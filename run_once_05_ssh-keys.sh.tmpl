@@ -51,8 +51,9 @@ chmod 644 "$PUB_KEY_FILE"
 # Write allowed_signers for SSH commit verification
 ALLOWED_SIGNERS="$SSH_DIR/allowed_signers"
 PUB_KEY_CONTENT=$(cat "$PUB_KEY_FILE")
-# Remove existing entry for this machine if present, then add fresh
-grep -v "${MACHINE}" "$ALLOWED_SIGNERS" > /tmp/allowed_signers_tmp 2>/dev/null || true
+# Remove existing entry for this key (match on key body, not machine name) then add fresh
+KEY_BODY=$(awk '{print $2}' "$PUB_KEY_FILE")
+grep -v "$KEY_BODY" "$ALLOWED_SIGNERS" > /tmp/allowed_signers_tmp 2>/dev/null || true
 echo "jreilly1821@gmail.com namespaces=\"git\" $PUB_KEY_CONTENT" >> /tmp/allowed_signers_tmp
 mv /tmp/allowed_signers_tmp "$ALLOWED_SIGNERS"
 chmod 644 "$ALLOWED_SIGNERS"

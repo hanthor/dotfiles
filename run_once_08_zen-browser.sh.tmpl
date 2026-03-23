@@ -1,4 +1,5 @@
 {{ if not .isDesktop }}#!/usr/bin/env bash
+set -euo pipefail
 echo "Not a desktop machine, skipping Zen Browser setup."
 exit 0
 {{ else }}#!/usr/bin/env bash
