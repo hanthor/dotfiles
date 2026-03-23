@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Flatpakfile hash: {{ include "Flatpakfile" | sha256sum }}
+# desktop only: {{ .isDesktop }}
+{{ if not .isDesktop }}exit 0{{ end }}
+set -euo pipefail
+
+FLATPAKFILE="$(chezmoi source-path)/Flatpakfile"
+[[ -f "$FLATPAKFILE" ]] || { echo "Flatpakfile not found"; exit 1; }
+
+parse_section() {
+  local section="$1"
+  awk "/^\[${section}\]/{found=1; next} /^\[/{found=0} found && /^[a-z]/{print \$1}" "$FLATPAKFILE"
+}
+
+# --- Remotes ---
+echo "Configuring Flatpak remotes..."
+while IFS='=' read -r name url; do
+  [[ -z "$name" || "$name" == \#* ]] && continue
+  if ! flatpak remote-list --system 2>/dev/null | grep -q "^${name}"; then
+    sudo flatpak remote-add --system --if-not-exists "$name" "$url" || true
+  fi
+  if ! flatpak remote-list --user 2>/dev/null | grep -q "^${name}"; then
+    flatpak remote-add --user --if-not-exists "$name" "$url" || true
+  fi
+done < <(parse_section "remotes")
+
+# --- System apps ---
+echo "Installing system Flatpak apps..."
+while read -r app; do
+  [[ -z "$app" || "$app" == \#* ]] && continue
+  if ! flatpak info --system "$app" &>/dev/null; then
+    sudo flatpak install --system -y --noninteractive flathub "$app" || true
+  fi
+done < <(parse_section "system")
+
+# --- User apps ---
+echo "Installing user Flatpak apps..."
+while read -r app; do
+  [[ -z "$app" || "$app" == \#* ]] && continue
+  if ! flatpak info --user "$app" &>/dev/null; then
+    flatpak install --user -y --noninteractive flathub "$app" || true
+  fi
+done < <(parse_section "user")
+
+echo "Flatpak setup complete."

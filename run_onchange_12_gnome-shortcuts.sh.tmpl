@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# gnome-keybindings.ini hash: {{ include "dot_config/dconf/gnome-keybindings.ini" | sha256sum }}
+# desktop only: {{ .isDesktop }}
+{{ if not .isDesktop }}exit 0{{ end }}
+set -euo pipefail
+
+INI="$(chezmoi source-path)/dot_config/dconf/gnome-keybindings.ini"
+[[ -f "$INI" ]] || { echo "gnome-keybindings.ini not found"; exit 1; }
+
+echo "Applying GNOME keyboard shortcuts..."
+dconf load /org/gnome/settings-daemon/plugins/media-keys/ < "$INI"
+echo "GNOME keyboard shortcuts applied."
