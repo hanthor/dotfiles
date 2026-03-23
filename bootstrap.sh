@@ -39,8 +39,8 @@ ensure_python() {
   else
     echo "Installing Python3..."
     case "$OS" in
-      fedora|rhel|centos) sudo dnf install -y python3 python3-pip ;;
-      debian|ubuntu)      sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-venv ;;
+      fedora|rhel|centos) sudo dnf install -y python3 ;;
+      debian|ubuntu)      sudo apt-get update && sudo apt-get install -y python3 ;;
       *)                  echo "ERROR: Unsupported OS '$OS'. Install python3 manually."; exit 1 ;;
     esac
   fi
@@ -48,45 +48,49 @@ ensure_python() {
 
 # ── Install Ansible ───────────────────────────────────────────────
 ensure_ansible() {
+  # Check common locations
   if command -v ansible-playbook &>/dev/null; then
     echo "Ansible found."
     return
   fi
+  for p in "$HOME/.local/bin" "$HOME/.local/share/pipx/venvs/ansible/bin" "/home/linuxbrew/.linuxbrew/bin"; do
+    if [ -x "$p/ansible-playbook" ]; then
+      export PATH="$p:$PATH"
+      echo "Ansible found in $p."
+      return
+    fi
+  done
 
-  # Check in ~/.local/bin (pip --user install location)
-  if [ -x "$HOME/.local/bin/ansible-playbook" ]; then
-    export PATH="$HOME/.local/bin:$PATH"
-    echo "Ansible found in ~/.local/bin."
-    return
-  fi
-
-  # Check in our venv
-  if [ -x "$HOME/.local/share/dotfiles-venv/bin/ansible-playbook" ]; then
-    export PATH="$HOME/.local/share/dotfiles-venv/bin:$PATH"
-    echo "Ansible found in dotfiles venv."
-    return
-  fi
-
-  # Try system package first (works on Debian/Fedora without PEP 668 issues)
   echo "Installing Ansible..."
+
+  # Try pipx first (clean, PEP 668 safe)
+  if command -v pipx &>/dev/null; then
+    pipx install --include-deps ansible
+    export PATH="$HOME/.local/bin:$PATH"
+    return
+  fi
+
+  # Install pipx then use it
   case "$OS" in
-    debian|ubuntu)
-      if sudo apt-get install -y ansible 2>/dev/null; then
-        return
-      fi
-      ;;
-    fedora|rhel|centos)
-      if sudo dnf install -y ansible 2>/dev/null; then
-        return
-      fi
-      ;;
+    debian|ubuntu)  sudo apt-get update && sudo apt-get install -y pipx ;;
+    fedora|rhel|centos) sudo dnf install -y pipx ;;
   esac
 
-  # Fallback: venv-based install (PEP 668 safe)
-  echo "System package unavailable, installing via venv..."
-  python3 -m venv "$HOME/.local/share/dotfiles-venv"
-  "$HOME/.local/share/dotfiles-venv/bin/pip" install --quiet ansible
-  export PATH="$HOME/.local/share/dotfiles-venv/bin:$PATH"
+  if command -v pipx &>/dev/null; then
+    pipx install --include-deps ansible
+    export PATH="$HOME/.local/bin:$PATH"
+    return
+  fi
+
+  # Last resort: uv if available
+  if command -v uv &>/dev/null; then
+    uv tool install ansible
+    export PATH="$HOME/.local/bin:$PATH"
+    return
+  fi
+
+  echo "ERROR: Could not install Ansible. Install pipx or ansible manually."
+  exit 1
 }
 
 # ── Install git ───────────────────────────────────────────────────
