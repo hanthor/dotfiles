@@ -25,7 +25,7 @@ apply:
         chmod 600 /tmp/bw_session
       fi
     fi
-    ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml
+    ansible-playbook --connection=local -l {{machine}} -e target={{machine}} -e "bw_session=${BW_SESSION:-}" site.yml
 
 # Apply without secrets
 apply-nosecrets:
