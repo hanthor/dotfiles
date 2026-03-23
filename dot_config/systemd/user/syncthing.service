@@ -4,8 +4,7 @@ Documentation=man:syncthing(1)
 After=network.target
 
 [Service]
-Environment="PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=syncthing serve --no-browser --logflags=0
+ExecStart=/home/linuxbrew/.linuxbrew/bin/syncthing serve --no-browser --logflags=0
 Restart=on-failure
 RestartSec=5
 SuccessExitStatus=3 4
