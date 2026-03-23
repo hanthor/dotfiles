@@ -13,5 +13,5 @@ fi
 
 echo "Installing packages from Brewfile..."
 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0="" \
-  brew bundle install --file="$BREWFILE" --no-lock
+  brew bundle install --file="$BREWFILE"
 echo "Packages installed."
