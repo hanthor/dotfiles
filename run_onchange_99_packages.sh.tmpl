@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Brewfile hash: {{ include "Brewfile" | sha256sum }}
+# Brewfile hash: {{ include "Brewfile.tmpl" | sha256sum }}
 set -euo pipefail
 
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
-BREWFILE="$(chezmoi source-path)/Brewfile"
+BREWFILE="$HOME/Brewfile"
 
 if [ ! -f "$BREWFILE" ]; then
   echo "ERROR: Brewfile not found at $BREWFILE"

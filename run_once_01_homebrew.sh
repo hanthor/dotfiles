@@ -12,7 +12,7 @@ eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
 # Run brew bundle on first init so packages (including bw, gh, etc.)
 # are available for subsequent run_once_ scripts.
-BREWFILE="$(chezmoi source-path)/Brewfile"
+BREWFILE="$HOME/Brewfile"
 if [ -f "$BREWFILE" ]; then
   echo "Installing packages from Brewfile (initial bootstrap)..."
   # Disable credential helper during bootstrap — gh may not be installed yet
