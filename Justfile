@@ -56,7 +56,7 @@ apply-remote name:
     echo "Applying to {{name}} with forwarded BW session..."
     ssh -o SendEnv=BW_SESSION {{name}} 'cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
 
-# Apply to ALL remote machines, forwarding your local BW session
+# Apply to ALL remote machines in parallel, forwarding your local BW session
 apply-all:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -70,14 +70,57 @@ apply-all:
         chmod 600 /tmp/bw_session
       fi
     fi
-    just apply
-    for host in bihar kanpur lkofoss himachal dilli; do
-      echo ""
-      echo "━━━ $host ━━━"
-      ssh -o SendEnv=BW_SESSION -o ConnectTimeout=10 $host \
-        'cd ~/.local/share/dotfiles && git pull --ff-only && just apply' || \
-        echo "⚠ $host unreachable or failed"
+
+    HOSTS=(bihar kanpur lkofoss himachal dilli)
+    PIDS=()
+    UP=()
+
+    echo "Checking which hosts are reachable..."
+    for host in "${HOSTS[@]}"; do
+      if ssh -o BatchMode=yes -o ConnectTimeout=5 "$host" true 2>/dev/null; then
+        UP+=("$host")
+      else
+        echo "  ⚠ $host — unreachable, skipping"
+      fi
     done
+
+    echo ""
+    echo "Applying locally to {{machine}}..."
+    just apply &
+    PIDS+=("$!:{{machine}}")
+
+    for host in "${UP[@]}"; do
+      echo "Applying to $host (background)..."
+      ssh -o SendEnv=BW_SESSION "$host" \
+        'cd ~/.local/share/dotfiles && git pull --ff-only && just apply' \
+        > "/tmp/apply_${host}.log" 2>&1 &
+      PIDS+=("$!:$host")
+    done
+
+    echo ""
+    echo "Waiting for all hosts to finish..."
+    FAILED=()
+    for pid_host in "${PIDS[@]}"; do
+      pid="${pid_host%%:*}"
+      host="${pid_host##*:}"
+      if wait "$pid"; then
+        echo "  ✓ $host"
+      else
+        echo "  ✗ $host (see /tmp/apply_${host}.log)"
+        FAILED+=("$host")
+      fi
+    done
+
+    if [ ${#FAILED[@]} -gt 0 ]; then
+      echo ""
+      echo "Failed hosts: ${FAILED[*]}"
+      for host in "${FAILED[@]}"; do
+        [ -f "/tmp/apply_${host}.log" ] && echo "=== $host ===" && tail -10 "/tmp/apply_${host}.log"
+      done
+      exit 1
+    fi
+    echo ""
+    echo "All hosts done ✓"
 
 
     ssh -o SendEnv=BW_SESSION james@{{name}} 'curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name {{name}}'
