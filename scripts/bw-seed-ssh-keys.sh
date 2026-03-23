@@ -29,6 +29,9 @@ declare -A MACHINE_HOST=(
 
 SSH_USER="james"
 
+# Collected public keys — populated by fetch_keys, consumed by write_authorized_keys
+declare -A COLLECTED_KEYS
+
 # ── Bitwarden login/unlock ────────────────────────────────────────────────────
 STATUS=$(bw status 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])" 2>/dev/null || echo "unauthenticated")
 
@@ -180,6 +183,32 @@ fetch_keys() {
   echo "  ✓ Keys fetched (pub: $(echo "$public_key" | awk '{print substr($2,1,20)}')...)"
   upsert_bw_item "$machine" "$private_key" "$public_key"
   register_github_key "$machine" "$public_key"
+  # Collect for authorized_keys
+  COLLECTED_KEYS["$machine"]="$public_key"
+}
+
+# ── Helper: write authorized_keys from all collected public keys ──────────────
+write_authorized_keys() {
+  local source_dir
+  source_dir=$(chezmoi source-path 2>/dev/null || echo "$HOME/dotfiles")
+  local out="$source_dir/dot_ssh/authorized_keys"
+
+  echo "# Managed by chezmoi — all machine public keys" > "$out"
+  echo "# Regenerate with: scripts/bw-seed-ssh-keys.sh" >> "$out"
+  echo "" >> "$out"
+
+  local machine
+  for machine in $(echo "${!COLLECTED_KEYS[@]}" | tr ' ' '\n' | sort); do
+    echo "# $machine" >> "$out"
+    echo "${COLLECTED_KEYS[$machine]}" >> "$out"
+  done
+
+  echo ""
+  echo "Written: $out"
+  echo "  → $(wc -l < "$out") lines, ${#COLLECTED_KEYS[@]} machine(s)"
+  echo ""
+  echo "Commit and push to deploy to all machines:"
+  echo "  cd $source_dir && git add dot_ssh/authorized_keys && git commit -m 'chore: update authorized_keys' && git push"
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -201,5 +230,8 @@ else
   done
 fi
 
-echo ""
+if [ ${#COLLECTED_KEYS[@]} -gt 0 ]; then
+  write_authorized_keys
+fi
+
 echo "Done. Sync Bitwarden on other devices: bw sync"
