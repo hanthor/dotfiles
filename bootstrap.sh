@@ -183,8 +183,9 @@ main() {
 
   echo ""
   echo "✓ Bootstrap complete! Next steps:"
-  echo "  1. Restart your shell:  exec zsh"
-  echo "  2. Run secrets phase:   cd ~/.local/share/dotfiles && just apply"
+  echo "  1. Start a new shell with brew in PATH:"
+  echo "     eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" && exec zsh"
+  echo "  2. Run secrets phase:   just apply"
 }
 
 main
