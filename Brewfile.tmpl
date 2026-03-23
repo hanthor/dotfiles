@@ -14,6 +14,10 @@ brew "starship"
 brew "tmux"
 brew "carapace"             # shell completion engine
 
+# Bluefin CLI — shell integration on all machines
+tap "ublue-os/tap"
+brew "ublue-os/tap/bluefin-cli"
+
 # Modern CLI essentials
 brew "atuin"                # shell history sync
 brew "bat"                  # cat with syntax highlighting
@@ -39,7 +43,6 @@ brew "zoxide"               # smart cd
 # =============================================================================
 {{ if .isDesktop -}}
 tap "gptscript-ai/tap"
-tap "ublue-os/tap"
 
 # System tools
 brew "aria2"
@@ -74,11 +77,6 @@ brew "k9s"
 brew "kubernetes-cli"
 brew "kubectx"
 brew "podman-compose"
-
-# Bluefin-specific (Fedora Atomic desktop)
-{{ if eq .machineName "karnataka" -}}
-brew "ublue-os/tap/bluefin-cli"
-{{ end -}}
 
 # VSCode extensions
 vscode "bradlc.vscode-tailwindcss"

@@ -6,3 +6,6 @@ if [ -z "$TMUX" ] && [ -n "$SSH_CONNECTION" ]; then
   fi
 fi
 {{ end -}}
+
+# Bluefin CLI shell integration
+command -v bluefin-cli &>/dev/null && eval "$(bluefin-cli init bash)"
