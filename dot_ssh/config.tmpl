@@ -4,6 +4,7 @@ Host *
   ServerAliveInterval 60
   ServerAliveCountMax 3
   IdentityFile ~/.ssh/{{ .machineName }}_id_ed25519
+  SendEnv BW_SESSION
 
 Host himachal
   HostName himachal
