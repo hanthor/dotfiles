@@ -124,6 +124,15 @@
   register: atuin_bw_item
   no_log: true
   changed_when: false
+  failed_when: false
+  tags: [secrets]
+
+- name: Warn if atuin.sh not found in Bitwarden
+  ansible.builtin.debug:
+    msg: >-
+      Bitwarden item 'atuin.sh' not found — skipping atuin login.
+      See README for how to create it.
+  when: atuin_bw_item.rc != 0
   tags: [secrets]
 
 - name: Parse atuin credentials
@@ -132,6 +141,7 @@
     atuin_password: "{{ (atuin_bw_item.stdout | from_json).login.password }}"
     atuin_key: "{{ (atuin_bw_item.stdout | from_json).fields | selectattr('name', 'equalto', 'key') | map(attribute='value') | first }}"
   no_log: true
+  when: atuin_bw_item.rc == 0
   tags: [secrets]
 
 - name: Write atuin key file
@@ -140,24 +150,26 @@
     dest: ~/.local/share/atuin/key
     mode: "0600"
   no_log: true
+  when: atuin_bw_item.rc == 0
   tags: [secrets]
 
 - name: Check if atuin is already logged in
   ansible.builtin.stat:
     path: ~/.local/share/atuin/session
   register: atuin_session
+  when: atuin_bw_item.rc == 0
   tags: [secrets]
 
 - name: Login to atuin sync
   ansible.builtin.command: >
     atuin login -u "{{ atuin_username }}" -p "{{ atuin_password }}" -k "{{ atuin_key }}"
   no_log: true
-  when: not atuin_session.stat.exists
+  when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
   changed_when: true
   tags: [secrets]
 
 - name: Sync atuin history
   ansible.builtin.command: atuin sync
-  when: not atuin_session.stat.exists
+  when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
   changed_when: true
   tags: [secrets]
