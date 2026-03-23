@@ -115,7 +115,7 @@ get_machine_name() {
 
   echo ""
   echo "Available machines: himachal karnataka dilli kanpur goa bihar matrix lkofoss"
-  read -rp "Machine name: " MACHINE_NAME
+  read -rp "Machine name: " MACHINE_NAME </dev/tty
 
   if [ -z "$MACHINE_NAME" ]; then
     echo "ERROR: Machine name is required."
