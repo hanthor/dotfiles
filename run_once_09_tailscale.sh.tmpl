@@ -16,22 +16,15 @@ fi
 # Install Tailscale if not present
 if ! command -v tailscale &>/dev/null; then
   echo "Installing Tailscale..."
-
-  # Detect OS and install appropriately
   if command -v ujust &>/dev/null; then
-    # Bluefin / Universal Blue
     ujust install-tailscale || true
-    # If ujust doesn't have it, fall back to script
-    if ! command -v tailscale &>/dev/null; then
-      curl -fsSL https://tailscale.com/install.sh | sh
-    fi
-  else
-    # Ubuntu / Debian / Proxmox
+  fi
+  if ! command -v tailscale &>/dev/null; then
     curl -fsSL https://tailscale.com/install.sh | sh
   fi
 fi
 
-# Fetch Tailscale auth key from Bitwarden
+# Fetch Tailscale auth key from Bitwarden and join the network
 echo "Fetching Tailscale auth key from Bitwarden..."
 TAILSCALE_KEY=$(BW_SESSION="$BW_SESSION" bw get password tailscale-authkey)
 
