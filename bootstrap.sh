@@ -46,51 +46,39 @@ ensure_python() {
   fi
 }
 
-# ── Install Ansible ───────────────────────────────────────────────
-ensure_ansible() {
-  # Check common locations
-  if command -v ansible-playbook &>/dev/null; then
-    echo "Ansible found."
+# ── Install uv ────────────────────────────────────────────────────
+ensure_uv() {
+  if command -v uv &>/dev/null; then
+    echo "uv found."
     return
   fi
-  for p in "$HOME/.local/bin" "$HOME/.local/share/pipx/venvs/ansible/bin" "/home/linuxbrew/.linuxbrew/bin"; do
+  if [ -x "$HOME/.local/bin/uv" ]; then
+    export PATH="$HOME/.local/bin:$PATH"
+    echo "uv found in ~/.local/bin."
+    return
+  fi
+  echo "Installing uv..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+}
+
+# ── Install Ansible ───────────────────────────────────────────────
+ensure_ansible() {
+  for p in "$HOME/.local/bin" "/home/linuxbrew/.linuxbrew/bin"; do
     if [ -x "$p/ansible-playbook" ]; then
       export PATH="$p:$PATH"
       echo "Ansible found in $p."
       return
     fi
   done
-
-  echo "Installing Ansible..."
-
-  # Try pipx first (clean, PEP 668 safe)
-  if command -v pipx &>/dev/null; then
-    pipx install --include-deps ansible
-    export PATH="$HOME/.local/bin:$PATH"
+  if command -v ansible-playbook &>/dev/null; then
+    echo "Ansible found."
     return
   fi
 
-  # Install pipx then use it
-  case "$OS" in
-    debian|ubuntu)  sudo apt-get update && sudo apt-get install -y pipx ;;
-    fedora|rhel|centos) sudo dnf install -y pipx ;;
-  esac
-
-  if command -v pipx &>/dev/null; then
-    pipx install --include-deps ansible
-    export PATH="$HOME/.local/bin:$PATH"
-    return
-  fi
-
-  # Last resort: uv if available
-  if command -v uv &>/dev/null; then
-    uv tool install ansible
-    export PATH="$HOME/.local/bin:$PATH"
-    return
-  fi
-
-  echo "ERROR: Could not install Ansible. Install pipx or ansible manually."
-  exit 1
+  echo "Installing Ansible via uv..."
+  uv tool install --with ansible ansible-core
+  export PATH="$HOME/.local/bin:$PATH"
 }
 
 # ── Install git ───────────────────────────────────────────────────
@@ -174,6 +162,7 @@ main() {
   echo ""
 
   ensure_python
+  ensure_uv
   ensure_ansible
   ensure_git
   clone_repo
