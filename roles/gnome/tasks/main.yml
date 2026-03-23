@@ -27,3 +27,4 @@
     gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-shell-command '/home/linuxbrew/.linuxbrew/bin/fish'
   when: is_desktop | bool and ptyxis_uuid.rc is defined and ptyxis_uuid.rc == 0
   changed_when: true
+  ignore_errors: true

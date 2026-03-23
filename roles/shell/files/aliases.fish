@@ -48,6 +48,10 @@ alias dc 'podman compose'
 alias dps 'podman ps'
 alias dpsa 'podman ps -a'
 
+# Dotfiles
+alias dots 'cd ~/.local/share/dotfiles && git pull --ff-only && just apply-nosecrets'
+alias dots-secrets 'cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
+
 # Misc
 alias reload 'exec fish'
 alias path 'string split ":" $PATH'

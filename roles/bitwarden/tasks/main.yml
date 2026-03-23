@@ -4,43 +4,16 @@
     path: /home/linuxbrew/.linuxbrew/bin/bw
   register: bw_binary
 
-- name: Bitwarden session management
+- name: Resolve Bitwarden session
   when: bw_binary.stat.exists
-  environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
   block:
-    - name: Get Bitwarden status
-      ansible.builtin.shell: bw status 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])"
-      register: bw_status_result
-      changed_when: false
-      failed_when: false
-
-    - name: Set Bitwarden status fact
-      ansible.builtin.set_fact:
-        bw_status: "{{ bw_status_result.stdout | default('unauthenticated') }}"
-
-    - name: Login to Bitwarden (interactive — requires TTY)
-      ansible.builtin.shell: bw login
-      when: bw_status == "unauthenticated"
-
-    # ── Try BW_SESSION from environment (e.g. forwarded via SSH) ──
-    - name: Check if BW_SESSION from environment is valid
-      ansible.builtin.shell: |
-        BW_SESSION="{{ lookup('env', 'BW_SESSION') }}" bw status 2>/dev/null \
-          | grep -q '"status":"unlocked"'
-      register: bw_env_session_check
-      changed_when: false
-      failed_when: false
-      when: lookup('env', 'BW_SESSION') | length > 0
-
+    # 1. BW_SESSION passed in environment (preferred — set by 'just apply')
     - name: Use BW_SESSION from environment
       ansible.builtin.set_fact:
         bw_session: "{{ lookup('env', 'BW_SESSION') }}"
-      when:
-        - lookup('env', 'BW_SESSION') | length > 0
-        - bw_env_session_check.rc | default(1) == 0
+      when: lookup('env', 'BW_SESSION') | length > 0
 
-    # ── Try cached session at /tmp/bw_session ──
+    # 2. Cached session from previous run
     - name: Check for cached session file
       ansible.builtin.stat:
         path: /tmp/bw_session
@@ -56,41 +29,24 @@
         - bw_session_file.stat is defined
         - bw_session_file.stat.exists
 
-    - name: Validate cached session
-      ansible.builtin.shell: |
-        BW_SESSION="{{ bw_session_cached_raw.content | b64decode | trim }}" bw status 2>/dev/null \
-          | grep -q '"status":"unlocked"'
-      register: bw_cached_session_check
-      changed_when: false
-      failed_when: false
-      when:
-        - bw_session is not defined
-        - bw_session_cached_raw.content is defined
-
     - name: Use cached session
       ansible.builtin.set_fact:
         bw_session: "{{ bw_session_cached_raw.content | b64decode | trim }}"
       when:
         - bw_session is not defined
-        - bw_cached_session_check.rc | default(1) == 0
+        - bw_session_cached_raw.content is defined
 
-    # ── Unlock interactively as last resort ──
-    - name: Unlock Bitwarden vault (interactive — requires TTY)
-      ansible.builtin.shell: bw unlock --raw
-      register: bw_unlock_result
-      when: bw_session is not defined
-
-    - name: Set session from unlock result
-      ansible.builtin.set_fact:
-        bw_session: "{{ bw_unlock_result.stdout }}"
-      when:
-        - bw_session is not defined
-        - bw_unlock_result.stdout is defined
-
-    # ── Cache session for future runs ──
+    # 3. Cache session for reuse
     - name: Cache session to /tmp/bw_session
       ansible.builtin.copy:
         content: "{{ bw_session }}"
         dest: /tmp/bw_session
         mode: "0600"
       when: bw_session is defined
+
+    - name: Warn if no Bitwarden session found
+      ansible.builtin.debug:
+        msg: >
+          No BW_SESSION found. Run: export BW_SESSION=$(bw unlock --raw)
+          then re-run 'just apply'. Skipping secrets.
+      when: bw_session is not defined

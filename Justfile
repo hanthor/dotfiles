@@ -5,13 +5,27 @@ dotfiles_dir := env("HOME") / ".local/share/dotfiles"
 machine := `cat /etc/dotfiles-machine 2>/dev/null || hostname`
 export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" + env("PATH")
 
-# Apply all config to this machine
+# Apply all config to this machine (unlocks BW interactively if needed)
 apply:
-    cd {{dotfiles_dir}} && ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{dotfiles_dir}}
+    git pull --ff-only
+    if [ -z "${BW_SESSION:-}" ]; then
+      if [ -f /tmp/bw_session ]; then
+        export BW_SESSION=$(cat /tmp/bw_session)
+      else
+        echo "Unlocking Bitwarden..."
+        export BW_SESSION=$(bw unlock --raw)
+        echo "$BW_SESSION" > /tmp/bw_session
+        chmod 600 /tmp/bw_session
+      fi
+    fi
+    ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml
 
-# Apply without secrets (skip BW-dependent roles)
+# Apply without secrets
 apply-nosecrets:
-    cd {{dotfiles_dir}} && ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml --skip-tags secrets
+    cd {{dotfiles_dir}} && git pull --ff-only && ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml --skip-tags secrets
 
 # Apply only dotfile configs (shell, git, tmux, etc.)
 dotfiles:
