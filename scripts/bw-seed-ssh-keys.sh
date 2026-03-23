@@ -88,6 +88,38 @@ for i in items:
   fi
 }
 
+# ── Helper: register public key with GitHub (auth + signing) ─────────────────
+register_github_key() {
+  local machine="$1"
+  local public_key="$2"
+  local key_body
+  key_body=$(echo "$public_key" | awk '{print $2}')
+
+  # Auth key
+  local existing_auth
+  existing_auth=$(gh api user/keys --jq '.[].key' 2>/dev/null || true)
+  if echo "$existing_auth" | grep -qF "$key_body"; then
+    echo "  ✓ GitHub auth key already registered."
+  else
+    gh api user/keys --method POST \
+      --field title="${machine}-auth" \
+      --field key="$public_key" > /dev/null
+    echo "  ✓ GitHub auth key registered."
+  fi
+
+  # Signing key
+  local existing_signing
+  existing_signing=$(gh api user/ssh_signing_keys --jq '.[].key' 2>/dev/null || true)
+  if echo "$existing_signing" | grep -qF "$key_body"; then
+    echo "  ✓ GitHub signing key already registered."
+  else
+    gh api user/ssh_signing_keys --method POST \
+      --field title="${machine}-signing" \
+      --field key="$public_key" > /dev/null
+    echo "  ✓ GitHub signing key registered."
+  fi
+}
+
 # ── Helper: get keys from a machine ──────────────────────────────────────────
 fetch_keys() {
   local machine="$1"
@@ -147,6 +179,7 @@ fetch_keys() {
 
   echo "  ✓ Keys fetched (pub: $(echo "$public_key" | awk '{print substr($2,1,20)}')...)"
   upsert_bw_item "$machine" "$private_key" "$public_key"
+  register_github_key "$machine" "$public_key"
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
