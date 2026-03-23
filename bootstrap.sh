@@ -151,6 +151,7 @@ run_playbook() {
   echo ""
   echo "═══════════════════════════════════════════════════"
   echo "  Running playbook for: $MACHINE_NAME"
+  echo "  (skipping secrets — run 'just apply' afterwards)"
   echo "═══════════════════════════════════════════════════"
   echo ""
 
@@ -159,6 +160,7 @@ run_playbook() {
     --connection=local \
     -l "$MACHINE_NAME" \
     -e "target=$MACHINE_NAME" \
+    --skip-tags secrets \
     site.yml
 }
 
@@ -180,8 +182,9 @@ main() {
   run_playbook
 
   echo ""
-  echo "✓ Bootstrap complete! Restart your shell or run:"
-  echo "  exec zsh"
+  echo "✓ Bootstrap complete! Next steps:"
+  echo "  1. Restart your shell:  exec zsh"
+  echo "  2. Run secrets phase:   cd ~/.local/share/dotfiles && just apply"
 }
 
 main
