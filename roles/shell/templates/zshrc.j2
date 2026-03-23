@@ -1,3 +1,8 @@
+# Homebrew
+if [ -d /home/linuxbrew/.linuxbrew ]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
 # Bluefin CLI shell integration (handles eza, bat, zoxide, starship, atuin, etc.)
 command -v bluefin-cli &>/dev/null && eval "$(bluefin-cli init zsh)"
 
