@@ -7,11 +7,11 @@ system_flatpaks:
   - app.zen_browser.zen
   - com.github.tchx84.Flatseal
   - com.mattjakeman.ExtensionManager
-  - io.github.AdrianMorinworkemail.DistroShelf
+  - com.ranfdev.DistroShelf
   - dev.vencord.Vesktop
   - dev.zed.Zed
   - io.github.flattool.Warehouse
-  - com.anytype.Anytype
+  - io.anytype.anytype
   - io.gitlab.news_flash.NewsFlash
   - io.missioncenter.MissionCenter
   - md.obsidian.Obsidian
@@ -42,7 +42,7 @@ system_flatpaks:
   - org.gnome.Weather
   - com.github.finefindus.eyedropper
   - io.github.dvlv.boxbuddyrs
-  - com.github.grahamrow.Hitori
+  - org.gnome.Hitori
   - com.belmoussaoui.Obfuscate
   - org.nickvision.money
 
