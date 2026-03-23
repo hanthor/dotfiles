@@ -10,91 +10,94 @@
     priv_key: "{{ ansible_env.HOME }}/.ssh/id_ed25519"
     pub_key: "{{ ansible_env.HOME }}/.ssh/id_ed25519.pub"
 
-- name: Check if private key already exists
+- name: Check if private key exists on disk
   ansible.builtin.stat:
     path: "{{ priv_key }}"
   register: priv_key_stat
 
-# ── Key exists on disk — just fix permissions ──
-- name: Ensure existing key permissions
-  when: priv_key_stat.stat.exists
-  block:
-    - name: Set private key permissions
-      ansible.builtin.file:
-        path: "{{ priv_key }}"
-        mode: "0600"
-
-    - name: Set public key permissions
-      ansible.builtin.file:
-        path: "{{ pub_key }}"
-        mode: "0644"
-
 # ── Key missing — fetch from BW or generate ──
-- name: Provision SSH key from Bitwarden or generate new
+- name: Fetch SSH key from Bitwarden
+  ansible.builtin.shell: |
+    set -euo pipefail
+    BW_ITEM=$(bw get item "{{ user_login }}@{{ inventory_hostname }}" 2>/dev/null) || exit 1
+    echo "$BW_ITEM" | python3 -c "
+    import sys, json
+    item = json.load(sys.stdin)
+    ssh = item.get('sshKey', {})
+    priv = ssh.get('privateKey', '')
+    pub = ssh.get('publicKey', '')
+    if not priv or not pub:
+        sys.exit(1)
+    with open('{{ priv_key }}', 'w') as f:
+        f.write(priv + ('' if priv.endswith('\n') else '\n'))
+    with open('{{ pub_key }}', 'w') as f:
+        f.write(pub + ('' if pub.endswith('\n') else '\n'))
+    "
+    chmod 600 "{{ priv_key }}"
+    chmod 644 "{{ pub_key }}"
+  args:
+    executable: /bin/bash
+  register: bw_fetch_result
+  failed_when: false
+  changed_when: bw_fetch_result.rc == 0
   when: not priv_key_stat.stat.exists
   environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
-    BW_SESSION: "{{ bw_session }}"
-  block:
-    - name: Fetch SSH key from Bitwarden and write to disk
-      ansible.builtin.shell: |
-        set -euo pipefail
-        BW_ITEM=$(bw get item "{{ inventory_hostname }}" 2>/dev/null) || exit 1
-        echo "$BW_ITEM" | python3 -c "
-        import sys, json
-        item = json.load(sys.stdin)
-        ssh = item.get('sshKey', {})
-        priv = ssh.get('privateKey', '')
-        pub = ssh.get('publicKey', '')
-        if not priv or not pub:
-            sys.exit(1)
-        with open('{{ priv_key }}', 'w') as f:
-            f.write(priv)
-            if not priv.endswith('\n'):
-                f.write('\n')
-        with open('{{ pub_key }}', 'w') as f:
-            f.write(pub)
-            if not pub.endswith('\n'):
-                f.write('\n')
-        "
-        chmod 600 "{{ priv_key }}"
-        chmod 644 "{{ pub_key }}"
-      args:
-        executable: /bin/bash
-      register: bw_fetch_result
-      failed_when: false
 
-    - name: Generate new SSH key pair
-      ansible.builtin.command: >
-        ssh-keygen -t ed25519 -C "{{ inventory_hostname }}"
-        -f "{{ priv_key }}" -N ""
-      when: bw_fetch_result.rc != 0
+- name: Generate new SSH key pair if not on disk or in BW
+  ansible.builtin.command: >
+    ssh-keygen -t ed25519 -C "{{ inventory_hostname }}"
+    -f "{{ priv_key }}" -N ""
+  when: not priv_key_stat.stat.exists and bw_fetch_result.rc | default(1) != 0
 
-    - name: Store new key in Bitwarden
-      ansible.builtin.shell: |
-        set -euo pipefail
-        FINGERPRINT=$(ssh-keygen -lf "{{ pub_key }}" | awk '{print $2}')
-        python3 -c "
-        import json, sys
-        priv = open('{{ priv_key }}').read()
-        pub = open('{{ pub_key }}').read().strip()
-        fp = sys.argv[1]
-        print(json.dumps({
-            'type': 5,
-            'name': '{{ inventory_hostname }}',
-            'sshKey': {
-                'privateKey': priv,
-                'publicKey': pub,
-                'keyFingerprint': fp
-            }
-        }))
-        " "$FINGERPRINT" | bw encode | bw create item > /dev/null
-      args:
-        executable: /bin/bash
-      when: bw_fetch_result.rc != 0
+# ── Fix permissions ──
+- name: Set key permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ priv_key }}", mode: "0600" }
+    - { path: "{{ pub_key }}",  mode: "0644" }
 
-# ── Update allowed_signers ──
-- name: Read public key content
+# ── Sync key to Bitwarden (create or update) ──
+- name: Check if key already in Bitwarden
+  ansible.builtin.shell: bw get item "{{ user_login }}@{{ inventory_hostname }}" > /dev/null 2>&1
+  register: bw_item_exists
+  failed_when: false
+  changed_when: false
+  environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+
+- name: Store SSH key in Bitwarden
+  ansible.builtin.shell: |
+    set -euo pipefail
+    FINGERPRINT=$(ssh-keygen -lf "{{ pub_key }}" | awk '{print $2}')
+    python3 -c "
+    import json, sys
+    priv = open('{{ priv_key }}').read()
+    pub  = open('{{ pub_key }}').read().strip()
+    fp   = sys.argv[1]
+    print(json.dumps({
+        'type': 5,
+        'name': '{{ user_login }}@{{ inventory_hostname }}',
+        'sshKey': {
+            'privateKey': priv,
+            'publicKey': pub,
+            'keyFingerprint': fp
+        }
+    }))
+    " "$FINGERPRINT" | bw encode | bw create item > /dev/null
+  args:
+    executable: /bin/bash
+  when: bw_item_exists.rc != 0
+  environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+
+# ── Update allowed_signers for git commit signing ──
+- name: Read public key
   ansible.builtin.slurp:
     src: "{{ pub_key }}"
   register: pub_key_content
