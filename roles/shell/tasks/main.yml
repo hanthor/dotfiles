@@ -109,7 +109,7 @@
       filter_mode = "global"
       style = "compact"
 
-# ── Atuin key from Bitwarden ──────────────────────────────────────
+# ── Atuin setup from Bitwarden ────────────────────────────────────
 - name: Ensure atuin data dir exists
   ansible.builtin.file:
     path: ~/.local/share/atuin
@@ -117,19 +117,47 @@
     mode: "0700"
   tags: [secrets]
 
-- name: Fetch atuin key from Bitwarden
-  ansible.builtin.command: bw get password "Atuin"
-  register: atuin_key
+- name: Fetch atuin credentials from Bitwarden
+  ansible.builtin.shell: |
+    BW_SESSION="{{ lookup('file', '/tmp/bw_session') }}"
+    bw get item "atuin.sh" --session "$BW_SESSION"
+  register: atuin_bw_item
   no_log: true
   changed_when: false
-  environment:
-    BW_SESSION: "{{ lookup('env', 'BW_SESSION') }}"
+  tags: [secrets]
+
+- name: Parse atuin credentials
+  ansible.builtin.set_fact:
+    atuin_username: "{{ (atuin_bw_item.stdout | from_json).login.username }}"
+    atuin_password: "{{ (atuin_bw_item.stdout | from_json).login.password }}"
+    atuin_key: "{{ (atuin_bw_item.stdout | from_json).fields | selectattr('name', 'equalto', 'key') | map(attribute='value') | first }}"
+  no_log: true
   tags: [secrets]
 
 - name: Write atuin key file
   ansible.builtin.copy:
-    content: "{{ atuin_key.stdout }}"
+    content: "{{ atuin_key }}"
     dest: ~/.local/share/atuin/key
     mode: "0600"
   no_log: true
+  tags: [secrets]
+
+- name: Check if atuin is already logged in
+  ansible.builtin.stat:
+    path: ~/.local/share/atuin/session
+  register: atuin_session
+  tags: [secrets]
+
+- name: Login to atuin sync
+  ansible.builtin.command: >
+    atuin login -u "{{ atuin_username }}" -p "{{ atuin_password }}" -k "{{ atuin_key }}"
+  no_log: true
+  when: not atuin_session.stat.exists
+  changed_when: true
+  tags: [secrets]
+
+- name: Sync atuin history
+  ansible.builtin.command: atuin sync
+  when: not atuin_session.stat.exists
+  changed_when: true
   tags: [secrets]
