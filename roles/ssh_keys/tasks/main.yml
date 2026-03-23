@@ -93,13 +93,6 @@
         executable: /bin/bash
       when: bw_fetch_result.rc != 0
 
-# ── Deploy SSH config ──
-- name: Deploy SSH config from template
-  ansible.builtin.template:
-    src: ssh_config.j2
-    dest: "{{ ansible_env.HOME }}/.ssh/config"
-    mode: "0644"
-
 # ── Update allowed_signers ──
 - name: Read public key content
   ansible.builtin.slurp:
