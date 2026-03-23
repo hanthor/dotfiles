@@ -40,16 +40,9 @@ ensure_python() {
     echo "Installing Python3..."
     case "$OS" in
       fedora|rhel|centos) sudo dnf install -y python3 python3-pip ;;
-      debian|ubuntu)      sudo apt-get update && sudo apt-get install -y python3 python3-pip ;;
+      debian|ubuntu)      sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-venv ;;
       *)                  echo "ERROR: Unsupported OS '$OS'. Install python3 manually."; exit 1 ;;
     esac
-  fi
-
-  # Ensure pip is available
-  if ! python3 -m pip --version &>/dev/null; then
-    echo "Installing pip..."
-    python3 -m ensurepip --user 2>/dev/null || \
-      curl -fsSL https://bootstrap.pypa.io/get-pip.py | python3 - --user
   fi
 }
 
@@ -67,9 +60,33 @@ ensure_ansible() {
     return
   fi
 
-  echo "Installing Ansible via pip..."
-  python3 -m pip install --user --quiet ansible
-  export PATH="$HOME/.local/bin:$PATH"
+  # Check in our venv
+  if [ -x "$HOME/.local/share/dotfiles-venv/bin/ansible-playbook" ]; then
+    export PATH="$HOME/.local/share/dotfiles-venv/bin:$PATH"
+    echo "Ansible found in dotfiles venv."
+    return
+  fi
+
+  # Try system package first (works on Debian/Fedora without PEP 668 issues)
+  echo "Installing Ansible..."
+  case "$OS" in
+    debian|ubuntu)
+      if sudo apt-get install -y ansible 2>/dev/null; then
+        return
+      fi
+      ;;
+    fedora|rhel|centos)
+      if sudo dnf install -y ansible 2>/dev/null; then
+        return
+      fi
+      ;;
+  esac
+
+  # Fallback: venv-based install (PEP 668 safe)
+  echo "System package unavailable, installing via venv..."
+  python3 -m venv "$HOME/.local/share/dotfiles-venv"
+  "$HOME/.local/share/dotfiles-venv/bin/pip" install --quiet ansible
+  export PATH="$HOME/.local/share/dotfiles-venv/bin:$PATH"
 }
 
 # ── Install git ───────────────────────────────────────────────────
