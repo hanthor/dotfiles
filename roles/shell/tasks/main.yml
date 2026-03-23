@@ -1,4 +1,16 @@
 ---
+- name: Create ~/.config/shell/ directory
+  ansible.builtin.file:
+    path: ~/.config/shell
+    state: directory
+    mode: "0755"
+
+- name: Deploy shared aliases (bash/zsh)
+  ansible.builtin.template:
+    src: aliases.sh.j2
+    dest: ~/.config/shell/aliases.sh
+    mode: "0644"
+
 - name: Deploy ~/.bashrc
   ansible.builtin.template:
     src: bashrc.j2
@@ -29,10 +41,22 @@
     state: directory
     mode: "0755"
 
+- name: Create ~/.config/fish/conf.d/ directory
+  ansible.builtin.file:
+    path: ~/.config/fish/conf.d
+    state: directory
+    mode: "0755"
+
 - name: Deploy ~/.config/fish/config.fish
   ansible.builtin.copy:
     src: config.fish
     dest: ~/.config/fish/config.fish
+    mode: "0644"
+
+- name: Deploy fish aliases
+  ansible.builtin.copy:
+    src: aliases.fish
+    dest: ~/.config/fish/conf.d/aliases.fish
     mode: "0644"
 
 - name: Check if brew zsh exists

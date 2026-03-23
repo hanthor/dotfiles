@@ -1,1 +1,5 @@
+# Bluefin CLI shell integration (handles eza, bat, zoxide, starship, atuin, etc.)
 command -v bluefin-cli &>/dev/null && eval "$(bluefin-cli init zsh)"
+
+# Custom aliases (git, k8s, vim, etc.)
+[ -f ~/.config/shell/aliases.sh ] && source ~/.config/shell/aliases.sh
