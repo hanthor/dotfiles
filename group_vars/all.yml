@@ -128,3 +128,12 @@ desktop_vscode_extensions:
   - vue.volar
   - waderyan.gitblame
   - yzhang.markdown-all-in-one
+
+# ── Flatpaks ─────────────────────────────────────────────────────
+flatpak_remotes:
+  - name: flathub
+    url: https://dl.flathub.org/repo/flathub.flatpakrepo
+
+system_flatpaks:
+  - io.typora.Typora
+  - com.github.fabiocolacio.marker

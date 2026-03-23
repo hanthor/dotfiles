@@ -5,11 +5,6 @@
   become: true
   changed_when: false
 
-- name: Add flathub remote (user)
-  ansible.builtin.command: flatpak remote-add --if-not-exists --user {{ item.name }} {{ item.url }}
-  loop: "{{ flatpak_remotes }}"
-  changed_when: false
-
 - name: Install system flatpaks
   ansible.builtin.shell: |
     if ! flatpak info --system {{ item }} >/dev/null 2>&1; then
@@ -19,12 +14,3 @@
   become: true
   register: flatpak_result
   changed_when: "'Installing' in flatpak_result.stdout"
-
-- name: Install user flatpaks
-  ansible.builtin.shell: |
-    if ! flatpak info --user {{ item }} >/dev/null 2>&1; then
-      flatpak install --user -y flathub {{ item }}
-    fi
-  loop: "{{ user_flatpaks }}"
-  register: user_flatpak_result
-  changed_when: "'Installing' in user_flatpak_result.stdout"
