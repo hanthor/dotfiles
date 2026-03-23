@@ -34,7 +34,7 @@
       ansible.builtin.command: gh config set git_protocol ssh
       changed_when: false
 
-    # ── SSH key registration ──
+    # ── SSH key registration (only from central machine) ──
     - name: Read SSH public key
       ansible.builtin.slurp:
         src: "{{ ansible_env.HOME }}/.ssh/{{ inventory_hostname }}_id_ed25519.pub"
@@ -45,32 +45,24 @@
         ssh_pub_key_full: "{{ ssh_pub_key_raw.content | b64decode | trim }}"
         ssh_key_body: "{{ (ssh_pub_key_raw.content | b64decode).split()[1] }}"
 
-    # ── Auth key ──
-    - name: Check existing GitHub authentication keys
-      ansible.builtin.shell: gh api user/keys --jq '.[].key'
-      register: gh_existing_auth_keys
+    - name: List existing GitHub SSH keys
+      ansible.builtin.command: gh ssh-key list
+      register: gh_existing_keys
       changed_when: false
       failed_when: false
 
     - name: Register SSH authentication key with GitHub
       ansible.builtin.command: >
-        gh api user/keys
-        --method POST
-        --field title="{{ inventory_hostname }}-auth-{{ ansible_date_time.date | replace('-', '') }}"
-        --field key="{{ ssh_pub_key_full }}"
-      when: ssh_key_body not in (gh_existing_auth_keys.stdout | default(''))
-
-    # ── Signing key ──
-    - name: Check existing GitHub signing keys
-      ansible.builtin.shell: gh api user/ssh_signing_keys --jq '.[].key'
-      register: gh_existing_signing_keys
-      changed_when: false
+        gh ssh-key add "{{ ansible_env.HOME }}/.ssh/{{ inventory_hostname }}_id_ed25519.pub"
+        --title "{{ inventory_hostname }}-auth"
+        --type authentication
+      when: ssh_key_body not in (gh_existing_keys.stdout | default(''))
       failed_when: false
 
     - name: Register SSH signing key with GitHub
       ansible.builtin.command: >
-        gh api user/ssh_signing_keys
-        --method POST
-        --field title="{{ inventory_hostname }}-signing-{{ ansible_date_time.date | replace('-', '') }}"
-        --field key="{{ ssh_pub_key_full }}"
-      when: ssh_key_body not in (gh_existing_signing_keys.stdout | default(''))
+        gh ssh-key add "{{ ansible_env.HOME }}/.ssh/{{ inventory_hostname }}_id_ed25519.pub"
+        --title "{{ inventory_hostname }}-signing"
+        --type signing
+      when: ssh_key_body not in (gh_existing_keys.stdout | default(''))
+      failed_when: false
