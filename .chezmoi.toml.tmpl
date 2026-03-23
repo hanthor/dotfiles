@@ -1,0 +1,8 @@
+{{- $machineName := promptString "Machine name (himachal/karnataka/dilli/kanpur/goa/bihar/matrix/lkofoss)" -}}
+[data]
+  machineName = {{ $machineName | quote }}
+  isDesktop   = {{ has $machineName (list "himachal" "karnataka" "dilli" "kanpur" "goa") }}
+  isArm       = {{ eq $machineName "goa" }}
+
+[bitwarden]
+  command = "bw"

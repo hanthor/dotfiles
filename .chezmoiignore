@@ -1,0 +1,6 @@
+# Ignore Brewfile on servers (no GUI packages needed there too, but we keep brew)
+# Ignore Zen Browser config on servers
+{{ if not .isDesktop }}
+dot_config/zen-browser
+run_once_08_zen-browser.sh
+{{ end }}
