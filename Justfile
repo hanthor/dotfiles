@@ -3,6 +3,7 @@
 
 dotfiles_dir := env("HOME") / ".local/share/dotfiles"
 machine := `cat /etc/dotfiles-machine 2>/dev/null || hostname`
+export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" + env("PATH")
 
 # Apply all config to this machine
 apply:
