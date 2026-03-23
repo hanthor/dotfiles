@@ -19,22 +19,36 @@ if [ ! -f "$SIGNING_KEY_PATH" ]; then
 fi
 
 PUB_KEY=$(cat "$SIGNING_KEY_PATH")
-KEY_TITLE="$(hostname)-signing-$(date +%Y%m%d)"
+KEY_BODY=$(echo "$PUB_KEY" | awk '{print $2}')
+MACHINE=$(hostname)
+DATE=$(date +%Y%m%d)
 
-echo "Checking if signing key is already registered with GitHub..."
+# ── Auth key ──────────────────────────────────────────────────────────────────
+echo "Checking GitHub auth key..."
+EXISTING_AUTH=$(gh api user/keys --jq '.[].key' 2>/dev/null || echo "")
 
-# Fetch existing signing keys and check if this public key is already present
-EXISTING=$(gh api user/ssh_signing_keys --jq '.[].key' 2>/dev/null || echo "")
-
-if echo "$EXISTING" | grep -qF "$(echo "$PUB_KEY" | awk '{print $2}')"; then
-  echo "Signing key already registered, skipping."
-  exit 0
+if echo "$EXISTING_AUTH" | grep -qF "$KEY_BODY"; then
+  echo "Auth key already registered, skipping."
+else
+  echo "Registering auth key with GitHub..."
+  gh api user/keys \
+    --method POST \
+    --field title="${MACHINE}-auth-${DATE}" \
+    --field key="$PUB_KEY"
+  echo "Auth key registered."
 fi
 
-echo "Registering signing key with GitHub..."
-gh api user/ssh_signing_keys \
-  --method POST \
-  --field title="$KEY_TITLE" \
-  --field key="$PUB_KEY"
+# ── Signing key ───────────────────────────────────────────────────────────────
+echo "Checking GitHub signing key..."
+EXISTING_SIGNING=$(gh api user/ssh_signing_keys --jq '.[].key' 2>/dev/null || echo "")
 
-echo "Signing key registered."
+if echo "$EXISTING_SIGNING" | grep -qF "$KEY_BODY"; then
+  echo "Signing key already registered, skipping."
+else
+  echo "Registering signing key with GitHub..."
+  gh api user/ssh_signing_keys \
+    --method POST \
+    --field title="${MACHINE}-signing-${DATE}" \
+    --field key="$PUB_KEY"
+  echo "Signing key registered."
+fi
