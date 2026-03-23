@@ -36,5 +36,7 @@ all:
     server:
       hosts:
         bihar:
+    vps:
+      hosts:
         matrix:
         lkofoss:

@@ -53,5 +53,6 @@
     # Phase 4: Services
     - role: syncthing
       tags: [services]
+      when: inventory_hostname not in groups.get('vps', [])
     - role: systemd
       tags: [services]
