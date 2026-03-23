@@ -1,4 +1,4 @@
-{{- $machineName := promptString "Machine name (himachal/karnataka/dilli/kanpur/goa/bihar/matrix/lkofoss)" -}}
+{{- $machineName := promptStringOnce . "machineName" "Machine name (himachal/karnataka/dilli/kanpur/goa/bihar/matrix/lkofoss)" -}}
 [data]
   machineName = {{ $machineName | quote }}
   isDesktop   = {{ has $machineName (list "himachal" "karnataka" "dilli" "kanpur" "goa") }}
