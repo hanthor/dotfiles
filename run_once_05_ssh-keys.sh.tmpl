@@ -16,29 +16,23 @@ PUB_KEY_FILE="${PRIV_KEY_FILE}.pub"
 
 echo "Fetching SSH keys for $MACHINE from Bitwarden..."
 
-# Extract private and public key from custom fields
-PRIVATE_KEY=$(BW_SESSION="$BW_SESSION" bw get item "$MACHINE" | python3 -c "
+# Extract private and public key from native SSH key item (type 5)
+BW_ITEM=$(BW_SESSION="$BW_SESSION" bw get item "$MACHINE")
+PRIVATE_KEY=$(echo "$BW_ITEM" | python3 -c "
 import sys, json
 item = json.load(sys.stdin)
-fields = item.get('fields', [])
-for f in fields:
-    if f['name'] == 'private_key':
-        print(f['value'])
-        break
+print(item.get('sshKey', {}).get('privateKey', ''))
 ")
 
-PUBLIC_KEY=$(BW_SESSION="$BW_SESSION" bw get item "$MACHINE" | python3 -c "
+PUBLIC_KEY=$(echo "$BW_ITEM" | python3 -c "
 import sys, json
 item = json.load(sys.stdin)
-fields = item.get('fields', [])
-for f in fields:
-    if f['name'] == 'public_key':
-        print(f['value'])
-        break
+print(item.get('sshKey', {}).get('publicKey', ''))
 ")
 
 if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
-  echo "ERROR: Could not find private_key or public_key fields in Bitwarden item '$MACHINE'"
+  echo "ERROR: Could not find SSH key data in Bitwarden item '$MACHINE'"
+  echo "Make sure the item is type 'SSH Key' (not Secure Note) and has privateKey/publicKey set."
   exit 1
 fi
 

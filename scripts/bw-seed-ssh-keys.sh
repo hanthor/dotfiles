@@ -56,24 +56,23 @@ upsert_bw_item() {
     --arg priv "$private_key" \
     --arg pub  "$public_key" \
     '{
-      type: 2,
+      type: 5,
       name: $name,
-      notes: "",
-      secureNote: { type: 0 },
-      fields: [
-        { name: "private_key", value: $priv, type: 0 },
-        { name: "public_key",  value: $pub,  type: 0 }
-      ]
+      sshKey: {
+        privateKey:     $priv,
+        publicKey:      $pub,
+        keyFingerprint: ""
+      }
     }')
 
-  # Check if item already exists
+  # Check if item already exists (type 5 = SSH Key)
   local existing_id
   existing_id=$(BW_SESSION="$BW_SESSION" bw list items --search "$machine" 2>/dev/null \
     | python3 -c "
 import sys, json
 items = json.load(sys.stdin)
 for i in items:
-    if i.get('name') == '$machine' and i.get('type') == 2:
+    if i.get('name') == '$machine' and i.get('type') == 5:
         print(i['id'])
         break
 " 2>/dev/null || true)
