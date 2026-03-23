@@ -155,6 +155,17 @@ apply-ansible:
 
     cd {{dotfiles_dir}} && ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml --check --diff
 
+# Install a flatpak system-wide and persist it to dotfiles
+flatpak-install app:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    flatpak install --system -y flathub {{app}}
+    cd {{dotfiles_dir}}
+    yq -i '.system_flatpaks += ["{{app}}"]' group_vars/all.yml
+    git add group_vars/all.yml
+    git commit -m "flatpak: add {{app}}"
+    git push
+
 # Edit this machine's host_vars
 edit-host:
     ${EDITOR:-vi} {{dotfiles_dir}}/host_vars/{{machine}}.yml
