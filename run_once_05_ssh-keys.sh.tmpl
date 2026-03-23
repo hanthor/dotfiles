@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MACHINE="{{ .machineName }}"
+
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+source "$HOME/.config/chezmoi/bw-helper.sh"
+bw_ensure_unlocked
+
+SSH_DIR="$HOME/.ssh"
+mkdir -p "$SSH_DIR"
+chmod 700 "$SSH_DIR"
+
+PRIV_KEY_FILE="$SSH_DIR/${MACHINE}_id_ed25519"
+PUB_KEY_FILE="${PRIV_KEY_FILE}.pub"
+
+echo "Fetching SSH keys for $MACHINE from Bitwarden..."
+
+# Extract private and public key from custom fields
+PRIVATE_KEY=$(BW_SESSION="$BW_SESSION" bw get item "$MACHINE" | python3 -c "
+import sys, json
+item = json.load(sys.stdin)
+fields = item.get('fields', [])
+for f in fields:
+    if f['name'] == 'private_key':
+        print(f['value'])
+        break
+")
+
+PUBLIC_KEY=$(BW_SESSION="$BW_SESSION" bw get item "$MACHINE" | python3 -c "
+import sys, json
+item = json.load(sys.stdin)
+fields = item.get('fields', [])
+for f in fields:
+    if f['name'] == 'public_key':
+        print(f['value'])
+        break
+")
+
+if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
+  echo "ERROR: Could not find private_key or public_key fields in Bitwarden item '$MACHINE'"
+  exit 1
+fi
+
+# Write keys
+printf '%s\n' "$PRIVATE_KEY" > "$PRIV_KEY_FILE"
+printf '%s\n' "$PUBLIC_KEY"  > "$PUB_KEY_FILE"
+chmod 600 "$PRIV_KEY_FILE"
+chmod 644 "$PUB_KEY_FILE"
+
+# Write allowed_signers for SSH commit verification
+ALLOWED_SIGNERS="$SSH_DIR/allowed_signers"
+PUB_KEY_CONTENT=$(cat "$PUB_KEY_FILE")
+# Remove existing entry for this machine if present, then add fresh
+grep -v "${MACHINE}" "$ALLOWED_SIGNERS" > /tmp/allowed_signers_tmp 2>/dev/null || true
+echo "jreilly1821@gmail.com namespaces=\"git\" $PUB_KEY_CONTENT" >> /tmp/allowed_signers_tmp
+mv /tmp/allowed_signers_tmp "$ALLOWED_SIGNERS"
+chmod 644 "$ALLOWED_SIGNERS"
+
+echo "SSH keys for $MACHINE written to $SSH_DIR"
+echo "allowed_signers updated."
