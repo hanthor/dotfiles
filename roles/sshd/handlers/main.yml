@@ -1,0 +1,16 @@
+---
+- name: Reload sshd
+  ansible.builtin.systemd:
+    name: sshd
+    state: reloaded
+  become: true
+  ignore_errors: true
+  register: sshd_reload
+
+- name: Reload ssh
+  ansible.builtin.systemd:
+    name: ssh
+    state: reloaded
+  become: true
+  ignore_errors: true
+  when: sshd_reload is failed

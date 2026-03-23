@@ -1,0 +1,49 @@
+---
+- name: Check if tailscale is already connected
+  ansible.builtin.command: tailscale status
+  register: tailscale_status
+  changed_when: false
+  failed_when: false
+
+- name: Skip if already connected
+  ansible.builtin.meta: end_role
+  when: tailscale_status.rc == 0
+
+- name: Check if tailscale command exists
+  ansible.builtin.command: which tailscale
+  register: tailscale_exists
+  changed_when: false
+  failed_when: false
+
+- name: Check if ujust exists
+  ansible.builtin.command: which ujust
+  register: ujust_exists
+  changed_when: false
+  failed_when: false
+  when: tailscale_exists.rc != 0
+
+- name: Install tailscale via ujust
+  ansible.builtin.command: ujust install-tailscale
+  when:
+    - tailscale_exists.rc != 0
+    - ujust_exists.rc == 0
+
+- name: Install tailscale via install script
+  ansible.builtin.shell: curl -fsSL https://tailscale.com/install.sh | sh
+  become: true
+  when:
+    - tailscale_exists.rc != 0
+    - ujust_exists.rc != 0
+
+- name: Fetch tailscale auth key from Bitwarden
+  ansible.builtin.shell: BW_SESSION={{ bw_session }} bw get password tailscale-authkey
+  register: tailscale_authkey
+  changed_when: false
+  no_log: true
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+
+- name: Join tailscale network
+  ansible.builtin.command: tailscale up --authkey {{ tailscale_authkey.stdout }} --hostname {{ inventory_hostname }}
+  become: true
+  no_log: true

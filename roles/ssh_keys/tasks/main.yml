@@ -1,0 +1,131 @@
+---
+- name: Ensure ~/.ssh directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.ssh"
+    state: directory
+    mode: "0700"
+
+- name: Set SSH key path facts
+  ansible.builtin.set_fact:
+    priv_key: "{{ ansible_env.HOME }}/.ssh/{{ inventory_hostname }}_id_ed25519"
+    pub_key: "{{ ansible_env.HOME }}/.ssh/{{ inventory_hostname }}_id_ed25519.pub"
+
+- name: Check if private key already exists
+  ansible.builtin.stat:
+    path: "{{ priv_key }}"
+  register: priv_key_stat
+
+# ── Key exists on disk — just fix permissions ──
+- name: Ensure existing key permissions
+  when: priv_key_stat.stat.exists
+  block:
+    - name: Set private key permissions
+      ansible.builtin.file:
+        path: "{{ priv_key }}"
+        mode: "0600"
+
+    - name: Set public key permissions
+      ansible.builtin.file:
+        path: "{{ pub_key }}"
+        mode: "0644"
+
+# ── Key missing — fetch from BW or generate ──
+- name: Provision SSH key from Bitwarden or generate new
+  when: not priv_key_stat.stat.exists
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+    BW_SESSION: "{{ bw_session }}"
+  block:
+    - name: Fetch SSH key from Bitwarden and write to disk
+      ansible.builtin.shell: |
+        set -euo pipefail
+        BW_ITEM=$(bw get item "{{ inventory_hostname }}" 2>/dev/null) || exit 1
+        echo "$BW_ITEM" | python3 -c "
+        import sys, json
+        item = json.load(sys.stdin)
+        ssh = item.get('sshKey', {})
+        priv = ssh.get('privateKey', '')
+        pub = ssh.get('publicKey', '')
+        if not priv or not pub:
+            sys.exit(1)
+        with open('{{ priv_key }}', 'w') as f:
+            f.write(priv)
+            if not priv.endswith('\n'):
+                f.write('\n')
+        with open('{{ pub_key }}', 'w') as f:
+            f.write(pub)
+            if not pub.endswith('\n'):
+                f.write('\n')
+        "
+        chmod 600 "{{ priv_key }}"
+        chmod 644 "{{ pub_key }}"
+      args:
+        executable: /bin/bash
+      register: bw_fetch_result
+      failed_when: false
+
+    - name: Generate new SSH key pair
+      ansible.builtin.command: >
+        ssh-keygen -t ed25519 -C "{{ inventory_hostname }}"
+        -f "{{ priv_key }}" -N ""
+      when: bw_fetch_result.rc != 0
+
+    - name: Store new key in Bitwarden
+      ansible.builtin.shell: |
+        set -euo pipefail
+        python3 -c "
+        import json
+        priv = open('{{ priv_key }}').read()
+        pub = open('{{ pub_key }}').read().strip()
+        print(json.dumps({
+            'type': 5,
+            'name': '{{ inventory_hostname }}',
+            'sshKey': {
+                'privateKey': priv,
+                'publicKey': pub,
+                'keyFingerprint': ''
+            }
+        }))
+        " | bw encode | bw create item > /dev/null
+      args:
+        executable: /bin/bash
+      when: bw_fetch_result.rc != 0
+
+# ── Deploy SSH config ──
+- name: Deploy SSH config from template
+  ansible.builtin.template:
+    src: ssh_config.j2
+    dest: "{{ ansible_env.HOME }}/.ssh/config"
+    mode: "0644"
+
+# ── Update allowed_signers ──
+- name: Read public key content
+  ansible.builtin.slurp:
+    src: "{{ pub_key }}"
+  register: pub_key_content
+
+- name: Set allowed_signers facts
+  ansible.builtin.set_fact:
+    signers_pub_key: "{{ pub_key_content.content | b64decode | trim }}"
+    signers_key_body: "{{ (pub_key_content.content | b64decode).split()[1] }}"
+
+- name: Ensure allowed_signers file exists
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.ssh/allowed_signers"
+    state: touch
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Remove stale entries for this key
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_env.HOME }}/.ssh/allowed_signers"
+    regexp: "{{ signers_key_body }}"
+    state: absent
+
+- name: Add current key to allowed_signers
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_env.HOME }}/.ssh/allowed_signers"
+    line: "{{ user_email }} namespaces=\"git\" {{ signers_pub_key }}"
+    create: true
+    mode: "0644"

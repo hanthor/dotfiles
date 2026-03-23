@@ -1,0 +1,40 @@
+---
+all:
+  hosts:
+    karnataka:
+      ansible_host: localhost
+      ansible_connection: local
+    bihar:
+      ansible_host: localhost
+      ansible_connection: local
+    kanpur:
+      ansible_host: localhost
+      ansible_connection: local
+    himachal:
+      ansible_host: localhost
+      ansible_connection: local
+    dilli:
+      ansible_host: localhost
+      ansible_connection: local
+    goa:
+      ansible_host: localhost
+      ansible_connection: local
+    matrix:
+      ansible_host: localhost
+      ansible_connection: local
+    lkofoss:
+      ansible_host: localhost
+      ansible_connection: local
+  children:
+    desktop:
+      hosts:
+        karnataka:
+        kanpur:
+        himachal:
+        dilli:
+        goa:
+    server:
+      hosts:
+        bihar:
+        matrix:
+        lkofoss:

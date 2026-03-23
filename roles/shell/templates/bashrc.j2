@@ -1,0 +1,11 @@
+{% if inventory_hostname in tmux_ssh_machines %}
+# Start tmux with fish for SSH sessions
+if [ -z "$TMUX" ] && [ -n "$SSH_CONNECTION" ]; then
+  if command -v tmux &>/dev/null && [ -x /home/linuxbrew/.linuxbrew/bin/fish ]; then
+    exec tmux new-session /home/linuxbrew/.linuxbrew/bin/fish
+  fi
+fi
+{% endif %}
+
+# Bluefin CLI shell integration
+command -v bluefin-cli &>/dev/null && eval "$(bluefin-cli init bash)"

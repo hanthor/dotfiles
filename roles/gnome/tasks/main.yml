@@ -1,0 +1,13 @@
+---
+- name: Ensure dconf config directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.config/dconf"
+    state: directory
+    mode: "0755"
+
+- name: Copy GNOME keybindings file
+  ansible.builtin.copy:
+    src: gnome-keybindings.ini
+    dest: "{{ ansible_env.HOME }}/.config/dconf/gnome-keybindings.ini"
+    mode: "0644"
+  notify: Load GNOME keybindings

@@ -1,0 +1,14 @@
+---
+- name: Check if /etc/ssh/sshd_config.d directory exists
+  ansible.builtin.stat:
+    path: /etc/ssh/sshd_config.d
+  register: sshd_config_d
+
+- name: Deploy AcceptEnv drop-in file
+  ansible.builtin.copy:
+    content: "AcceptEnv BW_SESSION\n"
+    dest: /etc/ssh/sshd_config.d/99-bw-env.conf
+    mode: "0644"
+  become: true
+  when: sshd_config_d.stat.isdir is defined and sshd_config_d.stat.isdir
+  notify: Reload sshd

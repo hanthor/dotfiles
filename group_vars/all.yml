@@ -1,0 +1,134 @@
+---
+user_name: James Reilly
+user_email: jreilly1821@gmail.com
+user_login: james
+
+brew_prefix: /home/linuxbrew/.linuxbrew
+
+# Machines that get tmux+fish SSH wrapper in bashrc
+tmux_ssh_machines:
+  - karnataka
+  - bihar
+
+# All machine names (for SSH config generation)
+machines:
+  himachal:
+    hostname: himachal
+  karnataka:
+    hostname: karnataka
+  dilli:
+    hostname: dilli
+  kanpur:
+    hostname: kanpur
+  goa:
+    hostname: goa
+  bihar:
+    hostname: bihar
+  matrix:
+    hostname: matrix.reilly.asia
+  lkofoss:
+    hostname: lkofoss.club
+
+# ── Core packages (all machines) ─────────────────────────────────
+core_brews:
+  - bitwarden-cli
+  - gh
+  - git-lfs
+  - fish
+  - bash-preexec
+  - starship
+  - tmux
+  - carapace
+  - atuin
+  - bat
+  - colordiff
+  - direnv
+  - eza
+  - fd
+  - fzf
+  - just
+  - ripgrep
+  - shellcheck
+  - shfmt
+  - tealdeer
+  - television
+  - trash-cli
+  - ugrep
+  - yq
+  - zoxide
+
+core_taps:
+  - ublue-os/experimental-tap
+
+core_tap_brews:
+  - ublue-os/experimental-tap/bluefin-cli
+
+# ── Desktop-only packages ────────────────────────────────────────
+desktop_taps:
+  - gptscript-ai/tap
+
+desktop_brews:
+  - aria2
+  - btop
+  - dysk
+  - rclone
+  - stress-ng
+  - syncthing
+  - uutils-coreutils
+  - gcc
+  - gcc@11
+  - gdb
+  - go
+  - neovim
+  - node
+  - pipx
+  - python@3.13
+  - rust
+  - rust-analyzer
+  - rustup
+  - gemini-cli
+  - ramalama
+  - gptscript-ai/tap/clio
+  - glab
+  - k9s
+  - kubernetes-cli
+  - kubectx
+  - podman-compose
+
+desktop_vscode_extensions:
+  - bradlc.vscode-tailwindcss
+  - catppuccin.catppuccin-vsc
+  - catppuccin.catppuccin-vsc-icons
+  - catppuccin.catppuccin-vsc-pack
+  - charliermarsh.ruff
+  - docker.docker
+  - esbenp.prettier-vscode
+  - github.copilot
+  - github.copilot-chat
+  - github.vscode-github-actions
+  - github.vscode-pull-request-github
+  - golang.go
+  - ms-azuretools.vscode-azureresourcegroups
+  - ms-azuretools.vscode-containers
+  - ms-azuretools.vscode-docker
+  - ms-kubernetes-tools.vscode-kubernetes-tools
+  - ms-python.debugpy
+  - ms-python.python
+  - ms-python.vscode-pylance
+  - ms-vscode-remote.remote-containers
+  - ms-vscode-remote.remote-ssh
+  - ms-vscode-remote.remote-ssh-edit
+  - ms-vscode-remote.remote-wsl
+  - ms-vscode-remote.vscode-remote-extensionpack
+  - ms-vscode.remote-explorer
+  - ms-vscode.remote-server
+  - nur.just-black
+  - orta.vscode-jest
+  - redhat.vscode-yaml
+  - rust-lang.rust-analyzer
+  - skellock.just
+  - visualstudioexptteam.intellicode-api-usage-examples
+  - visualstudioexptteam.vscodeintellicode
+  - vue.volar
+  - waderyan.gitblame
+  - yzhang.markdown-all-in-one

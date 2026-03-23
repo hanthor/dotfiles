@@ -1,0 +1,14 @@
+Host *
+  AddKeysToAgent yes
+  IdentitiesOnly yes
+  ServerAliveInterval 60
+  ServerAliveCountMax 3
+  IdentityFile ~/.ssh/{{ inventory_hostname }}_id_ed25519
+  SendEnv BW_SESSION
+
+{% for name, info in machines.items() %}
+Host {{ name }}
+  HostName {{ info.hostname }}
+  User {{ user_login }}
+
+{% endfor %}

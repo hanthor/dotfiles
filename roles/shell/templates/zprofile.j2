@@ -1,0 +1,5 @@
+[ -f /home/linuxbrew/.linuxbrew/bin/brew ] && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+{% if is_desktop | bool %}
+export PATH="$HOME/.local/share/flatpak/exports/bin:$PATH"
+{% endif %}
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"

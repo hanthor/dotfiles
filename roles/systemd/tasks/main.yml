@@ -1,0 +1,27 @@
+---
+- name: Create systemd user directory
+  ansible.builtin.file:
+    path: ~/.config/systemd/user
+    state: directory
+    mode: "0755"
+
+- name: Deploy dotfiles-update service
+  ansible.builtin.template:
+    src: dotfiles-update.service.j2
+    dest: ~/.config/systemd/user/dotfiles-update.service
+    mode: "0644"
+  notify: Reload systemd user daemon
+
+- name: Deploy dotfiles-update timer
+  ansible.builtin.template:
+    src: dotfiles-update.timer.j2
+    dest: ~/.config/systemd/user/dotfiles-update.timer
+    mode: "0644"
+  notify: Reload systemd user daemon
+
+- name: Enable and start dotfiles-update timer
+  ansible.builtin.systemd:
+    name: dotfiles-update.timer
+    scope: user
+    enabled: true
+    state: started

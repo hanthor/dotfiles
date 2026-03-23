@@ -1,0 +1,18 @@
+---
+- name: Deploy ~/.gitconfig
+  ansible.builtin.template:
+    src: gitconfig.j2
+    dest: ~/.gitconfig
+    mode: "0644"
+
+- name: Create ~/.config/gh/ directory
+  ansible.builtin.file:
+    path: ~/.config/gh
+    state: directory
+    mode: "0755"
+
+- name: Deploy ~/.config/gh/config.yml
+  ansible.builtin.copy:
+    src: gh_config.yml
+    dest: ~/.config/gh/config.yml
+    mode: "0644"

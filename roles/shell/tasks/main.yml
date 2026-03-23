@@ -1,0 +1,55 @@
+---
+- name: Deploy ~/.bashrc
+  ansible.builtin.template:
+    src: bashrc.j2
+    dest: ~/.bashrc
+    mode: "0644"
+
+- name: Deploy ~/.zshrc
+  ansible.builtin.template:
+    src: zshrc.j2
+    dest: ~/.zshrc
+    mode: "0644"
+
+- name: Deploy ~/.zprofile
+  ansible.builtin.template:
+    src: zprofile.j2
+    dest: ~/.zprofile
+    mode: "0644"
+
+- name: Deploy ~/.tmux.conf
+  ansible.builtin.copy:
+    src: tmux.conf
+    dest: ~/.tmux.conf
+    mode: "0644"
+
+- name: Create ~/.config/fish/ directory
+  ansible.builtin.file:
+    path: ~/.config/fish
+    state: directory
+    mode: "0755"
+
+- name: Deploy ~/.config/fish/config.fish
+  ansible.builtin.copy:
+    src: config.fish
+    dest: ~/.config/fish/config.fish
+    mode: "0644"
+
+- name: Check if brew zsh exists
+  ansible.builtin.stat:
+    path: /home/linuxbrew/.linuxbrew/bin/zsh
+  register: brew_zsh
+
+- name: Add brew zsh to /etc/shells
+  ansible.builtin.lineinfile:
+    path: /etc/shells
+    line: /home/linuxbrew/.linuxbrew/bin/zsh
+  become: true
+  when: brew_zsh.stat.exists
+
+- name: Set login shell to brew zsh
+  ansible.builtin.user:
+    name: "{{ ansible_user_id }}"
+    shell: /home/linuxbrew/.linuxbrew/bin/zsh
+  become: true
+  when: brew_zsh.stat.exists

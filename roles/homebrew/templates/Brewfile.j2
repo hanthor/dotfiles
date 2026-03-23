@@ -1,0 +1,27 @@
+# Core packages
+{% for tap in core_taps %}
+tap "{{ tap }}"
+{% endfor %}
+
+{% for pkg in core_brews %}
+brew "{{ pkg }}"
+{% endfor %}
+
+{% for pkg in core_tap_brews %}
+brew "{{ pkg }}"
+{% endfor %}
+
+{% if is_desktop | bool %}
+# Desktop packages
+{% for tap in desktop_taps %}
+tap "{{ tap }}"
+{% endfor %}
+
+{% for pkg in desktop_brews %}
+brew "{{ pkg }}"
+{% endfor %}
+
+{% for ext in desktop_vscode_extensions %}
+vscode "{{ ext }}"
+{% endfor %}
+{% endif %}

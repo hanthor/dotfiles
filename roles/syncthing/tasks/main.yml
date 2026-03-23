@@ -1,0 +1,20 @@
+---
+- name: Create systemd user directory
+  ansible.builtin.file:
+    path: ~/.config/systemd/user
+    state: directory
+    mode: "0755"
+
+- name: Copy syncthing service file
+  ansible.builtin.copy:
+    src: syncthing.service
+    dest: ~/.config/systemd/user/syncthing.service
+    mode: "0644"
+  notify: Reload systemd user daemon
+
+- name: Enable and start syncthing user service
+  ansible.builtin.systemd:
+    name: syncthing.service
+    scope: user
+    enabled: true
+    state: started

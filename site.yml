@@ -1,0 +1,57 @@
+---
+- name: Configure workstation
+  hosts: "{{ target | default(lookup('file', '/etc/dotfiles-machine', errors='ignore') | default('localhost')) }}"
+  gather_facts: true
+
+  pre_tasks:
+    - name: Set convenience facts
+      ansible.builtin.set_fact:
+        is_desktop: "{{ inventory_hostname in groups.get('desktop', []) }}"
+        brew_bin: "{{ brew_prefix }}/bin"
+      tags: always
+
+    - name: Ensure brew is in PATH for this run
+      ansible.builtin.set_fact:
+        ansible_env_path: "{{ brew_bin }}:{{ ansible_env.PATH }}"
+      tags: always
+
+  environment:
+    PATH: "{{ brew_bin | default('/home/linuxbrew/.linuxbrew/bin') }}:{{ ansible_env.PATH }}"
+
+  roles:
+    # Phase 1: System + packages (no secrets needed)
+    - role: sshd
+      tags: [system]
+    - role: homebrew
+      tags: [packages]
+    - role: shell
+      tags: [dotfiles]
+    - role: git
+      tags: [dotfiles]
+
+    # Phase 2: Secrets + auth
+    - role: bitwarden
+      tags: [secrets]
+    - role: ssh_keys
+      tags: [secrets]
+    - role: github
+      tags: [secrets]
+    - role: tailscale
+      tags: [secrets]
+
+    # Phase 3: Desktop apps
+    - role: flatpak
+      tags: [packages, desktop]
+      when: is_desktop | bool
+    - role: gnome
+      tags: [desktop]
+      when: is_desktop | bool
+    - role: zen_browser
+      tags: [desktop]
+      when: is_desktop | bool
+
+    # Phase 4: Services
+    - role: syncthing
+      tags: [services]
+    - role: systemd
+      tags: [services]
