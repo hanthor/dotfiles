@@ -154,7 +154,7 @@
     dest: ~/.local/share/atuin/key
     mode: "0600"
   no_log: true
-  when: atuin_bw_item.rc == 0
+  when: atuin_bw_item.rc == 0 and (atuin_key | default('')) | length > 0
   tags: [secrets]
 
 - name: Check if atuin is already logged in
@@ -170,6 +170,8 @@
   no_log: true
   when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
   changed_when: true
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
   tags: [secrets]
 
 - name: Sync atuin history

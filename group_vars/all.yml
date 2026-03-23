@@ -30,6 +30,7 @@ core_brews:
   - gh
   - git-lfs
   - fish
+  - zsh
   - bash-preexec
   - starship
   - tmux
