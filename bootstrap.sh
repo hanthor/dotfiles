@@ -115,10 +115,18 @@ get_machine_name() {
 
   echo ""
   echo "Available machines: himachal karnataka dilli kanpur goa bihar matrix lkofoss"
-  read -rp "Machine name: " MACHINE_NAME </dev/tty
+
+  if [ ! -c /dev/tty ]; then
+    echo "ERROR: Cannot prompt interactively (no /dev/tty)."
+    echo "Re-run with: curl -fsSL $0 | bash -s -- --name <machine>"
+    exit 1
+  fi
+
+  printf "Machine name: " >/dev/tty
+  read -r MACHINE_NAME </dev/tty
 
   if [ -z "$MACHINE_NAME" ]; then
-    echo "ERROR: Machine name is required."
+    echo "ERROR: Machine name is required. Pass --name <machine> to skip prompt."
     exit 1
   fi
 }
