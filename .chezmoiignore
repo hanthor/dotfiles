@@ -3,3 +3,9 @@
 {{- if not .isDesktop }}
 .config/zen-browser
 {{- end }}
+
+# Fish files managed by fisher/fish itself (not chezmoi)
+.config/fish/fish_variables
+.config/fish/functions
+.config/fish/completions
+.config/fish/conf.d
