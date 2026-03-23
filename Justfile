@@ -122,15 +122,37 @@ apply-all:
     echo ""
     echo "All hosts done ✓"
 
-
+# Add a new machine (run from your main machine with BW unlocked)
+add-machine name:
     ssh -o SendEnv=BW_SESSION james@{{name}} 'curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name {{name}}'
 
 # Pull latest changes and apply
 update:
     cd {{dotfiles_dir}} && git pull --ff-only && just apply
 
-# Check what would change (dry run)
-check:
+# Apply to all machines in parallel via Ansible (run from karnataka)
+# Unlocks BW locally and passes session via extra-var; uses SSH connection to remotes
+apply-ansible:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{dotfiles_dir}}
+    git pull --ff-only
+    if [ -z "${BW_SESSION:-}" ]; then
+      if [ -f /tmp/bw_session ]; then
+        export BW_SESSION=$(cat /tmp/bw_session)
+      else
+        echo "Unlocking Bitwarden..."
+        export BW_SESSION=$(bw unlock --raw)
+        echo "$BW_SESSION" > /tmp/bw_session
+        chmod 600 /tmp/bw_session
+      fi
+    fi
+    ansible-playbook site.yml \
+      --forks 10 \
+      -e "bw_session=${BW_SESSION}" \
+      -e "target=all"
+
+
     cd {{dotfiles_dir}} && ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml --check --diff
 
 # Edit this machine's host_vars
