@@ -19,7 +19,7 @@ bw_ensure_unlocked() {
 
   if [ "$status" = "unauthenticated" ]; then
     echo "Bitwarden: not logged in. Running bw login..."
-    bw login
+    bw login || return 1
   fi
 
   echo "Bitwarden: unlocking vault..."
