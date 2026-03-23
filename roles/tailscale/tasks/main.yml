@@ -1,4 +1,33 @@
 ---
+# Configure systemd-resolved to work properly with Tailscale MagicDNS.
+# resolv.conf must point to the stub resolver so Tailscale can configure
+# resolved via D-Bus instead of overwriting the file directly.
+- name: Create systemd-resolved drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Configure systemd-resolved to listen on [::1] for container DNS
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/ipv6-stub.conf
+    mode: "0644"
+    content: |
+      [Resolve]
+      DNSStubListenerExtra=::1
+  become: true
+  notify: Restart systemd-resolved
+
+- name: Point resolv.conf to systemd-resolved stub resolver
+  ansible.builtin.file:
+    src: /run/systemd/resolve/stub-resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    force: true
+  become: true
+  notify: Restart systemd-resolved
+
 - name: Check if tailscale is already connected
   ansible.builtin.command: tailscale status
   register: tailscale_status
