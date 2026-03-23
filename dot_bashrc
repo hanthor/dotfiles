@@ -1,6 +1,6 @@
 # Start tmux with fish for SSH sessions
-if [ -z "$TMUX" ]; then
-  if [ -n "$SSH_CONNECTION" ]; then
-    tmux new-session /home/linuxbrew/.linuxbrew/bin/fish
+if [ -z "$TMUX" ] && [ -n "$SSH_CONNECTION" ]; then
+  if command -v tmux &>/dev/null && [ -x /home/linuxbrew/.linuxbrew/bin/fish ]; then
+    exec tmux new-session /home/linuxbrew/.linuxbrew/bin/fish
   fi
 fi
