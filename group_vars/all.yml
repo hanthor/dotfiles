@@ -5,11 +5,6 @@ user_login: james
 
 brew_prefix: /home/linuxbrew/.linuxbrew
 
-# Machines that get tmux+fish SSH wrapper in bashrc
-tmux_ssh_machines:
-  - karnataka
-  - bihar
-
 # All machine names (for SSH config generation)
 machines:
   himachal:
