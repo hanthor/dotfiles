@@ -15,7 +15,9 @@ eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 BREWFILE="$(chezmoi source-path)/Brewfile"
 if [ -f "$BREWFILE" ]; then
   echo "Installing packages from Brewfile (initial bootstrap)..."
-  brew bundle install --file="$BREWFILE" --no-lock
+  # Disable credential helper during bootstrap — gh may not be installed yet
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0="" \
+    brew bundle install --file="$BREWFILE" --no-lock
   echo "Packages installed."
 else
   echo "WARNING: Brewfile not found at $BREWFILE, skipping brew bundle."

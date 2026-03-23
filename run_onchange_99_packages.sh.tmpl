@@ -12,5 +12,6 @@ if [ ! -f "$BREWFILE" ]; then
 fi
 
 echo "Installing packages from Brewfile..."
-brew bundle install --file="$BREWFILE" --no-lock
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0="" \
+  brew bundle install --file="$BREWFILE" --no-lock
 echo "Packages installed."

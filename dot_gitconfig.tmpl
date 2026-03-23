@@ -26,8 +26,8 @@
 
 [credential "https://github.com"]
 	helper =
-	helper = !gh auth git-credential
+	helper = !/bin/sh -c 'command -v gh >/dev/null 2>&1 && gh auth git-credential "$@" || true' --
 
 [credential "https://gist.github.com"]
 	helper =
-	helper = !gh auth git-credential
+	helper = !/bin/sh -c 'command -v gh >/dev/null 2>&1 && gh auth git-credential "$@" || true' --
