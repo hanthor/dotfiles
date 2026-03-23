@@ -28,6 +28,21 @@
   become: true
   notify: Restart systemd-resolved
 
+# rp_filter=2 (loose mode) is required for exit node traffic to route correctly.
+# Tailscale v1.96+ sets this automatically, but net.ipv4.conf.default.rp_filter
+# defaults to 1 (strict) and applies to new interfaces, so set both explicitly.
+- name: Configure sysctl for Tailscale exit node compatibility
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-tailscale.conf
+    mode: "0644"
+    content: |
+      net.ipv4.conf.all.rp_filter = 2
+      net.ipv4.conf.default.rp_filter = 2
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+  become: true
+  notify: Apply sysctl settings
+
 - name: Check if tailscale is already connected
   ansible.builtin.command: tailscale status
   register: tailscale_status

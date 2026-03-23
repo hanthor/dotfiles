@@ -4,3 +4,8 @@
     name: systemd-resolved
     state: restarted
   become: true
+
+- name: Apply sysctl settings
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-tailscale.conf
+  become: true
+  changed_when: true
