@@ -119,8 +119,9 @@
 
 - name: Fetch atuin credentials from Bitwarden
   ansible.builtin.shell: |
-    BW_SESSION="{{ lookup('file', '/tmp/bw_session') }}"
-    bw get item "atuin.sh" --session "$BW_SESSION"
+    SESSION="${BW_SESSION:-$(cat /tmp/bw_session 2>/dev/null)}"
+    [ -z "$SESSION" ] && exit 1
+    bw get item "atuin.sh" --session "$SESSION"
   register: atuin_bw_item
   no_log: true
   changed_when: false

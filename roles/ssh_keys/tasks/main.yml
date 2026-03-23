@@ -77,7 +77,9 @@
     python3 -c "
     import json, sys
     priv = open('{{ priv_key }}').read()
-    pub  = open('{{ pub_key }}').read().strip()
+    # Strip comment — BW stores only 'ssh-ed25519 <key>', no trailing comment
+    pub_parts = open('{{ pub_key }}').read().strip().split()
+    pub = pub_parts[0] + ' ' + pub_parts[1]
     fp   = sys.argv[1]
     print(json.dumps({
         'type': 5,
@@ -92,6 +94,7 @@
   args:
     executable: /bin/bash
   when: bw_item_exists.rc != 0
+  failed_when: false
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
@@ -127,3 +130,34 @@
     line: "{{ user_email }} namespaces=\"git\" {{ signers_pub_key }}"
     create: true
     mode: "0644"
+
+# ── Distribute all machine keys to authorized_keys ──
+# Fetches james@<machine> from BW for every machine and adds pubkey
+# so any machine can SSH to this one after running 'just apply'
+- name: Fetch and authorize all machine SSH keys from Bitwarden
+  ansible.builtin.shell: |
+    set -euo pipefail
+    ITEM=$(bw get item "{{ user_login }}@{{ item }}" 2>/dev/null) || exit 0
+    PUB=$(echo "$ITEM" | python3 -c "
+    import sys, json
+    item = json.load(sys.stdin)
+    print(item.get('sshKey', {}).get('publicKey', ''))
+    " 2>/dev/null)
+    [ -z "$PUB" ] && exit 0
+    grep -qF "$PUB" ~/.ssh/authorized_keys 2>/dev/null || echo "$PUB" >> ~/.ssh/authorized_keys
+  args:
+    executable: /bin/bash
+  loop: "{{ machines.keys() | list }}"
+  changed_when: false
+  failed_when: false
+  environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+
+- name: Set authorized_keys permissions
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.ssh/authorized_keys"
+    mode: "0600"
+    state: touch
+    modification_time: preserve
+    access_time: preserve
