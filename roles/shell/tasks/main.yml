@@ -77,3 +77,47 @@
     shell: /home/linuxbrew/.linuxbrew/bin/zsh
   become: true
   when: brew_zsh.stat.exists
+
+# ── Atuin config ─────────────────────────────────────────────────
+- name: Ensure atuin config dir exists
+  ansible.builtin.file:
+    path: ~/.config/atuin
+    state: directory
+    mode: "0755"
+
+- name: Deploy atuin config
+  ansible.builtin.copy:
+    dest: ~/.config/atuin/config.toml
+    mode: "0644"
+    content: |
+      sync_address = "https://api.atuin.sh"
+      sync_frequency = "5m"
+      auto_sync = true
+      search_mode = "fuzzy"
+      filter_mode = "global"
+      style = "compact"
+
+# ── Atuin key from Bitwarden ──────────────────────────────────────
+- name: Ensure atuin data dir exists
+  ansible.builtin.file:
+    path: ~/.local/share/atuin
+    state: directory
+    mode: "0700"
+  tags: [secrets]
+
+- name: Fetch atuin key from Bitwarden
+  ansible.builtin.command: bw get password "Atuin"
+  register: atuin_key
+  no_log: true
+  changed_when: false
+  environment:
+    BW_SESSION: "{{ lookup('env', 'BW_SESSION') }}"
+  tags: [secrets]
+
+- name: Write atuin key file
+  ansible.builtin.copy:
+    content: "{{ atuin_key.stdout }}"
+    dest: ~/.local/share/atuin/key
+    mode: "0600"
+  no_log: true
+  tags: [secrets]

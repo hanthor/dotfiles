@@ -11,3 +11,19 @@
     dest: "{{ ansible_env.HOME }}/.config/dconf/gnome-keybindings.ini"
     mode: "0644"
   notify: Load GNOME keybindings
+
+# ── Ptyxis: default profile → brew fish ──────────────────────────
+- name: Get Ptyxis default profile UUID
+  ansible.builtin.command: gsettings get org.gnome.Ptyxis default-profile-uuid
+  register: ptyxis_uuid
+  changed_when: false
+  failed_when: false
+  when: is_desktop | bool
+
+- name: Set Ptyxis default profile to use brew fish
+  ansible.builtin.shell: |
+    UUID=$(gsettings get org.gnome.Ptyxis default-profile-uuid | tr -d "'")
+    gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" use-custom-shell-command true
+    gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-shell-command '/home/linuxbrew/.linuxbrew/bin/fish'
+  when: is_desktop | bool and ptyxis_uuid.rc is defined and ptyxis_uuid.rc == 0
+  changed_when: true

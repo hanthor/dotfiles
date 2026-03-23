@@ -25,3 +25,28 @@
     scope: user
     enabled: true
     state: started
+
+- name: Deploy atuin daemon service
+  ansible.builtin.copy:
+    dest: ~/.config/systemd/user/atuin-daemon.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Atuin shell history sync daemon
+      After=network.target
+
+      [Service]
+      ExecStart=/home/linuxbrew/.linuxbrew/bin/atuin daemon
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=default.target
+  notify: Reload systemd user daemon
+
+- name: Enable and start atuin daemon
+  ansible.builtin.systemd:
+    name: atuin-daemon.service
+    scope: user
+    enabled: true
+    state: started
