@@ -23,8 +23,29 @@
 - name: Set Ptyxis default profile to use brew fish
   ansible.builtin.shell: |
     UUID=$(gsettings get org.gnome.Ptyxis default-profile-uuid | tr -d "'")
-    gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" use-custom-shell-command true
-    gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-shell-command '/home/linuxbrew/.linuxbrew/bin/fish'
+    gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" use-custom-command true
+    gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-command '/home/linuxbrew/.linuxbrew/bin/fish'
   when: is_desktop | bool and ptyxis_uuid.rc is defined and ptyxis_uuid.rc == 0
   changed_when: true
   ignore_errors: true
+
+# ── User avatar ───────────────────────────────────────────────────
+- name: Download user avatar from reilly.asia
+  ansible.builtin.get_url:
+    url: https://reilly.asia/profile.png
+    dest: /var/lib/AccountsService/icons/james
+    mode: "0644"
+    force: true
+  become: true
+  when: is_desktop | bool
+
+- name: Set user avatar in AccountsService
+  community.general.ini_file:
+    path: /var/lib/AccountsService/users/james
+    section: User
+    option: Icon
+    value: /var/lib/AccountsService/icons/james
+    mode: "0644"
+    create: true
+  become: true
+  when: is_desktop | bool
