@@ -30,15 +30,17 @@
         - name: Warn if GitHub token not found in Bitwarden
           ansible.builtin.debug:
             msg: >-
-              No 'github-token' item found in Bitwarden — skipping GitHub auth.
+              No 'github-token' item found in Bitwarden (or vault locked) — skipping GitHub auth.
               Add a login item named 'github-token' with your PAT as the password,
               then re-run 'just apply'.
-          when: gh_token.rc != 0
+          when: gh_token.rc != 0 or (gh_token.stdout | default('')) | length == 0
 
         - name: Login to GitHub with token
           ansible.builtin.shell: echo "{{ gh_token.stdout }}" | gh auth login --with-token
           no_log: true
-          when: gh_token.rc == 0
+          when:
+            - gh_token.rc == 0
+            - (gh_token.stdout | default('')) | length > 0
 
     - name: Set git protocol to SSH
       ansible.builtin.command: gh config set git_protocol ssh
