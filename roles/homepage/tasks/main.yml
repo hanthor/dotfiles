@@ -46,6 +46,11 @@
 - name: Flush handlers to reload systemd
   ansible.builtin.meta: flush_handlers
 
+- name: Reload systemd daemon before starting homepage
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
 - name: Enable and start homepage service
   ansible.builtin.systemd:
     name: homepage.service
