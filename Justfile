@@ -53,6 +53,23 @@ apply-remote name:
         chmod 600 /tmp/bw_session
       fi
     fi
+    # Ensure bw is logged in on the remote — BW_SESSION is only an unlock token,
+    # it requires a prior 'bw login' on that machine. If unauthenticated, try
+    # to login via API key (fetched from local vault as 'bw-api-key' item).
+    REMOTE_STATUS=$(ssh {{ name }} '/home/linuxbrew/.linuxbrew/bin/bw status 2>/dev/null || echo "{}"')
+    if echo "$REMOTE_STATUS" | grep -q '"unauthenticated"'; then
+      echo "Bitwarden not logged in on {{ name }}. Attempting API key login..."
+      BW_CLIENTID=$(bw get username bw-api-key --session "$BW_SESSION" 2>/dev/null || true)
+      BW_CLIENTSECRET=$(bw get password bw-api-key --session "$BW_SESSION" 2>/dev/null || true)
+      if [ -n "$BW_CLIENTID" ] && [ -n "$BW_CLIENTSECRET" ]; then
+        ssh -o SendEnv=BW_CLIENTID,BW_CLIENTSECRET {{ name }} \
+          'export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH" && BW_CLIENTID="$BW_CLIENTID" BW_CLIENTSECRET="$BW_CLIENTSECRET" bw login --apikey 2>&1 || true'
+        echo "BW login done on {{ name }}."
+      else
+        echo "WARNING: No 'bw-api-key' item in vault. Run 'bw login' on {{ name }} manually, then re-run."
+        echo "  ssh {{ name }} 'bw login'"
+      fi
+    fi
     echo "Applying to {{ name }} with forwarded BW session..."
     ssh -o SendEnv=BW_SESSION {{ name }} \
       'export PATH="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH" && cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
