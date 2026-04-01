@@ -63,8 +63,7 @@ core_tap_brews:
   - ublue-os/experimental-tap/bluefin-cli
 
 # ── Desktop-only packages ────────────────────────────────────────
-desktop_taps:
-  - gptscript-ai/tap
+desktop_taps: []
 
 desktop_brews:
   - aria2
@@ -87,7 +86,7 @@ desktop_brews:
   - rustup
   - gemini-cli
   - ramalama
-  - gptscript-ai/tap/clio
+  - ublue-os/experimental-tap/visual-studio-code-linux
   - glab
   - k9s
   - kubernetes-cli
