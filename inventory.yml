@@ -1,6 +1,9 @@
 ---
 all:
   hosts:
+    vm:
+      ansible_host: localhost
+      ansible_connection: local
     karnataka:
       ansible_host: localhost
       ansible_connection: local
@@ -38,6 +41,7 @@ all:
         karnataka:
     server:
       hosts:
+        vm:
         bihar:
     vps:
       hosts:
