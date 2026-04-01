@@ -6,7 +6,7 @@
 
 - name: Deploy AcceptEnv drop-in file
   ansible.builtin.copy:
-    content: "AcceptEnv BW_SESSION\n"
+    content: "AcceptEnv BW_SESSION BW_CLIENTID BW_CLIENTSECRET\n"
     dest: /etc/ssh/sshd_config.d/99-bw-env.conf
     mode: "0644"
   become: true
