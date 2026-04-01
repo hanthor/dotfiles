@@ -1,2 +1,7 @@
----
 is_arm: false
+web_services:
+  - name: Cockpit
+    href: https://kanpur:9090
+    icon: cockpit.png
+    description: System management
+    group: System

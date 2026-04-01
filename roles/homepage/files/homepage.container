@@ -5,6 +5,7 @@ After=network-online.target
 [Container]
 Image=ghcr.io/gethomepage/homepage:latest
 Volume=/etc/homepage/config:/app/config
+Volume=/run/podman/podman.sock:/var/run/docker.sock:ro
 PublishPort=3000:3000
 AutoUpdate=registry
 

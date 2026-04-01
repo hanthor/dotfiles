@@ -1,0 +1,27 @@
+[Unit]
+Description=Node Exporter — hardware and OS metrics collector
+After=monitoring-network.service
+Wants=monitoring-network.service
+
+[Container]
+Image=quay.io/prometheus/node-exporter:latest
+ContainerName=node_exporter
+Network=monitoring.network
+
+Volume=/sys:/host/sys:ro
+Volume=/:/rootfs:ro,rslave
+Volume=/run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
+
+Exec=--path.rootfs=/rootfs \
+     --path.sysfs=/host/sys \
+     --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/credentials/.+|var/lib/docker/.+|var/lib/containers/.+)($$|/) \
+     --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|fuse.lxcfs|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$ \
+     --no-collector.thermal_zone \
+     --collector.systemd
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,29 @@
+---
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+    scope: user
+
+- name: Restart prometheus
+  ansible.builtin.systemd:
+    name: prometheus.service
+    state: restarted
+    scope: user
+
+- name: Restart alertmanager
+  ansible.builtin.systemd:
+    name: alertmanager.service
+    state: restarted
+    scope: user
+
+- name: Restart pve-exporter
+  ansible.builtin.systemd:
+    name: pve-exporter.service
+    state: restarted
+    scope: user
+
+- name: Restart matrix-notifier
+  ansible.builtin.systemd:
+    name: matrix-notifier.service
+    state: restarted
+    scope: user

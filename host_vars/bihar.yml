@@ -1,2 +1,13 @@
----
 is_arm: false
+tailscale_advertise_routes: "192.168.0.0/24"
+web_services:
+  - name: Proxmox
+    href: https://bihar:8006
+    icon: proxmox.png
+    description: Hypervisor
+    group: Infrastructure
+  - name: Cockpit
+    href: https://bihar:9090
+    icon: cockpit.png
+    description: System management
+    group: System

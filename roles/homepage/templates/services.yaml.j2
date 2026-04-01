@@ -1,40 +1,30 @@
-- Infrastructure:
-    - Proxmox:
-        icon: proxmox.png
-        href: https://bihar:8006
-        description: Hypervisor
-        siteMonitor: https://bihar:8006
-    - NetBox:
-        icon: netbox.png
-        href: https://bihar
-        description: Network source of truth
-        siteMonitor: https://bihar
-    - Homepage:
-        icon: homepage.png
-        href: http://bihar:3000
-        description: This dashboard
-
-- System:
-    - Cockpit (Bihar):
-        icon: cockpit.png
-        href: https://bihar:9090
-        description: Bihar system management
-        siteMonitor: https://bihar:9090
-{% for host in groups.get('desktop', []) %}
-    - Cockpit ({{ host }}):
-        icon: cockpit.png
-        href: https://{{ host }}:9090
-        description: {{ host }} system management
+{# Collect all web_services across the fleet, grouped by 'group' field #}
+{# Containers (NetBox, lima, etc.) are auto-discovered via Podman socket labels #}
+{% set ns = namespace(groups={}) %}
+{% for host in groups['all'] %}
+{%   for svc in hostvars[host].get('web_services', []) %}
+{%     set g = svc.get('group', 'Other') %}
+{%     if g not in ns.groups %}
+{%       set _ = ns.groups.update({g: []}) %}
+{%     endif %}
+{%     set _ = ns.groups[g].append({'host': host, 'svc': svc}) %}
+{%   endfor %}
 {% endfor %}
-    - Syncthing:
-        icon: syncthing.png
-        href: http://karnataka:8384
-        description: File sync
-        siteMonitor: http://karnataka:8384
+{% for group_name, entries in ns.groups.items() %}
+- {{ group_name }}:
+{% for entry in entries %}
+    - {{ entry.svc.name }}{% if entry.svc.get('description') %} ({{ entry.host }}){% endif %}:
 
-- VPS:
-{% for host in groups.get('vps', []) %}
-    - {{ host }}:
-        href: https://{{ hostvars[host].ansible_host | default(host) }}
-        description: VPS
+        href: {{ entry.svc.href }}
+{% if entry.svc.get('icon') %}
+        icon: {{ entry.svc.icon }}
+{% endif %}
+{% if entry.svc.get('description') %}
+        description: {{ entry.svc.description }}
+{% endif %}
+{% if entry.svc.get('siteMonitor') %}
+        siteMonitor: {{ entry.svc.siteMonitor }}
+{% endif %}
+        server: bihar
+{% endfor %}
 {% endfor %}

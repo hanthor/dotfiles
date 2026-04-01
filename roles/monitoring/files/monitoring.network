@@ -1,0 +1,5 @@
+[Unit]
+Description=Monitoring stack network
+
+[Network]
+Label=app=monitoring

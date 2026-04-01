@@ -1,0 +1,28 @@
+# Standard prometheus.container for non-hub machines (kanpur, himachal, etc.)
+# For karnataka (hub), see prometheus-hub.container
+
+[Unit]
+Description=Prometheus — time series database
+After=monitoring-network.service node-exporter.service prometheus-data-volume.service
+Wants=monitoring-network.service node-exporter.service prometheus-data-volume.service
+
+[Container]
+Image=quay.io/prometheus/prometheus:latest
+ContainerName=prometheus
+Network=monitoring.network
+
+PublishPort=9090:9090
+
+Volume=%h/.config/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+Volume=prometheus-data.volume:/prometheus:z
+
+Exec=--config.file=/etc/prometheus/prometheus.yml \
+     --storage.tsdb.path=/prometheus \
+     --web.enable-lifecycle
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

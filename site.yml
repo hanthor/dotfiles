@@ -51,6 +51,9 @@
       when: is_desktop | bool
 
     # Phase 4: Services
+    - role: monitoring
+      tags: [services, monitoring]
+      when: inventory_hostname not in groups.get('vps', [])
     - role: syncthing
       tags: [services]
       when: inventory_hostname not in groups.get('vps', [])

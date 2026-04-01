@@ -10,6 +10,11 @@ Volume=netbox-media.volume:/opt/netbox/netbox/media
 EnvironmentFile=/etc/netbox/netbox.env
 PublishPort=127.0.0.1:8080:8080
 AutoUpdate=registry
+Label=homepage.name=NetBox
+Label=homepage.group=Infrastructure
+Label=homepage.icon=netbox.png
+Label=homepage.href=https://bihar
+Label=homepage.description=Network source of truth
 
 [Service]
 Restart=always

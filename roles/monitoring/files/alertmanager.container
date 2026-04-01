@@ -1,0 +1,24 @@
+[Unit]
+Description=Alertmanager — alert routing and deduplication
+After=monitoring-network.service
+Wants=monitoring-network.service
+
+[Container]
+Image=quay.io/prometheus/alertmanager:latest
+ContainerName=alertmanager
+Network=monitoring.network
+
+PublishPort=9093:9093
+
+Volume=%h/.config/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,z
+Volume=alertmanager-data.volume:/alertmanager:z
+
+Exec=--config.file=/etc/alertmanager/alertmanager.yml \
+     --storage.path=/alertmanager
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

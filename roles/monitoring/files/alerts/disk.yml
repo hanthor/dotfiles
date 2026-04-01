@@ -1,0 +1,32 @@
+groups:
+  - name: disk
+    rules:
+      - alert: DiskAlmostFull
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|overlay|squashfs|efivarfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|overlay|squashfs|efivarfs"}
+          ) * 100 < 15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.machine }}"
+          description: >-
+            {{ $labels.device }} mounted at {{ $labels.mountpoint }}
+            on {{ $labels.machine }} has {{ $value | printf "%.1f" }}% free.
+
+      - alert: DiskCriticallyFull
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|overlay|squashfs|efivarfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|overlay|squashfs|efivarfs"}
+          ) * 100 < 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk critically full on {{ $labels.machine }}"
+          description: >-
+            {{ $labels.device }} mounted at {{ $labels.mountpoint }}
+            on {{ $labels.machine }} has only {{ $value | printf "%.1f" }}% free!

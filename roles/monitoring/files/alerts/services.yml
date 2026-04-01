@@ -1,0 +1,31 @@
+groups:
+  - name: services
+    rules:
+      - alert: SystemdServiceFailed
+        # node_systemd_unit_state requires --collector.systemd on node-exporter
+        # and /run/dbus/system_bus_socket mounted in the container.
+        # Only fires for system services (not user units — those need user D-Bus).
+        expr: |
+          node_systemd_unit_state{
+            state="failed",
+            name!~"(systemd-coredump@|user@|session-\\d+\\.scope|run-.*\\.scope).*"
+          } == 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service failed on {{ $labels.machine }}"
+          description: >-
+            systemd unit {{ $labels.name }} is in failed state
+            on {{ $labels.machine }}.
+
+      - alert: HostDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Exporter down on {{ $labels.machine }}"
+          description: >-
+            {{ $labels.job }} exporter on {{ $labels.machine }}
+            ({{ $labels.instance }}) has been unreachable for >5 min.

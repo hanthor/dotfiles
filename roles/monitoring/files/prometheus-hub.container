@@ -1,0 +1,30 @@
+# karnataka-specific prometheus — runs on port 9091 (9090 taken by Cockpit)
+# and accepts remote_write from other machines
+
+[Unit]
+Description=Prometheus — time series database (central hub)
+After=monitoring-network.service node-exporter.service prometheus-data-volume.service
+Wants=monitoring-network.service node-exporter.service prometheus-data-volume.service
+
+[Container]
+Image=quay.io/prometheus/prometheus:latest
+ContainerName=prometheus
+Network=monitoring.network
+
+PublishPort=9091:9090
+
+Volume=%h/.config/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+Volume=%h/.config/monitoring/alerts:/etc/prometheus/alerts:ro,z
+Volume=prometheus-data.volume:/prometheus:z
+
+Exec=--config.file=/etc/prometheus/prometheus.yml \
+     --storage.tsdb.path=/prometheus \
+     --web.enable-lifecycle \
+     --web.enable-remote-write-receiver
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

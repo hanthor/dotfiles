@@ -1,0 +1,18 @@
+[Unit]
+Description=Proxmox VE Exporter — Bihar metrics for Prometheus
+After=monitoring-network.service
+Wants=monitoring-network.service
+
+[Container]
+Image=docker.io/prompve/prometheus-pve-exporter:latest
+ContainerName=pve_exporter
+Network=monitoring.network
+
+Volume=%h/.config/monitoring/pve.yml:/etc/prometheus/pve.yml:ro,z
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

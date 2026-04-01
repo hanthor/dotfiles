@@ -1,0 +1,23 @@
+[Unit]
+Description=Matrix Alertmanager notifier — bridge Alertmanager webhooks to Matrix
+After=monitoring-network.service alertmanager.service
+Wants=monitoring-network.service alertmanager.service
+
+[Container]
+Image=docker.io/library/python:3-slim
+ContainerName=matrix_notifier
+Network=monitoring.network
+
+PublishPort=8081:8080
+
+Volume=%h/.config/monitoring/matrix-notifier.py:/app/notifier.py:ro,z
+EnvironmentFile=%h/.config/monitoring/matrix-notifier.env
+
+Exec=python /app/notifier.py
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

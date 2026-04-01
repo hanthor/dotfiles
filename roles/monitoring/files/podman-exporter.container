@@ -1,0 +1,26 @@
+[Unit]
+Description=Podman Exporter — container metrics for Prometheus
+After=monitoring-network.service
+Wants=monitoring-network.service
+
+[Container]
+Image=quay.io/navidys/prometheus-podman-exporter:latest
+ContainerName=podman_exporter
+Network=monitoring.network
+
+Volume=/run/user/1000/podman/podman.sock:/run/podman/podman.sock:ro
+Environment=CONTAINER_HOST=unix:///run/podman/podman.sock
+
+UserNS=keep-id
+SecurityLabelDisable=true
+
+Exec=--collector.enable-all \
+     --collector.cache_duration=30
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

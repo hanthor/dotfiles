@@ -30,6 +30,7 @@
     - settings.yaml
     - widgets.yaml
     - bookmarks.yaml
+    - docker.yaml
   notify: Reload systemd daemon
 
 - name: Deploy homepage quadlet

@@ -1,2 +1,14 @@
----
 is_arm: false
+monitoring_hub: true
+web_services:
+  - name: Cockpit
+    href: https://karnataka:9090
+    icon: cockpit.png
+    description: System management
+    group: System
+  - name: RamaLama
+    href: http://karnataka:8080
+    icon: ollama.png
+    description: Local LLM server
+    group: AI
+    siteMonitor: http://karnataka:8080
