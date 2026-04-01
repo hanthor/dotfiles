@@ -9,7 +9,7 @@ export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" +
 apply:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd {{dotfiles_dir}}
+    cd {{ dotfiles_dir }}
     git pull --ff-only
     if [ -z "${BW_SESSION:-}" ]; then
       if [ -f /tmp/bw_session ]; then
@@ -19,25 +19,25 @@ apply:
         if ! export BW_SESSION=$(bw unlock --raw 2>/dev/null); then
           echo "WARNING: Bitwarden unlock failed (not logged in?). Run 'bw login' first."
           echo "Continuing without secrets..."
-          exec ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml --skip-tags secrets
+          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets
         fi
         echo "$BW_SESSION" > /tmp/bw_session
         chmod 600 /tmp/bw_session
       fi
     fi
-    ansible-playbook --connection=local -l {{machine}} -e target={{machine}} -e "bw_session=${BW_SESSION:-}" site.yml
+    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e "bw_session=${BW_SESSION:-}" site.yml
 
 # Apply without secrets
 apply-nosecrets:
-    cd {{dotfiles_dir}} && git pull --ff-only && ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml --skip-tags secrets
+    cd {{ dotfiles_dir }} && git pull --ff-only && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets
 
 # Apply only dotfile configs (shell, git, tmux, etc.)
 dotfiles:
-    cd {{dotfiles_dir}} && ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml --tags dotfiles
+    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --tags dotfiles
 
 # Apply only packages (Homebrew + Flatpak)
 packages:
-    cd {{dotfiles_dir}} && ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml --tags packages
+    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --tags packages
 
 # Apply to a remote machine, forwarding your local BW session over SSH
 apply-remote name:
@@ -53,58 +53,36 @@ apply-remote name:
         chmod 600 /tmp/bw_session
       fi
     fi
-    echo "Applying to {{name}} with forwarded BW session..."
-    ssh -o SendEnv=BW_SESSION {{name}} \
+    echo "Applying to {{ name }} with forwarded BW session..."
+    ssh -o SendEnv=BW_SESSION {{ name }} \
       'export PATH="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH" && cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
 
 # Register a new machine in inventory and print bootstrap instructions
+
 # Usage: just onboard <name> [desktop|server|vps]
 onboard name type="desktop":
     #!/usr/bin/env bash
     set -euo pipefail
-    cd {{dotfiles_dir}}
+    cd {{ dotfiles_dir }}
     git pull --ff-only
 
-    if grep -q "^    {{name}}:" inventory.yml 2>/dev/null; then
-      echo "{{name}} is already in inventory."
-    else
-      echo "Registering {{name}} as {{type}}..."
-      python3 - <<'PYEOF'
-import sys
+    python3 scripts/register-machine.py {{ name }} {{ type }} inventory.yml
 
-name = "{{name}}"
-mtype = "{{type}}"
-path = "inventory.yml"
-content = open(path).read()
-
-host_entry = f"    {name}:\n      ansible_host: localhost\n      ansible_connection: local\n"
-content = content.replace("all:\n  hosts:\n", f"all:\n  hosts:\n{host_entry}", 1)
-
-group_marker = f"    {mtype}:\n      hosts:\n"
-if group_marker in content:
-    content = content.replace(group_marker, f"{group_marker}        {name}:\n", 1)
-
-open(path, "w").write(content)
-print(f"  Added {name} to {mtype} group")
-PYEOF
-
-      if [ ! -f "host_vars/{{name}}.yml" ]; then
-        echo "is_arm: false" > "host_vars/{{name}}.yml"
-      fi
-
-      git add inventory.yml host_vars/{{name}}.yml
-      git commit -m "inventory: add {{name}} ({{type}})"
-      git push
-      echo "✓ {{name}} registered and pushed."
+    if [ ! -f "host_vars/{{ name }}.yml" ]; then
+      echo "is_arm: false" > "host_vars/{{ name }}.yml"
     fi
+
+    git add inventory.yml host_vars/{{ name }}.yml
+    git diff --cached --quiet || git commit -m "inventory: add {{ name }} ({{ type }})"
+    git push
 
     echo ""
     echo "Bootstrap the new machine by running this on it:"
     echo ""
-    echo "  curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name {{name}}"
+    echo "  curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name {{ name }}"
     echo ""
     echo "Or if it's already reachable over Tailscale:"
-    echo "  just add-machine {{name}}"
+    echo "  just add-machine {{ name }}"
 
 # Apply to ALL remote machines in parallel, forwarding your local BW session
 apply-all:
@@ -135,9 +113,9 @@ apply-all:
     done
 
     echo ""
-    echo "Applying locally to {{machine}}..."
+    echo "Applying locally to {{ machine }}..."
     just apply &
-    PIDS+=("$!:{{machine}}")
+    PIDS+=("$!:{{ machine }}")
 
     for host in "${UP[@]}"; do
       echo "Applying to $host (background)..."
@@ -174,18 +152,19 @@ apply-all:
 
 # Add a new machine (run from your main machine with BW unlocked)
 add-machine name:
-    ssh -o SendEnv=BW_SESSION james@{{name}} 'curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name {{name}}'
+    ssh -o SendEnv=BW_SESSION james@{{ name }} 'curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name {{ name }}'
 
 # Pull latest changes and apply
 update:
-    cd {{dotfiles_dir}} && git pull --ff-only && just apply
+    cd {{ dotfiles_dir }} && git pull --ff-only && just apply
 
 # Apply to all machines in parallel via Ansible (run from karnataka)
+
 # Unlocks BW locally and passes session via extra-var; uses SSH connection to remotes
 apply-ansible:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd {{dotfiles_dir}}
+    cd {{ dotfiles_dir }}
     git pull --ff-only
     if [ -z "${BW_SESSION:-}" ]; then
       if [ -f /tmp/bw_session ]; then
@@ -204,19 +183,19 @@ apply-ansible:
       "$@"
 
 
-    cd {{dotfiles_dir}} && ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml --check --diff
+    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --check --diff
 
 # Install a flatpak system-wide and persist it to dotfiles
 flatpak-install app:
     #!/usr/bin/env bash
     set -euo pipefail
-    flatpak install --system -y flathub {{app}}
-    cd {{dotfiles_dir}}
-    yq -i '.system_flatpaks += ["{{app}}"]' group_vars/all.yml
+    flatpak install --system -y flathub {{ app }}
+    cd {{ dotfiles_dir }}
+    yq -i '.system_flatpaks += ["{{ app }}"]' group_vars/all.yml
     git add group_vars/all.yml
-    git commit -m "flatpak: add {{app}}"
+    git commit -m "flatpak: add {{ app }}"
     git push
 
 # Edit this machine's host_vars
 edit-host:
-    ${EDITOR:-vi} {{dotfiles_dir}}/host_vars/{{machine}}.yml
+    ${EDITOR:-vi} {{ dotfiles_dir }}/host_vars/{{ machine }}.yml

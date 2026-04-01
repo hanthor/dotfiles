@@ -113,20 +113,6 @@
     path: /home/linuxbrew/.linuxbrew/bin/zsh
   register: brew_zsh
 
-- name: Add brew zsh to /etc/shells
-  ansible.builtin.lineinfile:
-    path: /etc/shells
-    line: /home/linuxbrew/.linuxbrew/bin/zsh
-  become: true
-  when: brew_zsh.stat.exists
-
-- name: Set login shell to brew zsh
-  ansible.builtin.user:
-    name: "{{ ansible_user_id }}"
-    shell: /home/linuxbrew/.linuxbrew/bin/zsh
-  become: true
-  when: brew_zsh.stat.exists
-
 # ── Atuin config ─────────────────────────────────────────────────
 - name: Ensure atuin config dir exists
   ansible.builtin.file:
