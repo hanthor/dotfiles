@@ -21,7 +21,9 @@ tap "{{ tap }}"
 brew "{{ pkg }}"
 {% endfor %}
 
+{% if ansible_os_family == 'Darwin' %}
 {% for ext in desktop_vscode_extensions %}
 vscode "{{ ext }}"
 {% endfor %}
+{% endif %}
 {% endif %}
