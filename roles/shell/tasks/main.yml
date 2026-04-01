@@ -185,20 +185,20 @@
   ansible.builtin.stat:
     path: ~/.local/share/atuin/session
   register: atuin_session
-  when: atuin_bw_item.rc == 0
+  when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
   tags: [secrets]
 
 - name: Remove atuin data directory if corrupted
   ansible.builtin.file:
     path: ~/.local/share/atuin
     state: absent
-  when: atuin_bw_item.rc == 0
+  when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
   tags: [secrets]
 
 - name: Login to atuin sync
   ansible.builtin.command: >
     atuin login -u "{{ atuin_username }}" -p "{{ atuin_password }}" -k "{{ atuin_key }}"
-  when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
+  when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0 and not atuin_session.stat.exists
   changed_when: true
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
@@ -210,7 +210,7 @@
       ansible.builtin.command: atuin sync
       no_log: true
       changed_when: true
-      when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
+      when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0 and not atuin_session.stat.exists
       environment:
         PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
       ignore_errors: true
@@ -220,17 +220,17 @@
       ansible.builtin.file:
         path: ~/.local/share/atuin/records.db
         state: absent
-      when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
+      when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0 and not atuin_session.stat.exists
       tags: [secrets]
 
     - name: Retry atuin sync after cleanup
       ansible.builtin.command: atuin sync
       no_log: true
       changed_when: true
-      when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
+      when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0 and not atuin_session.stat.exists
       environment:
         PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
       ignore_errors: true
       tags: [secrets]
-  when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
+  when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0 and not atuin_session.stat.exists
   tags: [secrets]
