@@ -20,3 +20,9 @@
 
 - name: Flush handlers to run brew bundle now
   ansible.builtin.meta: flush_handlers
+
+- name: Ensure packaging is installed in brew Python (required by Ansible systemd module)
+  ansible.builtin.command: >
+    /home/linuxbrew/.linuxbrew/bin/python3 -m pip install packaging --break-system-packages --quiet
+  changed_when: false
+  failed_when: false
