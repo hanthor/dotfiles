@@ -164,9 +164,9 @@
 - name: Warn if atuin.sh not found in Bitwarden
   ansible.builtin.debug:
     msg: >-
-      Bitwarden item 'atuin.sh' not found — skipping atuin login.
-      See README for how to create it.
-  when: atuin_bw_item.rc != 0
+      Bitwarden item 'atuin.sh' not found or vault locked — skipping atuin login.
+      Run 'bw unlock' on this machine and re-run, or log in to atuin manually.
+  when: atuin_bw_item.rc != 0 or (atuin_bw_item.stdout | default('')) | length == 0
   tags: [secrets]
 
 - name: Parse atuin credentials
@@ -175,7 +175,7 @@
     atuin_password: "{{ (atuin_bw_item.stdout | from_json).login.password }}"
     atuin_key: "{{ (atuin_bw_item.stdout | from_json).fields | selectattr('name', 'equalto', 'key') | map(attribute='value') | first }}"
   no_log: true
-  when: atuin_bw_item.rc == 0
+  when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default('')) | length > 0
   tags: [secrets]
 
 # NOTE: We do NOT write atuin_key (mnemonic) to ~/.local/share/atuin/key directly.
