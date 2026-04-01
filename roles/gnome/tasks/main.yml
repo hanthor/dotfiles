@@ -23,11 +23,10 @@
 - name: Set Ptyxis default profile to use brew fish and Nerd Font
   ansible.builtin.shell: |
     UUID=$(gsettings get org.gnome.Ptyxis default-profile-uuid | tr -d "'")
-    # Set shell to brew fish
     gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" use-custom-command true
     gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-command '/home/linuxbrew/.linuxbrew/bin/fish'
-    # Set font to JetBrains Mono Nerd Font
-    gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" font-name 'JetBrainsMono Nerd Font 12'
+    gsettings set org.gnome.Ptyxis use-system-font false
+    gsettings set org.gnome.Ptyxis font-name 'JetBrainsMono Nerd Font 12'
   when: is_desktop | bool and ptyxis_uuid.rc is defined and ptyxis_uuid.rc == 0
   changed_when: true
   ignore_errors: true
