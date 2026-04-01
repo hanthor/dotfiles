@@ -76,8 +76,14 @@ apply-remote name:
       fi
     fi
     echo "Applying to {{ name }} with forwarded BW session..."
-    ssh -o SendEnv=BW_SESSION {{ name }} \
-      'export PATH="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH" && cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
+    # Interpolate BW_SESSION directly — avoids AcceptEnv dependency on fresh machines
+    ssh {{ name }} "
+      export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
+      export BW_SESSION='${BW_SESSION}'
+      echo \"\$BW_SESSION\" > /tmp/bw_session
+      chmod 600 /tmp/bw_session
+      cd ~/.local/share/dotfiles && git pull --ff-only && just apply
+    "
 
 # Register a new machine in inventory and print bootstrap instructions
 
@@ -141,9 +147,12 @@ apply-all:
 
     for host in "${UP[@]}"; do
       echo "Applying to $host (background)..."
-      ssh -o SendEnv=BW_SESSION "$host" \
-        'cd ~/.local/share/dotfiles && git pull --ff-only && just apply' \
-        > "/tmp/apply_${host}.log" 2>&1 &
+      ssh "$host" "
+        export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
+        export BW_SESSION='${BW_SESSION}'
+        echo \"\$BW_SESSION\" > /tmp/bw_session && chmod 600 /tmp/bw_session
+        cd ~/.local/share/dotfiles && git pull --ff-only && just apply
+      " > "/tmp/apply_${host}.log" 2>&1 &
       PIDS+=("$!:$host")
     done
 
