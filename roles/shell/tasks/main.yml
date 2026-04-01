@@ -135,6 +135,17 @@
     mode: "0700"
   tags: [secrets]
 
+- name: Sync Bitwarden vault before secret fetch
+  ansible.builtin.shell: |
+    SESSION="${BW_SESSION:-$(cat /tmp/bw_session 2>/dev/null)}"
+    [ -z "$SESSION" ] && exit 0
+    bw sync --session "$SESSION"
+  changed_when: false
+  failed_when: false
+  tags: [secrets]
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+
 - name: Fetch atuin credentials from Bitwarden
   ansible.builtin.shell: |
     SESSION="${BW_SESSION:-$(cat /tmp/bw_session 2>/dev/null)}"
