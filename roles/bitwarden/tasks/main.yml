@@ -36,7 +36,17 @@
         - bw_session is not defined
         - bw_session_cached_raw.content is defined
 
-    # 3. Cache session for reuse
+    # 3. Sync vault to ensure latest items are available
+    - name: Sync Bitwarden vault
+      ansible.builtin.command: bw sync
+      changed_when: false
+      failed_when: false
+      when: bw_session is defined
+      environment:
+        BW_SESSION: "{{ bw_session }}"
+        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+
+    # 4. Cache session for reuse
     - name: Cache session to /tmp/bw_session
       ansible.builtin.copy:
         content: "{{ bw_session }}"
