@@ -108,11 +108,6 @@
     dest: ~/.config/fish/conf.d/aliases.fish
     mode: "0644"
 
-- name: Check if brew zsh exists
-  ansible.builtin.stat:
-    path: /home/linuxbrew/.linuxbrew/bin/zsh
-  register: brew_zsh
-
 # ── Atuin config ─────────────────────────────────────────────────
 - name: Ensure atuin config dir exists
   ansible.builtin.file:
