@@ -144,6 +144,7 @@
   failed_when: false
   tags: [secrets]
   environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
 
 - name: Fetch atuin credentials from Bitwarden
