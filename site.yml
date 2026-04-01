@@ -59,6 +59,9 @@
     - role: netbox
       tags: [services, secrets]
       when: inventory_hostname in groups.get('server', [])
+    - role: homepage
+      tags: [services]
+      when: inventory_hostname == 'bihar'
     - role: netbox_agent
       tags: [services, secrets]
       when: inventory_hostname not in groups.get('desktop', [])

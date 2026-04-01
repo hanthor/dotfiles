@@ -1,0 +1,53 @@
+---
+- name: Create homepage config directory
+  ansible.builtin.file:
+    path: /etc/homepage/config
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  become: true
+
+- name: Deploy homepage service config
+  ansible.builtin.template:
+    src: services.yaml.j2
+    dest: /etc/homepage/config/services.yaml
+    mode: "0644"
+    owner: root
+    group: root
+  become: true
+  notify: Reload systemd daemon
+
+- name: Deploy homepage static config files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /etc/homepage/config/
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  loop:
+    - settings.yaml
+    - widgets.yaml
+    - bookmarks.yaml
+  notify: Reload systemd daemon
+
+- name: Deploy homepage quadlet
+  ansible.builtin.copy:
+    src: homepage.container
+    dest: /etc/containers/systemd/homepage.container
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd daemon
+
+- name: Flush handlers to reload systemd
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start homepage service
+  ansible.builtin.systemd:
+    name: homepage.service
+    state: started
+    enabled: true
+  become: true

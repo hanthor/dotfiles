@@ -1,0 +1,7 @@
+- resources:
+    cpu: true
+    memory: true
+    label: Bihar
+- search:
+    provider: duckduckgo
+    target: _blank

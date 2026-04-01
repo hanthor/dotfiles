@@ -1,0 +1,11 @@
+title: Tailnet
+theme: dark
+color: pink
+headerStyle: clean
+layout:
+  Infrastructure:
+    style: row
+    columns: 3
+  System:
+    style: row
+    columns: 3

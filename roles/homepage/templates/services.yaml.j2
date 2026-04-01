@@ -1,0 +1,40 @@
+- Infrastructure:
+    - Proxmox:
+        icon: proxmox.png
+        href: https://bihar:8006
+        description: Hypervisor
+        siteMonitor: https://bihar:8006
+    - NetBox:
+        icon: netbox.png
+        href: https://bihar
+        description: Network source of truth
+        siteMonitor: https://bihar
+    - Homepage:
+        icon: homepage.png
+        href: http://bihar:3000
+        description: This dashboard
+
+- System:
+    - Cockpit (Bihar):
+        icon: cockpit.png
+        href: https://bihar:9090
+        description: Bihar system management
+        siteMonitor: https://bihar:9090
+{% for host in groups.get('desktop', []) %}
+    - Cockpit ({{ host }}):
+        icon: cockpit.png
+        href: https://{{ host }}:9090
+        description: {{ host }} system management
+{% endfor %}
+    - Syncthing:
+        icon: syncthing.png
+        href: http://karnataka:8384
+        description: File sync
+        siteMonitor: http://karnataka:8384
+
+- VPS:
+{% for host in groups.get('vps', []) %}
+    - {{ host }}:
+        href: https://{{ hostvars[host].ansible_host | default(host) }}
+        description: VPS
+{% endfor %}
