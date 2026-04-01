@@ -33,7 +33,7 @@
     mode: "0644"
   notify: Reload systemd daemon
 
-# Prometheus + Perses (desktop + server hosts, not VPS)
+# Prometheus + Perses: desktops and hub only (servers get prometheus only to avoid port conflicts)
 - name: Deploy prometheus data volume
   ansible.builtin.copy:
     src: prometheus-data.volume
@@ -47,7 +47,7 @@
     src: perses-data.volume
     dest: "{{ ansible_env.HOME }}/.config/containers/systemd/perses-data.volume"
     mode: "0644"
-  when: is_desktop | bool or inventory_hostname in groups.get('server', [])
+  when: is_desktop | bool or (monitoring_hub | default(false) | bool)
   notify: Reload systemd daemon
 
 - name: Deploy prometheus quadlet (hub)
@@ -73,7 +73,7 @@
     src: perses.container
     dest: "{{ ansible_env.HOME }}/.config/containers/systemd/perses.container"
     mode: "0644"
-  when: is_desktop | bool or inventory_hostname in groups.get('server', [])
+  when: is_desktop | bool or (monitoring_hub | default(false) | bool)
   notify: Reload systemd daemon
 
 - name: Deploy prometheus.yml config
@@ -213,7 +213,7 @@
     state: started
     enabled: true
     scope: user
-  when: is_desktop | bool or inventory_hostname in groups.get('server', [])
+  when: is_desktop | bool or (monitoring_hub | default(false) | bool)
 
 - name: Enable and start perses
   ansible.builtin.systemd:
@@ -221,7 +221,7 @@
     state: started
     enabled: true
     scope: user
-  when: is_desktop | bool or inventory_hostname in groups.get('server', [])
+  when: is_desktop | bool or (monitoring_hub | default(false) | bool)
 
 - name: Enable and start hub services
   ansible.builtin.systemd:
