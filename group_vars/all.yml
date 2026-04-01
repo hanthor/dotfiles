@@ -58,6 +58,7 @@ core_brews:
 
 core_taps:
   - ublue-os/experimental-tap
+  - ublue-os/tap
 
 core_tap_brews:
   - ublue-os/experimental-tap/bluefin-cli
@@ -86,7 +87,7 @@ desktop_brews:
   - rustup
   - gemini-cli
   - ramalama
-  - ublue-os/experimental-tap/visual-studio-code-linux
+  - ublue-os/tap/visual-studio-code-linux
   - glab
   - k9s
   - kubernetes-cli
