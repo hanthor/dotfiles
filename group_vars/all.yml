@@ -5,7 +5,7 @@ user_login: james
 
 brew_prefix: /home/linuxbrew/.linuxbrew
 
-netbox_url: "http://bihar:8080"
+netbox_url: "https://bihar"  # Tailscale MagicDNS + tailscale serve cert
 
 # All machine names (for SSH config generation)
 machines:

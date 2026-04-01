@@ -54,7 +54,57 @@ apply-remote name:
       fi
     fi
     echo "Applying to {{name}} with forwarded BW session..."
-    ssh -o SendEnv=BW_SESSION {{name}} 'cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
+    ssh -o SendEnv=BW_SESSION {{name}} \
+      'export PATH="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH" && cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
+
+# Register a new machine in inventory and print bootstrap instructions
+# Usage: just onboard <name> [desktop|server|vps]
+onboard name type="desktop":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{dotfiles_dir}}
+    git pull --ff-only
+
+    if grep -q "^    {{name}}:" inventory.yml 2>/dev/null; then
+      echo "{{name}} is already in inventory."
+    else
+      echo "Registering {{name}} as {{type}}..."
+      python3 - <<'PYEOF'
+import sys
+
+name = "{{name}}"
+mtype = "{{type}}"
+path = "inventory.yml"
+content = open(path).read()
+
+host_entry = f"    {name}:\n      ansible_host: localhost\n      ansible_connection: local\n"
+content = content.replace("all:\n  hosts:\n", f"all:\n  hosts:\n{host_entry}", 1)
+
+group_marker = f"    {mtype}:\n      hosts:\n"
+if group_marker in content:
+    content = content.replace(group_marker, f"{group_marker}        {name}:\n", 1)
+
+open(path, "w").write(content)
+print(f"  Added {name} to {mtype} group")
+PYEOF
+
+      if [ ! -f "host_vars/{{name}}.yml" ]; then
+        echo "is_arm: false" > "host_vars/{{name}}.yml"
+      fi
+
+      git add inventory.yml host_vars/{{name}}.yml
+      git commit -m "inventory: add {{name}} ({{type}})"
+      git push
+      echo "✓ {{name}} registered and pushed."
+    fi
+
+    echo ""
+    echo "Bootstrap the new machine by running this on it:"
+    echo ""
+    echo "  curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name {{name}}"
+    echo ""
+    echo "Or if it's already reachable over Tailscale:"
+    echo "  just add-machine {{name}}"
 
 # Apply to ALL remote machines in parallel, forwarding your local BW session
 apply-all:
@@ -150,7 +200,8 @@ apply-ansible:
     ansible-playbook site.yml \
       --forks 10 \
       -e "bw_session=${BW_SESSION}" \
-      -e "target=all"
+      -e "target=all" \
+      "$@"
 
 
     cd {{dotfiles_dir}} && ansible-playbook --connection=local -l {{machine}} -e target={{machine}} site.yml --check --diff

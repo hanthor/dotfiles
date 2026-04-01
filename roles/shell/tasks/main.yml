@@ -1,4 +1,41 @@
 ---
+# ── Fonts ────────────────────────────────────────────────────────
+- name: Ensure font directory exists
+  ansible.builtin.file:
+    path: ~/.local/share/fonts
+    state: directory
+    mode: "0755"
+
+- name: Check if JetBrains Mono Nerd Font is installed
+  ansible.builtin.stat:
+    path: ~/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFont-Regular.ttf
+  register: jb_font
+
+- name: Install JetBrains Mono Nerd Font
+  when: not jb_font.stat.exists and is_desktop | bool
+  block:
+    - name: Download JetBrains Mono Nerd Font
+      ansible.builtin.get_url:
+        url: https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+        dest: /tmp/JetBrainsMono.zip
+        mode: "0644"
+
+    - name: Create JetBrainsMono font directory
+      ansible.builtin.file:
+        path: ~/.local/share/fonts/JetBrainsMono
+        state: directory
+        mode: "0755"
+
+    - name: Unarchive JetBrains Mono Nerd Font
+      ansible.builtin.unarchive:
+        src: /tmp/JetBrainsMono.zip
+        dest: ~/.local/share/fonts/JetBrainsMono
+        remote_src: true
+
+    - name: Update font cache
+      ansible.builtin.command: fc-cache -f
+      changed_when: true
+
 - name: Create ~/.config/shell/ directory
   ansible.builtin.file:
     path: ~/.config/shell
@@ -148,15 +185,9 @@
   when: atuin_bw_item.rc == 0
   tags: [secrets]
 
-- name: Write atuin key file
-  ansible.builtin.copy:
-    content: "{{ atuin_key }}"
-    dest: ~/.local/share/atuin/key
-    mode: "0600"
-  no_log: true
-  when: atuin_bw_item.rc == 0 and (atuin_key | default('')) | length > 0
-  tags: [secrets]
-
+# NOTE: We do NOT write atuin_key (mnemonic) to ~/.local/share/atuin/key directly.
+# Atuin expects that file to be a base64-encoded binary key.
+# Running 'atuin login -k' with the mnemonic correctly generates the binary key file.
 - name: Check if atuin is already logged in
   ansible.builtin.stat:
     path: ~/.local/share/atuin/session
@@ -164,18 +195,49 @@
   when: atuin_bw_item.rc == 0
   tags: [secrets]
 
+- name: Remove atuin data directory if corrupted
+  ansible.builtin.file:
+    path: ~/.local/share/atuin
+    state: absent
+  when: atuin_bw_item.rc == 0
+  tags: [secrets]
+
 - name: Login to atuin sync
   ansible.builtin.command: >
     atuin login -u "{{ atuin_username }}" -p "{{ atuin_password }}" -k "{{ atuin_key }}"
-  no_log: true
   when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
   changed_when: true
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
   tags: [secrets]
 
-- name: Sync atuin history
-  ansible.builtin.command: atuin sync
+- name: Remove legacy atuin data and retry sync if key mismatch
+  block:
+    - name: Sync atuin history
+      ansible.builtin.command: atuin sync
+      no_log: true
+      changed_when: true
+      when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
+      environment:
+        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+      ignore_errors: true
+      tags: [secrets]
+
+    - name: Remove legacy atuin records.db on failure
+      ansible.builtin.file:
+        path: ~/.local/share/atuin/records.db
+        state: absent
+      when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
+      tags: [secrets]
+
+    - name: Retry atuin sync after cleanup
+      ansible.builtin.command: atuin sync
+      no_log: true
+      changed_when: true
+      when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
+      environment:
+        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+      ignore_errors: true
+      tags: [secrets]
   when: atuin_bw_item.rc == 0 and not atuin_session.stat.exists
-  changed_when: true
   tags: [secrets]

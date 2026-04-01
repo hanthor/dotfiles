@@ -84,6 +84,18 @@
     - netbox-worker.container
   notify: Reload systemd daemon
 
+- name: Check Tailscale serve config
+  ansible.builtin.command: tailscale serve status
+  register: ts_serve_status
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Expose NetBox via Tailscale HTTPS
+  ansible.builtin.command: tailscale serve https / http://127.0.0.1:8080
+  when: "'127.0.0.1:8080' not in (ts_serve_status.stdout | default(''))"
+  become: true
+
 - name: Flush handlers before starting services
   ansible.builtin.meta: flush_handlers
 

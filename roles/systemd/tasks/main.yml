@@ -36,7 +36,7 @@
       After=network.target
 
       [Service]
-      ExecStart=/home/linuxbrew/.linuxbrew/bin/atuin daemon
+      ExecStart=/home/linuxbrew/.linuxbrew/bin/atuin daemon start --force
       Restart=on-failure
       RestartSec=5
 

@@ -8,7 +8,7 @@ Image=ghcr.io/netbox-community/netbox:v4.2
 Network=netbox.network
 Volume=netbox-media.volume:/opt/netbox/netbox/media
 EnvironmentFile=/etc/netbox/netbox.env
-PublishPort=8080:8080
+PublishPort=127.0.0.1:8080:8080
 AutoUpdate=registry
 
 [Service]
