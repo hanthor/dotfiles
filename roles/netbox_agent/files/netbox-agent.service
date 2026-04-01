@@ -1,0 +1,7 @@
+[Unit]
+Description=NetBox Agent - sync hardware inventory to NetBox
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/netbox-agent/bin/netbox_agent -c /etc/netbox/netbox_agent.yml

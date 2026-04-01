@@ -29,6 +29,12 @@
         - name: Login to GitHub with token
           ansible.builtin.shell: echo "{{ gh_token.stdout }}" | gh auth login --with-token
           no_log: true
+      rescue:
+        - name: Warn that GitHub auth failed
+          ansible.builtin.debug:
+            msg: >-
+              GitHub auth failed (no 'github-token' in Bitwarden?).
+              Skipping key registration — re-run 'just apply' after adding the token.
 
     - name: Set git protocol to SSH
       ansible.builtin.command: gh config set git_protocol ssh

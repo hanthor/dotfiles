@@ -56,3 +56,8 @@
       when: inventory_hostname not in groups.get('vps', [])
     - role: systemd
       tags: [services]
+    - role: netbox
+      tags: [services, secrets]
+      when: inventory_hostname in groups.get('server', [])
+    - role: netbox_agent
+      tags: [services, secrets]

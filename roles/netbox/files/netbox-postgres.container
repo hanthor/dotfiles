@@ -1,0 +1,19 @@
+[Unit]
+Description=NetBox PostgreSQL
+After=network-online.target
+
+[Container]
+Image=docker.io/library/postgres:16-alpine
+Network=netbox.network
+Volume=netbox-postgres.volume:/var/lib/postgresql/data
+Environment=POSTGRES_DB=netbox
+Environment=POSTGRES_USER=netbox
+EnvironmentFile=/etc/netbox/postgres.env
+AutoUpdate=registry
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target default.target

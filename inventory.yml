@@ -33,6 +33,9 @@ all:
         himachal:
         dilli:
         goa:
+    llm:
+      hosts:
+        karnataka:
     server:
       hosts:
         bihar:

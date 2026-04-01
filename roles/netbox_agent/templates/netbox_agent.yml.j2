@@ -1,0 +1,12 @@
+---
+netbox:
+  url: "{{ netbox_url }}"
+  token: "{{ netbox_api_token }}"
+  ssl_verify: false
+
+local_type: "{{ netbox_device_type | default('physical') }}"
+
+network:
+  ignore_interfaces: "^(lo|veth|docker|br-|podman|tap|virbr).*"
+  ignore_ips: ""
+  lldp: false

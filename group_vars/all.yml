@@ -5,6 +5,8 @@ user_login: james
 
 brew_prefix: /home/linuxbrew/.linuxbrew
 
+netbox_url: "http://bihar:8080"
+
 # All machine names (for SSH config generation)
 machines:
   himachal:
@@ -47,6 +49,7 @@ core_brews:
   - shellcheck
   - shfmt
   - tealdeer
+  - unzip
   - television
   - trash-cli
   - ugrep
@@ -137,3 +140,5 @@ flatpak_remotes:
 system_flatpaks:
   - io.typora.Typora
   - com.github.fabiocolacio.marker
+  - app.zen_browser.zen
+  - com.tailscale.tailscale
