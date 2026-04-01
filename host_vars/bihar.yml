@@ -1,5 +1,7 @@
 is_arm: false
 tailscale_advertise_routes: "192.168.0.0/24"
+tailscale_accept_dns: false
+tailscale_operator: james
 web_services:
   - name: Proxmox
     href: https://bihar:8006
