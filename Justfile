@@ -59,11 +59,13 @@ apply-remote name:
     REMOTE_STATUS=$(ssh {{ name }} '/home/linuxbrew/.linuxbrew/bin/bw status 2>/dev/null || echo "{}"')
     if echo "$REMOTE_STATUS" | grep -q '"unauthenticated"'; then
       echo "Bitwarden not logged in on {{ name }}. Attempting API key login..."
+      export BW_CLIENTID
+      export BW_CLIENTSECRET
       BW_CLIENTID=$(bw get username bw-api-key --session "$BW_SESSION" 2>/dev/null || true)
       BW_CLIENTSECRET=$(bw get password bw-api-key --session "$BW_SESSION" 2>/dev/null || true)
       if [ -n "$BW_CLIENTID" ] && [ -n "$BW_CLIENTSECRET" ]; then
         ssh -o SendEnv=BW_CLIENTID,BW_CLIENTSECRET {{ name }} \
-          'export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH" && BW_CLIENTID="$BW_CLIENTID" BW_CLIENTSECRET="$BW_CLIENTSECRET" bw login --apikey 2>&1 || true'
+          'export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH" && bw login --apikey 2>&1 || true'
         echo "BW login done on {{ name }}."
       else
         echo "WARNING: No 'bw-api-key' item in vault. Run 'bw login' on {{ name }} manually, then re-run."
