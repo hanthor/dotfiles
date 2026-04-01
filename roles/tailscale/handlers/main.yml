@@ -4,6 +4,7 @@
     name: systemd-resolved
     state: restarted
   become: true
+  failed_when: false
 
 - name: Apply sysctl settings
   ansible.builtin.command: sysctl -p /etc/sysctl.d/99-tailscale.conf
