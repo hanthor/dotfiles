@@ -246,6 +246,13 @@
     scope: user
     daemon_reload: true
 
+- name: Enable podman socket (required by podman-exporter)
+  ansible.builtin.systemd:
+    name: podman.socket
+    state: started
+    enabled: true
+    scope: user
+
 - name: Enable and start podman-exporter
   ansible.builtin.systemd:
     name: podman-exporter.service
