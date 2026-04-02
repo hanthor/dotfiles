@@ -64,10 +64,10 @@
       when: inventory_hostname in groups.get('server', [])
     - role: homepage
       tags: [services, homepage]
-      when: has_homepage | default(false)
+      when: inventory_hostname not in groups.get('vps', [])
     - role: proxy
       tags: [services, proxy, caddy]
-      when: has_proxy | default(false)
+      when: inventory_hostname not in groups.get('vps', [])
     - role: lima
       tags: [services, lima]
       when: inventory_hostname == 'bihar'

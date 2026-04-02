@@ -1,4 +1,12 @@
 :9000 {
+{% for svc in web_services | default([]) %}
+    # /service/{{ svc.name | lower | replace(' ', '-') | replace('/', '-') }}
+    handle /service/{{ svc.name | lower | replace(' ', '-') | replace('/', '-') }} {
+        redir {{ svc.href }} 302
+    }
+{% endfor %}
+
+{% if inventory_hostname == 'bihar' %}
     # /proxmox — redirect to direct Proxmox port (PVE uses absolute paths, can't sub-path proxy)
     @proxmox path /proxmox /proxmox/*
     redir @proxmox https://{{ proxy_tailscale_host | default('bihar.manatee-basking.ts.net') }}:8006 302
@@ -8,6 +16,7 @@
         reverse_proxy host.containers.internal:{{ lima_internal_port | default(8007) }}
     }
 
+{% endif %}
     # / — homepage dashboard
     handle {
         reverse_proxy host.containers.internal:3000

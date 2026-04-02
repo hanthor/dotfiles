@@ -132,32 +132,31 @@
     mode: "0644"
 
 # ── Distribute all machine keys to authorized_keys ──
-# Fetches james@<machine> from BW for every machine and adds pubkey
-# so any machine can SSH to this one after running 'just apply'
-- name: Fetch and authorize all machine SSH keys from Bitwarden
+# Fetches james@<machine> from BW for every machine, then uses
+# ansible.posix.authorized_key which deduplicates by key body (ignoring comments).
+- name: Fetch machine SSH public keys from Bitwarden
   ansible.builtin.shell: |
     set -euo pipefail
     ITEM=$(bw get item "{{ user_login }}@{{ item }}" 2>/dev/null) || exit 0
-    PUB=$(echo "$ITEM" | python3 -c "
+    echo "$ITEM" | python3 -c "
     import sys, json
     item = json.load(sys.stdin)
-    print(item.get('sshKey', {}).get('publicKey', ''))
-    " 2>/dev/null)
-    [ -z "$PUB" ] && exit 0
-    grep -qF "$PUB" ~/.ssh/authorized_keys 2>/dev/null || echo "$PUB" >> ~/.ssh/authorized_keys
+    print(item.get('sshKey', {}).get('publicKey', '').strip())
+    " 2>/dev/null
   args:
     executable: /bin/bash
   loop: "{{ machines.keys() | list }}"
+  register: machine_pub_keys
   changed_when: false
   failed_when: false
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
-- name: Set authorized_keys permissions
-  ansible.builtin.file:
-    path: "{{ ansible_facts['env']['HOME'] }}/.ssh/authorized_keys"
-    mode: "0600"
-    state: touch
-    modification_time: preserve
-    access_time: preserve
+- name: Authorize all machine SSH keys
+  ansible.posix.authorized_key:
+    user: "{{ ansible_facts['user_id'] }}"
+    key: "{{ item.stdout }}"
+    state: present
+  loop: "{{ machine_pub_keys.results }}"
+  when: item.stdout | length > 0
