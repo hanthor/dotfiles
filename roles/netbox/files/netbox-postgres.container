@@ -4,11 +4,15 @@ After=network-online.target
 
 [Container]
 Image=docker.io/library/postgres:16-alpine
+ContainerName=netbox-postgres
 Network=netbox.network
 Volume=netbox-postgres.volume:/var/lib/postgresql/data
 Environment=POSTGRES_DB=netbox
 Environment=POSTGRES_USER=netbox
 EnvironmentFile=/etc/netbox/postgres.env
+# Disable Unix sockets — NetBox connects via TCP, and /var/run/postgresql
+# may not be writable inside the container
+Exec=postgres -c unix_socket_directories=''
 AutoUpdate=registry
 
 [Service]

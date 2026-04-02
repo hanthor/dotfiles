@@ -10,7 +10,7 @@ AddDevice=/dev/kvm
 AddDevice=/dev/net/tun
 AddCapability=NET_ADMIN
 # Map to 8007 to avoid conflict with Proxmox on 8006
-PublishPort=127.0.0.1:8007:8006
+PublishPort=8007:8006
 Volume=%h/.lima:/var/lib/lima:z
 Volume=%h/.macadam-config:/root/.config/containers/macadam:z
 Volume=%h/.macadam-data:/root/.local/share/containers/macadam:z

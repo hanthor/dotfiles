@@ -4,6 +4,7 @@ After=network-online.target
 
 [Container]
 Image=docker.io/library/redis:7-alpine
+ContainerName=netbox-redis
 HealthCmd=redis-cli ping
 Network=netbox.network
 AutoUpdate=registry
