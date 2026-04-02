@@ -1,0 +1,39 @@
+---
+- name: Create lima data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ ansible_env.HOME }}/.lima"
+    - "{{ ansible_env.HOME }}/.macadam-config"
+    - "{{ ansible_env.HOME }}/.macadam-data"
+    - "{{ ansible_env.HOME }}/lima-bootc-builds"
+
+- name: Create user systemd container dir
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.config/containers/systemd"
+    state: directory
+    mode: "0755"
+
+- name: Deploy lima-bootc quadlet
+  ansible.builtin.copy:
+    src: lima-bootc.container
+    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/lima-bootc.container"
+    mode: "0644"
+  notify: Reload user systemd daemon
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Reload user systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+    scope: user
+
+- name: Enable and start lima-bootc
+  ansible.builtin.systemd:
+    name: lima-bootc.service
+    state: started
+    enabled: true
+    scope: user

@@ -1,0 +1,76 @@
+---
+- name: Create Caddy config directory
+  ansible.builtin.file:
+    path: /etc/caddy
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  become: true
+
+- name: Get Tailscale hostname for Caddyfile
+  ansible.builtin.command: tailscale status --json
+  register: _ts_status
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Set tailscale hostname fact
+  ansible.builtin.set_fact:
+    proxy_tailscale_host: "{{ (_ts_status.stdout | from_json).Self.DNSName | regex_replace('\\.$', '') }}"
+  when: (_ts_status.stdout | default('')) | length > 0
+
+- name: Deploy Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    mode: "0644"
+    owner: root
+    group: root
+  become: true
+  notify: Restart caddy
+
+- name: Deploy Caddy quadlet
+  ansible.builtin.copy:
+    src: caddy.container
+    dest: /etc/containers/systemd/caddy.container
+    mode: "0644"
+    owner: root
+    group: root
+  become: true
+  notify: Reload systemd daemon
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: Enable and start Caddy
+  ansible.builtin.systemd:
+    name: caddy.service
+    state: started
+    enabled: true
+  become: true
+
+- name: Check Tailscale serve config
+  ansible.builtin.command: tailscale serve status
+  register: ts_serve_status
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Point tailscale serve at Caddy (not homepage directly)
+  ansible.builtin.command: tailscale serve --bg http://127.0.0.1:9000
+  when: "'127.0.0.1:9000' not in (ts_serve_status.stdout | default(''))"
+  become: true
+
+- name: Remove old direct homepage serve if present
+  ansible.builtin.command: tailscale serve --https=443 off
+  when:
+    - "'127.0.0.1:3000' in (ts_serve_status.stdout | default(''))"
+    - "'127.0.0.1:9000' not in (ts_serve_status.stdout | default(''))"
+  become: true
+  failed_when: false

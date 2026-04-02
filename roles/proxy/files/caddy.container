@@ -1,0 +1,15 @@
+[Unit]
+Description=Caddy Reverse Proxy
+After=network-online.target
+
+[Container]
+Image=docker.io/library/caddy:latest
+PublishPort=127.0.0.1:9000:9000
+Volume=/etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target default.target

@@ -1,0 +1,31 @@
+[Unit]
+Description=Lima Bootc — VM dashboard with bootc image builder
+After=network-online.target caddy.service
+
+[Container]
+Image=ghcr.io/hanthor/lima-bootc:latest
+PodmanArgs=--privileged --cgroupns=host
+AddDevice=/dev/fuse
+AddDevice=/dev/kvm
+AddDevice=/dev/net/tun
+AddCapability=NET_ADMIN
+# Map to 8007 to avoid conflict with Proxmox on 8006
+PublishPort=127.0.0.1:8007:8006
+Volume=%h/.lima:/var/lib/lima:z
+Volume=%h/.macadam-config:/root/.config/containers/macadam:z
+Volume=%h/.macadam-data:/root/.local/share/containers/macadam:z
+Volume=%h/lima-bootc-builds:/var/lib/lima-bootc-builds:z
+Volume=/run/podman/podman.sock:/run/podman/podman.sock
+Environment=BOOTC_BUILDS_HOST_PATH=%h/lima-bootc-builds
+Environment=VM_BACKEND=macadam
+Environment=LIMA_ACCEL_MODE=auto
+Environment=AUTO_START_LIMA=N
+Environment=LIMA_BOOTC_ENABLED=true
+AutoUpdate=registry
+
+[Service]
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

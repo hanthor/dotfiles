@@ -15,6 +15,12 @@ web_services:
     description: Network documentation
     group: Infrastructure
     siteMonitor: https://bihar:8444
+  - name: Lima
+    href: https://bihar/lima
+    icon: mdi-virtual-machine
+    description: VM dashboard + bootc builder
+    group: Infrastructure
+    siteMonitor: http://127.0.0.1:8007
   - name: Cockpit
     href: https://bihar:9090
     icon: cockpit.png
