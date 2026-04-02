@@ -5,6 +5,21 @@ dotfiles_dir := env("HOME") / ".local/share/dotfiles"
 machine := `cat /etc/dotfiles-machine 2>/dev/null || hostname`
 export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" + env("PATH")
 
+# Resolve online fleet hosts: intersect tailscale online peers with inventory (excluding vps + self)
+_online_hosts := ```
+python3 -c "
+import subprocess, json, yaml, os
+ts = json.loads(subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True).stdout)
+online = {p['HostName'].lower() for p in ts.get('Peer', {}).values() if p.get('Online')}
+inv_path = os.path.expanduser('~/.local/share/dotfiles/inventory.yml')
+with open(inv_path) as f:
+    inv = yaml.safe_load(f)
+vps = set(inv['all']['children'].get('vps', {}).get('hosts', {}).keys())
+all_hosts = set(inv['all']['hosts'].keys()) - vps - {os.uname().nodename.lower()}
+print(' '.join(sorted(all_hosts & online)))
+"
+```
+
 # Apply all config to this machine (unlocks BW interactively if needed)
 apply:
     #!/usr/bin/env bash
@@ -152,7 +167,7 @@ onboard name type="desktop":
     echo "Or if it's already reachable over Tailscale:"
     echo "  just add-machine {{ name }}"
 
-# Apply to ALL remote machines in parallel, forwarding your local BW session
+# Apply to ALL online fleet machines in parallel (auto-detected via Tailscale)
 apply-all:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -167,25 +182,17 @@ apply-all:
       fi
     fi
 
-    HOSTS=(bihar kanpur lkofoss himachal dilli)
+    ONLINE_HOSTS="{{ _online_hosts }}"
+    echo "Online fleet hosts: ${ONLINE_HOSTS:-none}"
+    [ -z "$ONLINE_HOSTS" ] && echo "No remote hosts online." && exit 0
+
     PIDS=()
-    UP=()
 
-    echo "Checking which hosts are reachable..."
-    for host in "${HOSTS[@]}"; do
-      if ssh -o BatchMode=yes -o ConnectTimeout=5 "$host" true 2>/dev/null; then
-        UP+=("$host")
-      else
-        echo "  ⚠ $host — unreachable, skipping"
-      fi
-    done
-
-    echo ""
     echo "Applying locally to {{ machine }}..."
     just apply &
     PIDS+=("$!:{{ machine }}")
 
-    for host in "${UP[@]}"; do
+    for host in $ONLINE_HOSTS; do
       echo "Applying to $host (background)..."
       ssh "$host" "
         export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
@@ -214,12 +221,53 @@ apply-all:
       echo ""
       echo "Failed hosts: ${FAILED[*]}"
       for host in "${FAILED[@]}"; do
-        [ -f "/tmp/apply_${host}.log" ] && echo "=== $host ===" && tail -10 "/tmp/apply_${host}.log"
+        [ -f "/tmp/apply_${host}.log" ] && echo "=== $host ===" && tail -20 "/tmp/apply_${host}.log"
       done
       exit 1
     fi
-    echo ""
     echo "All hosts done ✓"
+
+# Apply specific tags to ALL online fleet machines in parallel
+apply-online-tags tags:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "${BW_SESSION:-}" ]; then
+      [ -f /tmp/bw_session ] && export BW_SESSION=$(cat /tmp/bw_session) || export BW_SESSION=$(bw unlock --raw)
+    fi
+
+    ONLINE_HOSTS="{{ _online_hosts }}"
+    echo "Online fleet hosts: ${ONLINE_HOSTS:-none}"
+    [ -z "$ONLINE_HOSTS" ] && echo "No remote hosts online." && exit 0
+
+    PIDS=()
+
+    echo "Applying tags '{{ tags }}' locally to {{ machine }}..."
+    just apply-tags {{ tags }} &
+    PIDS+=("$!:{{ machine }}")
+
+    for host in $ONLINE_HOSTS; do
+      echo "Applying tags '{{ tags }}' to $host (background)..."
+      ssh "$host" "
+        export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
+        export BW_SESSION='${BW_SESSION}'
+        cd ~/.local/share/dotfiles && git pull --ff-only && just apply-tags {{ tags }}
+      " > "/tmp/apply_${host}.log" 2>&1 &
+      PIDS+=("$!:$host")
+    done
+
+    FAILED=()
+    for pid_host in "${PIDS[@]}"; do
+      pid="${pid_host%%:*}"
+      host="${pid_host##*:}"
+      if wait "$pid"; then echo "  ✓ $host"; else echo "  ✗ $host"; FAILED+=("$host"); fi
+    done
+
+    [ ${#FAILED[@]} -gt 0 ] && echo "Failed: ${FAILED[*]}" && exit 1
+    echo "All hosts done ✓"
+
+# Show which fleet machines are currently online via Tailscale
+online:
+    @echo "Online fleet hosts: {{ _online_hosts }}"
 
 # Add a new machine (run from your main machine with BW unlocked)
 add-machine name:
