@@ -27,8 +27,24 @@ apply:
     fi
     ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e "bw_session=${BW_SESSION:-}" site.yml
 
-# Apply without secrets
-apply-nosecrets:
+# Apply only specific tags (e.g. just apply-tags homepage,proxy)
+apply-tags tags:
+    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }}
+
+# Apply to a remote machine with specific tags (e.g. just apply-remote-tags bihar homepage,proxy)
+apply-remote-tags name tags:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "${BW_SESSION:-}" ]; then
+      [ -f /tmp/bw_session ] && export BW_SESSION=$(cat /tmp/bw_session) || export BW_SESSION=$(bw unlock --raw)
+    fi
+    ssh {{ name }} "
+      export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
+      export BW_SESSION='${BW_SESSION}'
+      cd ~/.local/share/dotfiles && git pull --ff-only && ansible-playbook --connection=local -l {{ name }} -e target={{ name }} -e \"bw_session=${BW_SESSION}\" site.yml --tags {{ tags }}
+    "
+
+
     cd {{ dotfiles_dir }} && git pull --ff-only && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets
 
 # Apply only dotfile configs (shell, git, tmux, etc.)
