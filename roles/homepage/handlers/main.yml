@@ -3,3 +3,9 @@
   ansible.builtin.systemd:
     daemon_reload: true
   become: true
+
+- name: Restart homepage
+  ansible.builtin.systemd:
+    name: homepage.service
+    state: restarted
+  become: true
