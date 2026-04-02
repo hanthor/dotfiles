@@ -25,7 +25,7 @@
 
 - name: Log into GHCR with GitHub token
   ansible.builtin.shell: |
-    gh auth token | podman login ghcr.io -u {{ ansible_user_id }} --password-stdin
+    gh auth token | podman login ghcr.io -u {{ ansible_facts['user_id'] }} --password-stdin
   args:
     executable: /bin/bash
   environment:
