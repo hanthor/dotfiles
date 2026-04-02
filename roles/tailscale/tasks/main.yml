@@ -25,8 +25,10 @@
     dest: /etc/resolv.conf
     state: link
     force: true
+    follow: false
   become: true
   notify: Restart systemd-resolved
+  when: not (tailscale_accept_dns is defined and not tailscale_accept_dns)
 
 # rp_filter=2 (loose mode) is required for exit node traffic to route correctly.
 # Tailscale v1.96+ sets this automatically, but net.ipv4.conf.default.rp_filter
