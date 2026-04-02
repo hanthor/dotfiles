@@ -8,20 +8,19 @@ export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" +
 # Resolve online fleet hosts: intersect tailscale online peers with inventory (excluding vps + self)
 _online_hosts := ```
 python3 -c "
-import subprocess, json, yaml, os
+import subprocess, json, re, os
 ts = json.loads(subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True).stdout)
-# Match on DNSName (e.g. 'kanpur.manatee-basking.ts.net.') — strip domain suffix
 online = set()
 for p in ts.get('Peer', {}).values():
     if p.get('Online'):
-        dns = p.get('DNSName', '').lower().split('.')[0]
-        online.add(dns)
+        online.add(p.get('DNSName', '').lower().split('.')[0])
         online.add(p.get('HostName', '').lower())
 inv_path = os.path.expanduser('~/.local/share/dotfiles/inventory.yml')
-with open(inv_path) as f:
-    inv = yaml.safe_load(f)
-vps = set(inv['all']['children'].get('vps', {}).get('hosts', {}).keys())
-all_hosts = set(inv['all']['hosts'].keys()) - vps - {os.uname().nodename.lower()}
+raw = open(inv_path).read()
+# Parse hosts from inventory.yml without PyYAML — extract 'hostname:' keys under 'hosts:'
+all_hosts = set(re.findall(r'^\s{4}(\w+):\s*$', raw, re.MULTILINE))
+vps = set(re.findall(r'^\s{6}(\w+):\s*$', raw, re.MULTILINE))
+all_hosts -= vps | {os.uname().nodename.lower()}
 print(' '.join(sorted(all_hosts & online)))
 "
 ```
