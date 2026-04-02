@@ -5,6 +5,9 @@
   changed_when: false
 
 - name: Restart homepage
-  ansible.builtin.command: systemctl restart homepage.service
+  ansible.builtin.shell: |
+    systemctl daemon-reload
+    systemctl enable --now homepage.service
+    systemctl restart homepage.service
   become: true
   changed_when: true

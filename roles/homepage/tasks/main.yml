@@ -16,7 +16,6 @@
     owner: root
     group: root
   become: true
-  notify: Restart homepage
 
 - name: Deploy homepage static config files
   ansible.builtin.copy:
@@ -31,7 +30,6 @@
     - widgets.yaml
     - bookmarks.yaml
     - docker.yaml
-  notify: Restart homepage
 
 - name: Deploy homepage quadlet
   ansible.builtin.copy:
