@@ -7,7 +7,7 @@
 - name: GitHub authentication and key registration
   when: gh_binary.stat.exists
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
     BW_SESSION: "{{ bw_session | default('') }}"
   block:
     # ── Authentication ──
@@ -49,7 +49,7 @@
     # ── SSH key registration (only from central machine) ──
     - name: Read SSH public key
       ansible.builtin.slurp:
-        src: "{{ ansible_env.HOME }}/.ssh/id_ed25519.pub"
+        src: "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519.pub"
       register: ssh_pub_key_raw
 
     - name: Set SSH public key facts
@@ -65,7 +65,7 @@
 
     - name: Register SSH authentication key with GitHub
       ansible.builtin.command: >
-        gh ssh-key add "{{ ansible_env.HOME }}/.ssh/id_ed25519.pub"
+        gh ssh-key add "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519.pub"
         --title "{{ inventory_hostname }}-auth"
         --type authentication
       when: ssh_key_body not in (gh_existing_keys.stdout | default(''))
@@ -73,7 +73,7 @@
 
     - name: Register SSH signing key with GitHub
       ansible.builtin.command: >
-        gh ssh-key add "{{ ansible_env.HOME }}/.ssh/id_ed25519.pub"
+        gh ssh-key add "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519.pub"
         --title "{{ inventory_hostname }}-signing"
         --type signing
       when: ssh_key_body not in (gh_existing_keys.stdout | default(''))

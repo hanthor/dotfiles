@@ -1,7 +1,7 @@
 ---
 - name: Check if Zen Browser profiles.ini exists
   ansible.builtin.stat:
-    path: "{{ ansible_env.HOME }}/.var/app/app.zen_browser.zen/.zen/profiles.ini"
+    path: "{{ ansible_facts['env']['HOME'] }}/.var/app/app.zen_browser.zen/.zen/profiles.ini"
   register: zen_profiles_ini
 
 - name: Skip if Zen Browser is not installed
@@ -13,7 +13,7 @@
     python3 -c "
     import configparser
     c = configparser.ConfigParser()
-    c.read('{{ ansible_env.HOME }}/.var/app/app.zen_browser.zen/.zen/profiles.ini')
+    c.read('{{ ansible_facts['env']['HOME'] }}/.var/app/app.zen_browser.zen/.zen/profiles.ini')
     print(c['Profile0']['Path'])
     "
   register: zen_profile_path
@@ -22,17 +22,17 @@
 - name: Copy user.js to Zen Browser profile
   ansible.builtin.copy:
     src: user.js
-    dest: "{{ ansible_env.HOME }}/.var/app/app.zen_browser.zen/.zen/{{ zen_profile_path.stdout }}/user.js"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.var/app/app.zen_browser.zen/.zen/{{ zen_profile_path.stdout }}/user.js"
     mode: "0644"
 
 - name: Ensure Zen Browser distribution directory exists
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.zen/distribution"
+    path: "{{ ansible_facts['env']['HOME'] }}/.zen/distribution"
     state: directory
     mode: "0755"
 
 - name: Copy policies.json to Zen Browser distribution
   ansible.builtin.copy:
     src: policies.json
-    dest: "{{ ansible_env.HOME }}/.zen/distribution/policies.json"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.zen/distribution/policies.json"
     mode: "0644"

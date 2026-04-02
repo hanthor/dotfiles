@@ -14,7 +14,7 @@
 - name: Deploy Brewfile
   ansible.builtin.template:
     src: Brewfile.j2
-    dest: "{{ ansible_env.HOME }}/Brewfile"
+    dest: "{{ ansible_facts['env']['HOME'] }}/Brewfile"
     mode: "0644"
   notify: Run brew bundle
 

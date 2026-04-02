@@ -114,7 +114,7 @@
   changed_when: false
   no_log: true
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
 - name: Join tailscale network
   ansible.builtin.command: tailscale up --authkey {{ tailscale_authkey.stdout }} --hostname {{ inventory_hostname }}

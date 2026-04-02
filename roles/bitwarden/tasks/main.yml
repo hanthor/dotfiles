@@ -44,7 +44,7 @@
       when: bw_session is defined
       environment:
         BW_SESSION: "{{ bw_session }}"
-        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
     # 4. Cache session for reuse
     - name: Cache session to /tmp/bw_session

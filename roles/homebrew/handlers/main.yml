@@ -1,9 +1,9 @@
 ---
 - name: Run brew bundle
   ansible.builtin.command:
-    cmd: /home/linuxbrew/.linuxbrew/bin/brew bundle install --file={{ ansible_env.HOME }}/Brewfile
+    cmd: /home/linuxbrew/.linuxbrew/bin/brew bundle install --file={{ ansible_facts['env']['HOME'] }}/Brewfile
   environment:
-    PATH: "{{ brew_bin }}:{{ ansible_env.PATH }}"
+    PATH: "{{ brew_bin }}:{{ ansible_facts['env']['PATH'] }}"
     GIT_CONFIG_COUNT: "1"
     GIT_CONFIG_KEY_0: "credential.helper"
     GIT_CONFIG_VALUE_0: ""

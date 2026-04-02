@@ -5,21 +5,21 @@
     state: directory
     mode: "0755"
   loop:
-    - "{{ ansible_env.HOME }}/.lima"
-    - "{{ ansible_env.HOME }}/.macadam-config"
-    - "{{ ansible_env.HOME }}/.macadam-data"
-    - "{{ ansible_env.HOME }}/lima-bootc-builds"
+    - "{{ ansible_facts['env']['HOME'] }}/.lima"
+    - "{{ ansible_facts['env']['HOME'] }}/.macadam-config"
+    - "{{ ansible_facts['env']['HOME'] }}/.macadam-data"
+    - "{{ ansible_facts['env']['HOME'] }}/lima-bootc-builds"
 
 - name: Create user systemd container dir
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.config/containers/systemd"
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd"
     state: directory
     mode: "0755"
 
 - name: Deploy lima-bootc quadlet
   ansible.builtin.copy:
     src: lima-bootc.container
-    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/lima-bootc.container"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/lima-bootc.container"
     mode: "0644"
   notify: Reload user systemd daemon
 

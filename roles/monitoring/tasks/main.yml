@@ -1,13 +1,13 @@
 ---
 - name: Create monitoring config directory
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.config/monitoring"
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring"
     state: directory
     mode: "0755"
 
 - name: Create monitoring quadlets directory
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.config/containers/systemd"
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd"
     state: directory
     mode: "0755"
 
@@ -15,21 +15,21 @@
 - name: Deploy monitoring network
   ansible.builtin.copy:
     src: monitoring.network
-    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/monitoring.network"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/monitoring.network"
     mode: "0644"
   notify: Reload systemd daemon
 
 - name: Deploy node-exporter quadlet
   ansible.builtin.copy:
     src: node-exporter.container
-    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/node-exporter.container"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/node-exporter.container"
     mode: "0644"
   notify: Reload systemd daemon
 
 - name: Deploy podman-exporter quadlet
   ansible.builtin.copy:
     src: podman-exporter.container
-    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/podman-exporter.container"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/podman-exporter.container"
     mode: "0644"
   notify: Reload systemd daemon
 
@@ -37,7 +37,7 @@
 - name: Deploy prometheus data volume
   ansible.builtin.copy:
     src: prometheus-data.volume
-    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/prometheus-data.volume"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/prometheus-data.volume"
     mode: "0644"
   when: is_desktop | bool or inventory_hostname in groups.get('server', [])
   notify: Reload systemd daemon
@@ -45,7 +45,7 @@
 - name: Deploy perses data volume
   ansible.builtin.copy:
     src: perses-data.volume
-    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/perses-data.volume"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/perses-data.volume"
     mode: "0644"
   when: is_desktop | bool or (monitoring_hub | default(false) | bool)
   notify: Reload systemd daemon
@@ -53,7 +53,7 @@
 - name: Deploy prometheus quadlet (hub)
   ansible.builtin.copy:
     src: prometheus-hub.container
-    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/prometheus.container"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/prometheus.container"
     mode: "0644"
   when: monitoring_hub | default(false) | bool
   notify: Reload systemd daemon
@@ -61,7 +61,7 @@
 - name: Deploy prometheus quadlet (spoke)
   ansible.builtin.copy:
     src: prometheus.container
-    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/prometheus.container"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/prometheus.container"
     mode: "0644"
   when:
     - not (monitoring_hub | default(false) | bool)
@@ -71,7 +71,7 @@
 - name: Deploy perses quadlet
   ansible.builtin.copy:
     src: perses.container
-    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/perses.container"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/perses.container"
     mode: "0644"
   when: is_desktop | bool or (monitoring_hub | default(false) | bool)
   notify: Reload systemd daemon
@@ -79,7 +79,7 @@
 - name: Deploy prometheus.yml config
   ansible.builtin.template:
     src: prometheus.yml.j2
-    dest: "{{ ansible_env.HOME }}/.config/monitoring/prometheus.yml"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/prometheus.yml"
     mode: "0644"
   when: is_desktop | bool or inventory_hostname in groups.get('server', [])
   notify: Restart prometheus
@@ -88,7 +88,7 @@
 - name: Deploy hub-only quadlets
   ansible.builtin.copy:
     src: "{{ item }}"
-    dest: "{{ ansible_env.HOME }}/.config/containers/systemd/{{ item }}"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/{{ item }}"
     mode: "0644"
   loop:
     - alertmanager.container
@@ -100,7 +100,7 @@
 
 - name: Create alerts config directory
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.config/monitoring/alerts"
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/alerts"
     state: directory
     mode: "0755"
   when: monitoring_hub | default(false) | bool
@@ -108,7 +108,7 @@
 - name: Deploy alert rules
   ansible.builtin.copy:
     src: "alerts/{{ item }}"
-    dest: "{{ ansible_env.HOME }}/.config/monitoring/alerts/{{ item }}"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/alerts/{{ item }}"
     mode: "0644"
   loop:
     - disk.yml
@@ -119,7 +119,7 @@
 - name: Deploy matrix-notifier script
   ansible.builtin.copy:
     src: matrix-notifier.py
-    dest: "{{ ansible_env.HOME }}/.config/monitoring/matrix-notifier.py"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/matrix-notifier.py"
     mode: "0755"
   when: monitoring_hub | default(false) | bool
 
@@ -143,7 +143,7 @@
 - name: Deploy pve.yml config
   ansible.builtin.template:
     src: pve.yml.j2
-    dest: "{{ ansible_env.HOME }}/.config/monitoring/pve.yml"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/pve.yml"
     mode: "0644"
   no_log: true
   when:
@@ -172,7 +172,7 @@
 - name: Deploy alertmanager.yml config
   ansible.builtin.template:
     src: alertmanager.yml.j2
-    dest: "{{ ansible_env.HOME }}/.config/monitoring/alertmanager.yml"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/alertmanager.yml"
     mode: "0644"
   no_log: true
   when:
@@ -183,7 +183,7 @@
 - name: Deploy matrix-notifier.env config
   ansible.builtin.template:
     src: matrix-notifier.env.j2
-    dest: "{{ ansible_env.HOME }}/.config/monitoring/matrix-notifier.env"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/matrix-notifier.env"
     mode: "0600"
   no_log: true
   when:

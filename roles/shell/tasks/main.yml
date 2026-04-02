@@ -68,14 +68,14 @@
 
 - name: Ensure ~/.ssh directory exists
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.ssh"
+    path: "{{ ansible_facts['env']['HOME'] }}/.ssh"
     state: directory
     mode: "0700"
 
 - name: Deploy SSH config
   ansible.builtin.template:
     src: ../../ssh_keys/templates/ssh_config.j2
-    dest: "{{ ansible_env.HOME }}/.ssh/config"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.ssh/config"
     mode: "0644"
 
 - name: Deploy ~/.tmux.conf
@@ -145,7 +145,7 @@
   tags: [secrets]
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
 - name: Fetch atuin credentials from Bitwarden
   ansible.builtin.shell: |
@@ -158,7 +158,7 @@
   failed_when: false
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   tags: [secrets]
 
 - name: Warn if atuin.sh not found in Bitwarden
@@ -201,7 +201,7 @@
   when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0 and not atuin_session.stat.exists
   changed_when: true
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   tags: [secrets]
 
 - name: Remove legacy atuin data and retry sync if key mismatch
@@ -212,7 +212,7 @@
       changed_when: true
       when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0 and not atuin_session.stat.exists
       environment:
-        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
       ignore_errors: true
       tags: [secrets]
 
@@ -229,7 +229,7 @@
       changed_when: true
       when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0 and not atuin_session.stat.exists
       environment:
-        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
       ignore_errors: true
       tags: [secrets]
   when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0 and not atuin_session.stat.exists

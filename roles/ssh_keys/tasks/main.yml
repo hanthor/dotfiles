@@ -1,14 +1,14 @@
 ---
 - name: Ensure ~/.ssh directory exists
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.ssh"
+    path: "{{ ansible_facts['env']['HOME'] }}/.ssh"
     state: directory
     mode: "0700"
 
 - name: Set SSH key path facts
   ansible.builtin.set_fact:
-    priv_key: "{{ ansible_env.HOME }}/.ssh/id_ed25519"
-    pub_key: "{{ ansible_env.HOME }}/.ssh/id_ed25519.pub"
+    priv_key: "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519"
+    pub_key: "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519.pub"
 
 - name: Check if private key exists on disk
   ansible.builtin.stat:
@@ -43,7 +43,7 @@
   when: not priv_key_stat.stat.exists
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
 - name: Generate new SSH key pair if not on disk or in BW
   ansible.builtin.command: >
@@ -68,7 +68,7 @@
   changed_when: false
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
 - name: Store SSH key in Bitwarden
   ansible.builtin.shell: |
@@ -97,7 +97,7 @@
   failed_when: false
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
 # ── Update allowed_signers for git commit signing ──
 - name: Read public key
@@ -112,7 +112,7 @@
 
 - name: Ensure allowed_signers file exists
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.ssh/allowed_signers"
+    path: "{{ ansible_facts['env']['HOME'] }}/.ssh/allowed_signers"
     state: touch
     mode: "0644"
     modification_time: preserve
@@ -120,13 +120,13 @@
 
 - name: Remove stale entries for this key
   ansible.builtin.lineinfile:
-    path: "{{ ansible_env.HOME }}/.ssh/allowed_signers"
+    path: "{{ ansible_facts['env']['HOME'] }}/.ssh/allowed_signers"
     regexp: "{{ signers_key_body }}"
     state: absent
 
 - name: Add current key to allowed_signers
   ansible.builtin.lineinfile:
-    path: "{{ ansible_env.HOME }}/.ssh/allowed_signers"
+    path: "{{ ansible_facts['env']['HOME'] }}/.ssh/allowed_signers"
     line: "{{ user_email }} namespaces=\"git\" {{ signers_pub_key }}"
     create: true
     mode: "0644"
@@ -152,11 +152,11 @@
   failed_when: false
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
 - name: Set authorized_keys permissions
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.ssh/authorized_keys"
+    path: "{{ ansible_facts['env']['HOME'] }}/.ssh/authorized_keys"
     mode: "0600"
     state: touch
     modification_time: preserve

@@ -3,5 +3,5 @@ Description=Dotfiles auto-update via ansible-pull
 
 [Service]
 Type=oneshot
-ExecStart={{ brew_prefix }}/bin/ansible-pull -U https://github.com/hanthor/dotfiles -C master -d {{ ansible_env.HOME }}/.local/share/dotfiles -i inventory.yml -l {{ inventory_hostname }} site.yml
+ExecStart={{ brew_prefix }}/bin/ansible-pull -U https://github.com/hanthor/dotfiles -C master -d {{ ansible_facts['env']['HOME'] }}/.local/share/dotfiles -i inventory.yml -l {{ inventory_hostname }} site.yml
 Environment="PATH={{ brew_prefix }}/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
