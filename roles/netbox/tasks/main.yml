@@ -8,6 +8,14 @@
     group: root
   become: true
 
+- name: Initialize NetBox secret defaults
+  ansible.builtin.set_fact:
+    netbox_db_password: ""
+    netbox_secret_key: ""
+    netbox_superuser_password: ""
+    netbox_api_token: ""
+  no_log: true
+
 - name: Fetch NetBox secrets from Bitwarden
   when: bw_session | default('') | length > 0
   no_log: true
@@ -68,6 +76,7 @@
   become: true
   no_log: true
   notify: Restart NetBox
+  when: netbox_db_password | length > 0
 
 - name: Deploy Podman quadlet files
   ansible.builtin.copy:
