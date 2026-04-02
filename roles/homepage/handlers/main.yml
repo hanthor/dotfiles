@@ -1,13 +1,10 @@
 ---
 - name: Reload systemd daemon
-  ansible.builtin.systemd:
-    daemon_reload: true
-    scope: system
+  ansible.builtin.command: systemctl daemon-reload
   become: true
+  changed_when: false
 
 - name: Restart homepage
-  ansible.builtin.systemd:
-    name: homepage.service
-    state: restarted
-    scope: system
+  ansible.builtin.command: systemctl restart homepage.service
   become: true
+  changed_when: true
