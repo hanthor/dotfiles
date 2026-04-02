@@ -7,9 +7,27 @@ web_services:
     description: System management
     group: System
     siteMonitor: https://karnataka:9090
-  - name: RamaLama
+  - name: Perses
     href: http://karnataka:8080
+    icon: mdi-chart-line
+    description: Metrics dashboards
+    group: Monitoring
+    siteMonitor: http://karnataka:8080
+  - name: Prometheus
+    href: http://karnataka:9091
+    icon: prometheus.png
+    description: Metrics (hub)
+    group: Monitoring
+    siteMonitor: http://karnataka:9091
+  - name: Alertmanager
+    href: http://karnataka:9093
+    icon: prometheus.png
+    description: Alert routing
+    group: Monitoring
+    siteMonitor: http://karnataka:9093
+  - name: RamaLama
+    href: http://karnataka:8174
     icon: ollama.png
     description: Local LLM server
     group: AI
-    siteMonitor: http://karnataka:8080
+    siteMonitor: http://karnataka:8174
