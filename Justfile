@@ -75,11 +75,25 @@ apply-remote name:
         echo "  ssh {{ name }} 'bw login'"
       fi
     fi
+    # BW_SESSION from this machine can't decrypt the remote vault — unlock BW
+    # on the remote using its own master password, and use that session instead.
+    REMOTE_BW_SESSION=""
+    if echo "$REMOTE_STATUS" | grep -qE '"locked"|"unauthenticated"'; then
+      echo "Unlocking Bitwarden on {{ name }} (enter master password when prompted)..."
+      REMOTE_BW_SESSION=$(ssh -t {{ name }} \
+        'export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"; bw unlock --raw 2>/dev/null' \
+        | tr -d '\r\n')
+      if [ -z "$REMOTE_BW_SESSION" ]; then
+        echo "WARNING: Could not unlock BW on {{ name }}. Continuing without secrets..."
+      fi
+    fi
+    # Use remote's own session if we got one, otherwise fall back to local
+    APPLY_BW_SESSION="${REMOTE_BW_SESSION:-$BW_SESSION}"
     echo "Applying to {{ name }} with forwarded BW session..."
     # Interpolate BW_SESSION directly — avoids AcceptEnv dependency on fresh machines
     ssh {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-      export BW_SESSION='${BW_SESSION}'
+      export BW_SESSION='${APPLY_BW_SESSION}'
       echo \"\$BW_SESSION\" > /tmp/bw_session
       chmod 600 /tmp/bw_session
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply
