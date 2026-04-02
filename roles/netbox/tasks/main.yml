@@ -42,7 +42,9 @@
     netbox_superuser_password: "{{ _netbox_superuser_password.stdout }}"
     netbox_api_token: "{{ _netbox_api_token.stdout }}"
   no_log: true
-  when: bw_session | default('') | length > 0
+  when:
+    - bw_session | default('') | length > 0
+    - (_netbox_db_password.stdout | default('')) | length > 0
 
 - name: Deploy PostgreSQL credentials
   ansible.builtin.template:
@@ -54,6 +56,7 @@
   become: true
   no_log: true
   notify: Restart NetBox
+  when: netbox_db_password | default('') | length > 0
 
 - name: Deploy NetBox environment config
   ansible.builtin.template:

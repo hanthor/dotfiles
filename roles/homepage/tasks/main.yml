@@ -51,6 +51,13 @@
     daemon_reload: true
   become: true
 
+- name: Enable system Podman socket (for container auto-discovery)
+  ansible.builtin.systemd:
+    name: podman.socket
+    state: started
+    enabled: true
+  become: true
+
 - name: Enable and start homepage service
   ansible.builtin.systemd:
     name: homepage.service
