@@ -46,3 +46,4 @@
     state: started
     enabled: true
     scope: user
+  ignore_errors: true
