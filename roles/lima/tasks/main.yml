@@ -23,6 +23,15 @@
     mode: "0644"
   notify: Reload user systemd daemon
 
+- name: Log into GHCR with GitHub token
+  ansible.builtin.shell: |
+    gh auth token | podman login ghcr.io -u {{ ansible_user_id }} --password-stdin
+  args:
+    executable: /bin/bash
+  environment:
+    PATH: "{{ ansible_facts['env']['PATH'] }}"
+  changed_when: false
+
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers
 
