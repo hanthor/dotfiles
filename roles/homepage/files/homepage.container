@@ -4,7 +4,7 @@ After=network-online.target
 
 [Container]
 Image=ghcr.io/gethomepage/homepage:latest
-Volume=/etc/homepage/config:/app/config
+Volume=/etc/homepage/config:/app/config:z
 Volume=/run/podman/podman.sock:/var/run/docker.sock:ro
 PublishPort=3000:3000
 Environment=HOMEPAGE_ALLOWED_HOSTS=*
