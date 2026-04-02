@@ -80,7 +80,7 @@ apply-remote name:
     # Try fetching master password from local vault first (non-interactive).
     REMOTE_BW_SESSION=""
     if echo "$REMOTE_STATUS" | grep -qE '"locked"|"unauthenticated"'; then
-      BW_MASTER_PASS=$(bw get password bw-master-password --session "$BW_SESSION" 2>/dev/null || true)
+      BW_MASTER_PASS=$(bw get password "James Bitwarden" --session "$BW_SESSION" 2>/dev/null || true)
       if [ -n "$BW_MASTER_PASS" ]; then
         echo "Unlocking Bitwarden on {{ name }} (non-interactive)..."
         REMOTE_BW_SESSION=$(ssh {{ name }} \
