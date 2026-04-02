@@ -7,44 +7,44 @@ tailscale_accept_dns: false
 tailscale_operator: james
 web_services:
   - name: Proxmox
-    href: https://bihar:8006
+    href: https://bihar.manatee-basking.ts.net:8006
     icon: proxmox.png
     description: Hypervisor
     group: Infrastructure
-    siteMonitor: https://bihar:8006
+    siteMonitor: https://bihar.manatee-basking.ts.net:8006
   - name: NetBox
-    href: https://bihar:8444
+    href: https://bihar.manatee-basking.ts.net:8444
     icon: netbox.png
     description: Network documentation
     group: Infrastructure
-    siteMonitor: https://bihar:8444
+    siteMonitor: https://bihar.manatee-basking.ts.net:8444
   - name: Lima
-    href: https://bihar/lima
+    href: https://bihar.manatee-basking.ts.net/lima
     icon: mdi-virtual-machine
     description: VM dashboard + bootc builder
     group: Infrastructure
     siteMonitor: http://127.0.0.1:8007
   - name: Cockpit
-    href: https://bihar:9090
+    href: https://bihar.manatee-basking.ts.net:9090
     icon: cockpit.png
     description: System management
     group: System
-    siteMonitor: https://bihar:9090
+    siteMonitor: https://bihar.manatee-basking.ts.net:9090
   - name: Grafana
-    href: http://bihar:3000
+    href: http://bihar.manatee-basking.ts.net:3000
     icon: grafana.png
     description: Metrics and logs dashboards
     group: Monitoring
-    siteMonitor: http://bihar:3000
+    siteMonitor: http://bihar.manatee-basking.ts.net:3000
   - name: Prometheus
-    href: http://bihar:9091
+    href: http://bihar.manatee-basking.ts.net:9091
     icon: prometheus.png
     description: Metrics (hub)
     group: Monitoring
-    siteMonitor: http://bihar:9091
+    siteMonitor: http://bihar.manatee-basking.ts.net:9091
   - name: Alertmanager
-    href: http://bihar:9093
+    href: http://bihar.manatee-basking.ts.net:9093
     icon: prometheus.png
     description: Alert routing
     group: Monitoring
-    siteMonitor: http://bihar:9093
+    siteMonitor: http://bihar.manatee-basking.ts.net:9093

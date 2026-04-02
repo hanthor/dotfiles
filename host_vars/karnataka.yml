@@ -2,14 +2,14 @@ is_arm: false
 has_homepage: true
 web_services:
   - name: Cockpit
-    href: https://karnataka:9090
+    href: https://karnataka.manatee-basking.ts.net:9090
     icon: cockpit.png
     description: System management
     group: System
-    siteMonitor: https://karnataka:9090
+    siteMonitor: https://karnataka.manatee-basking.ts.net:9090
   - name: RamaLama
-    href: http://karnataka:8174
+    href: http://karnataka.manatee-basking.ts.net:8174
     icon: ollama.png
     description: Local LLM server
     group: AI
-    siteMonitor: http://karnataka:8174
+    siteMonitor: http://karnataka.manatee-basking.ts.net:8174

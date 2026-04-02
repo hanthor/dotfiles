@@ -1,6 +1,9 @@
 ---
+tailscale_domain: manatee-basking.ts.net
+
 monitoring_hub_host: bihar
 monitoring_hub_ip: "100.85.9.86"
+monitoring_hub_url: "http://bihar.manatee-basking.ts.net:3000"
 
 user_name: James Reilly
 user_email: jreilly1821@gmail.com
@@ -8,29 +11,29 @@ user_login: james
 
 brew_prefix: /home/linuxbrew/.linuxbrew
 
-netbox_url: "https://bihar"  # Tailscale MagicDNS + tailscale serve cert
+netbox_url: "https://bihar.manatee-basking.ts.net"  # Tailscale MagicDNS + tailscale serve cert
 
 # Fleet homepages — machines with a homepage instance.
 # Used to render the "Fleet" section on each machine's homepage.
 fleet:
   bihar:
     name: Bihar
-    url: https://bihar
+    url: https://bihar.manatee-basking.ts.net
     icon: mdi-server-network
     description: Home server (Proxmox)
   karnataka:
     name: Karnataka
-    url: https://karnataka
+    url: https://karnataka.manatee-basking.ts.net
     icon: mdi-desktop-tower
     description: Main workstation
   kanpur:
     name: Kanpur
-    url: https://kanpur
+    url: https://kanpur.manatee-basking.ts.net
     icon: mdi-laptop
     description: Laptop
   dilli:
     name: Dilli
-    url: https://dilli
+    url: https://dilli.manatee-basking.ts.net
     icon: mdi-desktop-tower
     description: Secondary workstation
 

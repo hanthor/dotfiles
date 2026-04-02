@@ -2,8 +2,8 @@ is_arm: false
 has_homepage: true
 web_services:
   - name: Cockpit
-    href: https://kanpur:9090
+    href: https://kanpur.manatee-basking.ts.net:9090
     icon: cockpit.png
     description: System management
     group: System
-    siteMonitor: https://kanpur:9090
+    siteMonitor: https://kanpur.manatee-basking.ts.net:9090
