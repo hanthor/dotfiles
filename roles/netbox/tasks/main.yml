@@ -91,9 +91,9 @@
   failed_when: false
   become: true
 
-- name: Expose NetBox via Tailscale HTTPS
-  ansible.builtin.command: tailscale serve --bg http://127.0.0.1:8080
-  when: "'127.0.0.1:8080' not in (ts_serve_status.stdout | default(''))"
+- name: Expose NetBox via Tailscale HTTPS on port 8444
+  ansible.builtin.command: tailscale serve --bg --https=8444 http://127.0.0.1:8080
+  when: "'8444' not in (ts_serve_status.stdout | default(''))"
   become: true
 
 - name: Flush handlers before starting services

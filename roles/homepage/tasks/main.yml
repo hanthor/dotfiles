@@ -57,3 +57,15 @@
     state: started
     enabled: true
   become: true
+
+- name: Check Tailscale serve config
+  ansible.builtin.command: tailscale serve status
+  register: ts_serve_status
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Expose homepage via Tailscale HTTPS (main bihar URL)
+  ansible.builtin.command: tailscale serve --bg http://127.0.0.1:3000
+  when: "'127.0.0.1:3000' not in (ts_serve_status.stdout | default(''))"
+  become: true

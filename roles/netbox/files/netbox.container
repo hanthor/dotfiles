@@ -13,7 +13,7 @@ AutoUpdate=registry
 Label=homepage.name=NetBox
 Label=homepage.group=Infrastructure
 Label=homepage.icon=netbox.png
-Label=homepage.href=https://bihar
+Label=homepage.href=https://bihar:8444
 Label=homepage.description=Network source of truth
 
 [Service]
