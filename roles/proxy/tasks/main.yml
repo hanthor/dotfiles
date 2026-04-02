@@ -28,7 +28,7 @@
     owner: root
     group: root
   become: true
-  notify: Restart caddy
+  notify: Reload and restart caddy
 
 - name: Deploy Caddy quadlet
   ansible.builtin.copy:
@@ -38,7 +38,7 @@
     owner: root
     group: root
   become: true
-  notify: Reload systemd daemon
+  notify: Reload and restart caddy
 
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers
