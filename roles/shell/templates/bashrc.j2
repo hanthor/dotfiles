@@ -4,7 +4,10 @@ if [ -d /home/linuxbrew/.linuxbrew ]; then
 fi
 
 # Bluefin CLI shell integration (handles eza, bat, zoxide, starship, atuin, etc.)
-command -v bluefin-cli &>/dev/null && eval "$(bluefin-cli init bash)"
+# Guard with interactive check: atuin's AI keybinding calls `bind` outside its
+# interactive guard, causing "bind: warning: line editing not enabled" in
+# non-interactive shells (e.g. SSH remote commands).
+[[ $- == *i* ]] && command -v bluefin-cli &>/dev/null && eval "$(bluefin-cli init bash)"
 
 # Custom aliases (git, k8s, vim, etc.)
 [ -f ~/.config/shell/aliases.sh ] && source ~/.config/shell/aliases.sh
