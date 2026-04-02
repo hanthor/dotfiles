@@ -22,9 +22,6 @@
 {% if entry.svc.get('description') %}
         description: {{ entry.svc.description }}
 {% endif %}
-{% if entry.svc.get('siteMonitor') %}
-        siteMonitor: {{ entry.svc.siteMonitor }}
-{% endif %}
-        server: bihar
+        siteMonitor: {{ entry.svc.get('siteMonitor', entry.svc.href) }}
 {% endfor %}
 {% endfor %}

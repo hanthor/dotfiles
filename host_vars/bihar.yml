@@ -8,8 +8,16 @@ web_services:
     icon: proxmox.png
     description: Hypervisor
     group: Infrastructure
+    siteMonitor: https://bihar:8006
+  - name: NetBox
+    href: https://bihar:8444
+    icon: netbox.png
+    description: Network documentation
+    group: Infrastructure
+    siteMonitor: https://bihar:8444
   - name: Cockpit
     href: https://bihar:9090
     icon: cockpit.png
     description: System management
     group: System
+    siteMonitor: https://bihar:9090
