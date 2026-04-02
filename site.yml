@@ -70,7 +70,7 @@
       when: inventory_hostname not in groups.get('vps', [])
     - role: lima
       tags: [services, lima]
-      when: inventory_hostname == 'bihar'
+      when: is_desktop | bool or inventory_hostname == 'bihar'
     - role: netbox_agent
       tags: [services, secrets, netbox, netbox_agent]
       when: inventory_hostname not in groups.get('desktop', [])

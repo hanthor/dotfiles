@@ -11,7 +11,9 @@
     @proxmox path /proxmox /proxmox/*
     redir @proxmox https://{{ proxy_tailscale_host | default('bihar.manatee-basking.ts.net') }}:8006 302
 
-    # /lima — lima-bootc VM dashboard
+{% endif %}
+{% if is_desktop | bool or inventory_hostname == 'bihar' %}
+    # /lima — lima-bootc VM dashboard and RDP client
     handle_path /lima* {
         reverse_proxy host.containers.internal:{{ lima_internal_port | default(8007) }}
     }

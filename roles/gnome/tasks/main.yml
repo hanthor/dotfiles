@@ -69,3 +69,19 @@
     create: true
   become: true
   when: is_desktop | bool
+
+# ── GNOME Remote Desktop (RDP) ────────────────────────────────────
+- name: Enable GNOME RDP protocol
+  ansible.builtin.command: grdctl rdp enable
+  changed_when: true
+  ignore_errors: true
+  when: is_desktop | bool
+
+- name: Enable GNOME Remote Desktop service
+  ansible.builtin.systemd:
+    name: gnome-remote-desktop.service
+    state: started
+    enabled: true
+    scope: user
+  when: is_desktop | bool
+  ignore_errors: true

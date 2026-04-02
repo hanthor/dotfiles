@@ -38,3 +38,19 @@
         siteMonitor: {{ data.url }}
 {% endfor %}
 {% endif %}
+{# Monitoring — Grafana link filtered for this machine on the monitoring hub #}
+{%- set _gq = '{"datasource":"Prometheus","queries":[{"expr":"up{machine=\\"' ~ inventory_hostname ~ '\\"}","refId":"A"}],"range":{"from":"now-1h","to":"now"}}' -%}
+{%- set _grafana_url = 'http://' ~ monitoring_hub_host ~ ':3000/explore?orgId=1&left=' ~ _gq -%}
+- Monitoring:
+    - Grafana:
+        href: "{{ _grafana_url }}"
+        icon: grafana.png
+        description: Metrics for {{ inventory_hostname }}
+        siteMonitor: http://{{ monitoring_hub_host }}:3000
+{% if is_desktop | bool %}
+    - Remote Desktop:
+        href: https://{{ inventory_hostname }}/lima
+        icon: mdi-remote-desktop
+        description: RDP via Lima
+        siteMonitor: https://{{ inventory_hostname }}/lima
+{% endif %}

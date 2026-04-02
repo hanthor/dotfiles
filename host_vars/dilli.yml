@@ -1,4 +1,10 @@
 ---
 is_arm: false
 has_homepage: true
-web_services: []
+web_services:
+  - name: Cockpit
+    href: https://dilli:9090
+    icon: cockpit.png
+    description: System management
+    group: System
+    siteMonitor: https://dilli:9090

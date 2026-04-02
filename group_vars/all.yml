@@ -28,6 +28,11 @@ fleet:
     url: https://kanpur
     icon: mdi-laptop
     description: Laptop
+  dilli:
+    name: Dilli
+    url: https://dilli
+    icon: mdi-desktop-tower
+    description: Secondary workstation
 
 # All machine names (for SSH config generation)
 machines:
