@@ -29,7 +29,6 @@ web_services:
     icon: cockpit.png
     description: System management
     group: System
-    siteMonitor: https://bihar.manatee-basking.ts.net:9090
   - name: Grafana
     href: http://bihar.manatee-basking.ts.net:3000
     icon: grafana.png

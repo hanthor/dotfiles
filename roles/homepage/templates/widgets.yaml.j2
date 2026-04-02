@@ -1,7 +1,7 @@
 - resources:
     cpu: true
     memory: true
-    label: Bihar
+    label: {{ inventory_hostname | title }}
 - search:
     provider: duckduckgo
     target: _blank

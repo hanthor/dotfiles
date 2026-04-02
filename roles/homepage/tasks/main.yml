@@ -17,6 +17,15 @@
     group: root
   become: true
 
+- name: Deploy homepage widgets config
+  ansible.builtin.template:
+    src: widgets.yaml.j2
+    dest: /etc/homepage/config/widgets.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
 - name: Deploy homepage static config files
   ansible.builtin.copy:
     src: "{{ item }}"
@@ -27,7 +36,6 @@
   become: true
   loop:
     - settings.yaml
-    - widgets.yaml
     - bookmarks.yaml
     - docker.yaml
 

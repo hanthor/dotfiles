@@ -6,4 +6,3 @@ web_services:
     icon: cockpit.png
     description: System management
     group: System
-    siteMonitor: https://kanpur.manatee-basking.ts.net:9090

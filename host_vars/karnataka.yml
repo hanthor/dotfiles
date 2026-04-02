@@ -6,10 +6,8 @@ web_services:
     icon: cockpit.png
     description: System management
     group: System
-    siteMonitor: https://karnataka.manatee-basking.ts.net:9090
   - name: RamaLama
     href: http://karnataka.manatee-basking.ts.net:8174
     icon: ollama.png
     description: Local LLM server
     group: AI
-    siteMonitor: http://karnataka.manatee-basking.ts.net:8174
