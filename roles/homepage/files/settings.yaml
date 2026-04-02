@@ -2,7 +2,6 @@ title: Tailnet
 theme: dark
 color: pink
 headerStyle: clean
-allowedHosts: all
 layout:
   Infrastructure:
     style: row
