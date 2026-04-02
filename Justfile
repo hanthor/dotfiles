@@ -77,12 +77,22 @@ apply-remote name:
     fi
     # BW_SESSION from this machine can't decrypt the remote vault — unlock BW
     # on the remote using its own master password, and use that session instead.
+    # Try fetching master password from local vault first (non-interactive).
     REMOTE_BW_SESSION=""
     if echo "$REMOTE_STATUS" | grep -qE '"locked"|"unauthenticated"'; then
-      echo "Unlocking Bitwarden on {{ name }} (enter master password when prompted)..."
-      REMOTE_BW_SESSION=$(ssh -t {{ name }} \
-        'export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"; bw unlock --raw 2>/dev/null' \
-        | tr -d '\r\n')
+      BW_MASTER_PASS=$(bw get password bw-master-password --session "$BW_SESSION" 2>/dev/null || true)
+      if [ -n "$BW_MASTER_PASS" ]; then
+        echo "Unlocking Bitwarden on {{ name }} (non-interactive)..."
+        REMOTE_BW_SESSION=$(ssh {{ name }} \
+          "export PATH='/home/linuxbrew/.linuxbrew/bin:\$PATH'; bw unlock --raw '${BW_MASTER_PASS}' 2>/dev/null" \
+          | tr -d '\r\n')
+      fi
+      if [ -z "$REMOTE_BW_SESSION" ]; then
+        echo "Unlocking Bitwarden on {{ name }} (enter master password when prompted)..."
+        REMOTE_BW_SESSION=$(ssh -t {{ name }} \
+          'export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"; bw unlock --raw 2>/dev/null' \
+          | tr -d '\r\n')
+      fi
       if [ -z "$REMOTE_BW_SESSION" ]; then
         echo "WARNING: Could not unlock BW on {{ name }}. Continuing without secrets..."
       fi
