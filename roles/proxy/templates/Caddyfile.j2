@@ -5,11 +5,11 @@
 
     # /lima — lima-bootc VM dashboard
     handle_path /lima* {
-        reverse_proxy 127.0.0.1:{{ lima_internal_port | default(8007) }}
+        reverse_proxy host.containers.internal:{{ lima_internal_port | default(8007) }}
     }
 
     # / — homepage dashboard
     handle {
-        reverse_proxy 127.0.0.1:3000
+        reverse_proxy host.containers.internal:3000
     }
 }
