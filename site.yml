@@ -16,7 +16,7 @@
       tags: always
 
   environment:
-    PATH: "{{ brew_bin | default('/home/linuxbrew/.linuxbrew/bin') }}:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ brew_bin | default('/home/linuxbrew/.linuxbrew/bin') }}:/home/linuxbrew/.linuxbrew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
   roles:
     # Phase 1: System + packages (no secrets needed)
