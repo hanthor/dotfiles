@@ -1,6 +1,7 @@
 is_arm: false
 has_homepage: true
 has_proxy: true
+monitoring_hub: true
 tailscale_advertise_routes: "192.168.0.0/24"
 tailscale_accept_dns: false
 tailscale_operator: james
@@ -29,3 +30,21 @@ web_services:
     description: System management
     group: System
     siteMonitor: https://bihar:9090
+  - name: Grafana
+    href: http://bihar:3000
+    icon: grafana.png
+    description: Metrics and logs dashboards
+    group: Monitoring
+    siteMonitor: http://bihar:3000
+  - name: Prometheus
+    href: http://bihar:9091
+    icon: prometheus.png
+    description: Metrics (hub)
+    group: Monitoring
+    siteMonitor: http://bihar:9091
+  - name: Alertmanager
+    href: http://bihar:9093
+    icon: prometheus.png
+    description: Alert routing
+    group: Monitoring
+    siteMonitor: http://bihar:9093

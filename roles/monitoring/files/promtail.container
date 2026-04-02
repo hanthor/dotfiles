@@ -1,0 +1,23 @@
+[Unit]
+Description=Promtail — log shipper for Loki
+After=monitoring-network.service
+Wants=monitoring-network.service
+
+[Container]
+Image=docker.io/grafana/promtail:latest
+ContainerName=promtail
+Network=monitoring.network
+
+Volume=%h/.config/monitoring/promtail.yml:/etc/promtail/config.yml:ro,z
+Volume=/var/log/journal:/var/log/journal:ro
+Volume=/run/log/journal:/run/log/journal:ro
+Volume=/etc/machine-id:/etc/machine-id:ro
+
+Exec=-config.file=/etc/promtail/config.yml
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

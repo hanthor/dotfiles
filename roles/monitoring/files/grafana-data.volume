@@ -1,0 +1,8 @@
+[Unit]
+Description=Grafana data volume
+
+[Volume]
+Label=app=monitoring
+
+[Install]
+WantedBy=default.target

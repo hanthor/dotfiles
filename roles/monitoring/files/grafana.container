@@ -1,0 +1,26 @@
+[Unit]
+Description=Grafana — metrics and logs visualization
+After=monitoring-network.service prometheus.service loki.service
+Wants=monitoring-network.service prometheus.service loki.service
+
+[Container]
+Image=docker.io/grafana/grafana-oss:latest
+ContainerName=grafana
+Network=monitoring.network
+
+PublishPort=3000:3000
+
+Volume=grafana-data.volume:/var/lib/grafana:z
+Volume=%h/.config/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro,z
+
+Environment=GF_AUTH_ANONYMOUS_ENABLED=true
+Environment=GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+Environment=GF_AUTH_DISABLE_LOGIN_FORM=true
+Environment=GF_SECURITY_ALLOW_EMBEDDING=true
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

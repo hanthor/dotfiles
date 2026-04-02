@@ -10,6 +10,24 @@
     state: restarted
     scope: user
 
+- name: Restart grafana
+  ansible.builtin.systemd:
+    name: grafana.service
+    state: restarted
+    scope: user
+
+- name: Restart loki
+  ansible.builtin.systemd:
+    name: loki.service
+    state: restarted
+    scope: user
+
+- name: Restart promtail
+  ansible.builtin.systemd:
+    name: promtail.service
+    state: restarted
+    scope: user
+
 - name: Restart alertmanager
   ansible.builtin.systemd:
     name: alertmanager.service

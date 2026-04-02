@@ -65,9 +65,6 @@ apply-remote-tags name tags:
       cd ~/.local/share/dotfiles && git pull --ff-only && ansible-playbook --connection=local -l {{ name }} -e target={{ name }} -e \"bw_session=${BW_SESSION}\" site.yml --tags {{ tags }}
     "
 
-
-    cd {{ dotfiles_dir }} && git pull --ff-only && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets
-
 # Apply only dotfile configs (shell, git, tmux, etc.)
 dotfiles:
     cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --tags dotfiles

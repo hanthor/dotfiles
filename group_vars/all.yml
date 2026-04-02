@@ -1,4 +1,7 @@
 ---
+monitoring_hub_host: bihar
+monitoring_hub_ip: "100.85.9.86"
+
 user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james

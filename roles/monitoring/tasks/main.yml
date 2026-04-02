@@ -11,6 +11,14 @@
     state: directory
     mode: "0755"
 
+# Add user to systemd-journal group for Promtail journal access
+- name: Add user to systemd-journal group
+  ansible.builtin.user:
+    name: "{{ ansible_facts['env']['USER'] }}"
+    groups: systemd-journal
+    append: true
+  become: true
+
 # Common quadlets (all non-VPS hosts)
 - name: Deploy monitoring network
   ansible.builtin.copy:
@@ -33,21 +41,28 @@
     mode: "0644"
   notify: Reload systemd daemon
 
-# Prometheus + Perses: desktops and hub only (servers get prometheus only to avoid port conflicts)
+# Promtail: all machines ship logs to Loki on the hub
+- name: Deploy promtail quadlet
+  ansible.builtin.copy:
+    src: promtail.container
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/promtail.container"
+    mode: "0644"
+  notify: Reload systemd daemon
+
+- name: Deploy promtail config
+  ansible.builtin.template:
+    src: promtail.yml.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/promtail.yml"
+    mode: "0644"
+  notify: Restart promtail
+
+# Prometheus: desktops and servers (hub and spokes)
 - name: Deploy prometheus data volume
   ansible.builtin.copy:
     src: prometheus-data.volume
     dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/prometheus-data.volume"
     mode: "0644"
   when: is_desktop | bool or inventory_hostname in groups.get('server', [])
-  notify: Reload systemd daemon
-
-- name: Deploy perses data volume
-  ansible.builtin.copy:
-    src: perses-data.volume
-    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/perses-data.volume"
-    mode: "0644"
-  when: is_desktop | bool or (monitoring_hub | default(false) | bool)
   notify: Reload systemd daemon
 
 - name: Deploy prometheus quadlet (hub)
@@ -68,14 +83,6 @@
     - is_desktop | bool or inventory_hostname in groups.get('server', [])
   notify: Reload systemd daemon
 
-- name: Deploy perses quadlet
-  ansible.builtin.copy:
-    src: perses.container
-    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/perses.container"
-    mode: "0644"
-  when: is_desktop | bool or (monitoring_hub | default(false) | bool)
-  notify: Reload systemd daemon
-
 - name: Deploy prometheus.yml config
   ansible.builtin.template:
     src: prometheus.yml.j2
@@ -84,19 +91,58 @@
   when: is_desktop | bool or inventory_hostname in groups.get('server', [])
   notify: Restart prometheus
 
-# Hub-only: alertmanager, pve-exporter, matrix-notifier
-- name: Deploy hub-only quadlets
+# Hub-only: Grafana, Loki, Alertmanager, PVE-exporter, Matrix-notifier
+- name: Deploy hub volumes
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/{{ item }}"
     mode: "0644"
   loop:
-    - alertmanager.container
+    - grafana-data.volume
+    - loki-data.volume
     - alertmanager-data.volume
+  when: monitoring_hub | default(false) | bool
+  notify: Reload systemd daemon
+
+- name: Deploy hub quadlets
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/{{ item }}"
+    mode: "0644"
+  loop:
+    - grafana.container
+    - loki.container
+    - alertmanager.container
     - pve-exporter.container
     - matrix-notifier.container
   when: monitoring_hub | default(false) | bool
   notify: Reload systemd daemon
+
+- name: Create Grafana provisioning directories
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/grafana/provisioning/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - datasources
+    - dashboards
+  when: monitoring_hub | default(false) | bool
+
+- name: Deploy Grafana datasources provisioning
+  ansible.builtin.template:
+    src: grafana-datasources.yml.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/grafana/provisioning/datasources/datasources.yml"
+    mode: "0644"
+  when: monitoring_hub | default(false) | bool
+  notify: Restart grafana
+
+- name: Deploy Loki config
+  ansible.builtin.template:
+    src: loki.yml.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/loki.yml"
+    mode: "0644"
+  when: monitoring_hub | default(false) | bool
+  notify: Restart loki
 
 - name: Create alerts config directory
   ansible.builtin.file:
@@ -207,17 +253,16 @@
     enabled: true
     scope: user
 
-- name: Enable and start prometheus
+- name: Enable and start promtail
   ansible.builtin.systemd:
-    name: prometheus.service
+    name: promtail.service
     state: started
     enabled: true
     scope: user
-  when: is_desktop | bool or (monitoring_hub | default(false) | bool)
 
-- name: Enable and start perses
+- name: Enable and start prometheus
   ansible.builtin.systemd:
-    name: perses.service
+    name: prometheus.service
     state: started
     enabled: true
     scope: user
@@ -230,6 +275,8 @@
     enabled: true
     scope: user
   loop:
+    - grafana.service
+    - loki.service
     - alertmanager.service
     - pve-exporter.service
     - matrix-notifier.service
