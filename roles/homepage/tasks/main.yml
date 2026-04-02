@@ -64,4 +64,19 @@
     state: started
     enabled: true
   become: true
-  # Tailscale serve is managed by the proxy role (routes via Caddy)
+  # On Bihar, tailscale serve is managed by the proxy role (routes via Caddy)
+
+- name: Check Tailscale serve config
+  ansible.builtin.command: tailscale serve status
+  register: ts_serve_status
+  changed_when: false
+  failed_when: false
+  become: true
+  when: not (has_proxy | default(false))
+
+- name: Expose homepage via Tailscale HTTPS
+  ansible.builtin.command: tailscale serve --bg http://127.0.0.1:3000
+  when:
+    - not (has_proxy | default(false))
+    - "'127.0.0.1:3000' not in (ts_serve_status.stdout | default(''))"
+  become: true

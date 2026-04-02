@@ -1,27 +1,40 @@
-{# Collect all web_services across the fleet, grouped by 'group' field #}
-{# Containers (NetBox, lima, etc.) are auto-discovered via Podman socket labels #}
+{# Show only this machine's own services, grouped by 'group' field #}
 {% set ns = namespace(groups={}) %}
-{% for host in groups['all'] %}
-{%   for svc in hostvars[host].get('web_services', []) %}
-{%     set g = svc.get('group', 'Other') %}
-{%     if g not in ns.groups %}
-{%       set _ = ns.groups.update({g: []}) %}
-{%     endif %}
-{%     set _ = ns.groups[g].append({'host': host, 'svc': svc}) %}
-{%   endfor %}
+{% for svc in web_services | default([]) %}
+{%   set g = svc.get('group', 'Services') %}
+{%   if g not in ns.groups %}
+{%     set _ = ns.groups.update({g: []}) %}
+{%   endif %}
+{%   set _ = ns.groups[g].append(svc) %}
 {% endfor %}
-{% for group_name, entries in ns.groups.items() %}
+{% for group_name, svcs in ns.groups.items() %}
 - {{ group_name }}:
-{% for entry in entries %}
-    - {{ entry.svc.name }}{% if entry.svc.get('description') %} ({{ entry.host }}){% endif %}:
-
-        href: {{ entry.svc.href }}
-{% if entry.svc.get('icon') %}
-        icon: {{ entry.svc.icon }}
+{% for svc in svcs %}
+    - {{ svc.name }}:
+        href: {{ svc.href }}
+{% if svc.get('icon') %}
+        icon: {{ svc.icon }}
 {% endif %}
-{% if entry.svc.get('description') %}
-        description: {{ entry.svc.description }}
+{% if svc.get('description') %}
+        description: {{ svc.description }}
 {% endif %}
-        siteMonitor: {{ entry.svc.get('siteMonitor', entry.svc.href) }}
+        siteMonitor: {{ svc.get('siteMonitor', svc.href) }}
 {% endfor %}
 {% endfor %}
+{# Fleet section — links to other machines' homepages #}
+{% set other_machines = [] %}
+{% for host, data in fleet.items() %}
+{%   if host != inventory_hostname %}
+{%     set _ = other_machines.append((host, data)) %}
+{%   endif %}
+{% endfor %}
+{% if other_machines %}
+- Fleet:
+{% for host, data in other_machines %}
+    - {{ data.name }}:
+        href: {{ data.url }}
+        icon: {{ data.get('icon', 'mdi-server') }}
+        description: {{ data.get('description', host) }}
+        siteMonitor: {{ data.url }}
+{% endfor %}
+{% endif %}

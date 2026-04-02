@@ -7,6 +7,25 @@ brew_prefix: /home/linuxbrew/.linuxbrew
 
 netbox_url: "https://bihar"  # Tailscale MagicDNS + tailscale serve cert
 
+# Fleet homepages — machines with a homepage instance.
+# Used to render the "Fleet" section on each machine's homepage.
+fleet:
+  bihar:
+    name: Bihar
+    url: https://bihar
+    icon: mdi-server-network
+    description: Home server (Proxmox)
+  karnataka:
+    name: Karnataka
+    url: https://karnataka
+    icon: mdi-desktop-tower
+    description: Main workstation
+  kanpur:
+    name: Kanpur
+    url: https://kanpur
+    icon: mdi-laptop
+    description: Laptop
+
 # All machine names (for SSH config generation)
 machines:
   himachal:

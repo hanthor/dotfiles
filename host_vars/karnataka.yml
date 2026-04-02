@@ -1,4 +1,5 @@
 is_arm: false
+has_homepage: true
 monitoring_hub: true
 web_services:
   - name: Cockpit
