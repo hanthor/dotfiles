@@ -12,11 +12,11 @@
 
     - name: Ensure brew is in PATH for this run
       ansible.builtin.set_fact:
-        ansible_env_path: "{{ brew_bin }}:{{ ansible_env.PATH }}"
+        ansible_env_path: "{{ brew_bin }}:{{ ansible_facts['env']['PATH'] }}"
       tags: always
 
   environment:
-    PATH: "{{ brew_bin | default('/home/linuxbrew/.linuxbrew/bin') }}:{{ ansible_env.PATH }}"
+    PATH: "{{ brew_bin | default('/home/linuxbrew/.linuxbrew/bin') }}:{{ ansible_facts['env']['PATH'] }}"
 
   roles:
     # Phase 1: System + packages (no secrets needed)
