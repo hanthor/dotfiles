@@ -10,7 +10,13 @@ _online_hosts := ```
 python3 -c "
 import subprocess, json, yaml, os
 ts = json.loads(subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True).stdout)
-online = {p['HostName'].lower() for p in ts.get('Peer', {}).values() if p.get('Online')}
+# Match on DNSName (e.g. 'kanpur.manatee-basking.ts.net.') — strip domain suffix
+online = set()
+for p in ts.get('Peer', {}).values():
+    if p.get('Online'):
+        dns = p.get('DNSName', '').lower().split('.')[0]
+        online.add(dns)
+        online.add(p.get('HostName', '').lower())
 inv_path = os.path.expanduser('~/.local/share/dotfiles/inventory.yml')
 with open(inv_path) as f:
     inv = yaml.safe_load(f)
