@@ -1,4 +1,23 @@
 ---
+# ── GNOME Shell extensions ────────────────────────────────────────
+- name: Configure GNOME extensions (disable tailscale ext, ensure appindicator enabled)
+  ansible.builtin.shell: |
+    python3 << 'EOF'
+    import subprocess, ast, os
+    os.environ['DBUS_SESSION_BUS_ADDRESS'] = f"unix:path=/run/user/{os.getuid()}/bus"
+    result = subprocess.run(
+        ['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions'],
+        capture_output=True, text=True)
+    exts = ast.literal_eval(result.stdout.strip())
+    exts = [e for e in exts if e != 'tailscale@joaophi.github.com']
+    if 'appindicatorsupport@rgcjonas.gmail.com' not in exts:
+        exts.insert(0, 'appindicatorsupport@rgcjonas.gmail.com')
+    subprocess.run(['gsettings', 'set', 'org.gnome.shell', 'enabled-extensions', repr(exts)])
+    EOF
+  when: is_desktop | bool
+  changed_when: false
+  ignore_errors: true
+
 - name: Ensure dconf config directory exists
   ansible.builtin.file:
     path: "{{ ansible_facts['env']['HOME'] }}/.config/dconf"

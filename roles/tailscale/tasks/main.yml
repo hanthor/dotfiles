@@ -85,15 +85,9 @@
   changed_when: false
   failed_when: false
 
-- name: Check if GNOME Tailscale extension is installed
-  ansible.builtin.stat:
-    path: "{{ ansible_facts['env']['HOME'] }}/.local/share/gnome-shell/extensions/tailscale@joaophi.github.com"
-  register: gnome_tailscale_ext
-  when: is_desktop | bool
-
-- name: Install Tailscale systray service (on machines without GNOME extension)
+- name: Install Tailscale systray service on desktop machines
   ansible.builtin.command: tailscale configure systray --enable-startup=systemd
-  when: is_desktop | bool and not gnome_tailscale_ext.stat.exists
+  when: is_desktop | bool
   changed_when: false
   failed_when: false
 
@@ -101,7 +95,7 @@
   ansible.builtin.shell: |
     systemctl --user daemon-reload
     systemctl --user enable --now tailscale-systray
-  when: is_desktop | bool and not gnome_tailscale_ext.stat.exists
+  when: is_desktop | bool
   changed_when: false
   failed_when: false
 
