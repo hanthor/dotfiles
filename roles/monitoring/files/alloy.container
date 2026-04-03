@@ -8,11 +8,18 @@ Image=docker.io/grafana/alloy:latest
 ContainerName=alloy
 Network=monitoring.network
 
+# Alloy config from repo
 Volume=%h/dev/homelab-monitoring/alloy.alloy:/etc/alloy/config.alloy:ro,z
+
+# Journal access (read-only)
 Volume=/var/log/journal:/var/log/journal:ro
 Volume=/run/log/journal:/run/log/journal:ro
 Volume=/etc/machine-id:/etc/machine-id:ro
+
+# Persistent positions (survives restarts)
 Volume=alloy-data.volume:/var/lib/alloy
+
+PodmanArgs=--group-add=keep-groups
 
 Exec=run /etc/alloy/config.alloy --storage.path=/var/lib/alloy --stability.level=generally-available
 
