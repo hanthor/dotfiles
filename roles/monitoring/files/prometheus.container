@@ -11,7 +11,7 @@ Image=quay.io/prometheus/prometheus:latest
 ContainerName=prometheus
 Network=monitoring.network
 
-PublishPort=9090:9090
+PublishPort=9091:9090
 
 Volume=%h/.config/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
 Volume=prometheus-data.volume:/prometheus:z

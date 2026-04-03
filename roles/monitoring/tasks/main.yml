@@ -297,6 +297,14 @@
     - monitoring_hub | default(false) | bool
     - pve_token_value is defined
 
+- name: Disable matrix-notifier when credentials not configured
+  ansible.builtin.command: systemctl --user disable --now matrix-notifier.service
+  when:
+    - monitoring_hub | default(false) | bool
+    - matrix_access_token is not defined
+  changed_when: false
+  failed_when: false
+
 - name: Enable and start matrix-notifier
   ansible.builtin.systemd:
     name: matrix-notifier.service
