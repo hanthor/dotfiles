@@ -11,7 +11,16 @@
     state: directory
     mode: "0755"
 
-# Add user to systemd-journal group for Promtail journal access
+# Clone homelab-monitoring repo (holds quadlets, dashboards, Alloy config)
+- name: Clone homelab-monitoring repo
+  ansible.builtin.git:
+    repo: https://github.com/hanthor/homelab-monitoring.git
+    dest: "{{ ansible_facts['env']['HOME'] }}/dev/homelab-monitoring"
+    version: main
+    update: true
+  register: monitoring_repo
+
+# Add user to systemd-journal group for Alloy journal access
 - name: Add user to systemd-journal group
   ansible.builtin.user:
     name: "{{ ansible_facts['env']['USER'] }}"
@@ -41,20 +50,34 @@
     mode: "0644"
   notify: Reload systemd daemon
 
-# Promtail: all machines ship logs to Loki on the hub
-- name: Deploy promtail quadlet
+# Alloy: all machines ship logs to Loki on the hub
+# (Replaces Promtail — Alloy has native systemd journal support in its Docker image)
+- name: Deploy alloy quadlet
   ansible.builtin.copy:
-    src: promtail.container
-    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/promtail.container"
+    src: alloy.container
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/alloy.container"
     mode: "0644"
   notify: Reload systemd daemon
 
-- name: Deploy promtail config
-  ansible.builtin.template:
-    src: promtail.yml.j2
-    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/promtail.yml"
+- name: Deploy alloy data volume
+  ansible.builtin.copy:
+    src: alloy-data.volume
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/alloy-data.volume"
     mode: "0644"
-  notify: Restart promtail
+  notify: Reload systemd daemon
+
+- name: Deploy alloy config
+  ansible.builtin.template:
+    src: alloy.alloy.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/dev/homelab-monitoring/alloy.alloy"
+    mode: "0644"
+  notify: Restart alloy
+
+- name: Remove old promtail quadlet
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/promtail.container"
+    state: absent
+  notify: Reload systemd daemon
 
 # Prometheus: desktops and servers (hub and spokes)
 - name: Deploy prometheus data volume
@@ -128,13 +151,9 @@
     - dashboards
   when: monitoring_hub | default(false) | bool
 
-- name: Deploy Grafana datasources provisioning
-  ansible.builtin.template:
-    src: grafana-datasources.yml.j2
-    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/grafana/provisioning/datasources/datasources.yml"
-    mode: "0644"
-  when: monitoring_hub | default(false) | bool
-  notify: Restart grafana
+# Grafana provisioning (datasources, dashboards) lives in the homelab-monitoring
+# repo at ~/dev/homelab-monitoring/grafana/provisioning — mounted by grafana.container.
+# No separate template deployment needed.
 
 - name: Deploy Loki config
   ansible.builtin.template:
@@ -260,9 +279,9 @@
     enabled: true
     scope: user
 
-- name: Enable and start promtail
+- name: Enable and start alloy
   ansible.builtin.systemd:
-    name: promtail.service
+    name: alloy.service
     state: started
     enabled: true
     scope: user

@@ -22,6 +22,12 @@
     state: restarted
     scope: user
 
+- name: Restart alloy
+  ansible.builtin.systemd:
+    name: alloy.service
+    state: restarted
+    scope: user
+
 - name: Restart promtail
   ansible.builtin.systemd:
     name: promtail.service

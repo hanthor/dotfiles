@@ -1,0 +1,24 @@
+[Unit]
+Description=Grafana Alloy — log and metric collection agent
+After=monitoring-network.service
+Wants=monitoring-network.service
+
+[Container]
+Image=docker.io/grafana/alloy:latest
+ContainerName=alloy
+Network=monitoring.network
+
+Volume=%h/dev/homelab-monitoring/alloy.alloy:/etc/alloy/config.alloy:ro,z
+Volume=/var/log/journal:/var/log/journal:ro
+Volume=/run/log/journal:/run/log/journal:ro
+Volume=/etc/machine-id:/etc/machine-id:ro
+Volume=alloy-data.volume:/var/lib/alloy
+
+Exec=run /etc/alloy/config.alloy --storage.path=/var/lib/alloy --stability.level=generally-available
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

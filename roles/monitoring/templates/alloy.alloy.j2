@@ -1,0 +1,41 @@
+// Grafana Alloy configuration — homelab log collection
+// Ships systemd journal logs to the central Loki instance on Bihar.
+
+loki.source.journal "system_journal" {
+  max_age       = "12h"
+  path          = "/var/log/journal"
+  relabel_rules = loki.relabel.journal_labels.rules
+  labels        = { job = "systemd-journal" }
+  forward_to    = [loki.write.hub.receiver]
+}
+
+loki.relabel "journal_labels" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__journal__hostname"]
+    target_label  = "machine"
+  }
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+  rule {
+    source_labels = ["__journal__comm"]
+    target_label  = "command"
+  }
+  rule {
+    regex  = "__journal__.*"
+    action = "labeldrop"
+  }
+}
+
+loki.write "hub" {
+  endpoint {
+    url = "http://{{ monitoring_hub_ip }}:3100/loki/api/v1/push"
+  }
+}

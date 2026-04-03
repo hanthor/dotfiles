@@ -11,12 +11,29 @@ Network=monitoring.network
 PublishPort=3001:3000
 
 Volume=grafana-data.volume:/var/lib/grafana:z
-Volume=%h/.config/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro,z
+Volume=%h/dev/homelab-monitoring/grafana/provisioning:/etc/grafana/provisioning:ro,z
 
+# Auth — open access (homelab, Tailscale-protected)
 Environment=GF_AUTH_ANONYMOUS_ENABLED=true
 Environment=GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
 Environment=GF_AUTH_DISABLE_LOGIN_FORM=true
 Environment=GF_SECURITY_ALLOW_EMBEDDING=true
+
+# Branding
+Environment=GF_DEFAULT_INSTANCE_NAME=Homelab
+Environment=GF_SERVER_ROOT_URL=http://bihar.manatee-basking.ts.net:3001
+
+# Home dashboard (fleet overview)
+Environment=GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/overview.json
+
+# Disable telemetry / news feed
+Environment=GF_ANALYTICS_REPORTING_ENABLED=false
+Environment=GF_ANALYTICS_CHECK_FOR_UPDATES=false
+Environment=GF_NEWS_FEED_ENABLED=false
+
+# Unified alerting
+Environment=GF_ALERTING_ENABLED=false
+Environment=GF_UNIFIED_ALERTING_ENABLED=true
 
 [Service]
 Restart=on-failure
