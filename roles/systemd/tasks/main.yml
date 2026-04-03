@@ -13,6 +13,13 @@
     append: true
   become: true
 
+- name: Create podman socket drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/podman.socket.d
+    state: directory
+    mode: "0755"
+  become: true
+
 - name: Deploy podman socket drop-in for group access
   ansible.builtin.copy:
     dest: /etc/systemd/system/podman.socket.d/group-access.conf
