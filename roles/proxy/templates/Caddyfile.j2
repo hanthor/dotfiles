@@ -15,7 +15,11 @@
 {% if is_desktop | bool or inventory_hostname == 'bihar' %}
     # /lima — lima-bootc VM dashboard and RDP client
     handle_path /lima* {
-        reverse_proxy host.containers.internal:{{ lima_internal_port | default(8007) }}
+        reverse_proxy https://host.containers.internal:{{ lima_internal_port | default(8007) }} {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
     }
 
 {% endif %}
