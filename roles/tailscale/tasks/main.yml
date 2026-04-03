@@ -78,6 +78,12 @@
     - tailscale_accept_dns is defined
     - not tailscale_accept_dns
 
+- name: Enable Tailscale systray on desktop machines
+  ansible.builtin.command: tailscale configure systray --enable-startup=systemd
+  when: is_desktop | bool
+  changed_when: false
+  failed_when: false
+
 - name: Skip if already connected
   ansible.builtin.meta: end_role
   when: tailscale_status.rc == 0
