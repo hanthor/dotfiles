@@ -21,7 +21,8 @@ Environment=GF_SECURITY_ALLOW_EMBEDDING=true
 
 # Branding
 Environment=GF_DEFAULT_INSTANCE_NAME=Homelab
-Environment=GF_SERVER_ROOT_URL=http://bihar.manatee-basking.ts.net:3001
+Environment=GF_SERVER_ROOT_URL=https://bihar.manatee-basking.ts.net/grafana
+Environment=GF_SERVER_SERVE_FROM_SUB_PATH=true
 
 # Home dashboard (fleet overview)
 Environment=GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/overview.json

@@ -7,6 +7,13 @@
 {% endfor %}
 
 {% if inventory_hostname == 'bihar' %}
+    # /grafana — Grafana metrics dashboard
+    handle /grafana* {
+        reverse_proxy host.containers.internal:3001
+    }
+
+{% endif %}
+{% if inventory_hostname == 'bihar' %}
     # /proxmox — redirect to direct Proxmox port (PVE uses absolute paths, can't sub-path proxy)
     @proxmox path /proxmox /proxmox/*
     redir @proxmox https://{{ proxy_tailscale_host | default('bihar.manatee-basking.ts.net') }}:8006 302

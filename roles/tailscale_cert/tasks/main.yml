@@ -1,0 +1,81 @@
+---
+- name: Create Tailscale cert directory
+  ansible.builtin.file:
+    path: /etc/ssl/tailscale
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Provision Tailscale TLS certificate
+  ansible.builtin.command:
+    cmd: >
+      tailscale cert
+      --cert-file /etc/ssl/tailscale/cert.pem
+      --key-file /etc/ssl/tailscale/key.pem
+      --min-validity 720h
+      {{ inventory_hostname }}.{{ tailscale_domain }}
+  become: true
+  register: ts_cert_result
+  changed_when: "'wrote' in ts_cert_result.stderr or ts_cert_result.rc == 0"
+  failed_when: ts_cert_result.rc != 0
+
+- name: Set cert permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  become: true
+  loop:
+    - { path: /etc/ssl/tailscale/cert.pem, mode: "0644" }
+    - { path: /etc/ssl/tailscale/key.pem, mode: "0640" }
+
+- name: Deploy cert renewal systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tailscale-cert-renew.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Renew Tailscale TLS certificate
+      After=tailscaled.service
+      Wants=tailscaled.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/tailscale cert \
+        --cert-file /etc/ssl/tailscale/cert.pem \
+        --key-file /etc/ssl/tailscale/key.pem \
+        --min-validity 720h \
+        {{ inventory_hostname }}.{{ tailscale_domain }}
+      ExecStartPost=/usr/bin/systemctl try-restart cockpit.service
+  become: true
+  notify: Reload systemd daemon
+
+- name: Deploy cert renewal systemd timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tailscale-cert-renew.timer
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Weekly Tailscale TLS certificate renewal
+
+      [Timer]
+      OnCalendar=weekly
+      RandomizedDelaySec=1h
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  become: true
+  notify: Reload systemd daemon
+
+- name: Enable cert renewal timer
+  ansible.builtin.systemd:
+    name: tailscale-cert-renew.timer
+    scope: system
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true

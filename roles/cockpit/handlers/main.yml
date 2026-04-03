@@ -1,0 +1,7 @@
+---
+- name: Restart cockpit
+  ansible.builtin.systemd:
+    name: cockpit.service
+    scope: system
+    state: restarted
+  become: true

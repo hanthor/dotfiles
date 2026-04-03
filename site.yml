@@ -68,6 +68,12 @@
     - role: proxy
       tags: [services, proxy, caddy]
       when: inventory_hostname not in groups.get('vps', [])
+    - role: tailscale_cert
+      tags: [services, tailscale_cert]
+      when: inventory_hostname not in groups.get('vps', [])
+    - role: cockpit
+      tags: [services, cockpit]
+      when: is_desktop | bool or inventory_hostname in groups.get('server', [])
     - role: lima
       tags: [services, lima]
       when: is_desktop | bool or inventory_hostname == 'bihar'

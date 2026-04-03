@@ -1,0 +1,41 @@
+---
+- name: Install cockpit
+  ansible.builtin.package:
+    name: cockpit
+    state: present
+  become: true
+
+- name: Create cockpit cert directory
+  ansible.builtin.file:
+    path: /etc/cockpit/ws-certs.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Symlink Tailscale cert for Cockpit
+  ansible.builtin.file:
+    src: /etc/ssl/tailscale/cert.pem
+    dest: /etc/cockpit/ws-certs.d/0-tailscale.cert
+    state: link
+    force: true
+  become: true
+  notify: Restart cockpit
+
+- name: Symlink Tailscale key for Cockpit
+  ansible.builtin.file:
+    src: /etc/ssl/tailscale/key.pem
+    dest: /etc/cockpit/ws-certs.d/0-tailscale.key
+    state: link
+    force: true
+  become: true
+  notify: Restart cockpit
+
+- name: Enable and start cockpit
+  ansible.builtin.systemd:
+    name: cockpit.service
+    scope: system
+    enabled: true
+    state: started
+  become: true
