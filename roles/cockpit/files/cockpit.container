@@ -1,0 +1,19 @@
+[Unit]
+Description=Cockpit — web-based server manager
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=quay.io/cockpit/ws:latest
+ContainerName=cockpit-ws
+Volume=/:/host
+PodmanArgs=--pid host --privileged
+Exec=/container/label-run
+AutoUpdate=registry
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

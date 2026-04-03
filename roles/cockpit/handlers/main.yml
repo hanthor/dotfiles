@@ -5,3 +5,11 @@
     scope: system
     state: restarted
   become: true
+
+- name: Reload systemd and restart cockpit
+  ansible.builtin.systemd:
+    name: cockpit.service
+    scope: system
+    state: restarted
+    daemon_reload: true
+  become: true
