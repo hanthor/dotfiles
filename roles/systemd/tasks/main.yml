@@ -1,4 +1,12 @@
 ---
+- name: Enable and start rootful podman socket
+  ansible.builtin.systemd:
+    name: podman.socket
+    scope: system
+    enabled: true
+    state: started
+  become: true
+
 - name: Create systemd user directory
   ansible.builtin.file:
     path: ~/.config/systemd/user
