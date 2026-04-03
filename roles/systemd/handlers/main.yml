@@ -3,3 +3,11 @@
   ansible.builtin.systemd:
     daemon_reload: true
     scope: user
+
+- name: Restart podman socket
+  ansible.builtin.systemd:
+    name: podman.socket
+    scope: system
+    state: restarted
+    daemon_reload: true
+  become: true
