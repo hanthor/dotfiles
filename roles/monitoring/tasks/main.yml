@@ -285,6 +285,24 @@
     - grafana.service
     - loki.service
     - alertmanager.service
-    - pve-exporter.service
-    - matrix-notifier.service
   when: monitoring_hub | default(false) | bool
+
+- name: Enable and start pve-exporter
+  ansible.builtin.systemd:
+    name: pve-exporter.service
+    state: started
+    enabled: true
+    scope: user
+  when:
+    - monitoring_hub | default(false) | bool
+    - pve_token_value is defined
+
+- name: Enable and start matrix-notifier
+  ansible.builtin.systemd:
+    name: matrix-notifier.service
+    state: started
+    enabled: true
+    scope: user
+  when:
+    - monitoring_hub | default(false) | bool
+    - matrix_access_token is defined

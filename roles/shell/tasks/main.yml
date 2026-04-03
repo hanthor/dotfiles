@@ -208,26 +208,11 @@
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   tags: [secrets]
 
-- name: Sync atuin history (with records.db rescue on failure)
-  block:
-    - name: Sync atuin history
-      ansible.builtin.command: atuin sync
-      changed_when: true
-      environment:
-        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
-      tags: [secrets]
-  rescue:
-    - name: Remove legacy atuin records.db on sync failure
-      ansible.builtin.file:
-        path: ~/.local/share/atuin/records.db
-        state: absent
-      tags: [secrets]
-
-    - name: Retry atuin sync after records.db cleanup
-      ansible.builtin.command: atuin sync
-      changed_when: true
-      environment:
-        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
-      tags: [secrets]
+- name: Sync atuin history (best-effort — key mismatch is non-fatal)
+  ansible.builtin.command: atuin sync
+  changed_when: true
+  failed_when: false
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
   tags: [secrets]
