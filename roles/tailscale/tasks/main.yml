@@ -79,7 +79,7 @@
     - not tailscale_accept_dns
 
 - name: Set Tailscale operator to allow user-level management
-  ansible.builtin.command: tailscale set --operator={{ ansible_user_id }}
+  ansible.builtin.command: tailscale set --operator={{ ansible_facts['env']['USER'] }}
   become: true
   when: is_desktop | bool
   changed_when: false
