@@ -19,7 +19,7 @@ Volume=/etc/machine-id:/etc/machine-id:ro
 # Persistent positions (survives restarts)
 Volume=alloy-data.volume:/var/lib/alloy
 
-PodmanArgs=--group-add=keep-groups
+PodmanArgs=--group-add=keep-groups --security-opt label=disable
 
 Exec=run /etc/alloy/config.alloy --storage.path=/var/lib/alloy --stability.level=generally-available
 
