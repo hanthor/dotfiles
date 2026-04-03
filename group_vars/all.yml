@@ -3,7 +3,7 @@ tailscale_domain: manatee-basking.ts.net
 
 monitoring_hub_host: bihar
 monitoring_hub_ip: "100.85.9.86"
-monitoring_hub_url: "http://bihar.manatee-basking.ts.net:3000"
+monitoring_hub_url: "http://bihar.manatee-basking.ts.net:3001"
 
 user_name: James Reilly
 user_email: jreilly1821@gmail.com

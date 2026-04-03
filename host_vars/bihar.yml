@@ -30,11 +30,11 @@ web_services:
     description: System management
     group: System
   - name: Grafana
-    href: http://bihar.manatee-basking.ts.net:3000
+    href: http://bihar.manatee-basking.ts.net:3001
     icon: grafana.png
     description: Metrics and logs dashboards
     group: Monitoring
-    siteMonitor: http://bihar.manatee-basking.ts.net:3000
+    siteMonitor: http://bihar.manatee-basking.ts.net:3001
   - name: Prometheus
     href: http://bihar.manatee-basking.ts.net:9091
     icon: prometheus.png
