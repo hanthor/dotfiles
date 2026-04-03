@@ -139,7 +139,9 @@
     - pve-exporter.container
     - matrix-notifier.container
   when: monitoring_hub | default(false) | bool
-  notify: Reload systemd daemon
+  notify:
+    - Reload systemd daemon
+    - Restart grafana
 
 - name: Create Grafana provisioning directories
   ansible.builtin.file:
