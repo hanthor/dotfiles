@@ -48,10 +48,16 @@ scrape_configs:
   - job_name: 'node'
     static_configs:
       - targets: ['node_exporter:9100']
+    relabel_configs:
+      - target_label: machine
+        replacement: {{ inventory_hostname }}
 
   - job_name: 'podman'
     static_configs:
       - targets: ['podman_exporter:9882']
+    relabel_configs:
+      - target_label: machine
+        replacement: {{ inventory_hostname }}
 
 remote_write:
   - url: 'http://{{ monitoring_hub_ip }}:9091/api/v1/write'
