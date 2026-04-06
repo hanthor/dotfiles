@@ -14,15 +14,11 @@
 
 {% endif %}
     # /cockpit — Cockpit system management (sub-path proxy)
-    handle /cockpit* {
+    redir /cockpit /cockpit/ 301
+    handle /cockpit/* {
         reverse_proxy https://host.containers.internal:9095 {
             transport http {
                 tls_insecure_skip_verify
-            }
-            header_up Host {upstream_hostport}
-            @redirect status 301 302 303 307 308
-            handle_response @redirect {
-                redir /cockpit{rp.header.Location} {rp.status_code}
             }
         }
     }
