@@ -15,7 +15,7 @@
 {% endif %}
     # /cockpit — Cockpit system management (sub-path proxy)
     handle /cockpit* {
-        reverse_proxy https://host.containers.internal:9090 {
+        reverse_proxy https://host.containers.internal:9095 {
             transport http {
                 tls_insecure_skip_verify
             }
