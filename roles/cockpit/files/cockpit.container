@@ -9,7 +9,7 @@ ContainerName=cockpit-ws
 Volume=/:/host
 Volume=/etc/ssl/tailscale:/etc/ssl/tailscale:ro
 PodmanArgs=--pid host --privileged
-Exec=/container/label-run
+Exec=/container/label-run --port 9095
 AutoUpdate=registry
 
 [Service]
