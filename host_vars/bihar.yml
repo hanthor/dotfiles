@@ -25,16 +25,16 @@ web_services:
     group: Infrastructure
     siteMonitor: http://127.0.0.1:8007
   - name: Cockpit
-    href: https://bihar.manatee-basking.ts.net:9090
+    href: https://bihar.manatee-basking.ts.net/cockpit
     icon: cockpit.png
     description: System management
     group: System
   - name: Grafana
-    href: http://bihar.manatee-basking.ts.net:3001
+    href: https://bihar.manatee-basking.ts.net/grafana
     icon: grafana.png
     description: Metrics and logs dashboards
     group: Monitoring
-    siteMonitor: http://bihar.manatee-basking.ts.net:3001
+    siteMonitor: https://bihar.manatee-basking.ts.net/grafana
   - name: Prometheus
     href: http://bihar.manatee-basking.ts.net:9091
     icon: prometheus.png

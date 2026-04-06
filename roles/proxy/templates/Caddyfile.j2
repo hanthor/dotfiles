@@ -13,10 +13,31 @@
     }
 
 {% endif %}
+    # /cockpit — Cockpit system management (sub-path proxy)
+    handle /cockpit* {
+        reverse_proxy https://host.containers.internal:9090 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+            header_up Host {upstream_hostport}
+            @redirect status 301 302 303 307 308
+            handle_response @redirect {
+                redir /cockpit{rp.header.Location} {rp.status_code}
+            }
+        }
+    }
+
 {% if inventory_hostname == 'bihar' %}
     # /proxmox — redirect to direct Proxmox port (PVE uses absolute paths, can't sub-path proxy)
     @proxmox path /proxmox /proxmox/*
     redir @proxmox https://{{ proxy_tailscale_host | default('bihar.manatee-basking.ts.net') }}:8006 302
+
+{% endif %}
+{% if is_desktop | bool or inventory_hostname == 'bihar' %}
+    # /rdp — shortcut redirect to Lima RDP client
+    handle /rdp* {
+        redir /lima/rdp/ 302
+    }
 
 {% endif %}
 {% if is_desktop | bool or inventory_hostname == 'bihar' %}

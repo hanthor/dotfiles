@@ -50,8 +50,12 @@
         description: Metrics for {{ inventory_hostname }}
         siteMonitor: {{ monitoring_hub_url }}
 {% if is_desktop | bool %}
-    - Remote Desktop:
+    - Lima:
         href: https://{{ inventory_hostname }}.{{ tailscale_domain }}/lima
+        icon: mdi-virtual-machine
+        description: VM dashboard (lima-bootc)
+    - Remote Desktop:
+        href: https://{{ inventory_hostname }}.{{ tailscale_domain }}/rdp
         icon: mdi-remote-desktop
         description: RDP via Lima
 {% endif %}

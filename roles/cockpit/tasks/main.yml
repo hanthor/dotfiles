@@ -36,6 +36,23 @@
   become: true
   notify: Reload systemd and restart cockpit
 
+- name: Remove legacy cockpit service if present
+  ansible.builtin.file:
+    path: /etc/systemd/system/cockpit.service
+    state: absent
+  become: true
+  notify: Reload systemd and restart cockpit
+
+- name: Deploy cockpit.conf with UrlRoot for sub-path proxy
+  ansible.builtin.template:
+    src: cockpit.conf.j2
+    dest: /etc/cockpit/cockpit.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Restart cockpit
+
 - name: Enable and start cockpit
   ansible.builtin.systemd:
     name: cockpit.service

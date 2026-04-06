@@ -3,7 +3,7 @@ is_arm: false
 has_homepage: true
 web_services:
   - name: Cockpit
-    href: https://dilli.manatee-basking.ts.net:9090
+    href: https://dilli.manatee-basking.ts.net/cockpit
     icon: cockpit.png
     description: System management
     group: System
