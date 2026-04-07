@@ -81,7 +81,7 @@
 
 - name: Install PyFxA into venv
   ansible.builtin.pip:
-    name: fxa
+    name: PyFxA
     state: present
     virtualenv: "{{ ansible_facts['env']['HOME'] }}/.local/venvs/fxa"
 
