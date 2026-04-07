@@ -51,13 +51,22 @@
     dest: "{{ ansible_facts['env']['HOME'] }}/.var/app/app.zen_browser.zen/.zen/{{ zen_profile_path.stdout }}/user.js"
     mode: "0644"
 
+- name: Deploy policies.json to Flatpak bundle directory (ensures Bitwarden extension is force-installed)
+  ansible.builtin.copy:
+    src: policies.json
+    dest: /var/lib/flatpak/app/app.zen_browser.zen/current/active/files/bin/distribution/policies.json
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
 - name: Ensure Zen Browser distribution directory exists
   ansible.builtin.file:
     path: "{{ ansible_facts['env']['HOME'] }}/.zen/distribution"
     state: directory
     mode: "0755"
 
-- name: Copy policies.json to Zen Browser distribution
+- name: Copy policies.json to Zen Browser user distribution (fallback)
   ansible.builtin.copy:
     src: policies.json
     dest: "{{ ansible_facts['env']['HOME'] }}/.zen/distribution/policies.json"

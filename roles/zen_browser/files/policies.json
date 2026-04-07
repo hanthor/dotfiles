@@ -1,5 +1,7 @@
 {
   "policies": {
+    "DisableAppUpdate": true,
+    "DontCheckDefaultBrowser": true,
     "Extensions": {
       "Install": [
         "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi"
