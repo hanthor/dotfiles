@@ -215,7 +215,7 @@
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
-  tags: [secrets]
+  tags: [shell, secrets]
 
 - name: Check if shell history has already been imported into atuin
   ansible.builtin.stat:
