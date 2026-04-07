@@ -71,3 +71,60 @@
     src: policies.json
     dest: "{{ ansible_facts['env']['HOME'] }}/.zen/distribution/policies.json"
     mode: "0644"
+
+# ── Firefox Accounts sign-in ──────────────────────────────────────────────────
+
+- name: Install PyFxA (needed for Firefox Accounts sign-in)
+  ansible.builtin.pip:
+    name: fxa
+    extra_args: --user
+    state: present
+
+- name: Copy FxA sign-in script
+  ansible.builtin.copy:
+    src: fxa_signin.py
+    dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/fxa_signin.py"
+    mode: "0700"
+
+- name: Fetch Firefox Account credentials from Bitwarden
+  ansible.builtin.command: bw get item "{{ fxa_bw_item | default('firefox-account') }}"
+  register: fxa_item_raw
+  no_log: true
+  failed_when: false
+  changed_when: false
+  environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
+
+- name: Fetch Firefox Account TOTP from Bitwarden
+  ansible.builtin.command: bw get totp "{{ fxa_bw_item | default('firefox-account') }}"
+  register: fxa_totp_raw
+  no_log: true
+  failed_when: false
+  changed_when: false
+  environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
+
+- name: Sign in to Firefox Accounts for Zen Browser
+  ansible.builtin.command: >
+    python3 {{ ansible_facts['env']['HOME'] }}/.local/bin/fxa_signin.py
+  register: fxa_signin_result
+  no_log: true
+  changed_when: "'Wrote signedInUser.json' in fxa_signin_result.stdout"
+  failed_when: fxa_signin_result.rc not in [0]
+  when:
+    - fxa_item_raw.rc is defined and fxa_item_raw.rc == 0
+    - fxa_totp_raw.rc is defined and fxa_totp_raw.rc == 0
+    - (fxa_item_raw.stdout | default('')) | length > 0
+    - (fxa_totp_raw.stdout | default('')) | length > 0
+  environment:
+    FXA_EMAIL: "{{ (fxa_item_raw.stdout | from_json).login.username }}"
+    FXA_PASSWORD: "{{ (fxa_item_raw.stdout | from_json).login.password }}"
+    FXA_TOTP: "{{ fxa_totp_raw.stdout | trim }}"
+
+- name: Show Firefox Accounts sign-in result
+  ansible.builtin.debug:
+    msg: "{{ fxa_signin_result.stdout }}"
+  when:
+    - fxa_signin_result is defined
+    - fxa_signin_result.stdout is defined
+    - fxa_signin_result.stdout | length > 0

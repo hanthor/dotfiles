@@ -172,3 +172,6 @@ system_flatpaks:
   - com.tailscale.tailscale
   - com.visualstudio.code
   - com.github.Eloston.UngoogledChromium
+
+# Bitwarden item name that holds Firefox Accounts credentials + TOTP
+fxa_bw_item: "accounts.firefox.com"
