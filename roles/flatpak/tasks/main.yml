@@ -5,6 +5,15 @@
   become: true
   changed_when: false
 
+- name: Remove unwanted flatpaks if present
+  ansible.builtin.shell: |
+    flatpak uninstall --system --nonexistent -y {{ item }} 2>/dev/null || true
+  loop:
+    - org.mozilla.firefox
+    - org.mozilla.Thunderbird
+  become: true
+  changed_when: false
+
 - name: Install system flatpaks
   ansible.builtin.shell: |
     if ! flatpak info --system {{ item }} >/dev/null 2>&1; then
@@ -14,3 +23,21 @@
   become: true
   register: flatpak_result
   changed_when: "'Installing' in flatpak_result.stdout"
+
+- name: Ensure ~/.local/bin exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/bin"
+    state: directory
+    mode: "0755"
+
+- name: Create chromium wrapper scripts pointing to ungoogled-chromium
+  ansible.builtin.copy:
+    dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/{{ item }}"
+    content: |
+      #!/usr/bin/env bash
+      exec flatpak run com.github.Eloston.UngoogledChromium "$@"
+    mode: "0755"
+  loop:
+    - google-chrome
+    - chromium-browser
+    - chromium

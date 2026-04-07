@@ -171,3 +171,4 @@ system_flatpaks:
   - app.zen_browser.zen
   - com.tailscale.tailscale
   - com.visualstudio.code
+  - com.github.Eloston.UngoogledChromium

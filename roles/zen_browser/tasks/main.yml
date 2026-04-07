@@ -1,4 +1,30 @@
 ---
+- name: Add Zen Browser to GNOME dock
+  ansible.builtin.shell: |
+    python3 << 'EOF'
+    import subprocess, ast, os
+    os.environ['DBUS_SESSION_BUS_ADDRESS'] = f"unix:path=/run/user/{os.getuid()}/bus"
+    result = subprocess.run(
+        ['gsettings', 'get', 'org.gnome.shell', 'favorite-apps'],
+        capture_output=True, text=True)
+    apps = ast.literal_eval(result.stdout.strip()) if result.stdout.strip() else []
+    zen = 'app.zen_browser.zen.desktop'
+    if zen not in apps:
+        apps.insert(0, zen)
+        subprocess.run(['gsettings', 'set', 'org.gnome.shell', 'favorite-apps', repr(apps)])
+    EOF
+  changed_when: false
+  ignore_errors: true
+
+- name: Set Zen Browser as default browser
+  ansible.builtin.shell: |
+    for mime in x-scheme-handler/http x-scheme-handler/https x-scheme-handler/ftp \
+                text/html text/xml application/xhtml+xml application/xml; do
+      xdg-mime default app.zen_browser.zen.desktop "$mime"
+    done
+  changed_when: false
+  ignore_errors: true
+
 - name: Check if Zen Browser profiles.ini exists
   ansible.builtin.stat:
     path: "{{ ansible_facts['env']['HOME'] }}/.var/app/app.zen_browser.zen/.zen/profiles.ini"
