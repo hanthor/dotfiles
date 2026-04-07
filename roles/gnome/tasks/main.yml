@@ -60,6 +60,15 @@
   become: true
   when: is_desktop | bool
 
+- name: Check if gdm user exists
+  ansible.builtin.getent:
+    database: passwd
+    key: gdm
+  register: gdm_user
+  failed_when: false
+  become: true
+  when: is_desktop | bool
+
 - name: Copy avatar to GDM cache directory
   ansible.builtin.copy:
     src: /var/lib/AccountsService/icons/james
@@ -67,7 +76,9 @@
     mode: "0644"
     force: true
   become: true
-  when: is_desktop | bool
+  when:
+    - is_desktop | bool
+    - gdm_user.ansible_facts is defined
 
 - name: Set avatar ownership for GDM
   ansible.builtin.file:
@@ -76,7 +87,9 @@
     group: gdm
     mode: "0644"
   become: true
-  when: is_desktop | bool
+  when:
+    - is_desktop | bool
+    - gdm_user.ansible_facts is defined
 
 - name: Set user avatar in AccountsService
   community.general.ini_file:
