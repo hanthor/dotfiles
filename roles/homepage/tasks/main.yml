@@ -48,6 +48,15 @@
     - bookmarks.yaml
     - docker.yaml
 
+- name: Create systemd quadlets directory
+  ansible.builtin.file:
+    path: /etc/containers/systemd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
 - name: Deploy homepage quadlet
   ansible.builtin.copy:
     src: homepage.container
