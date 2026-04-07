@@ -1,0 +1,26 @@
+galaxy_info:
+  author: hanthor
+  description: >-
+    Sign in to Firefox Accounts (FxA) for Zen Browser or Firefox using PyFxA,
+    with optional Bitwarden credential lookup and TOTP support.
+  company: hanthor
+  license: GPL-3.0-or-later
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Fedora
+      versions: all
+    - name: Ubuntu
+      versions: all
+    - name: Debian
+      versions: all
+    - name: EL
+      versions: all
+  galaxy_tags:
+    - firefox
+    - zen_browser
+    - fxa
+    - browser
+    - sync
+    - bitwarden
+
+dependencies: []
