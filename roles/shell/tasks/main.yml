@@ -216,3 +216,19 @@
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
   tags: [secrets]
+
+- name: Check if shell history has already been imported into atuin
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin/.history_imported"
+  register: atuin_import_sentinel
+
+- name: Import existing shell history into atuin
+  ansible.builtin.shell: |
+    atuin import auto 2>&1
+    touch "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin/.history_imported"
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  when: not atuin_import_sentinel.stat.exists
+  changed_when: true
+  failed_when: false
+  tags: [shell]
