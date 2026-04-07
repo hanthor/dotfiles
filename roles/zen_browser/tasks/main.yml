@@ -74,11 +74,16 @@
 
 # ── Firefox Accounts sign-in ──────────────────────────────────────────────────
 
-- name: Install PyFxA (needed for Firefox Accounts sign-in)
+- name: Create venv for PyFxA
+  ansible.builtin.command:
+    cmd: python3 -m venv {{ ansible_facts['env']['HOME'] }}/.local/venvs/fxa
+    creates: "{{ ansible_facts['env']['HOME'] }}/.local/venvs/fxa/bin/python"
+
+- name: Install PyFxA into venv
   ansible.builtin.pip:
     name: fxa
-    extra_args: --user
     state: present
+    virtualenv: "{{ ansible_facts['env']['HOME'] }}/.local/venvs/fxa"
 
 - name: Copy FxA sign-in script
   ansible.builtin.copy:
@@ -106,7 +111,7 @@
 
 - name: Sign in to Firefox Accounts for Zen Browser
   ansible.builtin.command: >
-    python3 {{ ansible_facts['env']['HOME'] }}/.local/bin/fxa_signin.py
+    {{ ansible_facts['env']['HOME'] }}/.local/venvs/fxa/bin/python {{ ansible_facts['env']['HOME'] }}/.local/bin/fxa_signin.py
   register: fxa_signin_result
   no_log: true
   changed_when: "'Wrote signedInUser.json' in fxa_signin_result.stdout"
