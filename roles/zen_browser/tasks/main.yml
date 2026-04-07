@@ -92,7 +92,7 @@
     mode: "0700"
 
 - name: Fetch Firefox Account credentials from Bitwarden
-  ansible.builtin.command: bw get item "{{ fxa_bw_item | default('firefox-account') }}"
+  ansible.builtin.shell: bw get item "{{ fxa_bw_item | default('firefox-account') }}" 2>&1
   register: fxa_item_raw
   no_log: true
   failed_when: false
@@ -102,7 +102,7 @@
     BW_SESSION: "{{ bw_session | default('') }}"
 
 - name: Fetch Firefox Account TOTP from Bitwarden
-  ansible.builtin.command: bw get totp "{{ fxa_bw_item | default('firefox-account') }}"
+  ansible.builtin.shell: bw get totp "{{ fxa_bw_item | default('firefox-account') }}" 2>&1
   register: fxa_totp_raw
   no_log: true
   failed_when: false
@@ -116,8 +116,10 @@
     msg: >-
       item_rc={{ fxa_item_raw.rc | default('undef') }}
       item_stdout_len={{ (fxa_item_raw.stdout | default('')) | length }}
+      item_stderr_len={{ (fxa_item_raw.stderr | default('')) | length }}
       totp_rc={{ fxa_totp_raw.rc | default('undef') }}
       totp_stdout_len={{ (fxa_totp_raw.stdout | default('')) | length }}
+      totp_stderr={{ fxa_totp_raw.stderr | default('') }}
 
 - name: Warn if Firefox Account credentials not found in Bitwarden
   ansible.builtin.debug:
