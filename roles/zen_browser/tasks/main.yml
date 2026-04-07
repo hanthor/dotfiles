@@ -116,10 +116,8 @@
     msg: >-
       item_rc={{ fxa_item_raw.rc | default('undef') }}
       item_stdout_len={{ (fxa_item_raw.stdout | default('')) | length }}
-      item_stderr_len={{ (fxa_item_raw.stderr | default('')) | length }}
       totp_rc={{ fxa_totp_raw.rc | default('undef') }}
       totp_stdout_len={{ (fxa_totp_raw.stdout | default('')) | length }}
-      totp_stderr={{ fxa_totp_raw.stderr | default('') }}
 
 - name: Warn if Firefox Account credentials not found in Bitwarden
   ansible.builtin.debug:
@@ -132,6 +130,19 @@
     or fxa_totp_raw.rc is not defined
     or fxa_totp_raw.rc != 0
 
+- name: Parse Firefox Account credentials from Bitwarden response
+  ansible.builtin.set_fact:
+    _fxa_email: >-
+      {{ ((fxa_item_raw.stdout | regex_search('(?s)\\{.*\\}') | default('{}')) | from_json).login.username | default('') }}
+    _fxa_password: >-
+      {{ ((fxa_item_raw.stdout | regex_search('(?s)\\{.*\\}') | default('{}')) | from_json).login.password | default('') }}
+    _fxa_totp: "{{ fxa_totp_raw.stdout | regex_replace('[^0-9]', '') }}"
+  no_log: true
+  when:
+    - fxa_item_raw.rc is defined and fxa_item_raw.rc == 0
+    - fxa_totp_raw.rc is defined and fxa_totp_raw.rc == 0
+    - (fxa_item_raw.stdout | default('')) | length > 0
+
 - name: Sign in to Firefox Accounts for Zen Browser
   ansible.builtin.command: >
     {{ ansible_facts['env']['HOME'] }}/.local/venvs/fxa/bin/python {{ ansible_facts['env']['HOME'] }}/.local/bin/fxa_signin.py
@@ -140,14 +151,13 @@
   changed_when: "'Wrote signedInUser.json' in fxa_signin_result.stdout"
   failed_when: fxa_signin_result.rc not in [0]
   when:
-    - fxa_item_raw.rc is defined and fxa_item_raw.rc == 0
-    - fxa_totp_raw.rc is defined and fxa_totp_raw.rc == 0
-    - (fxa_item_raw.stdout | default('')) | length > 0
-    - (fxa_totp_raw.stdout | default('')) | length > 0
+    - _fxa_email is defined and (_fxa_email | length) > 0
+    - _fxa_password is defined and (_fxa_password | length) > 0
+    - _fxa_totp is defined and (_fxa_totp | length) > 0
   environment:
-    FXA_EMAIL: "{{ (fxa_item_raw.stdout | from_json).login.username }}"
-    FXA_PASSWORD: "{{ (fxa_item_raw.stdout | from_json).login.password }}"
-    FXA_TOTP: "{{ fxa_totp_raw.stdout | trim }}"
+    FXA_EMAIL: "{{ _fxa_email | default('') }}"
+    FXA_PASSWORD: "{{ _fxa_password | default('') }}"
+    FXA_TOTP: "{{ _fxa_totp | default('') }}"
 
 - name: Show Firefox Accounts sign-in result
   ansible.builtin.debug:
