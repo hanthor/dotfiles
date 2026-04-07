@@ -18,6 +18,7 @@
     dest: "{{ ansible_facts['env']['HOME'] }}/dev/homelab-monitoring"
     version: main
     update: true
+    force: true
   register: monitoring_repo
 
 # Add user to systemd-journal group for Alloy journal access
