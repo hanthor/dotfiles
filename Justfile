@@ -35,10 +35,16 @@ apply:
       if [ -f /tmp/bw_session ]; then
         export BW_SESSION=$(cat /tmp/bw_session)
       else
-        echo "Unlocking Bitwarden..."
-        if ! export BW_SESSION=$(bw unlock --raw 2>/dev/null); then
-          echo "WARNING: Bitwarden unlock failed (not logged in?). Run 'bw login' first."
+        BW_STATUS=$(bw status 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "unknown")
+        if [ "$BW_STATUS" = "unauthenticated" ]; then
+          echo "WARNING: Bitwarden not logged in on this machine."
+          echo "  Run 'just apply-remote {{ machine }}' from karnataka, or run 'bw login' manually first."
           echo "Continuing without secrets..."
+          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets
+        fi
+        echo "Unlocking Bitwarden..."
+        if ! export BW_SESSION=$(timeout 30 bw unlock --raw 2>/dev/null); then
+          echo "WARNING: Bitwarden unlock failed. Continuing without secrets..."
           exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets
         fi
         echo "$BW_SESSION" > /tmp/bw_session
