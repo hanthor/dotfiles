@@ -98,6 +98,7 @@
   failed_when: false
   changed_when: false
   environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
     BW_SESSION: "{{ bw_session | default('') }}"
 
 - name: Fetch Firefox Account TOTP from Bitwarden
@@ -107,7 +108,19 @@
   failed_when: false
   changed_when: false
   environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
     BW_SESSION: "{{ bw_session | default('') }}"
+
+- name: Warn if Firefox Account credentials not found in Bitwarden
+  ansible.builtin.debug:
+    msg: >-
+      Could not fetch Firefox Account credentials from Bitwarden
+      (item '{{ fxa_bw_item | default('firefox-account') }}' not found or vault locked) — skipping FxA sign-in.
+  when: >-
+    fxa_item_raw.rc is not defined
+    or fxa_item_raw.rc != 0
+    or fxa_totp_raw.rc is not defined
+    or fxa_totp_raw.rc != 0
 
 - name: Sign in to Firefox Accounts for Zen Browser
   ansible.builtin.command: >
