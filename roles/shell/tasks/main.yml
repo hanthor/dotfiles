@@ -181,9 +181,9 @@
 # NOTE: We do NOT write atuin_key (mnemonic) to ~/.local/share/atuin/key directly.
 # Atuin expects that file to be a base64-encoded binary key.
 # Running 'atuin login -k' with the mnemonic correctly generates the binary key file.
-- name: Check if atuin is already logged in
+- name: Check if atuin key exists (indicates already logged in)
   ansible.builtin.stat:
-    path: ~/.local/share/atuin/session
+    path: ~/.local/share/atuin/key
   register: atuin_session
   when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
   tags: [secrets]
