@@ -175,3 +175,4 @@ system_flatpaks:
 
 # Bitwarden item name that holds Firefox Accounts credentials + TOTP
 fxa_bw_item: "accounts.firefox.com"
+fxa_bw_username: "jreilly1821@gmail.com"
