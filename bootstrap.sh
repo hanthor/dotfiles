@@ -67,7 +67,20 @@ ensure_uv() {
     return
   fi
   echo "Installing uv..."
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+  # Retry up to 3 times — DNS may not be ready immediately on fresh installs
+  local attempts=0
+  while [ $attempts -lt 3 ]; do
+    if curl -LsSf https://astral.sh/uv/install.sh | sh; then
+      export PATH="$HOME/.local/bin:$PATH"
+      return
+    fi
+    attempts=$((attempts + 1))
+    echo "uv install attempt $attempts failed, retrying in 5s..."
+    sleep 5
+  done
+  # Fallback: install via pip3
+  echo "astral.sh unreachable, falling back to pip3 install uv..."
+  pip3 install --user uv
   export PATH="$HOME/.local/bin:$PATH"
 }
 
