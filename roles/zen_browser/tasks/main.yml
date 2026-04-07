@@ -111,6 +111,14 @@
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
     BW_SESSION: "{{ bw_session | default('') }}"
 
+- name: Debug BW fetch status (lengths only, no secrets)
+  ansible.builtin.debug:
+    msg: >-
+      item_rc={{ fxa_item_raw.rc | default('undef') }}
+      item_stdout_len={{ (fxa_item_raw.stdout | default('')) | length }}
+      totp_rc={{ fxa_totp_raw.rc | default('undef') }}
+      totp_stdout_len={{ (fxa_totp_raw.stdout | default('')) | length }}
+
 - name: Warn if Firefox Account credentials not found in Bitwarden
   ansible.builtin.debug:
     msg: >-
