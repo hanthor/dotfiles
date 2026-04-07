@@ -20,7 +20,11 @@
   ansible.builtin.shell: |
     for mime in x-scheme-handler/http x-scheme-handler/https x-scheme-handler/ftp \
                 text/html text/xml application/xhtml+xml application/xml; do
-      xdg-mime default app.zen_browser.zen.desktop "$mime"
+      if command -v xdg-mime &>/dev/null; then
+        xdg-mime default app.zen_browser.zen.desktop "$mime"
+      else
+        gio mime "$mime" app.zen_browser.zen.desktop
+      fi
     done
   changed_when: false
   ignore_errors: true
