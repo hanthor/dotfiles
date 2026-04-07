@@ -43,7 +43,7 @@ apply:
           exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets
         fi
         echo "Unlocking Bitwarden..."
-        if ! export BW_SESSION=$(timeout 30 bw unlock --raw 2>/dev/null); then
+        if ! export BW_SESSION=$(bw unlock --raw 2>/dev/null); then
           echo "WARNING: Bitwarden unlock failed. Continuing without secrets..."
           exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets
         fi
