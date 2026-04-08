@@ -21,3 +21,11 @@ user_pref("startup.homepage_welcome_url", "");
 
 // Auto-update extensions
 user_pref("extensions.update.autoUpdateDefault", true);
+
+// Disable built-in password manager (using Bitwarden instead)
+user_pref("signon.rememberSignons", false);
+user_pref("signon.autofillForms", false);
+user_pref("signon.generation.enabled", false);
+user_pref("signon.management.page.breach-alerts.enabled", false);
+user_pref("extensions.formautofill.creditCards.enabled", false);
+user_pref("extensions.formautofill.addresses.enabled", false);
