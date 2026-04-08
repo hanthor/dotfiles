@@ -8,6 +8,15 @@
     mode: "0755"
   become: true
 
+- name: Check if Tailscale cert is still valid (30+ days)
+  ansible.builtin.shell: |
+    openssl x509 -checkend 2592000 -noout \
+      -in /etc/ssl/tailscale/cert.pem 2>/dev/null && echo "valid" || echo "renew"
+  register: cert_validity
+  changed_when: false
+  failed_when: false
+  become: true
+
 - name: Provision Tailscale TLS certificate
   ansible.builtin.command:
     cmd: >
@@ -18,8 +27,9 @@
       {{ inventory_hostname }}.{{ tailscale_domain }}
   become: true
   register: ts_cert_result
-  changed_when: "'wrote' in ts_cert_result.stderr or ts_cert_result.rc == 0"
+  changed_when: "'wrote' in ts_cert_result.stderr"
   failed_when: ts_cert_result.rc != 0
+  when: cert_validity.stdout != 'valid'
 
 - name: Set cert permissions
   ansible.builtin.file:

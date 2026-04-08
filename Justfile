@@ -31,7 +31,7 @@ apply:
     set -euo pipefail
     cd {{ dotfiles_dir }}
     git pull --ff-only
-    ansible-galaxy install -r requirements.yml --force-with-deps 2>/dev/null || ansible-galaxy install -r requirements.yml
+    ansible-galaxy install -r requirements.yml
     if [ -z "${BW_SESSION:-}" ]; then
       if [ -f /tmp/bw_session ]; then
         export BW_SESSION=$(cat /tmp/bw_session)
