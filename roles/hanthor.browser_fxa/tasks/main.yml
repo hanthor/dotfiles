@@ -1,0 +1,159 @@
+---
+- name: Check browser profile exists
+  ansible.builtin.stat:
+    path: >-
+      {{
+        (browser_fxa_browser == 'zen')
+          | ternary(
+              ansible_facts['env']['HOME'] + '/.var/app/app.zen_browser.zen/.zen/profiles.ini',
+              ansible_facts['env']['HOME'] + '/.var/app/org.mozilla.firefox/.mozilla/firefox/profiles.ini'
+          )
+      }}
+  register: _fxa_profiles_ini
+
+- name: Skip if browser is not installed
+  ansible.builtin.meta: end_role
+  when: not _fxa_profiles_ini.stat.exists
+
+- name: Ensure venv directory exists
+  ansible.builtin.file:
+    path: "{{ fxa_venv_path | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Create venv for PyFxA
+  ansible.builtin.command:
+    cmd: python3 -m venv {{ fxa_venv_path }}
+    creates: "{{ fxa_venv_path }}/bin/python"
+
+- name: Install PyFxA into venv
+  ansible.builtin.pip:
+    name: PyFxA
+    state: present
+    virtualenv: "{{ fxa_venv_path }}"
+
+- name: Copy FxA sign-in script
+  ansible.builtin.copy:
+    src: fxa_signin.py
+    dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/fxa_signin.py"
+    mode: "0700"
+
+# ── Bitwarden credential fetch ────────────────────────────────────────────────
+
+- name: Fetch Firefox Account item from Bitwarden
+  ansible.builtin.shell: |
+    bw list items --search "{{ fxa_bw_item }}" 2>/dev/null | python3 -c "
+    import json, sys
+    raw = sys.stdin.read().strip()
+    if not raw:
+        print('BW_EMPTY', file=sys.stderr)
+        sys.exit(1)
+    items = json.loads(raw)
+    if not items:
+        print('BW_EMPTY', file=sys.stderr)
+        sys.exit(1)
+    username_filter = '{{ fxa_bw_username }}'
+    # Try exact username match first, then fall back to first item
+    for item in items:
+        login_username = item.get('login', {}).get('username', '')
+        if not username_filter or login_username == username_filter:
+            print(json.dumps(item))
+            sys.exit(0)
+    # Fallback: return first item with a password if username didn't match
+    for item in items:
+        if item.get('login', {}).get('password'):
+            print(json.dumps(item), file=sys.stderr)
+            print('BW_USERNAME_MISMATCH:' + ','.join(
+                i.get('login',{}).get('username','?') for i in items
+            ), file=sys.stderr)
+            sys.exit(2)
+    sys.exit(1)
+    "
+  register: _fxa_item_raw
+  no_log: true
+  failed_when: false
+  changed_when: false
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    BW_SESSION: "{{ bw_session | default('') }}"
+
+- name: Report BW lookup result (diagnostic)
+  ansible.builtin.debug:
+    msg: >-
+      {% if _fxa_item_raw.rc == 0 %}
+      Found '{{ fxa_bw_item }}' in Bitwarden.
+      {% elif 'BW_USERNAME_MISMATCH' in (_fxa_item_raw.stderr | default('')) %}
+      Found '{{ fxa_bw_item }}' but username did not match '{{ fxa_bw_username }}'.
+      Stored usernames: {{ (_fxa_item_raw.stderr | default('')) | regex_findall('BW_USERNAME_MISMATCH:(.+)') | first | default('unknown') }}.
+      Set fxa_bw_username in group_vars/all.yml to one of those, or clear it to use the first match.
+      {% elif 'BW_EMPTY' in (_fxa_item_raw.stderr | default('')) %}
+      No Bitwarden item found matching '{{ fxa_bw_item }}'. Create a BW login item with that name to enable FxA sign-in.
+      {% else %}
+      BW lookup failed (vault locked or bw not installed). rc={{ _fxa_item_raw.rc | default('?') }}
+      {% endif %}
+  when: _fxa_item_raw.rc is defined and _fxa_item_raw.rc != 0
+
+- name: Extract Firefox Account item ID for TOTP lookup
+  ansible.builtin.set_fact:
+    _fxa_item_id: "{{ (_fxa_item_raw.stdout | from_json).id }}"
+  no_log: true
+  when:
+    - _fxa_item_raw.rc is defined and _fxa_item_raw.rc == 0
+    - (_fxa_item_raw.stdout | default('')) | length > 0
+
+- name: Fetch Firefox Account TOTP from Bitwarden
+  ansible.builtin.shell: bw get totp "{{ _fxa_item_id }}" 2>&1
+  register: _fxa_totp_raw
+  no_log: true
+  failed_when: false
+  changed_when: false
+  when: _fxa_item_id is defined
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    BW_SESSION: "{{ bw_session | default('') }}"
+
+- name: Warn if Firefox Account credentials not found in Bitwarden
+  ansible.builtin.debug:
+    msg: >-
+      Could not fetch Firefox Account credentials from Bitwarden
+      (item '{{ fxa_bw_item }}' for user '{{ fxa_bw_username }}' not found or vault locked) — skipping FxA sign-in.
+  when: >-
+    _fxa_item_raw.rc is not defined
+    or _fxa_item_raw.rc != 0
+    or _fxa_item_id is not defined
+
+- name: Parse Firefox Account credentials
+  ansible.builtin.set_fact:
+    _fxa_email: "{{ (_fxa_item_raw.stdout | from_json).login.username | default('') }}"
+    _fxa_password: "{{ (_fxa_item_raw.stdout | from_json).login.password | default('') }}"
+    _fxa_totp: "{{ _fxa_totp_raw.stdout | default('') | regex_replace('[^0-9]', '') }}"
+  no_log: true
+  when:
+    - _fxa_item_id is defined
+    # TOTP is optional — proceed even if not stored in BW (accounts without 2FA)
+
+# ── Sign-in ───────────────────────────────────────────────────────────────────
+
+- name: Sign in to Firefox Accounts
+  ansible.builtin.command: >
+    {{ fxa_venv_path }}/bin/python {{ ansible_facts['env']['HOME'] }}/.local/bin/fxa_signin.py
+  register: _fxa_signin_result
+  no_log: true
+  changed_when: "'Wrote signedInUser.json' in _fxa_signin_result.stdout"
+  failed_when: _fxa_signin_result.rc not in [0]
+  when:
+    - _fxa_email is defined and (_fxa_email | length) > 0
+    - _fxa_password is defined and (_fxa_password | length) > 0
+    # TOTP is optional — accounts without 2FA can sign in without it
+  environment:
+    FXA_EMAIL: "{{ _fxa_email | default('') }}"
+    FXA_PASSWORD: "{{ _fxa_password | default('') }}"
+    FXA_TOTP: "{{ _fxa_totp | default('') }}"
+    BROWSER_TYPE: "{{ browser_fxa_browser }}"
+
+- name: Show Firefox Accounts sign-in result
+  ansible.builtin.debug:
+    msg: "{{ _fxa_signin_result.stdout }}"
+  when:
+    - _fxa_signin_result is defined
+    - (_fxa_signin_result.stdout | default('')) | length > 0

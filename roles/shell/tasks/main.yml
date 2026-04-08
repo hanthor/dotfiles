@@ -1,19 +1,4 @@
 ---
-# ── Ghostty terminfo ──────────────────────────────────────────────
-# Ensures backspace and other keys work correctly when SSHing into
-# this machine from a Ghostty terminal on another host.
-- name: Ensure ~/.terminfo directory exists
-  ansible.builtin.file:
-    path: ~/.terminfo
-    state: directory
-    mode: "0755"
-
-- name: Install xterm-ghostty terminfo
-  ansible.builtin.shell: |
-    tic -x -o ~/.terminfo {{ role_path }}/files/xterm-ghostty.terminfo
-  args:
-    creates: ~/.terminfo/x/xterm-ghostty
-
 # ── Fonts ────────────────────────────────────────────────────────
 - name: Ensure font directory exists
   ansible.builtin.file:

@@ -1,0 +1,14 @@
+# Browsers to sign in to. Supported values: "zen", "firefox", "firefox-flatpak"
+# The role iterates over this list and skips any browser that isn't installed.
+fxa_browsers:
+  - zen
+
+# Bitwarden item name containing the Firefox Account credentials
+fxa_bw_item: "accounts.firefox.com"
+
+# Bitwarden login.username value used to select the correct item
+# when multiple items share the same search term.
+fxa_bw_username: ""
+
+# Path to the venv where PyFxA will be installed
+fxa_venv_path: "{{ ansible_facts['env']['HOME'] }}/.local/venvs/fxa"

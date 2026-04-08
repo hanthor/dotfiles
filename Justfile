@@ -156,6 +156,7 @@ apply-remote name:
       chmod 600 /tmp/bw_session
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply
     "
+    just push-terminfo {{ name }}
 
 # Register a new machine in inventory and print bootstrap instructions
 
@@ -243,6 +244,7 @@ apply-all:
       exit 1
     fi
     echo "All hosts done ✓"
+    just push-terminfo
 
 # Apply specific tags to ALL online fleet machines in parallel
 apply-online-tags tags:
@@ -281,6 +283,21 @@ apply-online-tags tags:
 
     [ ${#FAILED[@]} -gt 0 ] && echo "Failed: ${FAILED[*]}" && exit 1
     echo "All hosts done ✓"
+
+# Push local terminal's terminfo to one or all online fleet hosts
+# Usage: just push-terminfo [host]  — omit host to push to all online hosts
+push-terminfo host="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TARGETS="{{ host }}"
+    if [ -z "$TARGETS" ]; then
+      TARGETS="{{ _online_hosts }}"
+    fi
+    [ -z "$TARGETS" ] && echo "No hosts to push terminfo to." && exit 0
+    for h in $TARGETS; do
+      echo "Pushing $TERM terminfo to $h..."
+      infocmp -x | ssh "$h" -- tic -x - && echo "  ✓ $h" || echo "  ✗ $h (tic failed)"
+    done
 
 # Show which fleet machines are currently online via Tailscale
 online:
