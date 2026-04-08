@@ -132,31 +132,35 @@
     mode: "0644"
 
 # ── Distribute all machine keys to authorized_keys ──
-# Fetches james@<machine> from BW for every machine, then uses
-# ansible.posix.authorized_key which deduplicates by key body (ignoring comments).
-- name: Fetch machine SSH public keys from Bitwarden
+# One bw list call to get all SSH keys, then write authorized_keys in one shot.
+- name: Fetch all machine SSH public keys from Bitwarden (batch)
   ansible.builtin.shell: |
     set -euo pipefail
-    ITEM=$(bw get item "{{ user_login }}@{{ item }}" 2>/dev/null) || exit 0
-    echo "$ITEM" | python3 -c "
+    MACHINE_NAMES="{{ machines.keys() | list | join(' ') }}"
+    bw list items --session "{{ bw_session | default('') }}" 2>/dev/null | python3 -c "
     import sys, json
-    item = json.load(sys.stdin)
-    print(item.get('sshKey', {}).get('publicKey', '').strip())
-    " 2>/dev/null
+    items = json.load(sys.stdin)
+    names = set('{{ user_login }}@' + m for m in '${MACHINE_NAMES}'.split())
+    keys = []
+    for item in items:
+        if item.get('name') in names:
+            pub = item.get('sshKey', {}).get('publicKey', '').strip()
+            if pub:
+                keys.append(pub)
+    print('\n'.join(keys))
+    "
   args:
     executable: /bin/bash
-  loop: "{{ machines.keys() | list }}"
-  register: machine_pub_keys
+  register: all_machine_keys
   changed_when: false
   failed_when: false
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
-- name: Authorize all machine SSH keys
-  ansible.posix.authorized_key:
-    user: "{{ ansible_facts['user_id'] }}"
-    key: "{{ item.stdout }}"
-    state: present
-  loop: "{{ machine_pub_keys.results }}"
-  when: item.stdout | length > 0
+- name: Write authorized_keys with all machine public keys
+  ansible.builtin.copy:
+    dest: "{{ ansible_facts['env']['HOME'] }}/.ssh/authorized_keys"
+    content: "{{ all_machine_keys.stdout }}\n"
+    mode: "0600"
+  when: all_machine_keys.stdout | length > 0

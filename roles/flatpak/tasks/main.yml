@@ -14,28 +14,21 @@
   become: true
   changed_when: false
 
-- name: Install system flatpaks
-  ansible.builtin.shell: |
-    if ! flatpak info --system {{ item }} >/dev/null 2>&1; then
-      flatpak install --system -y flathub {{ item }}
-      echo installed
-    fi
-  loop: "{{ system_flatpaks }}"
+- name: Get list of installed system flatpaks
+  ansible.builtin.command: flatpak list --system --columns=application --app
+  register: installed_flatpaks
+  changed_when: false
   become: true
-  register: flatpak_results
-  changed_when: "'installed' in flatpak_results.stdout"
-  async: 300
-  poll: 0
+  failed_when: false
 
-- name: Wait for flatpak installs to complete
-  ansible.builtin.async_status:
-    jid: "{{ item.ansible_job_id }}"
-  loop: "{{ flatpak_results.results }}"
-  register: flatpak_wait
-  until: flatpak_wait.finished
-  retries: 60
-  delay: 5
+- name: Install missing system flatpaks (batch)
+  ansible.builtin.shell: |
+    flatpak install --system -y flathub {{ missing_flatpaks | join(' ') }}
+  vars:
+    missing_flatpaks: "{{ system_flatpaks | reject('in', installed_flatpaks.stdout_lines) | list }}"
   become: true
+  when: missing_flatpaks | length > 0
+  changed_when: true
 
 - name: Ensure ~/.local/bin exists
   ansible.builtin.file:
