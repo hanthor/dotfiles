@@ -90,5 +90,3 @@
 - name: Sign in to Firefox Accounts (Zen Browser)
   ansible.builtin.include_role:
     name: hanthor.browser_fxa
-  vars:
-    fxa_browsers: "{{ fxa_browsers | default(['zen']) }}"
