@@ -124,8 +124,14 @@ apply-remote name:
       if [ -n "$BW_MASTER_PASS" ]; then
         echo "Unlocking Bitwarden on {{ name }} (non-interactive)..."
         REMOTE_BW_SESSION=$(ssh {{ name }} \
-          "export PATH='/home/linuxbrew/.linuxbrew/bin:\$PATH'; bw unlock --raw '${BW_MASTER_PASS}' 2>/dev/null" \
+          "export PATH='/home/linuxbrew/.linuxbrew/bin:\$PATH'; BW_PASSWORD='${BW_MASTER_PASS}' bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null" \
           | tr -d '\r\n')
+        if [ -z "$REMOTE_BW_SESSION" ]; then
+          echo "  passwordenv failed, trying positional arg..."
+          REMOTE_BW_SESSION=$(ssh {{ name }} \
+            "export PATH='/home/linuxbrew/.linuxbrew/bin:\$PATH'; bw unlock --raw '${BW_MASTER_PASS}' 2>/dev/null" \
+            | tr -d '\r\n')
+        fi
       fi
       if [ -z "$REMOTE_BW_SESSION" ]; then
         echo "Unlocking Bitwarden on {{ name }} (enter master password when prompted)..."
@@ -135,6 +141,8 @@ apply-remote name:
       fi
       if [ -z "$REMOTE_BW_SESSION" ]; then
         echo "WARNING: Could not unlock BW on {{ name }}. Continuing without secrets..."
+      else
+        echo "Bitwarden unlocked on {{ name }} (session: ${#REMOTE_BW_SESSION} chars)"
       fi
     fi
     # Use remote's own session if we got one, otherwise fall back to local

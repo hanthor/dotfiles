@@ -40,6 +40,14 @@
 
 # ── Bitwarden credential fetch ────────────────────────────────────────────────
 
+- name: Sync Bitwarden vault before credential lookup
+  ansible.builtin.command: bw sync
+  changed_when: false
+  failed_when: false
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    BW_SESSION: "{{ bw_session | default('') }}"
+
 - name: Fetch Firefox Account item from Bitwarden
   ansible.builtin.shell: |
     bw list items --search "{{ fxa_bw_item }}" 2>/dev/null | python3 -c "
