@@ -1,6 +1,14 @@
 // Firefox Sync
 user_pref("identity.fxaccounts.enabled", true);
 
+// Sync engines — explicitly enable all useful ones
+user_pref("services.sync.engine.addons", true);
+user_pref("services.sync.engine.bookmarks", true);
+user_pref("services.sync.engine.history", true);
+user_pref("services.sync.engine.passwords", true);
+user_pref("services.sync.engine.prefs", true);
+user_pref("services.sync.engine.tabs", true);
+
 // Telemetry off
 user_pref("datareporting.policy.dataSubmissionEnabled", false);
 user_pref("toolkit.telemetry.enabled", false);
