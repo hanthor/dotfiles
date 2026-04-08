@@ -5,8 +5,4 @@ collections:
   - name: ansible.posix
     version: ">=1.5.0"
 
-roles:
-  - name: hanthor.browser_fxa
-    src: https://github.com/hanthor/ansible-role-browser-fxa
-    scm: git
-    version: main
+roles: []

@@ -44,13 +44,29 @@
   ansible.builtin.shell: |
     bw list items --search "{{ fxa_bw_item }}" 2>/dev/null | python3 -c "
     import json, sys
-    items = json.load(sys.stdin)
+    raw = sys.stdin.read().strip()
+    if not raw:
+        print('BW_EMPTY', file=sys.stderr)
+        sys.exit(1)
+    items = json.loads(raw)
+    if not items:
+        print('BW_EMPTY', file=sys.stderr)
+        sys.exit(1)
     username_filter = '{{ fxa_bw_username }}'
+    # Try exact username match first, then fall back to first item
     for item in items:
         login_username = item.get('login', {}).get('username', '')
         if not username_filter or login_username == username_filter:
             print(json.dumps(item))
             sys.exit(0)
+    # Fallback: return first item with a password if username didn't match
+    for item in items:
+        if item.get('login', {}).get('password'):
+            print(json.dumps(item), file=sys.stderr)
+            print('BW_USERNAME_MISMATCH:' + ','.join(
+                i.get('login',{}).get('username','?') for i in items
+            ), file=sys.stderr)
+            sys.exit(2)
     sys.exit(1)
     "
   register: _fxa_item_raw
@@ -60,6 +76,22 @@
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
     BW_SESSION: "{{ bw_session | default('') }}"
+
+- name: Report BW lookup result (diagnostic)
+  ansible.builtin.debug:
+    msg: >-
+      {% if _fxa_item_raw.rc == 0 %}
+      Found '{{ fxa_bw_item }}' in Bitwarden.
+      {% elif 'BW_USERNAME_MISMATCH' in (_fxa_item_raw.stderr | default('')) %}
+      Found '{{ fxa_bw_item }}' but username did not match '{{ fxa_bw_username }}'.
+      Stored usernames: {{ (_fxa_item_raw.stderr | default('')) | regex_findall('BW_USERNAME_MISMATCH:(.+)') | first | default('unknown') }}.
+      Set fxa_bw_username in group_vars/all.yml to one of those, or clear it to use the first match.
+      {% elif 'BW_EMPTY' in (_fxa_item_raw.stderr | default('')) %}
+      No Bitwarden item found matching '{{ fxa_bw_item }}'. Create a BW login item with that name to enable FxA sign-in.
+      {% else %}
+      BW lookup failed (vault locked or bw not installed). rc={{ _fxa_item_raw.rc | default('?') }}
+      {% endif %}
+  when: _fxa_item_raw.rc is defined and _fxa_item_raw.rc != 0
 
 - name: Extract Firefox Account item ID for TOTP lookup
   ansible.builtin.set_fact:
@@ -98,8 +130,7 @@
   no_log: true
   when:
     - _fxa_item_id is defined
-    - _fxa_totp_raw is defined and _fxa_totp_raw.rc == 0
-    - (_fxa_totp_raw.stdout | default('')) | length > 0
+    # TOTP is optional — proceed even if not stored in BW (accounts without 2FA)
 
 # ── Sign-in ───────────────────────────────────────────────────────────────────
 
@@ -113,7 +144,7 @@
   when:
     - _fxa_email is defined and (_fxa_email | length) > 0
     - _fxa_password is defined and (_fxa_password | length) > 0
-    - _fxa_totp is defined and (_fxa_totp | length) > 0
+    # TOTP is optional — accounts without 2FA can sign in without it
   environment:
     FXA_EMAIL: "{{ _fxa_email | default('') }}"
     FXA_PASSWORD: "{{ _fxa_password | default('') }}"

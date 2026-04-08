@@ -104,4 +104,4 @@
 
 - name: Sign in to Firefox Accounts (Zen Browser)
   ansible.builtin.include_role:
-    name: hanthor.browser_fxa
+    name: browser_fxa

@@ -74,8 +74,8 @@ def main():
     password = os.environ.get("FXA_PASSWORD")
     totp_code = os.environ.get("FXA_TOTP", "").strip()
 
-    if not all([email, password, totp_code]):
-        print("ERROR: FXA_EMAIL, FXA_PASSWORD, and FXA_TOTP must be set", file=sys.stderr)
+    if not all([email, password]):
+        print("ERROR: FXA_EMAIL and FXA_PASSWORD must be set", file=sys.stderr)
         sys.exit(2)
 
     try:
@@ -109,9 +109,10 @@ def main():
     client = fxa.core.Client("https://api.accounts.firefox.com")
     session = client.login(email, password)
 
-    if not session.totp_verify(totp_code):
-        print("ERROR: TOTP verification failed — check your code and try again", file=sys.stderr)
-        sys.exit(1)
+    if totp_code:
+        if not session.totp_verify(totp_code):
+            print("ERROR: TOTP verification failed — check your code and try again", file=sys.stderr)
+            sys.exit(1)
 
     token = session.token
     if isinstance(token, bytes):
