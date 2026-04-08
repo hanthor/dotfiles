@@ -17,8 +17,8 @@
     repo: https://github.com/hanthor/homelab-monitoring.git
     dest: "{{ ansible_facts['env']['HOME'] }}/dev/homelab-monitoring"
     version: main
-    update: true
-    force: true
+    update: false
+    force: false
   register: monitoring_repo
 
 # Add user to systemd-journal group for Alloy journal access

@@ -49,7 +49,7 @@
 
     - name: Update font cache
       ansible.builtin.command: fc-cache -f
-      changed_when: true
+      changed_when: false
 
 - name: Create ~/.config/shell/ directory
   ansible.builtin.file:
@@ -225,7 +225,7 @@
 
 - name: Sync atuin history (best-effort — key mismatch is non-fatal)
   ansible.builtin.command: atuin sync
-  changed_when: true
+  changed_when: false
   failed_when: false
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
@@ -244,6 +244,6 @@
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   when: not atuin_import_sentinel.stat.exists
-  changed_when: true
+  changed_when: false
   failed_when: false
   tags: [shell]

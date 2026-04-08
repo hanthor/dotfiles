@@ -42,12 +42,18 @@
 - name: Set Ptyxis default profile to use brew fish and Nerd Font
   ansible.builtin.shell: |
     UUID=$(gsettings get org.gnome.Ptyxis default-profile-uuid | tr -d "'")
-    gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" use-custom-command true
-    gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-command '/home/linuxbrew/.linuxbrew/bin/fish'
-    gsettings set org.gnome.Ptyxis use-system-font false
-    gsettings set org.gnome.Ptyxis font-name 'JetBrainsMono Nerd Font 12'
+    CURRENT_CMD=$(gsettings get "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-command 2>/dev/null | tr -d "'")
+    CURRENT_FONT=$(gsettings get org.gnome.Ptyxis font-name 2>/dev/null | tr -d "'")
+    if [ "$CURRENT_CMD" != "/home/linuxbrew/.linuxbrew/bin/fish" ] || [ "$CURRENT_FONT" != "JetBrainsMono Nerd Font 12" ]; then
+      gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" use-custom-command true
+      gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-command '/home/linuxbrew/.linuxbrew/bin/fish'
+      gsettings set org.gnome.Ptyxis use-system-font false
+      gsettings set org.gnome.Ptyxis font-name 'JetBrainsMono Nerd Font 12'
+      echo changed
+    fi
+  register: ptyxis_set
   when: is_desktop | bool and ptyxis_uuid.rc is defined and ptyxis_uuid.rc == 0
-  changed_when: true
+  changed_when: "'changed' in ptyxis_set.stdout"
   ignore_errors: true
 
 # ── User avatar ───────────────────────────────────────────────────
@@ -104,8 +110,12 @@
 
 # ── GNOME Remote Desktop (RDP) ────────────────────────────────────
 - name: Enable GNOME RDP protocol
-  ansible.builtin.command: grdctl rdp enable
-  changed_when: true
+  ansible.builtin.shell: |
+    if ! grdctl rdp status 2>/dev/null | grep -q "Status: enabled"; then
+      grdctl rdp enable && echo changed
+    fi
+  register: grdctl_enable
+  changed_when: "'changed' in grdctl_enable.stdout"
   ignore_errors: true
   when: is_desktop | bool
 
