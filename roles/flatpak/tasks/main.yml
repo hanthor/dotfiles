@@ -7,12 +7,18 @@
 
 - name: Remove unwanted flatpaks if present
   ansible.builtin.shell: |
-    flatpak uninstall --system --nonexistent -y {{ item }} 2>/dev/null || true
-  loop:
-    - org.mozilla.firefox
-    - org.mozilla.Thunderbird
+    REMOVE=""
+    for pkg in org.mozilla.firefox org.mozilla.Thunderbird; do
+      flatpak info --system "$pkg" >/dev/null 2>&1 && REMOVE="$REMOVE $pkg"
+    done
+    if [ -n "$REMOVE" ]; then
+      flatpak uninstall --system -y $REMOVE
+      echo "removed:$REMOVE"
+    fi
   become: true
-  changed_when: false
+  register: flatpak_remove
+  changed_when: "'removed:' in flatpak_remove.stdout"
+  failed_when: false
 
 - name: Get list of installed system flatpaks
   ansible.builtin.command: flatpak list --system --columns=application --app

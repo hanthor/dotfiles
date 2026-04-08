@@ -1,20 +1,35 @@
 ---
-- name: Add Zen Browser to GNOME dock
+- name: Add Zen Browser to GNOME dock and remove Firefox/Thunderbird
   ansible.builtin.shell: |
     python3 << 'EOF'
-    import subprocess, ast, os
+    import subprocess, ast, os, sys
     os.environ['DBUS_SESSION_BUS_ADDRESS'] = f"unix:path=/run/user/{os.getuid()}/bus"
+    os.environ['XDG_RUNTIME_DIR'] = f"/run/user/{os.getuid()}"
     result = subprocess.run(
         ['gsettings', 'get', 'org.gnome.shell', 'favorite-apps'],
         capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"gsettings get failed: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
     apps = ast.literal_eval(result.stdout.strip()) if result.stdout.strip() else []
+    remove = {'org.mozilla.firefox.desktop', 'org.mozilla.Thunderbird.desktop'}
+    apps = [a for a in apps if a not in remove]
     zen = 'app.zen_browser.zen.desktop'
     if zen not in apps:
         apps.insert(0, zen)
-        subprocess.run(['gsettings', 'set', 'org.gnome.shell', 'favorite-apps', repr(apps)])
+    r = subprocess.run(
+        ['gsettings', 'set', 'org.gnome.shell', 'favorite-apps', repr(apps)],
+        capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"gsettings set failed: {r.stderr}", file=sys.stderr)
+        sys.exit(1)
+    print("dock updated")
     EOF
-  changed_when: false
+  register: dock_result
+  changed_when: "'dock updated' in dock_result.stdout"
+  failed_when: dock_result.rc != 0
   ignore_errors: true
+  when: is_desktop | bool
 
 - name: Set Zen Browser as default browser
   ansible.builtin.shell: |
