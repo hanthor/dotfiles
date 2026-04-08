@@ -7,6 +7,7 @@
     - name: Set convenience facts
       ansible.builtin.set_fact:
         is_desktop: "{{ is_desktop | default(inventory_hostname in groups.get('desktop', [])) }}"
+        is_laptop: "{{ is_laptop | default(false) }}"
         brew_bin: "{{ brew_prefix }}/bin"
       tags: always
 

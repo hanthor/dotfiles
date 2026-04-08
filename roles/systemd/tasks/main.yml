@@ -54,19 +54,36 @@
     mode: "0644"
   notify: Reload systemd user daemon
 
-- name: Deploy dotfiles-update timer
+# Laptops: run on login/boot via graphical-session, no periodic timer
+- name: Enable dotfiles-update service on login (laptop)
+  ansible.builtin.systemd:
+    name: dotfiles-update.service
+    scope: user
+    enabled: true
+  when: is_laptop | bool
+
+- name: Remove dotfiles-update timer on laptop (not needed)
+  ansible.builtin.file:
+    path: ~/.config/systemd/user/dotfiles-update.timer
+    state: absent
+  when: is_laptop | bool
+
+# Desktops/servers: daily timer
+- name: Deploy dotfiles-update timer (non-laptop)
   ansible.builtin.template:
     src: dotfiles-update.timer.j2
     dest: ~/.config/systemd/user/dotfiles-update.timer
     mode: "0644"
+  when: not (is_laptop | bool)
   notify: Reload systemd user daemon
 
-- name: Enable and start dotfiles-update timer
+- name: Enable and start dotfiles-update timer (non-laptop)
   ansible.builtin.systemd:
     name: dotfiles-update.timer
     scope: user
     enabled: true
     state: started
+  when: not (is_laptop | bool)
 
 - name: Deploy atuin daemon service
   ansible.builtin.copy:

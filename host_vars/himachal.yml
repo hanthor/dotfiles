@@ -1,4 +1,5 @@
 ---
 is_arm: false
+is_laptop: true
 has_homepage: true
 web_services: []
