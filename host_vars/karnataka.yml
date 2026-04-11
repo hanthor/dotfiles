@@ -1,5 +1,7 @@
 is_arm: false
 has_homepage: true
+extra_authorized_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBMOW8LcOS2jiQvP0lb172rs0lYyaoUqRd1HZ496HZLp termux"
 web_services:
   - name: Cockpit
     href: https://karnataka.manatee-basking.ts.net/cockpit

@@ -182,3 +182,5 @@ fxa_browsers:
   - zen
   - firefox
   - firefox-flatpak
+
+extra_authorized_keys: []

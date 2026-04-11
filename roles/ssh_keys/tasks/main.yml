@@ -161,6 +161,6 @@
 - name: Write authorized_keys with all machine public keys
   ansible.builtin.copy:
     dest: "{{ ansible_facts['env']['HOME'] }}/.ssh/authorized_keys"
-    content: "{{ all_machine_keys.stdout }}\n"
+    content: "{{ (all_machine_keys.stdout_lines + extra_authorized_keys) | unique | join('\n') }}\n"
     mode: "0600"
   when: all_machine_keys.stdout | length > 0
