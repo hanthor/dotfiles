@@ -7,7 +7,7 @@ tailscale_accept_dns: false
 tailscale_operator: james
 web_services:
   - name: Proxmox
-    href: https://bihar.manatee-basking.ts.net:8006
+    href: https://bihar.manatee-basking.ts.net/proxmox
     icon: proxmox.png
     description: Hypervisor
     group: Infrastructure

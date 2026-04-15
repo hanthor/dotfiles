@@ -24,9 +24,30 @@
     }
 
 {% if inventory_hostname == 'bihar' %}
-    # /proxmox — redirect to direct Proxmox port (PVE uses absolute paths, can't sub-path proxy)
-    @proxmox path /proxmox /proxmox/*
-    redir @proxmox https://{{ proxy_tailscale_host | default('bihar.manatee-basking.ts.net') }}:8006 302
+    # /proxmox — Proxmox VE sub-path proxy
+    # Entry point strips /proxmox prefix; resource paths (/pve2/, /api2/, etc.)
+    # are intercepted at root since PVE JS uses absolute paths.
+    redir /proxmox /proxmox/ 301
+    handle /proxmox/* {
+        uri strip_prefix /proxmox
+        reverse_proxy https://127.0.0.1:8006 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+            @redirect status 301 302 303 307 308
+            handle_response @redirect {
+                redir /proxmox{rp.header.Location} {rp.status_code}
+            }
+        }
+    }
+    @pve_resources path /pve2/* /api2/* /novnc/* /xtermjs/*
+    handle @pve_resources {
+        reverse_proxy https://127.0.0.1:8006 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
 
 {% endif %}
 {% if is_desktop | bool or inventory_hostname == 'bihar' %}
