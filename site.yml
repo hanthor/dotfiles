@@ -66,6 +66,8 @@
     - role: homepage
       tags: [services, homepage]
       when: inventory_hostname not in groups.get('vps', [])
+    - role: bst_dashboard
+      tags: [services, bst_dashboard]
     - role: proxy
       tags: [services, proxy, caddy]
       when: inventory_hostname not in groups.get('vps', [])

@@ -9,14 +9,14 @@
 {% if inventory_hostname == 'bihar' %}
     # /grafana — Grafana metrics dashboard
     handle /grafana* {
-        reverse_proxy host.containers.internal:3001
+        reverse_proxy 10.88.0.1:3001
     }
 
 {% endif %}
     # /cockpit — Cockpit system management (sub-path proxy)
     redir /cockpit /cockpit/ 301
     handle /cockpit/* {
-        reverse_proxy https://host.containers.internal:9095 {
+        reverse_proxy https://10.88.0.1:9095 {
             transport http {
                 tls_insecure_skip_verify
             }
@@ -61,7 +61,7 @@
     # /lima — lima-bootc VM dashboard and RDP client
     handle /lima* {
         uri strip_prefix /lima
-        reverse_proxy https://host.containers.internal:{{ lima_internal_port | default(8007) }} {
+        reverse_proxy https://10.88.0.1:{{ lima_internal_port | default(8007) }} {
             transport http {
                 tls_insecure_skip_verify
             }
@@ -73,8 +73,15 @@
     }
 
 {% endif %}
+    # /bst — BuildStream live build dashboard 
+    redir /bst /bst/ 301 
+    handle /bst/* { 
+        uri strip_prefix /bst 
+        reverse_proxy 10.88.0.1:8765 
+    }
+
     # / — homepage dashboard
     handle {
-        reverse_proxy host.containers.internal:3000
+        reverse_proxy 10.88.0.1:3000
     }
 }

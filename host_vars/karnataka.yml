@@ -13,3 +13,8 @@ web_services:
     icon: ollama.png
     description: Local LLM server
     group: AI
+  - name: BuildStream Dashboard
+    href: https://karnataka.manatee-basking.ts.net/bst/
+    icon: buildstream.png
+    description: Build monitor
+    group: System

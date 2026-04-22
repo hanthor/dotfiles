@@ -1,0 +1,13 @@
+[Unit]
+Description=BuildStream Build Dashboard
+After=network.target
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 {{ bst_dashboard_dir }}/bst-dashboard.py --log /var/tmp/{{ bst_dashboard_image_name }}-build.log --target oci/{{ bst_dashboard_image_name }}.bst --project {{ bst_dashboard_dir }}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

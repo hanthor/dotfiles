@@ -1,0 +1,32 @@
+---
+- name: Set dashboard directory based on hostname
+  ansible.builtin.set_fact:
+    bst_dashboard_dir: "/var/home/james/dev/{{ 'kde-linux' if inventory_hostname == 'karnataka' else 'dakota' }}"
+    bst_dashboard_image_name: "{{ 'aurora' if inventory_hostname == 'karnataka' else 'dakota' }}"
+
+- name: Check if dashboard directory exists
+  ansible.builtin.stat:
+    path: "{{ bst_dashboard_dir }}"
+  register: _bst_dir
+
+- name: Deploy bst-dashboard service
+  ansible.builtin.template:
+    src: bst-dashboard.service.j2
+    dest: ~/.config/systemd/user/bst-dashboard.service
+    mode: "0644"
+  when: _bst_dir.stat.exists
+  notify: Reload systemd user daemon
+
+- name: Enable and start bst-dashboard
+  ansible.builtin.systemd:
+    name: bst-dashboard.service
+    scope: user
+    enabled: true
+    state: started
+  when: _bst_dir.stat.exists
+
+- name: Enable linger for user
+  ansible.builtin.command: loginctl enable-linger {{ ansible_facts['env']['USER'] }}
+  become: true
+  changed_when: false
+  when: _bst_dir.stat.exists
