@@ -32,6 +32,13 @@ apply *args:
     cd {{ dotfiles_dir }}
     git pull --ff-only
     ansible-galaxy install -r requirements.yml
+    
+    BECOME_ARGS=""
+    if ! sudo -n true 2>/dev/null; then
+      echo "Sudo requires a password. Adding --ask-become-pass..."
+      BECOME_ARGS="--ask-become-pass"
+    fi
+
     if [ -z "${BW_SESSION:-}" ]; then
       if [ -f /tmp/bw_session ]; then
         export BW_SESSION=$(cat /tmp/bw_session)
@@ -41,18 +48,18 @@ apply *args:
           echo "WARNING: Bitwarden not logged in on this machine."
           echo "  Run 'just apply-remote {{ machine }}' from karnataka, or run 'bw login' manually first."
           echo "Continuing without secrets..."
-          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets {{ args }}
+          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
         fi
         echo "Unlocking Bitwarden..."
         if ! export BW_SESSION=$(bw unlock --raw 2>/dev/null); then
           echo "WARNING: Bitwarden unlock failed. Continuing without secrets..."
-          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets {{ args }}
+          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
         fi
         echo "$BW_SESSION" > /tmp/bw_session
         chmod 600 /tmp/bw_session
       fi
     fi
-    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e "bw_session=${BW_SESSION:-}" site.yml {{ args }}
+    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }}
 
 # Apply only specific tags (e.g. just apply-tags homepage,proxy)
 apply-tags tags:
@@ -65,10 +72,10 @@ apply-remote-tags name tags:
     if [ -z "${BW_SESSION:-}" ]; then
       [ -f /tmp/bw_session ] && export BW_SESSION=$(cat /tmp/bw_session) || export BW_SESSION=$(bw unlock --raw)
     fi
-    ssh {{ name }} "
+    ssh -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
       export BW_SESSION='${BW_SESSION}'
-      cd ~/.local/share/dotfiles && git pull --ff-only && ansible-playbook --connection=local -l {{ name }} -e target={{ name }} -e \"bw_session=${BW_SESSION}\" site.yml --tags {{ tags }}
+      cd ~/.local/share/dotfiles && git pull --ff-only && just apply-tags {{ tags }}
     "
 
 # Apply only dotfile configs (shell, git, tmux, etc.)
@@ -310,6 +317,17 @@ add-machine name:
 # Pull latest changes and apply
 update:
     cd {{ dotfiles_dir }} && git pull --ff-only && just apply
+
+# Pull latest, apply, and upgrade all packages
+update-all:
+    just update -e upgrade=true
+
+# Sync current Homebrew state back to dotfiles variables
+sync-brews:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 scripts/sync-brews.py
+    git diff group_vars/all.yml
 
 # Apply to all machines in parallel via Ansible (run from karnataka)
 

@@ -36,6 +36,13 @@
   when: missing_flatpaks | length > 0
   changed_when: true
 
+- name: Update all flatpaks
+  ansible.builtin.command: flatpak update --system -y
+  become: true
+  when: upgrade | default(false) | bool
+  changed_when: true
+  ignore_errors: true
+
 - name: Ensure ~/.local/bin exists
   ansible.builtin.file:
     path: "{{ ansible_facts['env']['HOME'] }}/.local/bin"

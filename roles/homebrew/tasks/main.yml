@@ -28,6 +28,14 @@
   changed_when: false
   ignore_errors: true
 
+- name: Upgrade all Homebrew packages
+  ansible.builtin.command: /home/linuxbrew/.linuxbrew/bin/brew upgrade
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  when: upgrade | default(false) | bool
+  changed_when: true
+  ignore_errors: true
+
 - name: Ensure packaging is installed in brew Python (required by Ansible systemd module)
   ansible.builtin.command: >
     /home/linuxbrew/.linuxbrew/bin/python3 -m pip install packaging --break-system-packages --quiet

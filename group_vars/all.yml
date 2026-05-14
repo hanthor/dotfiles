@@ -1,18 +1,13 @@
 ---
 tailscale_domain: manatee-basking.ts.net
-
 monitoring_hub_host: bihar
 monitoring_hub_ip: "100.85.9.86"
 monitoring_hub_url: "https://bihar.manatee-basking.ts.net/grafana"
-
 user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james
-
 brew_prefix: /home/linuxbrew/.linuxbrew
-
-netbox_url: "https://bihar.manatee-basking.ts.net"  # Tailscale MagicDNS + tailscale serve cert
-
+netbox_url: "https://bihar.manatee-basking.ts.net" # Tailscale MagicDNS + tailscale serve cert
 # Fleet homepages — machines with a homepage instance.
 # Used to render the "Fleet" section on each machine's homepage.
 fleet:
@@ -36,7 +31,6 @@ fleet:
     url: https://dilli.manatee-basking.ts.net
     icon: mdi-desktop-tower
     description: Secondary workstation
-
 # All machine names (for SSH config generation)
 machines:
   himachal:
@@ -55,7 +49,6 @@ machines:
     hostname: matrix.reilly.asia
   lkofoss:
     hostname: lkofoss.club
-
 # ── Core packages (all machines) ─────────────────────────────────
 core_brews:
   - bitwarden-cli
@@ -85,16 +78,12 @@ core_brews:
   - ugrep
   - yq
   - zoxide
-
 core_taps:
   - ublue-os/experimental-tap
-
 core_tap_brews:
   - ublue-os/experimental-tap/bluefin-cli
-
 # ── Desktop-only packages ────────────────────────────────────────
 desktop_taps: []
-
 desktop_brews:
   - aria2
   - btop
@@ -121,7 +110,63 @@ desktop_brews:
   - kubernetes-cli
   - kubectx
   - podman-compose
-
+  - act
+  - actionlint
+  - aichat
+  - ansible
+  - block-goose-cli
+  - charmbracelet/tap/crush
+  - chezmoi
+  - cmake
+  - cosign
+  - curl
+  - fisher
+  - github-mcp-server
+  - gpatch
+  - gptscript-ai/tap/clio
+  - gtk4
+  - gum
+  - hanthor/tap/oramalama
+  - helm
+  - hf
+  - htop
+  - jq
+  - k3d
+  - kimi-cli
+  - libvncserver
+  - llmfit
+  - meson
+  - mistral-vibe
+  - mtools
+  - ncdu
+  - nmap
+  - ollama
+  - openai-whisper
+  - opencode
+  - oras
+  - p7zip
+  - pkgconf
+  - pnpm
+  - python@3.14
+  - qemu
+  - qwen-code
+  - sshpass
+  - steipete/tap/gogcli
+  - typst
+  - ublue-os/experimental-tap/bluefin-cli
+  - ublue-os/experimental-tap/rocm-smi-lib
+  - ublue-os/tap/linux-mcp-server
+  - uutils-diffutils
+  - uutils-findutils
+  - uv
+  - valkyrie00/bbrew/bbrew
+  - whisper-cpp
+  - yamllint
+  - zellij
+  - zsh-autosuggestions
+  - zsh-completions
+  - zsh-syntax-highlighting
+  - zstd
 desktop_vscode_extensions:
   - bradlc.vscode-tailwindcss
   - catppuccin.catppuccin-vsc
@@ -159,12 +204,10 @@ desktop_vscode_extensions:
   - vue.volar
   - waderyan.gitblame
   - yzhang.markdown-all-in-one
-
 # ── Flatpaks ─────────────────────────────────────────────────────
 flatpak_remotes:
   - name: flathub
     url: https://dl.flathub.org/repo/flathub.flatpakrepo
-
 system_flatpaks:
   - io.typora.Typora
   - com.github.fabiocolacio.marker
@@ -172,15 +215,12 @@ system_flatpaks:
   - com.tailscale.tailscale
   - com.visualstudio.code
   - com.github.Eloston.UngoogledChromium
-
 # Bitwarden item name that holds Firefox Accounts credentials + TOTP
 fxa_bw_item: "accounts.firefox.com"
 fxa_bw_username: "jreilly1821@gmail.com"
-
 # Browsers to sign in to via FxA (skips any not installed on the host)
 fxa_browsers:
   - zen
   - firefox
   - firefox-flatpak
-
 extra_authorized_keys: []
