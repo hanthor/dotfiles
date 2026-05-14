@@ -84,6 +84,24 @@
     dest: ~/.tmux.conf
     mode: "0644"
 
+- name: Deploy ~/.inputrc (readline defaults for bash + readline apps)
+  ansible.builtin.copy:
+    src: inputrc
+    dest: ~/.inputrc
+    mode: "0644"
+
+- name: Ensure ~/.config/starship directory exists
+  ansible.builtin.file:
+    path: ~/.config
+    state: directory
+    mode: "0755"
+
+- name: Deploy starship.toml
+  ansible.builtin.copy:
+    src: starship.toml
+    dest: ~/.config/starship.toml
+    mode: "0644"
+
 - name: Create ~/.config/fish/ directory
   ansible.builtin.file:
     path: ~/.config/fish
@@ -124,8 +142,12 @@
       sync_frequency = "5m"
       auto_sync = true
       search_mode = "fuzzy"
+      # global search for Ctrl-R; session-scoped for Up arrow (muscle memory preserved)
       filter_mode = "global"
+      filter_mode_shell_up_key_binding = "session"
       style = "compact"
+      show_preview = true
+      max_preview_height = 4
 
 # ── Atuin setup from Bitwarden ────────────────────────────────────
 - name: Ensure atuin data dir exists
@@ -137,6 +159,13 @@
 
 # bw sync is handled by the bitwarden role earlier in the play — skip here.
 
+# Skip BW round-trip when already logged in — atuin key file is the source of truth.
+- name: Check if atuin already has a key on disk
+  ansible.builtin.stat:
+    path: ~/.local/share/atuin/key
+  register: atuin_existing_key
+  tags: [secrets]
+
 - name: Fetch atuin credentials from Bitwarden
   ansible.builtin.shell: |
     SESSION="${BW_SESSION:-$(cat /tmp/bw_session 2>/dev/null)}"
@@ -146,9 +175,16 @@
   no_log: true
   changed_when: false
   failed_when: false
+  when: not atuin_existing_key.stat.exists
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  tags: [secrets]
+
+- name: Skip atuin login (already keyed)
+  ansible.builtin.set_fact:
+    atuin_bw_item: { rc: 1, stdout: "" }
+  when: atuin_existing_key.stat.exists
   tags: [secrets]
 
 - name: Warn if atuin.sh not found in Bitwarden
@@ -156,7 +192,9 @@
     msg: >-
       Bitwarden item 'atuin.sh' not found or vault locked — skipping atuin login.
       Run 'bw unlock' on this machine and re-run, or log in to atuin manually.
-  when: atuin_bw_item.rc != 0 or (atuin_bw_item.stdout | default('')) | length == 0
+  when:
+    - not atuin_existing_key.stat.exists
+    - atuin_bw_item.rc != 0 or (atuin_bw_item.stdout | default('')) | length == 0
   tags: [secrets]
 
 - name: Parse atuin credentials

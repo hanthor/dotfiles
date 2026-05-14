@@ -31,7 +31,7 @@ apply *args:
     set -euo pipefail
     cd {{ dotfiles_dir }}
     git pull --ff-only
-    ansible-galaxy install -r requirements.yml
+    ansible-galaxy collection install -r requirements.yml
     
     BECOME_ARGS=""
     if ! sudo -n true 2>/dev/null; then
@@ -55,8 +55,7 @@ apply *args:
           echo "WARNING: Bitwarden unlock failed. Continuing without secrets..."
           exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
         fi
-        echo "$BW_SESSION" > /tmp/bw_session
-        chmod 600 /tmp/bw_session
+        (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
       fi
     fi
     ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }}
@@ -96,8 +95,7 @@ apply-remote name *args:
       else
         echo "Unlocking Bitwarden..."
         export BW_SESSION=$(bw unlock --raw)
-        echo "$BW_SESSION" > /tmp/bw_session
-        chmod 600 /tmp/bw_session
+        (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
       fi
     fi
     # Ensure bw is logged in on the remote — BW_SESSION is only an unlock token,
@@ -159,8 +157,7 @@ apply-remote name *args:
     ssh -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
       export BW_SESSION='${APPLY_BW_SESSION}'
-      echo \"\$BW_SESSION\" > /tmp/bw_session
-      chmod 600 /tmp/bw_session
+      (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply {{ args }}
     "
     just push-terminfo {{ name }}
@@ -202,8 +199,7 @@ apply-all:
       else
         echo "Unlocking Bitwarden..."
         export BW_SESSION=$(bw unlock --raw)
-        echo "$BW_SESSION" > /tmp/bw_session
-        chmod 600 /tmp/bw_session
+        (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
       fi
     fi
 
@@ -222,7 +218,7 @@ apply-all:
       ssh "$host" "
         export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
         export BW_SESSION='${BW_SESSION}'
-        echo \"\$BW_SESSION\" > /tmp/bw_session && chmod 600 /tmp/bw_session
+        (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
         cd ~/.local/share/dotfiles && git pull --ff-only && just apply
       " > "/tmp/apply_${host}.log" 2>&1 &
       PIDS+=("$!:$host")
@@ -310,9 +306,36 @@ push-terminfo host="":
 online:
     @echo "Online fleet hosts: {{ _online_hosts }}"
 
-# Add a new machine (run from your main machine with BW unlocked)
-add-machine name:
-    ssh -o SendEnv=BW_SESSION james@{{ name }} 'curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name {{ name }}'
+# Bootstrap a new machine over SSH — registers it in inventory then runs bootstrap.sh
+# Usage: just add-machine kerala             (defaults to desktop)
+#        just add-machine kerala server
+add-machine name type="desktop":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{ dotfiles_dir }}
+    git pull --ff-only
+
+    # Register in inventory if not already present
+    if ! grep -q "^    {{ name }}:" inventory.yml 2>/dev/null; then
+      echo "→ Registering {{ name }} ({{ type }}) in inventory..."
+      python3 scripts/register-machine.py {{ name }} {{ type }} inventory.yml
+      if [ ! -f "host_vars/{{ name }}.yml" ]; then
+        echo "is_arm: false" > "host_vars/{{ name }}.yml"
+      fi
+      git add inventory.yml "host_vars/{{ name }}.yml"
+      git diff --cached --quiet || git commit -m "inventory: add {{ name }} ({{ type }})"
+      git push
+      echo "✓ Inventory updated and pushed."
+    else
+      echo "✓ {{ name }} already in inventory."
+    fi
+
+    # Bootstrap on the remote machine.
+    # -t allocates a PTY so /dev/tty is available for any remaining prompts.
+    echo "→ Bootstrapping {{ name }}..."
+    ssh -t {{ name }} \
+      "curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh \
+       | bash -s -- --name {{ name }} --type {{ type }}"
 
 # Pull latest changes and apply
 update:
@@ -343,8 +366,7 @@ apply-ansible:
       else
         echo "Unlocking Bitwarden..."
         export BW_SESSION=$(bw unlock --raw)
-        echo "$BW_SESSION" > /tmp/bw_session
-        chmod 600 /tmp/bw_session
+        (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
       fi
     fi
     ansible-playbook site.yml \
@@ -370,3 +392,93 @@ flatpak-install app:
 # Edit this machine's host_vars
 edit-host:
     ${EDITOR:-vi} {{ dotfiles_dir }}/host_vars/{{ machine }}.yml
+
+# Update all neovim plugins (headless)
+nvim-update:
+    nvim --headless "+Lazy! sync" +qa
+
+# Open neovim (alias for muscle memory)
+vim *args:
+    nvim {{ args }}
+
+# Lint YAML + Ansible playbook (uses tools from Brewfile when available)
+lint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{ dotfiles_dir }}
+    rc=0
+    if command -v yamllint >/dev/null 2>&1; then
+      echo "→ yamllint"
+      yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, comments-indentation: disable}}" . || rc=$?
+    else
+      echo "yamllint not installed (brew install yamllint) — skipping"
+    fi
+    if command -v ansible-lint >/dev/null 2>&1; then
+      echo "→ ansible-lint"
+      ansible-lint site.yml || rc=$?
+    else
+      echo "ansible-lint not installed (uv tool install ansible-lint) — skipping"
+    fi
+    exit $rc
+
+# Dry-run apply (no changes) — quick way to see what would change
+check *args:
+    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --check --diff {{ args }}
+
+# Health check: verify this machine is in a good state
+doctor:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    cd {{ dotfiles_dir }}
+    fail=0
+    pass() { printf '  ✓ %s\n' "$1"; }
+    warn() { printf '  ⚠ %s\n' "$1"; fail=1; }
+    echo "→ Machine identity"
+    if [ -f /etc/dotfiles-machine ]; then pass "machine: $(cat /etc/dotfiles-machine)"; else warn "/etc/dotfiles-machine missing — run bootstrap"; fi
+    echo "→ Core binaries"
+    for bin in brew bw gh tailscale ansible-playbook just; do
+      if command -v "$bin" >/dev/null 2>&1; then pass "$bin"; else warn "$bin missing"; fi
+    done
+    echo "→ Tailscale"
+    if tailscale status >/dev/null 2>&1; then pass "connected"; else warn "not connected to tailnet"; fi
+    echo "→ Bitwarden"
+    bw_status=$(bw status 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','?'))" 2>/dev/null || echo "?")
+    case "$bw_status" in
+      unlocked) pass "vault unlocked" ;;
+      locked)   warn "vault locked — run: export BW_SESSION=\$(bw unlock --raw)" ;;
+      *)        warn "vault status: $bw_status" ;;
+    esac
+    echo "→ GitHub auth"
+    if gh auth status >/dev/null 2>&1; then pass "gh authenticated"; else warn "gh not authenticated"; fi
+    echo "→ SSH key"
+    if [ -f ~/.ssh/id_ed25519 ]; then pass "id_ed25519 present"; else warn "no ~/.ssh/id_ed25519"; fi
+    echo "→ Dotfiles repo"
+    if git -C {{ dotfiles_dir }} diff --quiet && git -C {{ dotfiles_dir }} diff --cached --quiet; then
+      pass "clean working tree"
+    else
+      warn "uncommitted changes in {{ dotfiles_dir }}"
+    fi
+    if [ "$(git -C {{ dotfiles_dir }} rev-list HEAD..@{u} --count 2>/dev/null || echo 0)" -gt 0 ]; then
+      warn "local branch behind upstream — run: just update"
+    else
+      pass "up to date with upstream"
+    fi
+    echo "→ Systemd timers"
+    if systemctl --user is-active dotfiles-update.timer >/dev/null 2>&1 || systemctl --user is-active dotfiles-update.service >/dev/null 2>&1; then
+      pass "dotfiles-update unit active"
+    else
+      warn "dotfiles-update timer/service not active"
+    fi
+    exit $fail
+
+# Show all online fleet machines' doctor status in parallel
+doctor-fleet:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    ONLINE_HOSTS="{{ _online_hosts }}"
+    just doctor || true
+    for h in $ONLINE_HOSTS; do
+      echo ""
+      echo "═══ $h ═══"
+      ssh -o BatchMode=yes "$h" 'cd ~/.local/share/dotfiles && just doctor' || true
+    done

@@ -5,6 +5,18 @@
     dest: ~/.gitconfig
     mode: "0644"
 
+- name: Deploy ~/.gitignore_global
+  ansible.builtin.copy:
+    src: gitignore_global
+    dest: ~/.gitignore_global
+    mode: "0644"
+
+- name: Deploy ~/.gitmessage commit template
+  ansible.builtin.copy:
+    src: gitmessage
+    dest: ~/.gitmessage
+    mode: "0644"
+
 - name: Create ~/.config/gh/ directory
   ansible.builtin.file:
     path: ~/.config/gh

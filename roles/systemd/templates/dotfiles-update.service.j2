@@ -1,5 +1,5 @@
 [Unit]
-Description=Dotfiles auto-update via ansible-pull
+Description=Dotfiles auto-update
 {% if is_laptop | bool %}
 After=network-online.target graphical-session.target
 Wants=network-online.target
@@ -11,12 +11,22 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStartPre=-/usr/bin/podman auto-update --user
-ExecStartPre=-/usr/bin/sudo /usr/bin/podman auto-update
-ExecStart={{ brew_prefix }}/bin/ansible-pull -U https://github.com/hanthor/dotfiles -C master -d {{ ansible_facts['env']['HOME'] }}/.local/share/dotfiles -i inventory.yml -l {{ inventory_hostname }} site.yml -e upgrade=true
+# Wait for network to settle and desktop to stabilise before pulling
+ExecStartPre=/bin/sleep {{ dotfiles_update_delay_seconds | default(60) }}
+# Pull latest repo changes, then run ansible locally (no ansible-pull clone overhead)
+ExecStart={{ brew_prefix }}/bin/just -f {{ ansible_facts['env']['HOME'] }}/.local/share/dotfiles/Justfile apply
+# Also update podman containers while we're at it
+ExecStartPost=-/usr/bin/podman auto-update --user
+ExecStartPost=-/usr/bin/sudo /usr/bin/podman auto-update
 Environment="PATH={{ brew_prefix }}/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HOME={{ ansible_facts['env']['HOME'] }}"
+# Keep output for journalctl -u dotfiles-update
+StandardOutput=journal
+StandardError=journal
 
-{% if is_laptop | bool %}
 [Install]
+{% if is_laptop | bool %}
 WantedBy=graphical-session.target
+{% else %}
+WantedBy=default.target
 {% endif %}

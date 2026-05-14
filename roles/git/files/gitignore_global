@@ -1,0 +1,61 @@
+# OS
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editors / IDEs
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Environments / secrets
+.env
+.env.*
+!.env.example
+.envrc
+*.pem
+*.key
+*.cert
+*.p12
+
+# Build / deps
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+node_modules/
+.pnp/
+.yarn/cache/
+target/
+*.class
+*.jar
+*.war
+
+# Tools
+.direnv/
+.cache/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+coverage/
+.coverage
+htmlcov/
+.tox/
+
+# Ansible
+*.retry

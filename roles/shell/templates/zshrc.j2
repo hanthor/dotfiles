@@ -3,8 +3,43 @@ if [ -d /home/linuxbrew/.linuxbrew ]; then
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
 
-# Bluefin CLI shell integration (handles eza, bat, zoxide, starship, atuin, etc.)
+# ── History ──────────────────────────────────────────────────────
+export HISTFILE=~/.zsh_history
+export HISTSIZE=100000
+export SAVEHIST=100000
+setopt INC_APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE HIST_REDUCE_BLANKS
+setopt AUTO_CD EXTENDED_GLOB INTERACTIVE_COMMENTS PROMPT_SUBST
+
+# ── Environment ──────────────────────────────────────────────────
+export EDITOR=nvim
+export VISUAL=nvim
+export PAGER=delta
+export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+
+# XDG
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+export XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+
+export PATH="$HOME/.local/bin:$PATH"
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+# ── Completion ───────────────────────────────────────────────────
+autoload -Uz compinit
+compinit -d "${XDG_CACHE_HOME:-$HOME/.cache}/zcompdump"
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'  # case-insensitive
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# ── Bluefin CLI (eza, bat, zoxide, starship, atuin, fzf) ─────────
 command -v bluefin-cli &>/dev/null && eval "$(bluefin-cli init zsh)"
 
-# Custom aliases (git, k8s, vim, etc.)
+# ── direnv ───────────────────────────────────────────────────────
+command -v direnv &>/dev/null && eval "$(direnv hook zsh)"
+
+# ── fzf (fallback if bluefin-cli didn't set it up) ───────────────
+command -v fzf &>/dev/null && ! type _fzf_complete &>/dev/null && source <(fzf --zsh)
+
+# ── Custom aliases ───────────────────────────────────────────────
 [ -f ~/.config/shell/aliases.sh ] && source ~/.config/shell/aliases.sh

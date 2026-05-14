@@ -43,9 +43,12 @@ ensure_python() {
   fi
   echo "Installing Python3..."
   case "$OS" in
-    fedora|rhel|centos) sudo dnf install -y python3 ;;
-    debian|ubuntu)      sudo apt-get update && sudo apt-get install -y python3 ;;
-    *)                  echo "ERROR: Unsupported OS '$OS'. Install python3 manually."; exit 1 ;;
+    fedora|rhel|centos)    sudo dnf install -y python3 ;;
+    debian|ubuntu)         sudo apt-get update && sudo apt-get install -y python3 ;;
+    alpine|postmarketos)   sudo apk add --no-cache python3 ;;
+    arch|manjaro|endeavouros) sudo pacman -Sy --noconfirm python ;;
+    opensuse*|suse*)       sudo zypper install -y python3 ;;
+    *)                     echo "ERROR: Unsupported OS '$OS'. Install python3 manually."; exit 1 ;;
   esac
 }
 
@@ -54,8 +57,11 @@ ensure_git() {
   if command -v git &>/dev/null; then return; fi
   echo "Installing git..."
   case "$OS" in
-    fedora|rhel|centos) sudo dnf install -y git ;;
-    debian|ubuntu)      sudo apt-get update && sudo apt-get install -y git ;;
+    fedora|rhel|centos)    sudo dnf install -y git ;;
+    debian|ubuntu)         sudo apt-get update && sudo apt-get install -y git ;;
+    alpine|postmarketos)   sudo apk add --no-cache git ;;
+    arch|manjaro|endeavouros) sudo pacman -Sy --noconfirm git ;;
+    opensuse*|suse*)       sudo zypper install -y git ;;
   esac
 }
 
@@ -201,7 +207,7 @@ PYEOF
 
   # Interactive prompt for new machines
   if [ ! -c /dev/tty ]; then
-    echo "WARNING: No /dev/tty, defaulting to 'desktop'"
+    echo "WARNING: No /dev/tty — defaulting to 'desktop'. Pass --type to override."
     MACHINE_TYPE="desktop"
     return
   fi
@@ -342,8 +348,7 @@ setup_bitwarden() {
   esac
 
   export BW_SESSION
-  echo "$BW_SESSION" > /tmp/bw_session
-  chmod 600 /tmp/bw_session
+  (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
   return 0
 }
 

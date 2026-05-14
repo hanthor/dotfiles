@@ -1,64 +1,71 @@
-# Shared aliases for fish — managed by Ansible
+# Fish abbreviations + aliases — managed by Ansible
+# Abbreviations expand visually on space so you see (and learn) the real command.
 # NOTE: bluefin-cli init handles: eza/ll/ls, bat/cat, ugrep/grep,
 #       zoxide/cd, starship, atuin, fzf — do NOT duplicate those here
 
-# vim → nvim
+# ── vim → nvim ───────────────────────────────────────────────────
 if command -q nvim
-    alias vim 'nvim'
-    alias vi 'nvim'
+    alias vim nvim
+    alias vi nvim
+    alias v nvim
 end
 
-# Navigation
-alias .. 'cd ..'
-alias ... 'cd ../..'
-alias .... 'cd ../../..'
+# ── Navigation ───────────────────────────────────────────────────
+abbr --add -- .. 'cd ..'
+abbr --add -- ... 'cd ../..'
+abbr --add -- .... 'cd ../../..'
 
-# Git
-alias gs 'git status'
-alias ga 'git add'
-alias gaa 'git add -A'
-alias gc 'git commit'
-alias gcm 'git commit -m'
-alias gca 'git commit --amend'
-alias gp 'git push'
-alias gpf 'git push --force-with-lease'
-alias gl 'git log --oneline --graph -20'
-alias gd 'git diff'
-alias gds 'git diff --staged'
-alias gco 'git checkout'
-alias gb 'git branch'
-alias gpl 'git pull'
-alias gst 'git stash'
-alias gstp 'git stash pop'
+# ── Git abbreviations ────────────────────────────────────────────
+abbr --add gs   'git status -sb'
+abbr --add ga   'git add'
+abbr --add gaa  'git add -A'
+abbr --add gc   'git commit'
+abbr --add gcm  'git commit -m'
+abbr --add gca  'git commit --amend --no-edit'
+abbr --add gp   'git push'
+abbr --add gpf  'git push --force-with-lease'
+abbr --add gl   'git log --oneline --graph --decorate -20'
+abbr --add gla  'git log --oneline --graph --decorate --all'
+abbr --add gd   'git diff'
+abbr --add gds  'git diff --staged'
+abbr --add gco  'git checkout'
+abbr --add gb   'git branch -vv'
+abbr --add gpl  'git pull'
+abbr --add gst  'git stash'
+abbr --add gstp 'git stash pop'
 
-# Kubernetes
+# ── Kubernetes abbreviations ─────────────────────────────────────
 if command -q kubectl
-    alias k 'kubectl'
-    alias kgp 'kubectl get pods'
-    alias kgs 'kubectl get svc'
-    alias kgn 'kubectl get nodes'
-    alias kd 'kubectl describe'
-    alias kl 'kubectl logs'
-    alias klf 'kubectl logs -f'
-    alias kx 'kubectl exec -it'
+    abbr --add k    kubectl
+    abbr --add kgp  'kubectl get pods'
+    abbr --add kgpa 'kubectl get pods -A'
+    abbr --add kgs  'kubectl get svc'
+    abbr --add kgn  'kubectl get nodes'
+    abbr --add kd   'kubectl describe'
+    abbr --add kl   'kubectl logs'
+    abbr --add klf  'kubectl logs -f'
+    abbr --add kx   'kubectl exec -it'
 end
 
-# Podman
-alias dc 'podman compose'
-alias dps 'podman ps'
-alias dpsa 'podman ps -a'
+# ── Podman abbreviations ─────────────────────────────────────────
+abbr --add dc    'podman compose'
+abbr --add dps   'podman ps'
+abbr --add dpsa  'podman ps -a'
+abbr --add dexec 'podman exec -it'
+abbr --add dlogs 'podman logs -f'
 
-# Dotfiles
-alias dots 'cd ~/.local/share/dotfiles && git pull --ff-only && just apply-nosecrets'
-alias dots-secrets 'cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
+# ── Dotfiles ─────────────────────────────────────────────────────
+abbr --add dots       'cd ~/.local/share/dotfiles; and git pull --ff-only; and just apply --skip-tags secrets'
+abbr --add dots-apply 'cd ~/.local/share/dotfiles; and git pull --ff-only; and just apply'
 
-# Misc
-alias reload 'exec fish'
-alias path 'string split ":" $PATH'
-alias myip 'curl -s ifconfig.me'
-alias cls 'clear'
-alias h 'history'
-alias md 'mkdir -p'
+# ── Misc ─────────────────────────────────────────────────────────
+abbr --add reload  'exec fish -l'
+abbr --add path    'string split : $PATH'
+abbr --add myip    'curl -s ifconfig.me; and echo'
+abbr --add cls     clear
+abbr --add md      'mkdir -p'
+abbr --add h       history
+
 if command -q trash
-    alias rm 'trash'
+    alias rm trash
 end

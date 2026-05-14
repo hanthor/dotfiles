@@ -1,9 +1,13 @@
-# Shared aliases — sourced by bash, zsh, and fish (via wrapper)
+# Shared aliases — sourced by bash and zsh
 # NOTE: bluefin-cli init handles: eza/ll/ls, bat/cat, ugrep/grep,
 #       zoxide/cd, starship, atuin, fzf — do NOT duplicate those here
 
-# vim → nvim
-command -v nvim &>/dev/null && alias vim='nvim' && alias vi='nvim'
+# vim → nvim (nvim is the default editor; EDITOR/VISUAL are set in rc files)
+if command -v nvim &>/dev/null; then
+  alias vim='nvim'
+  alias vi='nvim'
+  alias v='nvim'
+fi
 
 # Navigation
 alias ..='cd ..'
@@ -11,44 +15,64 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 alias -- -='cd -'
 
-# Git
-alias gs='git status'
+# Git shortcuts (delta-enhanced diffs via gitconfig pager setting)
+alias gs='git status -sb'
 alias ga='git add'
 alias gaa='git add -A'
 alias gc='git commit'
 alias gcm='git commit -m'
-alias gca='git commit --amend'
+alias gca='git commit --amend --no-edit'
 alias gp='git push'
 alias gpf='git push --force-with-lease'
-alias gl='git log --oneline --graph -20'
+alias gl='git log --oneline --graph --decorate -20'
+alias gla='git log --oneline --graph --decorate --all'
 alias gd='git diff'
 alias gds='git diff --staged'
 alias gco='git checkout'
-alias gb='git branch'
+alias gb='git branch -vv'
 alias gpl='git pull'
 alias gst='git stash'
 alias gstp='git stash pop'
+alias gclean='git branch --merged | grep -v "\*\|main\|master" | xargs -r git branch -d'
 
 # Kubernetes
-command -v kubectl &>/dev/null && alias k='kubectl' && alias kgp='kubectl get pods' && alias kgs='kubectl get svc' && alias kgn='kubectl get nodes' && alias kd='kubectl describe' && alias kl='kubectl logs' && alias klf='kubectl logs -f' && alias kx='kubectl exec -it'
+if command -v kubectl &>/dev/null; then
+  alias k='kubectl'
+  alias kgp='kubectl get pods'
+  alias kgs='kubectl get svc'
+  alias kgn='kubectl get nodes'
+  alias kd='kubectl describe'
+  alias kl='kubectl logs'
+  alias klf='kubectl logs -f'
+  alias kx='kubectl exec -it'
+  alias kctx='kubectl config use-context'
+  alias kns='kubectl config set-context --current --namespace'
+fi
 
 # Podman
 alias dc='podman compose'
 alias dps='podman ps'
 alias dpsa='podman ps -a'
+alias dexec='podman exec -it'
+alias dlogs='podman logs -f'
 
 # Dotfiles
-alias dots='cd ~/.local/share/dotfiles && git pull --ff-only && just apply-nosecrets'
-alias dots-secrets='cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
+alias dots='cd ~/.local/share/dotfiles && git pull --ff-only && just apply --skip-tags secrets'
+alias dots-apply='cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
+alias dots-edit='cd ~/.local/share/dotfiles && ${EDITOR:-nvim} .'
 
 # Misc
 alias reload='exec $SHELL -l'
-alias path='echo $PATH | tr ":" "\n"'
-alias myip='curl -s ifconfig.me'
+alias path='tr ":" "\n" <<< "$PATH"'
+alias myip='curl -s ifconfig.me && echo'
+alias localip='ip route get 1.1.1.1 | grep -oP "src \K\S+"'
 alias cls='clear'
 alias h='history'
 alias md='mkdir -p'
-command -v trash &>/dev/null && alias rm='trash'
+alias please='sudo $(fc -ln -1)'
+if command -v trash &>/dev/null; then
+  alias rm='trash'
+fi
 {% if is_desktop | bool %}
 alias open='xdg-open'
 {% endif %}

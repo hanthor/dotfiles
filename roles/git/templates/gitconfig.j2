@@ -5,6 +5,7 @@
 
 [commit]
 	gpgsign = true
+	template = ~/.gitmessage
 
 [gpg]
 	format = ssh
@@ -17,6 +18,59 @@
 
 [format]
 	signoff = true
+
+[core]
+	pager = delta
+	excludesfile = ~/.gitignore_global
+	autocrlf = input
+	whitespace = trailing-space,space-before-tab
+
+[interactive]
+	diffFilter = delta --color-only
+
+[delta]
+	navigate = true
+	light = false
+	line-numbers = true
+	side-by-side = false
+	syntax-theme = Catppuccin Mocha
+	hyperlinks = true
+
+[merge]
+	conflictstyle = zdiff3
+
+[diff]
+	algorithm = histogram
+	colorMoved = default
+
+[pull]
+	rebase = true
+
+[push]
+	autoSetupRemote = true
+
+[rebase]
+	autoStash = true
+	updateRefs = true
+
+[rerere]
+	enabled = true
+
+[fetch]
+	prune = true
+	pruneTags = false
+
+[branch]
+	sort = -committerdate
+
+[tag]
+	sort = version:refname
+
+[column]
+	ui = auto
+
+[help]
+	autocorrect = prompt
 
 [filter "lfs"]
 	clean = git-lfs clean -- %f
@@ -31,3 +85,26 @@
 [credential "https://gist.github.com"]
 	helper =
 	helper = !/bin/sh -c 'command -v gh >/dev/null 2>&1 && gh auth git-credential "$@" || true' --
+
+[alias]
+	st = status -sb
+	lg = log --oneline --graph --decorate -20
+	lga = log --oneline --graph --decorate --all
+	last = log -1 HEAD --stat
+	who = shortlog -sn --no-merges
+	co = checkout
+	br = branch -vv
+	bra = branch -vva
+	sw = switch
+	unstage = reset HEAD --
+	amend = commit --amend --no-edit
+	fixup = commit --fixup
+	df = diff
+	dfs = diff --staged
+	sp = stash pop
+	sl = stash list
+	pu = push
+	puf = push --force-with-lease
+	pl = pull
+	cleanup = "!git branch --merged | grep -v '\\*\\|main\\|master\\|develop' | xargs -r git branch -d"
+	aliases = config --get-regexp alias

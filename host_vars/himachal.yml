@@ -1,5 +1,6 @@
 ---
 is_arm: false
 is_laptop: true
+dotfiles_update_delay_seconds: 90
 has_homepage: true
 web_services: []

@@ -11,7 +11,6 @@ system_flatpaks:
   - dev.vencord.Vesktop
   - dev.zed.Zed
   - io.github.flattool.Warehouse
-  - io.anytype.anytype
   - io.gitlab.news_flash.NewsFlash
   - io.missioncenter.MissionCenter
   - md.obsidian.Obsidian

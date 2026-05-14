@@ -31,6 +31,8 @@
       tags: [dotfiles, shell]
     - role: git
       tags: [dotfiles, git]
+    - role: neovim
+      tags: [dotfiles, neovim, editor]
 
     # Phase 2: Secrets + auth
     - role: bitwarden

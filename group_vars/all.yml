@@ -54,6 +54,8 @@ core_brews:
   - bitwarden-cli
   - gh
   - git-lfs
+  - git-delta
+  - neovim
   - fish
   - zsh
   - bash-preexec
@@ -96,7 +98,6 @@ desktop_brews:
   - gcc@11
   - gdb
   - go
-  - neovim
   - node
   - pipx
   - python@3.13

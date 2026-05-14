@@ -36,14 +36,13 @@
   become: true
   failed_when: false
 
-- name: Install missing system flatpaks (batch)
-  ansible.builtin.shell: |
-    flatpak install --system -y flathub {{ missing_flatpaks | join(' ') }}
-  vars:
-    missing_flatpaks: "{{ system_flatpaks | reject('in', installed_flatpaks.stdout_lines) | list }}"
+- name: Install missing system flatpaks (one at a time so a bad ID doesn't abort the rest)
+  ansible.builtin.command: flatpak install --system -y flathub {{ item }}
+  loop: "{{ system_flatpaks | reject('in', installed_flatpaks.stdout_lines) | list }}"
   become: true
-  when: missing_flatpaks | length > 0
-  changed_when: true
+  register: flatpak_install_result
+  changed_when: flatpak_install_result.rc == 0
+  failed_when: false
 
 - name: Update all flatpaks
   ansible.builtin.command: flatpak update --system -y

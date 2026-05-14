@@ -1,7 +1,16 @@
 Host *
   AddKeysToAgent yes
-  ServerAliveInterval 60
+  IdentityFile ~/.ssh/id_ed25519
+  ServerAliveInterval 30
   ServerAliveCountMax 3
+  # Reuse connections — big speedup for repeated SSH to the same host
+  ControlMaster auto
+  ControlPersist 10m
+  ControlPath ~/.ssh/cp/%C
+  # Don't hash known_hosts so tab-completion and doctor checks work
+  HashKnownHosts no
+  # Compression on slow links; negligible on LAN/Tailscale
+  Compression yes
   SendEnv BW_SESSION
 
 {% for name, info in machines.items() %}

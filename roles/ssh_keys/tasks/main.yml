@@ -5,6 +5,12 @@
     state: directory
     mode: "0700"
 
+- name: Ensure SSH ControlPath directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.ssh/cp"
+    state: directory
+    mode: "0700"
+
 - name: Set SSH key path facts
   ansible.builtin.set_fact:
     priv_key: "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519"

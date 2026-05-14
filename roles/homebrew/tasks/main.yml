@@ -1,43 +1,78 @@
 ---
+# Homebrew requires glibc — skip entirely on musl-based systems (Alpine, postmarketOS).
+- name: Detect musl libc (Homebrew incompatible)
+  ansible.builtin.stat:
+    path: /lib/ld-musl-x86_64.so.1
+  register: musl_x86
+
+- name: Detect musl libc aarch64
+  ansible.builtin.stat:
+    path: /lib/ld-musl-aarch64.so.1
+  register: musl_aarch64
+
+- name: Set brew_supported fact
+  ansible.builtin.set_fact:
+    brew_supported: "{{ not (musl_x86.stat.exists or musl_aarch64.stat.exists) }}"
+
+- name: Warn that Homebrew is not supported on this system
+  ansible.builtin.debug:
+    msg: "Skipping Homebrew — musl libc detected (postmarketOS/Alpine). Install packages via apk instead."
+  when: not brew_supported
+
 - name: Check if Homebrew is installed
   ansible.builtin.stat:
     path: /home/linuxbrew/.linuxbrew/bin/brew
   register: brew_installed
+  when: brew_supported
 
 - name: Install Homebrew
   ansible.builtin.shell: |
     NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   args:
     creates: /home/linuxbrew/.linuxbrew/bin/brew
-  when: not brew_installed.stat.exists
+  when: brew_supported and not brew_installed.stat.exists
 
 - name: Deploy Brewfile
   ansible.builtin.template:
     src: Brewfile.j2
     dest: "{{ ansible_facts['env']['HOME'] }}/Brewfile"
     mode: "0644"
+  when: brew_supported
 
 - name: Run brew bundle
   ansible.builtin.command:
-    cmd: /home/linuxbrew/.linuxbrew/bin/brew bundle install --file={{ ansible_facts['env']['HOME'] }}/Brewfile
+    cmd: /home/linuxbrew/.linuxbrew/bin/brew bundle install --file={{ ansible_facts['env']['HOME'] }}/Brewfile --no-upgrade
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
     GIT_CONFIG_COUNT: "1"
     GIT_CONFIG_KEY_0: "credential.helper"
     GIT_CONFIG_VALUE_0: ""
-  changed_when: false
-  ignore_errors: true
+    HOMEBREW_NO_AUTO_UPDATE: "1"
+    HOMEBREW_NO_ENV_HINTS: "1"
+  register: brew_bundle
+  when: brew_supported
+  changed_when: "'Installing ' in (brew_bundle.stdout | default('')) or 'Tapping ' in (brew_bundle.stdout | default(''))"
+  failed_when: false
+
+- name: Warn if brew bundle reported errors
+  ansible.builtin.debug:
+    msg: "brew bundle returned {{ brew_bundle.rc }} — last stderr: {{ brew_bundle.stderr_lines[-10:] | default([]) }}"
+  when: brew_supported and brew_bundle.rc | default(0) != 0
 
 - name: Upgrade all Homebrew packages
   ansible.builtin.command: /home/linuxbrew/.linuxbrew/bin/brew upgrade
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
-  when: upgrade | default(false) | bool
-  changed_when: true
-  ignore_errors: true
+    HOMEBREW_NO_AUTO_UPDATE: "1"
+    HOMEBREW_NO_ENV_HINTS: "1"
+  register: brew_upgrade
+  when: brew_supported and (upgrade | default(false) | bool)
+  changed_when: "'Upgrading ' in (brew_upgrade.stdout | default(''))"
+  failed_when: false
 
 - name: Ensure packaging is installed in brew Python (required by Ansible systemd module)
   ansible.builtin.command: >
     /home/linuxbrew/.linuxbrew/bin/python3 -m pip install packaging --break-system-packages --quiet
+  when: brew_supported
   changed_when: false
   failed_when: false

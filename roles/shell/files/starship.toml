@@ -1,0 +1,128 @@
+# Starship prompt — Catppuccin Mocha palette
+# https://starship.rs/config/
+
+"$schema" = "https://starship.rs/config-schema.json"
+
+format = """
+[╭─](bold #6c7086)\
+$os\
+$username\
+$hostname\
+$directory\
+$git_branch\
+$git_state\
+$git_status\
+$git_metrics\
+$fill\
+$kubernetes\
+$docker_context\
+$python\
+$nodejs\
+$rust\
+$golang\
+$cmd_duration\
+$line_break\
+[╰─](bold #6c7086)\
+$character"""
+
+[os]
+disabled = false
+style = "bold #cba6f7"
+
+[os.symbols]
+Linux   = " "
+Fedora  = " "
+Ubuntu  = " "
+Debian  = " "
+Macos   = " "
+Unknown = " "
+
+[username]
+show_always = false
+style_user  = "bold #cba6f7"
+style_root  = "bold #f38ba8"
+format      = "[$user]($style) "
+
+[hostname]
+ssh_only = true
+style    = "bold #89b4fa"
+format   = "[@$hostname]($style) "
+
+[directory]
+style            = "bold #89dceb"
+read_only        = " 󰌾"
+truncation_length = 4
+truncate_to_repo = true
+fish_style_pwd_dir_length = 1
+
+[git_branch]
+symbol = " "
+style  = "bold #f9e2af"
+format = "[$symbol$branch]($style) "
+
+[git_status]
+style     = "bold #f38ba8"
+format    = "([$all_status$ahead_behind]($style) )"
+conflicted = "󰃤 "
+ahead      = "⇡${count}"
+behind     = "⇣${count}"
+diverged   = "⇕⇡${ahead_count}⇣${behind_count}"
+untracked  = "?${count}"
+stashed    = " "
+modified   = "!${count}"
+staged     = "+${count}"
+renamed    = "»${count}"
+deleted    = "✘${count}"
+
+[git_metrics]
+disabled = false
+added_style   = "bold #a6e3a1"
+deleted_style = "bold #f38ba8"
+format        = "([+$added]($added_style) )([-$deleted]($deleted_style) )"
+
+[git_state]
+style  = "bold #fab387"
+format = "([$state( $progress_current/$progress_total)]($style) )"
+
+[fill]
+symbol = " "
+
+[kubernetes]
+disabled = false
+style   = "bold #89b4fa"
+symbol  = "󱃾 "
+format  = "[$symbol$context( \\($namespace\\))]($style) "
+
+[docker_context]
+disabled = false
+symbol   = " "
+style    = "bold #89b4fa"
+format   = "[$symbol$context]($style) "
+
+[python]
+symbol = " "
+style  = "bold #f9e2af"
+format = "[$symbol$pyenv_prefix($version )(($virtualenv) )]($style)"
+
+[nodejs]
+symbol = " "
+style  = "bold #a6e3a1"
+
+[rust]
+symbol = " "
+style  = "bold #fab387"
+
+[golang]
+symbol = " "
+style  = "bold #89dceb"
+
+[cmd_duration]
+min_time          = 2000
+style             = "bold #6c7086"
+format            = "[$duration]($style) "
+show_notifications = false
+
+[character]
+success_symbol = "[❯](bold #a6e3a1)"
+error_symbol   = "[❯](bold #f38ba8)"
+vimcmd_symbol  = "[❮](bold #cba6f7)"

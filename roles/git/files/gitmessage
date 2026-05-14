@@ -1,0 +1,10 @@
+# <type>(<scope>): <short summary>  ← 72 chars max
+#
+# Types: feat fix docs style refactor test chore ci perf revert
+#
+# Body (wrap at 72, explain WHY not what):
+#
+#
+# Footer — breaking changes, issue refs:
+# BREAKING CHANGE: <description>
+# Closes #<issue>

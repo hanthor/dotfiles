@@ -1,0 +1,65 @@
+---
+- name: Ensure nvim config directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/nvim"
+    state: directory
+    mode: "0755"
+
+- name: Ensure nvim lua config directories exist
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/nvim/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - lua/config
+    - lua/plugins
+
+- name: Deploy nvim init.lua
+  ansible.builtin.copy:
+    src: nvim/init.lua
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/nvim/init.lua"
+    mode: "0644"
+
+- name: Deploy nvim config files
+  ansible.builtin.copy:
+    src: "nvim/lua/config/{{ item }}"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/nvim/lua/config/{{ item }}"
+    mode: "0644"
+  loop:
+    - options.lua
+    - keymaps.lua
+    - autocmds.lua
+
+- name: Deploy nvim plugin specs
+  ansible.builtin.copy:
+    src: "nvim/lua/plugins/{{ item }}"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/nvim/lua/plugins/{{ item }}"
+    mode: "0644"
+  loop:
+    - colorscheme.lua
+    - editor.lua
+    - lsp.lua
+    - ui.lua
+    - coding.lua
+
+- name: Bootstrap lazy.nvim (headless install)
+  ansible.builtin.shell: |
+    LAZY_DIR="${HOME}/.local/share/nvim/lazy/lazy.nvim"
+    if [ ! -d "$LAZY_DIR" ]; then
+      git clone --filter=blob:none https://github.com/folke/lazy.nvim.git \
+        --branch=stable "$LAZY_DIR"
+    fi
+  changed_when: false
+  failed_when: false
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+
+- name: Install nvim plugins (headless)
+  ansible.builtin.shell: |
+    nvim --headless "+Lazy! sync" +qa 2>&1 | tail -5
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    HOME: "{{ ansible_facts['env']['HOME'] }}"
+  changed_when: false
+  failed_when: false
+  timeout: 120
