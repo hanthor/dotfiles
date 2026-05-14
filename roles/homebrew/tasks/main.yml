@@ -26,6 +26,7 @@
     GIT_CONFIG_KEY_0: "credential.helper"
     GIT_CONFIG_VALUE_0: ""
   changed_when: false
+  ignore_errors: true
 
 - name: Ensure packaging is installed in brew Python (required by Ansible systemd module)
   ansible.builtin.command: >
