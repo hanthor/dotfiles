@@ -264,7 +264,7 @@ write_machine_name() {
 
 # ── Ensure passwordless sudo ──────────────────────────────────────
 ensure_sudo() {
-  local sudo_file="/etc/sudoers.d/99-$USER"
+  local sudo_file="/etc/sudoers.d/zz-$USER"
   if [ -f "$sudo_file" ]; then
     echo "✓ Passwordless sudo already configured for $USER."
     return
