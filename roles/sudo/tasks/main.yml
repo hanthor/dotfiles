@@ -2,7 +2,13 @@
 - name: Ensure passwordless sudo for current user
   ansible.builtin.copy:
     content: "{{ ansible_user_id | default(lookup('env', 'USER')) }} ALL=(ALL) NOPASSWD:ALL"
-    dest: "/etc/sudoers.d/{{ ansible_user_id | default(lookup('env', 'USER')) }}"
+    dest: "/etc/sudoers.d/99-{{ ansible_user_id | default(lookup('env', 'USER')) }}"
     mode: "0440"
     validate: /usr/sbin/visudo -cf %s
+  become: true
+
+- name: Remove old sudoers file without 99- prefix
+  ansible.builtin.file:
+    path: "/etc/sudoers.d/{{ ansible_user_id | default(lookup('env', 'USER')) }}"
+    state: absent
   become: true

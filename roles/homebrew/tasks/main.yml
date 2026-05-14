@@ -16,10 +16,16 @@
     src: Brewfile.j2
     dest: "{{ ansible_facts['env']['HOME'] }}/Brewfile"
     mode: "0644"
-  notify: Run brew bundle
 
-- name: Flush handlers to run brew bundle now
-  ansible.builtin.meta: flush_handlers
+- name: Run brew bundle
+  ansible.builtin.command:
+    cmd: /home/linuxbrew/.linuxbrew/bin/brew bundle install --file={{ ansible_facts['env']['HOME'] }}/Brewfile
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    GIT_CONFIG_COUNT: "1"
+    GIT_CONFIG_KEY_0: "credential.helper"
+    GIT_CONFIG_VALUE_0: ""
+  changed_when: false
 
 - name: Ensure packaging is installed in brew Python (required by Ansible systemd module)
   ansible.builtin.command: >

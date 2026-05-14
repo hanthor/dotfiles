@@ -14,7 +14,7 @@
 # Clone homelab-monitoring repo (holds quadlets, dashboards, Alloy config)
 - name: Clone homelab-monitoring repo
   ansible.builtin.git:
-    repo: https://github.com/hanthor/homelab-monitoring.git
+    repo: git@github.com:hanthor/homelab-monitoring.git
     dest: "{{ ansible_facts['env']['HOME'] }}/dev/homelab-monitoring"
     version: main
     update: false
