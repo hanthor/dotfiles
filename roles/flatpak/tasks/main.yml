@@ -36,12 +36,28 @@
   become: true
   failed_when: false
 
-- name: Install missing system flatpaks (one at a time so a bad ID doesn't abort the rest)
-  ansible.builtin.command: flatpak install --system -y flathub {{ item }}
-  loop: "{{ system_flatpaks | reject('in', installed_flatpaks.stdout_lines) | list }}"
+- name: Set missing flatpaks fact
+  ansible.builtin.set_fact:
+    missing_flatpaks: "{{ system_flatpaks | reject('in', installed_flatpaks.stdout_lines) | list }}"
+
+# Fast path: try all missing apps in one batch command
+- name: Install missing system flatpaks (batch)
+  ansible.builtin.shell: |
+    flatpak install --system -y flathub {{ missing_flatpaks | join(' ') }} 2>&1
   become: true
-  register: flatpak_install_result
-  changed_when: flatpak_install_result.rc == 0
+  register: flatpak_batch
+  when: missing_flatpaks | length > 0
+  changed_when: flatpak_batch.rc == 0
+  failed_when: false
+
+# Slow path: re-run individually only for the apps that failed (keeps the common case fast)
+- name: Install flatpaks that failed in batch (individually, tolerating bad IDs)
+  ansible.builtin.command: flatpak install --system -y flathub {{ item }}
+  loop: "{{ missing_flatpaks }}"
+  become: true
+  register: flatpak_individual
+  when: missing_flatpaks | length > 0 and flatpak_batch.rc | default(0) != 0
+  changed_when: flatpak_individual.rc == 0
   failed_when: false
 
 - name: Update all flatpaks
