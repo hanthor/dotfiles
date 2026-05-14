@@ -1,6 +1,9 @@
 ---
 all:
   hosts:
+    kerala:
+      ansible_host: localhost
+      ansible_connection: local
     vm:
       ansible_host: localhost
       ansible_connection: local
@@ -31,6 +34,7 @@ all:
   children:
     desktop:
       hosts:
+        kerala:
         karnataka:
         kanpur:
         himachal:
