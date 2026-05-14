@@ -326,7 +326,7 @@ update-all:
 sync-brews:
     #!/usr/bin/env bash
     set -euo pipefail
-    python3 scripts/sync-brews.py
+    ./scripts/sync-brews.sh
     git diff group_vars/all.yml
 
 # Apply to all machines in parallel via Ansible (run from karnataka)
