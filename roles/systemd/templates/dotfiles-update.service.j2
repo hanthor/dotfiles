@@ -11,6 +11,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+ExecStartPre=-/usr/bin/podman auto-update --user
+ExecStartPre=-/usr/bin/sudo /usr/bin/podman auto-update
 ExecStart={{ brew_prefix }}/bin/ansible-pull -U https://github.com/hanthor/dotfiles -C master -d {{ ansible_facts['env']['HOME'] }}/.local/share/dotfiles -i inventory.yml -l {{ inventory_hostname }} site.yml -e upgrade=true
 Environment="PATH={{ brew_prefix }}/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
 

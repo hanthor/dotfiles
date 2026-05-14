@@ -1,4 +1,13 @@
 ---
+- name: Fix broken flatpak symlink if present
+  ansible.builtin.shell: |
+    if [ -L /var/lib/flatpak ] && [ ! -e /var/lib/flatpak ]; then
+      rm /var/lib/flatpak
+      mkdir -p /var/lib/flatpak
+    fi
+  become: true
+  changed_when: false
+
 - name: Add flathub remote (system)
   ansible.builtin.command: flatpak remote-add --if-not-exists --system {{ item.name }} {{ item.url }}
   loop: "{{ flatpak_remotes }}"
