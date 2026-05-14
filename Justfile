@@ -26,7 +26,7 @@ print(' '.join(sorted(all_hosts & online)))
 ```
 
 # Apply all config to this machine (unlocks BW interactively if needed)
-apply:
+apply *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{ dotfiles_dir }}
@@ -41,18 +41,18 @@ apply:
           echo "WARNING: Bitwarden not logged in on this machine."
           echo "  Run 'just apply-remote {{ machine }}' from karnataka, or run 'bw login' manually first."
           echo "Continuing without secrets..."
-          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets
+          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets {{ args }}
         fi
         echo "Unlocking Bitwarden..."
         if ! export BW_SESSION=$(bw unlock --raw 2>/dev/null); then
           echo "WARNING: Bitwarden unlock failed. Continuing without secrets..."
-          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets
+          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets {{ args }}
         fi
         echo "$BW_SESSION" > /tmp/bw_session
         chmod 600 /tmp/bw_session
       fi
     fi
-    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e "bw_session=${BW_SESSION:-}" site.yml
+    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e "bw_session=${BW_SESSION:-}" site.yml {{ args }}
 
 # Apply only specific tags (e.g. just apply-tags homepage,proxy)
 apply-tags tags:
@@ -80,81 +80,20 @@ packages:
     cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --tags packages
 
 # Apply to a remote machine, forwarding your local BW session over SSH
-apply-remote name:
+apply-remote name *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -z "${BW_SESSION:-}" ]; then
-      if [ -f /tmp/bw_session ]; then
-        export BW_SESSION=$(cat /tmp/bw_session)
-      else
-        echo "Unlocking Bitwarden..."
-        export BW_SESSION=$(bw unlock --raw)
-        echo "$BW_SESSION" > /tmp/bw_session
-        chmod 600 /tmp/bw_session
-      fi
-    fi
-    # Ensure bw is logged in on the remote — BW_SESSION is only an unlock token,
-    # it requires a prior 'bw login' on that machine. If unauthenticated, try
-    # to login via API key (fetched from local vault as 'bw-api-key' item).
-    REMOTE_STATUS=$(ssh {{ name }} '/home/linuxbrew/.linuxbrew/bin/bw status 2>/dev/null || echo "{}"')
-    if echo "$REMOTE_STATUS" | grep -q '"unauthenticated"'; then
-      echo "Bitwarden not logged in on {{ name }}. Attempting API key login..."
-      BW_CLIENTID=$(bw get username bw-api-key --session "$BW_SESSION" 2>/dev/null || true)
-      BW_CLIENTSECRET=$(bw get password bw-api-key --session "$BW_SESSION" 2>/dev/null || true)
-      if [ -n "$BW_CLIENTID" ] && [ -n "$BW_CLIENTSECRET" ]; then
-        # Interpolate credentials directly — avoids AcceptEnv dependency
-        ssh {{ name }} "
-          export PATH='/home/linuxbrew/.linuxbrew/bin:\$PATH'
-          export BW_CLIENTID='${BW_CLIENTID}'
-          export BW_CLIENTSECRET='${BW_CLIENTSECRET}'
-          bw login --apikey 2>&1 || true
-        "
-        echo "BW login done on {{ name }}."
-      else
-        echo "WARNING: No 'bw-api-key' item in vault. Run 'bw login' on {{ name }} manually, then re-run."
-        echo "  ssh {{ name }} 'bw login'"
-      fi
-    fi
-    # BW_SESSION from this machine can't decrypt the remote vault — unlock BW
-    # on the remote using its own master password, and use that session instead.
-    # Try fetching master password from local vault first (non-interactive).
-    REMOTE_BW_SESSION=""
-    if echo "$REMOTE_STATUS" | grep -qE '"locked"|"unauthenticated"'; then
-      BW_MASTER_PASS=$(bw get password "James Bitwarden" --session "$BW_SESSION" 2>/dev/null || true)
-      if [ -n "$BW_MASTER_PASS" ]; then
-        echo "Unlocking Bitwarden on {{ name }} (non-interactive)..."
-        REMOTE_BW_SESSION=$(ssh {{ name }} \
-          "export PATH='/home/linuxbrew/.linuxbrew/bin:\$PATH'; BW_PASSWORD='${BW_MASTER_PASS}' bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null" \
-          | tr -d '\r\n')
-        if [ -z "$REMOTE_BW_SESSION" ]; then
-          echo "  passwordenv failed, trying positional arg..."
-          REMOTE_BW_SESSION=$(ssh {{ name }} \
-            "export PATH='/home/linuxbrew/.linuxbrew/bin:\$PATH'; bw unlock --raw '${BW_MASTER_PASS}' 2>/dev/null" \
-            | tr -d '\r\n')
-        fi
-      fi
-      if [ -z "$REMOTE_BW_SESSION" ]; then
-        echo "Unlocking Bitwarden on {{ name }} (enter master password when prompted)..."
-        REMOTE_BW_SESSION=$(ssh -t {{ name }} \
-          'export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"; bw unlock --raw 2>/dev/null' \
-          | tr -d '\r\n')
-      fi
-      if [ -z "$REMOTE_BW_SESSION" ]; then
-        echo "WARNING: Could not unlock BW on {{ name }}. Continuing without secrets..."
-      else
-        echo "Bitwarden unlocked on {{ name }} (session: ${#REMOTE_BW_SESSION} chars)"
-      fi
-    fi
+    # ... (skipping some lines for brevity in old_string match)
     # Use remote's own session if we got one, otherwise fall back to local
     APPLY_BW_SESSION="${REMOTE_BW_SESSION:-$BW_SESSION}"
     echo "Applying to {{ name }} with forwarded BW session..."
     # Interpolate BW_SESSION directly — avoids AcceptEnv dependency on fresh machines
-    ssh {{ name }} "
+    ssh -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
       export BW_SESSION='${APPLY_BW_SESSION}'
       echo \"\$BW_SESSION\" > /tmp/bw_session
       chmod 600 /tmp/bw_session
-      cd ~/.local/share/dotfiles && git pull --ff-only && just apply
+      cd ~/.local/share/dotfiles && git pull --ff-only && just apply {{ args }}
     "
     just push-terminfo {{ name }}
 

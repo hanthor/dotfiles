@@ -262,6 +262,19 @@ write_machine_name() {
   echo "Machine name written to $MACHINE_FILE"
 }
 
+# ── Ensure passwordless sudo ──────────────────────────────────────
+ensure_sudo() {
+  local sudo_file="/etc/sudoers.d/$USER"
+  if [ -f "$sudo_file" ]; then
+    echo "✓ Passwordless sudo already configured for $USER."
+    return
+  fi
+
+  echo "Configuring passwordless sudo for $USER..."
+  echo "$USER ALL=(ALL) NOPASSWD:ALL" | sudo tee "$sudo_file" > /dev/null
+  sudo chmod 0440 "$sudo_file"
+}
+
 # ── Install Galaxy collections ────────────────────────────────────
 install_collections() {
   echo "Installing Ansible collections..."
@@ -385,6 +398,7 @@ main() {
   get_machine_type
   register_in_inventory
   write_machine_name
+  ensure_sudo
   ensure_tailscale
   install_collections
   run_phase1

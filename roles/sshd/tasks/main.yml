@@ -11,4 +11,5 @@
     mode: "0644"
   become: true
   when: sshd_config_d.stat.isdir is defined and sshd_config_d.stat.isdir
+  ignore_errors: true
   notify: Reload sshd

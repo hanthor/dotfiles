@@ -7,3 +7,8 @@ web_services:
     icon: cockpit.png
     description: System management
     group: System
+  - name: BuildStream Dashboard
+    href: https://dilli.manatee-basking.ts.net/bst/
+    icon: buildstream.png
+    description: Build monitor
+    group: System

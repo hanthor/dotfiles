@@ -20,6 +20,8 @@
     PATH: "{{ brew_bin | default('/home/linuxbrew/.linuxbrew/bin') }}:/home/linuxbrew/.linuxbrew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
   roles:
+    - role: sudo
+      tags: [system, sudo]
     # Phase 1: System + packages (no secrets needed)
     - role: sshd
       tags: [system, sshd]
