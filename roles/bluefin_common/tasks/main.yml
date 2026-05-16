@@ -131,6 +131,53 @@
       ansible.builtin.command: fc-cache -f
       changed_when: false
 
+- name: Ensure ~/.local/bin exists
+  ansible.builtin.file:
+    path: "~/.local/bin"
+    state: directory
+    mode: "0755"
+
+- name: Deploy wallpaper rotation script
+  ansible.builtin.copy:
+    src: bluefin-wallpaper-rotate.py
+    dest: "~/.local/bin/bluefin-wallpaper-rotate.py"
+    mode: "0755"
+
+- name: Ensure systemd user directory exists
+  ansible.builtin.file:
+    path: "~/.config/systemd/user"
+    state: directory
+    mode: "0755"
+
+- name: Deploy wallpaper rotation service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "~/.config/systemd/user/{{ item }}"
+    mode: "0644"
+  loop:
+    - bluefin-wallpaper-rotate.service
+    - bluefin-wallpaper-rotate.timer
+  register: rotation_systemd
+
+- name: Reload systemd user daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+    scope: user
+  when: rotation_systemd.changed
+
+- name: Enable and start wallpaper rotation timer
+  ansible.builtin.systemd:
+    name: bluefin-wallpaper-rotate.timer
+    enabled: true
+    state: started
+    scope: user
+
+- name: Run wallpaper rotation once
+  ansible.builtin.command: "~/.local/bin/bluefin-wallpaper-rotate.py"
+  environment:
+    DBUS_SESSION_BUS_ADDRESS: "{{ dbus_session_bus_address }}"
+  changed_when: true
+
 - name: Install Bluefin-recommended GNOME extensions
   when: is_gnome and (not is_bluefin or force_bluefin | default(false)) and is_desktop | bool
   environment:

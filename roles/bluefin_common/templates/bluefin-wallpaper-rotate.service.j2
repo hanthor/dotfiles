@@ -1,0 +1,11 @@
+[Unit]
+Description=Rotate Bluefin wallpaper monthly
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart={{ ansible_facts['env']['HOME'] }}/.local/bin/bluefin-wallpaper-rotate.py
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{{ user_uid_cmd.stdout | trim }}/bus
+
+[Install]
+WantedBy=graphical-session.target
