@@ -105,7 +105,7 @@
 
     - name: Download JetBrains Mono font
       ansible.builtin.get_url:
-        url: https://github.com/JetBrains/JetBrainsMono/releases/latest/download/JetBrainsMono.zip
+        url: https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip
         dest: /tmp/JetBrainsMono.zip
         mode: "0644"
 
