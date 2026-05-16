@@ -1,5 +1,5 @@
 ---
-# PostMarketOS laptop (ARM)
+# ARM hardware
 is_arm: true
-# Treat as full desktop — PostMarketOS is a complete Linux desktop environment
+# Laptop: runs on login, not on timer
 is_laptop: true

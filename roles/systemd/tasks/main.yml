@@ -1,10 +1,17 @@
 ---
+# Detect if podman is available on this system
+- name: Check if podman is installed
+  ansible.builtin.stat:
+    path: /usr/bin/podman
+  register: podman_available
+
 - name: Ensure podman group exists
   ansible.builtin.group:
     name: podman
     system: true
     state: present
   become: true
+  when: podman_available.stat.exists
 
 - name: Add user to podman group
   ansible.builtin.user:
@@ -12,6 +19,7 @@
     groups: podman
     append: true
   become: true
+  when: podman_available.stat.exists
 
 - name: Create podman socket drop-in directory
   ansible.builtin.file:
@@ -19,6 +27,7 @@
     state: directory
     mode: "0755"
   become: true
+  when: podman_available.stat.exists
 
 - name: Deploy podman socket drop-in for group access
   ansible.builtin.copy:
@@ -31,6 +40,7 @@
       DirectoryMode=0710
   become: true
   notify: Restart podman socket
+  when: podman_available.stat.exists
 
 - name: Enable and start rootful podman socket
   ansible.builtin.systemd:
@@ -40,6 +50,12 @@
     state: started
     daemon_reload: true
   become: true
+  when: podman_available.stat.exists
+
+- name: Debug message for systems without podman
+  ansible.builtin.debug:
+    msg: "Podman not found on this system, skipping socket configuration"
+  when: not podman_available.stat.exists
 
 - name: Create systemd user directory
   ansible.builtin.file:
