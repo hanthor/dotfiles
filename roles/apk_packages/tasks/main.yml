@@ -67,7 +67,6 @@
       - busybox-extras
       - podman
       - podman-compose
-      - podman-dnsmasq
       - crun
     state: present
     update_cache: false # Handled by previous task
