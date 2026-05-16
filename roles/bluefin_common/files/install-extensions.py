@@ -22,14 +22,16 @@ def install_ext(uuid):
     try:
         # Fetch extension metadata to find the latest version
         url = f"https://extensions.gnome.org/extension-query/?search={uuid}"
-        with urllib.request.urlopen(url) as response:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
             data = json.loads(response.read().decode())
             ext_data = next(e for e in data['extensions'] if e['uuid'] == uuid)
             pk = ext_data['pk']
         
         # Fetch download URL for the latest version
         url = f"https://extensions.gnome.org/extension-info/?pk={pk}"
-        with urllib.request.urlopen(url) as response:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
             ext_info = json.loads(response.read().decode())
             # Pick the highest version compatible with current shell
             try:
@@ -40,25 +42,26 @@ def install_ext(uuid):
             
             # Find the best version for our shell
             ver_map = ext_info['shell_version_map']
-            # Try exact match, then major version match, then latest
-            best_ver = None
+            best_ver_data = None
             if major_version in ver_map:
-                best_ver = ver_map[major_version]
+                best_ver_data = ver_map[major_version]
             else:
                 # Fallback to any version that contains the major version in its support list
                 for v in sorted(ver_map.keys(), reverse=True):
                     if major_version in v.split('.'):
-                        best_ver = ver_map[v]
+                        best_ver_data = ver_map[v]
                         break
             
-            if not best_ver:
+            if not best_ver_data:
                 # Final fallback: just take the newest one
                 latest_v = sorted(ver_map.keys(), reverse=True)[0]
-                best_ver = ver_map[latest_v]
+                best_ver_data = ver_map[latest_v]
 
-            download_url = f"https://extensions.gnome.org{best_ver['download_url']}"
+            version_pk = best_ver_data['pk']
+            download_url = f"https://extensions.gnome.org/download-extension/{uuid}.shell-extension.zip?version_tag={version_pk}"
         
-        with urllib.request.urlopen(download_url) as response:
+        req = urllib.request.Request(download_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
             with zipfile.ZipFile(io.BytesIO(response.read())) as z:
                 dest = os.path.join(USER_EXT_DIR, uuid)
                 os.makedirs(dest, exist_ok=True)
