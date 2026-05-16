@@ -7,7 +7,8 @@ EXTENSIONS = [
     'blur-my-shell@aunetx',
     'gsconnect@andyholmes.github.io',
     'logomenu@aryan_k',
-    'search-light@icedman.github.com'
+    'search-light@icedman.github.com',
+    'caffeine@patapon.info'
 ]
 
 USER_EXT_DIR = os.path.expanduser('~/.local/share/gnome-shell/extensions')

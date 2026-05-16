@@ -3,6 +3,7 @@ import os
 import subprocess
 import configparser
 import re
+import ast
 
 def run_cmd(cmd):
     return subprocess.run(cmd, capture_output=True, text=True)
@@ -33,6 +34,17 @@ def apply_gschema_override(file_path):
                     local_path = os.path.expanduser('~/.local/share/backgrounds/bluefin')
                     val = val.replace('/usr/share/backgrounds/bluefin', local_path)
                     print(f"    Redirected to local path: {val}")
+
+                # Ensure Caffeine is always included in enabled-extensions
+                if schema == 'org.gnome.shell' and key == 'enabled-extensions':
+                    try:
+                        exts = ast.literal_eval(val)
+                        if 'caffeine@patapon.info' not in exts:
+                            exts.append('caffeine@patapon.info')
+                            val = repr(exts)
+                            print(f"    Added Caffeine to enabled-extensions: {val}")
+                    except Exception as e:
+                        print(f"    Error patching enabled-extensions: {e}")
 
                 res = run_cmd(['gsettings', 'set', schema, key, val])
                 if res.returncode != 0:
