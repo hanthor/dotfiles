@@ -60,13 +60,28 @@ def install_ext(uuid):
             version_pk = best_ver_data['pk']
             download_url = f"https://extensions.gnome.org/download-extension/{uuid}.shell-extension.zip?version_tag={version_pk}"
         
+        # Download and install via gnome-extensions CLI to trigger Shell scan
+        tmp_zip = f"/tmp/{uuid}.zip"
         req = urllib.request.Request(download_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
-            with zipfile.ZipFile(io.BytesIO(response.read())) as z:
+        with urllib.request.urlopen(req) as response, open(tmp_zip, 'wb') as out:
+            out.write(response.read())
+        
+        # Run gnome-extensions install
+        res = subprocess.run(['gnome-extensions', 'install', '--force', tmp_zip], capture_output=True, text=True)
+        if res.returncode == 0:
+            print(f"Successfully installed {uuid}")
+        else:
+            print(f"Failed to install {uuid} via CLI: {res.stderr.strip()}")
+            # Fallback to manual extraction if CLI fails
+            with zipfile.ZipFile(tmp_zip) as z:
                 dest = os.path.join(USER_EXT_DIR, uuid)
                 os.makedirs(dest, exist_ok=True)
                 z.extractall(dest)
-        print(f"Successfully installed {uuid}")
+            print(f"Manually extracted {uuid} as fallback")
+        
+        if os.path.exists(tmp_zip):
+            os.remove(tmp_zip)
+
     except Exception as e:
         print(f"Failed to install {uuid}: {e}")
 
