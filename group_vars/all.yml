@@ -26,6 +26,11 @@ fleet:
     url: https://kanpur.manatee-basking.ts.net
     icon: mdi-laptop
     description: Laptop
+  kerala:
+    name: Kerala
+    url: https://kerala.manatee-basking.ts.net
+    icon: mdi-cellphone
+    description: PostMarketOS mobile device
   dilli:
     name: Dilli
     url: https://dilli.manatee-basking.ts.net
@@ -37,6 +42,8 @@ machines:
     hostname: himachal
   karnataka:
     hostname: karnataka
+  kerala:
+    hostname: kerala
   dilli:
     hostname: dilli
   kanpur:

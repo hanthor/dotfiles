@@ -8,6 +8,7 @@
       ansible.builtin.set_fact:
         is_desktop: "{{ is_desktop | default(inventory_hostname in groups.get('desktop', [])) }}"
         is_laptop: "{{ is_laptop | default(false) }}"
+        is_postmarketos: "{{ is_postmarketos | default(false) }}"
         brew_bin: "{{ brew_prefix }}/bin"
       tags: always
 
@@ -47,21 +48,21 @@
     # Phase 3: Desktop apps
     - role: flatpak
       tags: [packages, desktop, flatpak]
-      when: is_desktop | bool
+      when: is_desktop | bool and not skip_flatpak | default(false)
     - role: gnome
       tags: [desktop, gnome]
-      when: is_desktop | bool
+      when: is_desktop | bool and not skip_gnome | default(false)
     - role: zen_browser
       tags: [desktop, browser, zen_browser]
-      when: is_desktop | bool
+      when: is_desktop | bool and not skip_zen_browser | default(false)
 
     # Phase 4: Services
     - role: monitoring
       tags: [services, monitoring]
-      when: inventory_hostname not in groups.get('vps', [])
+      when: inventory_hostname not in groups.get('vps', []) and not skip_monitoring | default(false)
     - role: syncthing
       tags: [services, syncthing]
-      when: inventory_hostname not in groups.get('vps', [])
+      when: inventory_hostname not in groups.get('vps', []) and not skip_syncthing | default(false)
     - role: systemd
       tags: [services, systemd]
     - role: netbox
@@ -69,21 +70,21 @@
       when: inventory_hostname in groups.get('server', [])
     - role: homepage
       tags: [services, homepage]
-      when: inventory_hostname not in groups.get('vps', [])
+      when: inventory_hostname not in groups.get('vps', []) and not skip_homepage | default(false)
     - role: bst_dashboard
       tags: [services, bst_dashboard]
     - role: proxy
       tags: [services, proxy, caddy]
-      when: inventory_hostname not in groups.get('vps', [])
+      when: inventory_hostname not in groups.get('vps', []) and not skip_proxy | default(false)
     - role: tailscale_cert
       tags: [services, tailscale_cert]
       when: inventory_hostname not in groups.get('vps', [])
     - role: cockpit
       tags: [services, cockpit]
-      when: is_desktop | bool or inventory_hostname in groups.get('server', [])
+      when: (is_desktop | bool or inventory_hostname in groups.get('server', [])) and not skip_cockpit | default(false)
     - role: lima
       tags: [services, lima]
-      when: is_desktop | bool or inventory_hostname == 'bihar'
+      when: (is_desktop | bool or inventory_hostname == 'bihar') and not skip_lima | default(false)
     - role: netbox_agent
       tags: [services, secrets, netbox, netbox_agent]
       when: inventory_hostname not in groups.get('desktop', [])
