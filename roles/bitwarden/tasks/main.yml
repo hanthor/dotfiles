@@ -1,11 +1,12 @@
 ---
 - name: Check if bw CLI exists
-  ansible.builtin.stat:
-    path: /home/linuxbrew/.linuxbrew/bin/bw
-  register: bw_binary
+  ansible.builtin.command: which bw
+  register: bw_check
+  failed_when: false
+  changed_when: false
 
 - name: Resolve Bitwarden session
-  when: bw_binary.stat.exists
+  when: bw_check.rc == 0
   block:
     # 1. BW_SESSION passed in environment (preferred — set by 'just apply')
     - name: Use BW_SESSION from environment
@@ -44,7 +45,6 @@
       when: bw_session is defined
       environment:
         BW_SESSION: "{{ bw_session }}"
-        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
     # 4. Cache session for reuse
     - name: Cache session to /tmp/bw_session

@@ -58,6 +58,8 @@
     - atuin
     - shellcheck
     - shfmt
+    - nodejs
+    - npm
     - busybox-extras  # provides telnet, nc, etc.
     - podman  # Container runtime - essential for quadlets
     - podman-compose  # For pod orchestration
@@ -67,6 +69,13 @@
   register: apk_install
   changed_when: "'Installing' in apk_install.stdout or 'Upgrading' in apk_install.stdout"
   failed_when: false
+
+- name: Install Bitwarden CLI via npm
+  become: true
+  ansible.builtin.command:
+    cmd: npm install -g @bitwarden/cli
+  when: apk_available
+  changed_when: false
 
 - name: Enable podman service
   become: true
@@ -89,7 +98,7 @@
 - name: Add user to podman group for rootless containers
   become: true
   ansible.builtin.user:
-    name: "{{ ansible_facts['env']['USER'] }}"
+    name: "{{ ansible_facts['env']['USER'] | default(ansible_facts['user_id']) }}"
     groups: podman
     append: true
   when: apk_available
