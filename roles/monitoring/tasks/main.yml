@@ -87,6 +87,7 @@
     dest: "{{ ansible_facts['env']['HOME'] }}/dev/homelab-monitoring/alloy.alloy"
     mode: "0644"
   notify: Restart alloy
+  when: ssh_key_stat.stat.exists and (monitoring_repo.rc is defined and monitoring_repo.rc == 0 or monitoring_repo.changed)
 
 - name: Remove old promtail quadlet
   ansible.builtin.file:
