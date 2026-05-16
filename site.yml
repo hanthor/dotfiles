@@ -8,7 +8,6 @@
       ansible.builtin.set_fact:
         is_desktop: "{{ is_desktop | default(inventory_hostname in groups.get('desktop', [])) }}"
         is_laptop: "{{ is_laptop | default(false) }}"
-        is_postmarketos: "{{ is_postmarketos | default(false) }}"
         brew_bin: "{{ brew_prefix }}/bin"
       tags: always
 

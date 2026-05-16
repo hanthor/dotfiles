@@ -1,12 +1,10 @@
 ---
-# Podman socket setup (skip on PostMarketOS/mobile)
 - name: Ensure podman group exists
   ansible.builtin.group:
     name: podman
     system: true
     state: present
   become: true
-  when: not (is_postmarketos | default(false))
 
 - name: Add user to podman group
   ansible.builtin.user:
@@ -14,7 +12,6 @@
     groups: podman
     append: true
   become: true
-  when: not (is_postmarketos | default(false))
 
 - name: Create podman socket drop-in directory
   ansible.builtin.file:
@@ -22,7 +19,6 @@
     state: directory
     mode: "0755"
   become: true
-  when: not (is_postmarketos | default(false))
 
 - name: Deploy podman socket drop-in for group access
   ansible.builtin.copy:
@@ -35,7 +31,6 @@
       DirectoryMode=0710
   become: true
   notify: Restart podman socket
-  when: not (is_postmarketos | default(false))
 
 - name: Enable and start rootful podman socket
   ansible.builtin.systemd:
@@ -45,7 +40,6 @@
     state: started
     daemon_reload: true
   become: true
-  when: not (is_postmarketos | default(false))
 
 - name: Create systemd user directory
   ansible.builtin.file:

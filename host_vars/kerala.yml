@@ -1,16 +1,5 @@
 ---
-# PostMarketOS laptop (typically ARM)
+# PostMarketOS laptop (ARM)
 is_arm: true
-is_postmarketos: true
-# PostMarketOS is mobile/embedded — skip heavy desktop/server roles
-skip_flatpak: true
-skip_gnome: true
-skip_zen_browser: true
-skip_homepage: true
-skip_cockpit: true
-skip_lima: true
-skip_monitoring: true
-skip_syncthing: false  # syncthing is useful for mobile sync
-skip_proxy: true
-# Homebrew may not work on Alpine/PostMarketOS — rely on apk instead
-use_system_package_manager: true
+# Treat as full desktop — PostMarketOS is a complete Linux desktop environment
+is_laptop: true
