@@ -50,6 +50,9 @@
     - role: flatpak
       tags: [packages, desktop, flatpak]
       when: is_desktop | bool and not skip_flatpak | default(false)
+    - role: bluefin_common
+      tags: [desktop, bluefin]
+      when: is_desktop | bool and not skip_bluefin | default(false)
     - role: gnome
       tags: [desktop, gnome]
       when: is_desktop | bool and not skip_gnome | default(false)

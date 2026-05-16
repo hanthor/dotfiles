@@ -1,0 +1,93 @@
+---
+- name: Detect if running GNOME
+  ansible.builtin.command: gsettings get org.gnome.desktop.interface color-scheme
+  register: gsettings_check
+  failed_when: false
+  changed_when: false
+  check_mode: false
+
+- name: Detect if system is Bluefin
+  ansible.builtin.shell: grep -iq "Bluefin" /etc/os-release
+  register: bluefin_check
+  failed_when: false
+  changed_when: false
+  check_mode: false
+
+- name: Set GNOME/Bluefin facts
+  ansible.builtin.set_fact:
+    is_gnome: "{{ gsettings_check.rc == 0 }}"
+    is_bluefin: "{{ bluefin_check.rc == 0 }}"
+
+- name: Sync Bluefin customizations and branding from OCI image
+  when: is_gnome and (not is_bluefin or force_bluefin | default(false)) and is_desktop | bool
+  block:
+    - name: Create temporary directory for Bluefin sync
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: bluefin_oci
+      register: bluefin_temp
+
+    - name: Pull and extract Bluefin common files and branding
+      ansible.builtin.shell: |
+        # Use --arch amd64 even on ARM to get the files (they are just text/data)
+        podman pull --arch amd64 ghcr.io/projectbluefin/common:latest
+        podman create --name temp-bluefin-sync ghcr.io/projectbluefin/common:latest
+        
+        # Structure for extraction
+        mkdir -p {{ bluefin_temp.path }}/dconf
+        mkdir -p {{ bluefin_temp.path }}/backgrounds
+        mkdir -p {{ bluefin_temp.path }}/icons
+        mkdir -p {{ bluefin_temp.path }}/ublue-os
+
+        # Extract gsettings/dconf
+        podman cp temp-bluefin-sync:system_files/bluefin/usr/share/glib-2.0/schemas/zz0-bluefin-modifications.gschema.override {{ bluefin_temp.path }}/ || true
+        podman cp temp-bluefin-sync:system_files/bluefin/etc/dconf/db/distro.d/. {{ bluefin_temp.path }}/dconf/ || true
+        
+        # Extract backgrounds
+        podman cp temp-bluefin-sync:system_files/bluefin/usr/share/backgrounds/bluefin/. {{ bluefin_temp.path }}/backgrounds/ || true
+        
+        # Extract icons (logos)
+        podman cp temp-bluefin-sync:system_files/bluefin/usr/share/icons/hicolor/. {{ bluefin_temp.path }}/icons/ || true
+        
+        # Extract ublue-os specific assets (logos, fastfetch, etc.)
+        podman cp temp-bluefin-sync:system_files/bluefin/usr/share/ublue-os/. {{ bluefin_temp.path }}/ublue-os/ || true
+
+        podman rm temp-bluefin-sync
+      changed_when: true
+
+    - name: Ensure local branding directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "~/.local/share/backgrounds/bluefin"
+        - "~/.local/share/icons/hicolor"
+        - "~/.local/share/ublue-os"
+
+    - name: Install Bluefin branding assets locally
+      ansible.builtin.shell: |
+        cp -r {{ bluefin_temp.path }}/backgrounds/* ~/.local/share/backgrounds/bluefin/
+        cp -r {{ bluefin_temp.path }}/icons/* ~/.local/share/icons/hicolor/
+        cp -r {{ bluefin_temp.path }}/ublue-os/* ~/.local/share/ublue-os/
+        
+        # Fix XML background paths to point to local home instead of /usr
+        find ~/.local/share/backgrounds/bluefin/ -name "*.xml" -type f -exec sed -i "s|/usr/share/backgrounds/bluefin/|$HOME/.local/share/backgrounds/bluefin/|g" {} +
+      changed_when: true
+
+    - name: Apply extracted Bluefin settings via Python script
+      ansible.builtin.script:
+        cmd: bluefin-sync.py "{{ bluefin_temp.path }}"
+      changed_when: true
+
+    - name: Clean up temporary directory
+      ansible.builtin.file:
+        path: "{{ bluefin_temp.path }}"
+        state: absent
+
+- name: Install Bluefin-recommended GNOME extensions
+  when: is_gnome and (not is_bluefin or force_bluefin | default(false)) and is_desktop | bool
+  ansible.builtin.script:
+    cmd: install-extensions.py
+  changed_when: false
+  ignore_errors: true
