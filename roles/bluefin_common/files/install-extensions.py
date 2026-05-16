@@ -14,8 +14,12 @@ USER_EXT_DIR = os.path.expanduser('~/.local/share/gnome-shell/extensions')
 os.makedirs(USER_EXT_DIR, exist_ok=True)
 
 def install_ext(uuid):
-    if os.path.exists(os.path.join(USER_EXT_DIR, uuid)):
-        print(f"Extension {uuid} already installed.")
+    # Check if Shell recognizes it
+    res = subprocess.run(['gnome-extensions', 'info', uuid], capture_output=True, text=True)
+    if res.returncode == 0:
+        print(f"Extension {uuid} already recognized by Shell.")
+        # Ensure it's enabled
+        subprocess.run(['gnome-extensions', 'enable', uuid])
         return
 
     print(f"Installing {uuid}...")
