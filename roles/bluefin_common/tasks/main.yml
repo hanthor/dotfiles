@@ -85,6 +85,43 @@
         path: "{{ bluefin_temp.path }}"
         state: absent
 
+- name: Install Bluefin-standard fonts (Inter, JetBrains Mono)
+  when: is_gnome and (not is_bluefin or force_bluefin | default(false)) and is_desktop | bool
+  block:
+    - name: Ensure font directories exist
+      ansible.builtin.file:
+        path: "~/.local/share/fonts/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - Inter
+        - JetBrainsMono
+
+    - name: Download Inter font
+      ansible.builtin.get_url:
+        url: https://github.com/rsms/inter/releases/latest/download/Inter-4.1.zip
+        dest: /tmp/Inter.zip
+        mode: "0644"
+
+    - name: Download JetBrains Mono font
+      ansible.builtin.get_url:
+        url: https://github.com/JetBrains/JetBrainsMono/releases/latest/download/JetBrainsMono.zip
+        dest: /tmp/JetBrainsMono.zip
+        mode: "0644"
+
+    - name: Unarchive fonts
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ item }}.zip"
+        dest: "~/.local/share/fonts/{{ item }}"
+        remote_src: true
+      loop:
+        - Inter
+        - JetBrainsMono
+
+    - name: Update font cache
+      ansible.builtin.command: fc-cache -f
+      changed_when: false
+
 - name: Install Bluefin-recommended GNOME extensions
   when: is_gnome and (not is_bluefin or force_bluefin | default(false)) and is_desktop | bool
   ansible.builtin.script:
