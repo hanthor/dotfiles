@@ -275,6 +275,12 @@
   notify: Restart matrix-notifier
 
 # Enable and start services
+# Check if services exist (quadlet-generated services may not be immediately available)
+- name: Check if node-exporter service exists
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/node-exporter.container"
+  register: node_exporter_exists
+
 - name: Enable and start node-exporter
   ansible.builtin.systemd:
     name: node-exporter.service
@@ -282,6 +288,7 @@
     enabled: true
     scope: user
     daemon_reload: true
+  when: node_exporter_exists.stat.exists
 
 - name: Enable podman socket (required by podman-exporter)
   ansible.builtin.systemd:
@@ -289,6 +296,12 @@
     state: started
     enabled: true
     scope: user
+  failed_when: false
+
+- name: Check if podman-exporter service exists
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/podman-exporter.container"
+  register: podman_exporter_exists
 
 - name: Enable and start podman-exporter
   ansible.builtin.systemd:
@@ -296,6 +309,13 @@
     state: started
     enabled: true
     scope: user
+  when: podman_exporter_exists.stat.exists
+  failed_when: false
+
+- name: Check if alloy service exists
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/alloy.container"
+  register: alloy_exists
 
 - name: Enable and start alloy
   ansible.builtin.systemd:
@@ -303,6 +323,13 @@
     state: started
     enabled: true
     scope: user
+  when: alloy_exists.stat.exists
+  failed_when: false
+
+- name: Check if prometheus service exists
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/prometheus.container"
+  register: prometheus_exists
 
 - name: Enable and start prometheus
   ansible.builtin.systemd:
@@ -310,7 +337,8 @@
     state: started
     enabled: true
     scope: user
-  when: is_desktop | bool or (monitoring_hub | default(false) | bool)
+  when: (is_desktop | bool or (monitoring_hub | default(false) | bool)) and prometheus_exists.stat.exists
+  failed_when: false
 
 - name: Enable and start hub services
   ansible.builtin.systemd:
@@ -323,6 +351,12 @@
     - loki.service
     - alertmanager.service
   when: monitoring_hub | default(false) | bool
+  failed_when: false
+
+- name: Check if pve-exporter service exists
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/pve-exporter.container"
+  register: pve_exporter_exists
 
 - name: Enable and start pve-exporter
   ansible.builtin.systemd:
@@ -333,12 +367,20 @@
   when:
     - monitoring_hub | default(false) | bool
     - pve_token_value is defined
+    - pve_exporter_exists.stat.exists
+  failed_when: false
+
+- name: Check if matrix-notifier service exists
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd/matrix-notifier.container"
+  register: matrix_notifier_exists
 
 - name: Disable matrix-notifier when credentials not configured
   ansible.builtin.command: systemctl --user disable --now matrix-notifier.service
   when:
     - monitoring_hub | default(false) | bool
     - matrix_access_token is not defined
+    - matrix_notifier_exists.stat.exists
   changed_when: false
   failed_when: false
 
@@ -351,3 +393,5 @@
   when:
     - monitoring_hub | default(false) | bool
     - matrix_access_token is defined
+    - matrix_notifier_exists.stat.exists
+  failed_when: false
