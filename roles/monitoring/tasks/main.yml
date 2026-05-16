@@ -275,6 +275,12 @@
   notify: Restart matrix-notifier
 
 # Enable and start services
+# Quadlet-based services need systemd daemon reload before they're recognized
+- name: Reload systemd user daemon for quadlets
+  ansible.builtin.systemd:
+    scope: user
+    daemon_reload: true
+
 # Check if services exist (quadlet-generated services may not be immediately available)
 - name: Check if node-exporter service exists
   ansible.builtin.stat:
