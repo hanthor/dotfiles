@@ -1,0 +1,101 @@
+---
+# Install packages via apk on Alpine/musl systems (when Homebrew is not available)
+# This role handles PostMarketOS, Alpine, and other musl-based distributions
+
+- name: Detect if musl libc (Alpine-based system)
+  ansible.builtin.stat:
+    path: /lib/ld-musl-x86_64.so.1
+  register: musl_x86
+
+- name: Detect if musl libc aarch64
+  ansible.builtin.stat:
+    path: /lib/ld-musl-aarch64.so.1
+  register: musl_aarch64
+
+- name: Set apk_available fact
+  ansible.builtin.set_fact:
+    apk_available: "{{ musl_x86.stat.exists or musl_aarch64.stat.exists }}"
+
+- name: Skip if apk not available
+  ansible.builtin.debug:
+    msg: "Skipping apk packages — musl libc not detected. System uses glibc (using Homebrew instead)."
+  when: not apk_available
+
+- name: Update apk package cache
+  become: true
+  ansible.builtin.command: apk update
+  when: apk_available
+  changed_when: true
+
+# Core packages needed for dotfiles configuration on Alpine
+- name: Install core APK packages
+  become: true
+  ansible.builtin.command:
+    cmd: apk add --no-cache {{ item }}
+  loop:
+    - bash
+    - fish
+    - zsh
+    - git
+    - git-lfs
+    - delta  # git diff tool
+    - vim
+    - neovim
+    - tmux
+    - openssh-client
+    - curl
+    - wget
+    - jq
+    - yq
+    - ripgrep
+    - fd
+    - fzf
+    - starship
+    - bat
+    - exa
+    - direnv
+    - zoxide
+    - atuin
+    - shellcheck
+    - shfmt
+    - busybox-extras  # provides telnet, nc, etc.
+    - podman  # Container runtime - essential for quadlets
+    - podman-compose  # For pod orchestration
+    - podman-dnsmasq  # DNS support for containers
+    - crun  # OCI runtime (lightweight alternative to runc)
+  when: apk_available
+  register: apk_install
+  changed_when: "'Installing' in apk_install.stdout or 'Upgrading' in apk_install.stdout"
+  failed_when: false
+
+- name: Enable podman service
+  become: true
+  ansible.builtin.systemd:
+    name: podman
+    state: started
+    enabled: true
+  when: apk_available
+  failed_when: false
+
+- name: Enable podman socket
+  become: true
+  ansible.builtin.systemd:
+    name: podman.socket
+    state: started
+    enabled: true
+  when: apk_available
+  failed_when: false
+
+- name: Add user to podman group for rootless containers
+  become: true
+  ansible.builtin.user:
+    name: "{{ ansible_facts['env']['USER'] }}"
+    groups: podman
+    append: true
+  when: apk_available
+  register: user_podman_group
+
+- name: Restart user session to apply podman group (optional - login again to use rootless podman)
+  ansible.builtin.debug:
+    msg: "User added to podman group. Log out and back in to use rootless podman without sudo."
+  when: user_podman_group.changed

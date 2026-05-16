@@ -25,6 +25,8 @@
     # Phase 1: System + packages (no secrets needed)
     - role: sshd
       tags: [system, sshd]
+    - role: apk_packages
+      tags: [system, packages, apk]
     - role: homebrew
       tags: [packages, homebrew]
     - role: shell
