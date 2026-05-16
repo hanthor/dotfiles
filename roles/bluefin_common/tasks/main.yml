@@ -13,13 +13,22 @@
   changed_when: false
   check_mode: false
 
+- name: Get user UID
+  ansible.builtin.command: id -u
+  register: user_uid_cmd
+  changed_when: false
+  check_mode: false
+
 - name: Set GNOME/Bluefin facts
   ansible.builtin.set_fact:
     is_gnome: "{{ gsettings_check.rc == 0 }}"
     is_bluefin: "{{ bluefin_check.rc == 0 }}"
+    dbus_session_bus_address: "unix:path=/run/user/{{ user_uid_cmd.stdout | trim }}/bus"
 
 - name: Sync Bluefin customizations and branding from OCI image
   when: is_gnome and (not is_bluefin or force_bluefin | default(false)) and is_desktop | bool
+  environment:
+    DBUS_SESSION_BUS_ADDRESS: "{{ dbus_session_bus_address }}"
   block:
     - name: Create temporary directory for Bluefin sync
       ansible.builtin.tempfile:
@@ -124,6 +133,8 @@
 
 - name: Install Bluefin-recommended GNOME extensions
   when: is_gnome and (not is_bluefin or force_bluefin | default(false)) and is_desktop | bool
+  environment:
+    DBUS_SESSION_BUS_ADDRESS: "{{ dbus_session_bus_address }}"
   ansible.builtin.script:
     cmd: install-extensions.py
   changed_when: false
