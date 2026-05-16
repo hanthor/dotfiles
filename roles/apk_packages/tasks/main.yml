@@ -35,12 +35,43 @@
 # Core packages needed for dotfiles configuration on Alpine
 - name: Install core APK packages
   become: true
-  ansible.builtin.command:
-    cmd: apk add --no-cache bash fish zsh git git-lfs delta vim neovim tmux openssh-client curl wget jq yq ripgrep fd fzf starship bat exa direnv zoxide atuin shellcheck shfmt nodejs npm busybox-extras podman podman-compose podman-dnsmasq crun
+  community.general.apk:
+    name:
+      - bash
+      - fish
+      - zsh
+      - git
+      - git-lfs
+      - delta
+      - vim
+      - neovim
+      - tmux
+      - openssh-client
+      - curl
+      - wget
+      - jq
+      - yq
+      - ripgrep
+      - fd
+      - fzf
+      - starship
+      - bat
+      - exa
+      - direnv
+      - zoxide
+      - atuin
+      - shellcheck
+      - shfmt
+      - nodejs
+      - npm
+      - busybox-extras
+      - podman
+      - podman-compose
+      - podman-dnsmasq
+      - crun
+    state: present
+    update_cache: false # Handled by previous task
   when: apk_available
-  register: apk_install
-  changed_when: "'Installing' in apk_install.stdout or 'Upgrading' in apk_install.stdout"
-  failed_when: false
 
 - name: Install Bitwarden CLI via npm
   become: true
