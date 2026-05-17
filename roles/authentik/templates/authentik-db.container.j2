@@ -5,7 +5,7 @@ Environment=POSTGRES_USER=authentik
 Environment=POSTGRES_PASSWORD={{ authentik_pg_password }}
 Environment=POSTGRES_DB=authentik
 Volume=authentik-db-data:/var/lib/postgresql/data:Z
-Network=authentik
+Network=authentik.network
 
 [Service]
 Restart=always

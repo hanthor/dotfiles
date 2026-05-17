@@ -11,7 +11,7 @@ Environment=AUTHENTIK_SECRET_KEY={{ authentik_secret_key }}
 Volume=authentik-media:/media:Z
 Volume=authentik-certs:/certs:Z
 Volume=authentik-custom-templates:/templates:Z
-Network=authentik
+Network=authentik.network
 
 [Service]
 Restart=always

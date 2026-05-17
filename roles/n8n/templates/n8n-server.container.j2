@@ -11,7 +11,7 @@ Environment=WEBHOOK_URL={{ n8n_external_url }}
 Environment=N8N_COMMUNITY_PACKAGES_ENABLED=true
 Volume=n8n-data:/home/node/.n8n:Z
 PublishPort=5678:5678
-Network=n8n
+Network=n8n.network
 
 [Service]
 Restart=always
