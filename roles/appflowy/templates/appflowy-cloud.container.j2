@@ -8,6 +8,10 @@ Environment=REDIS_URL=redis://:{{ appflowy_redis_password }}@appflowy-redis:6379
 Environment=GOTRUE_JWT_SECRET={{ appflowy_gotrue_jwt_secret }}
 Environment=GOTRUE_URL=http://appflowy-gotrue:8081
 Environment=API_EXTERNAL_URL={{ appflowy_external_url }}
+Environment=APPFLOWY_WEB_URL={{ appflowy_external_url }}
+Environment=APPFLOWY_S3_USE_MINIO=true
+Environment=APPFLOWY_GOTRUE_BASE_URL=http://appflowy-gotrue:8081
+Environment=APPFLOWY_DATABASE_URL=postgres://appflowy:{{ appflowy_db_password }}@appflowy-db:5432/appflowy?sslmode=disable
 Environment=APPFLOWY_S3_ACCESS_KEY={{ appflowy_minio_access_key }}
 Environment=APPFLOWY_S3_SECRET_KEY={{ appflowy_minio_secret_key }}
 Environment=APPFLOWY_S3_REGION=us-east-1
