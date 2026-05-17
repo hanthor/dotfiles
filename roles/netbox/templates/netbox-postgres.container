@@ -3,7 +3,7 @@ Description=NetBox PostgreSQL
 After=network-online.target
 
 [Container]
-Image=docker.io/library/postgres:16-alpine
+Image=docker.io/library/postgres:18-alpine
 ContainerName=netbox-postgres
 Network=netbox.network
 Volume=netbox-postgres.volume:/var/lib/postgresql/data
