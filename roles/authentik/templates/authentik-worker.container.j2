@@ -1,6 +1,6 @@
 [Container]
 Image=ghcr.io/goauthentik/server:latest
-Command=worker
+Exec=worker
 Environment=AUTHENTIK_REDIS__HOST=authentik-redis
 Environment=AUTHENTIK_REDIS__PASSWORD={{ authentik_redis_password }}
 Environment=AUTHENTIK_POSTGRESQL__HOST=authentik-db

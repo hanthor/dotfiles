@@ -15,8 +15,8 @@
     - appflowy-db-data.volume
     - appflowy-db.container
     - appflowy-redis.container
-    - appflowy-minio-data.volume
-    - appflowy-minio.container
+    - appflowy-s3-data.volume
+    - appflowy-s3.container
     - appflowy-cloud.container
   register: appflowy_quadlets
 
@@ -35,5 +35,5 @@
   loop:
     - appflowy-db.service
     - appflowy-redis.service
-    - appflowy-minio.service
+    - appflowy-s3.service
     - appflowy-cloud.service
