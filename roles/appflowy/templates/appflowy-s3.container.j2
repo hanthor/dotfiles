@@ -1,0 +1,11 @@
+[Container]
+Image=docker.io/chrislusf/seaweedfs:latest
+Command=server -s3 -filer -dir=/data -s3.port=8333
+Volume=appflowy-s3-data:/data:Z
+Network=appflowy.network
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

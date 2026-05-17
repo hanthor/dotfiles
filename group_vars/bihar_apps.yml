@@ -1,0 +1,11 @@
+---
+# Identity & Auth configuration (Authentik)
+authentik_pg_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+authentik_redis_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+authentik_secret_key: "{{ lookup('password', '/dev/null length=64 chars=ascii_letters,digits') }}"
+authentik_external_url: "https://bihar.manatee-basking.ts.net/auth"
+
+# n8n configuration
+n8n_db_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+n8n_encryption_key: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+n8n_external_url: "https://bihar.manatee-basking.ts.net/n8n"

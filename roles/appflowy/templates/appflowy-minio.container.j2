@@ -1,0 +1,12 @@
+[Container]
+Image=docker.io/library/minio:latest
+Command=server /data --console-address ":9001"
+Environment=MINIO_ROOT_USER={{ appflowy_minio_access_key }}
+Environment=MINIO_ROOT_PASSWORD={{ appflowy_minio_secret_key }}
+Volume=appflowy-minio-data:/data:Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

@@ -7,6 +7,25 @@
 {% endfor %}
 
 {% if inventory_hostname == 'bihar' %}
+    # /auth — Authentik SSO
+    handle /auth* {
+        reverse_proxy 10.88.0.1:9443 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    # /n8n — n8n automation
+    handle /n8n* {
+        reverse_proxy 10.88.0.1:5678
+    }
+
+    # /appflowy — AppFlowy Cloud
+    handle /appflowy* {
+        reverse_proxy 10.88.0.1:8000
+    }
+
     # /grafana — Grafana metrics dashboard
     handle /grafana* {
         reverse_proxy 10.88.0.1:3001

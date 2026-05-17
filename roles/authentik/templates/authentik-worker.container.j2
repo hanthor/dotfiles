@@ -1,0 +1,20 @@
+[Container]
+Image=ghcr.io/goauthentik/server:latest
+Command=worker
+Environment=AUTHENTIK_REDIS__HOST=authentik-redis
+Environment=AUTHENTIK_REDIS__PASSWORD={{ authentik_redis_password }}
+Environment=AUTHENTIK_POSTGRESQL__HOST=authentik-db
+Environment=AUTHENTIK_POSTGRESQL__USER=authentik
+Environment=AUTHENTIK_POSTGRESQL__NAME=authentik
+Environment=AUTHENTIK_POSTGRESQL__PASSWORD={{ authentik_pg_password }}
+Environment=AUTHENTIK_SECRET_KEY={{ authentik_secret_key }}
+Volume=authentik-media:/media:Z
+Volume=authentik-certs:/certs:Z
+Volume=authentik-custom-templates:/templates:Z
+Network=authentik.network
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
