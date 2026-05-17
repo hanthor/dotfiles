@@ -79,9 +79,9 @@
   when: netbox_db_password | length > 0
 
 - name: Deploy Podman quadlet files
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: /etc/containers/systemd/
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/containers/systemd/{{ item }}"
     owner: root
     group: root
     mode: "0644"
@@ -94,6 +94,7 @@
     - netbox-redis.container
     - netbox.container
     - netbox-worker.container
+  register: netbox_quadlets
   notify: Reload systemd daemon
 
 - name: Check Tailscale serve config
