@@ -1,14 +1,12 @@
 [Container]
-Image=docker.io/appflowy/appflowy-cloud:latest
+Image=docker.io/appflowyinc/appflowy_cloud:latest
 Environment=POSTGRES_USER=appflowy
 Environment=POSTGRES_PASSWORD={{ appflowy_db_password }}
 Environment=POSTGRES_DB=appflowy
 Environment=POSTGRES_HOST=appflowy-db
 Environment=REDIS_URL=redis://:{{ appflowy_redis_password }}@appflowy-redis:6379
 Environment=GOTRUE_JWT_SECRET={{ appflowy_gotrue_jwt_secret }}
-Environment=GOTRUE_EXTERNAL_GOOGLE_ENABLED={{ 'true' if appflowy_google_client_id else 'false' }}
-Environment=GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID={{ appflowy_google_client_id }}
-Environment=GOTRUE_EXTERNAL_GOOGLE_SECRET={{ appflowy_google_client_secret }}
+Environment=GOTRUE_URL=http://appflowy-gotrue:8081
 Environment=API_EXTERNAL_URL={{ appflowy_external_url }}
 Environment=APPFLOWY_S3_ACCESS_KEY={{ appflowy_minio_access_key }}
 Environment=APPFLOWY_S3_SECRET_KEY={{ appflowy_minio_secret_key }}

@@ -17,6 +17,7 @@
     - appflowy-redis.container
     - appflowy-s3-data.volume
     - appflowy-s3.container
+    - appflowy-gotrue.container
     - appflowy-cloud.container
   register: appflowy_quadlets
 
@@ -36,4 +37,5 @@
     - appflowy-db.service
     - appflowy-redis.service
     - appflowy-s3.service
+    - appflowy-gotrue.service
     - appflowy-cloud.service
