@@ -5,14 +5,13 @@ Requires=netbox-postgres.service netbox-redis.service
 
 [Container]
 ContainerName=netbox
+User=root
 Image=ghcr.io/netbox-community/netbox:v4.2
 Network=netbox.network
 Volume=netbox-media.volume:/opt/netbox/netbox/media:Z
-# Add tmpfs for /run and /tmp to fix Nginx socket permission errors
-Volume=tmpfs:/run:rw,size=64m
-Volume=tmpfs:/tmp:rw,size=64m
 EnvironmentFile=/etc/netbox/netbox.env
 PublishPort=127.0.0.1:8080:8080
+AddCapability=CAP_NET_ADMIN CAP_NET_RAW
 AutoUpdate=registry
 Label=homepage.name=NetBox
 Label=homepage.group=Infrastructure
