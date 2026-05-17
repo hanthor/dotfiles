@@ -9,6 +9,9 @@ User=root
 Image=ghcr.io/netbox-community/netbox:v4.1
 Network=netbox.network
 Volume=netbox-media.volume:/opt/netbox/netbox/media:Z
+# Sockets and temp files
+Volume=tmpfs:/run:rw,size=64m
+Volume=tmpfs:/tmp:rw,size=64m
 EnvironmentFile=/etc/netbox/netbox.env
 PublishPort=127.0.0.1:8080:8080
 AddCapability=CAP_NET_ADMIN CAP_NET_RAW
