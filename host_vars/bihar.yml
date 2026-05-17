@@ -52,6 +52,7 @@ web_services:
 authentik_pg_password: "167pundFNxh+ipnAKc+q8L3mcnRzBUtj"
 authentik_redis_password: "xHoLkBr8bV/79Pp4Fy9NLxGRkmGshtcc"
 authentik_secret_key: "3m34Awgr3yORGCTc59kqUWiiKJ2PokeZpyRujNXEYAP/RTxLWT70caTVh721NxMF"
+authentik_api_token: "james_api_token_key"
 authentik_external_url: "https://bihar.manatee-basking.ts.net/auth"
 
 # n8n configuration
