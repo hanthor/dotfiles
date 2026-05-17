@@ -6,7 +6,7 @@ Requires=netbox-postgres.service netbox-redis.service
 [Container]
 ContainerName=netbox
 User=root
-Image=ghcr.io/netbox-community/netbox:v4.2
+Image=ghcr.io/netbox-community/netbox:v4.1
 Network=netbox.network
 Volume=netbox-media.volume:/opt/netbox/netbox/media:Z
 EnvironmentFile=/etc/netbox/netbox.env
