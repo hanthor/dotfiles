@@ -1,15 +1,10 @@
 ---
 # AppFlowy Cloud configuration
-# AppFlowy requires PostgreSQL, Redis, and MinIO.
-# We'll use Quadlets to manage these on Bihar.
+# (Passwords are now in host_vars/bihar.yml for persistence)
 
-appflowy_db_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
-appflowy_redis_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
-appflowy_gotrue_jwt_secret: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
 appflowy_minio_access_key: "appflowy"
-appflowy_minio_secret_key: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+appflowy_external_url: "https://bihar.manatee-basking.ts.net/appflowy"
 
 # Google OAuth (user should provide these via BW or extra_vars)
 appflowy_google_client_id: "{{ lookup('env', 'APPFLOWY_GOOGLE_CLIENT_ID') | default('') }}"
 appflowy_google_client_secret: "{{ lookup('env', 'APPFLOWY_GOOGLE_CLIENT_SECRET') | default('') }}"
-appflowy_external_url: "https://bihar.manatee-basking.ts.net/appflowy"
