@@ -1,4 +1,5 @@
 [Container]
+ContainerName=appflowy-gotrue
 Image=docker.io/appflowyinc/gotrue:latest
 Environment=GOTRUE_EXTERNAL_GOOGLE_ENABLED={{ 'true' if appflowy_google_client_id else 'false' }}
 Environment=GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID={{ appflowy_google_client_id }}
