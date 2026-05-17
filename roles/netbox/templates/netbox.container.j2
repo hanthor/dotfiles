@@ -14,7 +14,7 @@ Volume=tmpfs:/run:rw,size=64m
 Volume=tmpfs:/tmp:rw,size=64m
 EnvironmentFile=/etc/netbox/netbox.env
 PublishPort=127.0.0.1:8080:8080
-Privileged=true
+PodmanArgs=--privileged
 AutoUpdate=registry
 Label=homepage.name=NetBox
 Label=homepage.group=Infrastructure
