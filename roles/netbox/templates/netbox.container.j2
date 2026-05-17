@@ -14,8 +14,7 @@ Volume=tmpfs:/run:rw,size=64m
 Volume=tmpfs:/tmp:rw,size=64m
 EnvironmentFile=/etc/netbox/netbox.env
 PublishPort=127.0.0.1:8080:8080
-AddCapability=CAP_NET_ADMIN CAP_NET_RAW
-SecurityLabelDisable=true
+Privileged=true
 AutoUpdate=registry
 Label=homepage.name=NetBox
 Label=homepage.group=Infrastructure
