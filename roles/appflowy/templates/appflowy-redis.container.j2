@@ -1,6 +1,7 @@
 [Container]
 Image=docker.io/library/redis:7-alpine
 Exec=redis-server --requirepass {{ appflowy_redis_password }}
+Network=appflowy.network
 
 [Service]
 Restart=always

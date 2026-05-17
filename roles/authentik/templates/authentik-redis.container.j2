@@ -1,6 +1,7 @@
 [Container]
 Image=docker.io/library/redis:7-alpine
 Exec=redis-server --requirepass {{ authentik_redis_password }}
+Network=authentik.network
 
 [Service]
 Restart=always
