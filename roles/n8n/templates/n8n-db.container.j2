@@ -5,7 +5,7 @@ Environment=POSTGRES_USER=n8n
 Environment=POSTGRES_PASSWORD={{ n8n_db_password }}
 Environment=POSTGRES_DB=n8n
 Volume=n8n-db-data:/var/lib/postgresql/data:Z
-Network=n8n.network
+Network=n8n
 
 [Service]
 Restart=always

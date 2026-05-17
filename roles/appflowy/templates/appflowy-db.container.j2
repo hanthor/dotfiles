@@ -5,7 +5,7 @@ Environment=POSTGRES_USER=appflowy
 Environment=POSTGRES_PASSWORD={{ appflowy_db_password }}
 Environment=POSTGRES_DB=appflowy
 Volume=appflowy-db-data:/var/lib/postgresql/data:Z
-Network=appflowy.network
+Network=appflowy
 
 [Service]
 Restart=always
