@@ -19,6 +19,9 @@ all:
     lkofoss:
       ansible_host: 77.42.94.83
       ansible_connection: ssh
+    himachal:
+      ansible_host: 100.73.3.51
+      ansible_connection: ssh
   children:
     desktop:
       hosts:

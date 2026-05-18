@@ -12,7 +12,7 @@ fi
 
 create_item() {
   local name="$1" value="$2"
-  local uris='[{"uri":"https://bihar.manatee-basking.ts.net:8444"},{"uri":"https://bihar.manatee-basking.ts.net/auth"}]'
+  local uris='[{"uri":"https://bihar.manatee-basking.ts.net/netbox"},{"uri":"https://bihar.manatee-basking.ts.net/auth"}]'
   local existing
   
   if existing=$(bw get item "$name" --session "$BW_SESSION" 2>/dev/null); then

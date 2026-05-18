@@ -17,11 +17,11 @@ global_services:
     group: Core
     siteMonitor: https://bihar.manatee-basking.ts.net/appflowy
   - name: NetBox
-    href: https://bihar.manatee-basking.ts.net:8444
+    href: https://bihar.manatee-basking.ts.net/netbox
     icon: netbox.png
     description: Network source of truth
     group: Core
-    siteMonitor: https://bihar.manatee-basking.ts.net:8444
+    siteMonitor: https://bihar.manatee-basking.ts.net/netbox
   - name: Proxmox
     href: https://bihar.manatee-basking.ts.net/proxmox
     icon: proxmox.png

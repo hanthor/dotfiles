@@ -26,6 +26,12 @@
         reverse_proxy 10.88.0.1:8000
     }
 
+    # /netbox — NetBox source of truth
+    redir /netbox /netbox/ 301
+    handle /netbox* {
+        reverse_proxy 10.88.0.1:8080
+    }
+
     # /grafana — Grafana metrics dashboard
     handle /grafana* {
         reverse_proxy 10.88.0.1:3001

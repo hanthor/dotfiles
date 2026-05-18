@@ -11,7 +11,7 @@
         "server.py"
       ],
       "env": {
-        "NETBOX_URL": "https://bihar.manatee-basking.ts.net:8444",
+        "NETBOX_URL": "https://bihar.manatee-basking.ts.net/netbox",
         "NETBOX_TOKEN": "$NETBOX_API_TOKEN"
       }
     }
