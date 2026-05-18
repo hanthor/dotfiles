@@ -1,0 +1,33 @@
+from authentik.core.models import Application
+from authentik.providers.oidc.models import OAuth2Provider
+from authentik.flows.models import Flow
+
+# Get the default authorization flow
+try:
+    auth_flow = Flow.objects.get(slug="default-provider-authorization-implicit-consent")
+except Flow.DoesNotExist:
+    auth_flow = Flow.objects.all().first()
+
+provider, created = OAuth2Provider.objects.get_or_create(
+    name="NetBox",
+    defaults={
+        "client_id": "{{ netbox_oidc_client_id }}",
+        "client_secret": "{{ netbox_oidc_client_secret }}",
+        "authorization_flow": auth_flow,
+        "redirect_uris": "https://bihar.manatee-basking.ts.net:8444/oauth/complete/oidc/",
+    }
+)
+
+if not created:
+    provider.client_id = "{{ netbox_oidc_client_id }}"
+    provider.client_secret = "{{ netbox_oidc_client_secret }}"
+    provider.redirect_uris = "https://bihar.manatee-basking.ts.net:8444/oauth/complete/oidc/"
+    provider.save()
+
+Application.objects.get_or_create(
+    name="NetBox",
+    slug="netbox",
+    defaults={
+        "provider": provider,
+    }
+)

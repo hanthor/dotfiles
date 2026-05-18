@@ -8,7 +8,7 @@ device:
   server_role: "{{ netbox_device_role | default('Server') }}"
 
 network:
-  ignore_interfaces: "^(lo|veth|docker|br-|podman|tap|virbr).*"
+  ignore_interfaces: "^(lo|veth|docker|br-|podman|tap|virbr|enp0s31f6).*"
   ignore_ips: ""
   lldp: false
 

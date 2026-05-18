@@ -14,6 +14,8 @@
     netbox_secret_key: ""
     netbox_superuser_password: ""
     netbox_api_token: ""
+    netbox_oidc_client_id: ""
+    netbox_oidc_client_secret: ""
   no_log: true
 
 - name: Fetch NetBox secrets from Bitwarden
@@ -43,12 +45,24 @@
       register: _netbox_api_token
       changed_when: false
 
+    - name: Fetch OIDC Client ID
+      ansible.builtin.command: bw get password netbox-oidc-client-id
+      register: _netbox_oidc_client_id
+      changed_when: false
+
+    - name: Fetch OIDC Client Secret
+      ansible.builtin.command: bw get password netbox-oidc-client-secret
+      register: _netbox_oidc_client_secret
+      changed_when: false
+
 - name: Set NetBox secret facts
   ansible.builtin.set_fact:
     netbox_db_password: "{{ _netbox_db_password.stdout }}"
     netbox_secret_key: "{{ _netbox_secret_key.stdout }}"
     netbox_superuser_password: "{{ _netbox_superuser_password.stdout }}"
     netbox_api_token: "{{ _netbox_api_token.stdout }}"
+    netbox_oidc_client_id: "{{ _netbox_oidc_client_id.stdout }}"
+    netbox_oidc_client_secret: "{{ _netbox_oidc_client_secret.stdout }}"
   no_log: true
   when:
     - bw_session | default('') | length > 0

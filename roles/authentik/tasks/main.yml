@@ -39,3 +39,52 @@
     - authentik-redis.service
     - authentik-server.service
     - authentik-worker.service
+
+- name: Initialize NetBox secret defaults
+  ansible.builtin.set_fact:
+    netbox_oidc_client_id: ""
+    netbox_oidc_client_secret: ""
+  no_log: true
+
+- name: Fetch NetBox OIDC secrets from Bitwarden
+  when: bw_session | default('') | length > 0
+  no_log: true
+  environment:
+    BW_SESSION: "{{ bw_session }}"
+    PATH: "{{ ansible_env_path }}"
+  block:
+    - name: Fetch OIDC Client ID
+      ansible.builtin.command: bw get password netbox-oidc-client-id
+      register: _netbox_oidc_client_id
+      changed_when: false
+      ignore_errors: true
+
+    - name: Fetch OIDC Client Secret
+      ansible.builtin.command: bw get password netbox-oidc-client-secret
+      register: _netbox_oidc_client_secret
+      changed_when: false
+      ignore_errors: true
+
+- name: Set NetBox OIDC secret facts
+  ansible.builtin.set_fact:
+    netbox_oidc_client_id: "{{ _netbox_oidc_client_id.stdout | default('') }}"
+    netbox_oidc_client_secret: "{{ _netbox_oidc_client_secret.stdout | default('') }}"
+  no_log: true
+  when:
+    - bw_session | default('') | length > 0
+    - _netbox_oidc_client_id.stdout is defined
+
+- name: Deploy NetBox provision script
+  ansible.builtin.template:
+    src: provision-netbox.py.j2
+    dest: /tmp/provision-netbox.py
+    mode: "0600"
+  when: netbox_oidc_client_id | length > 0
+
+- name: Provision NetBox in Authentik
+  ansible.builtin.shell: |
+    podman cp /tmp/provision-netbox.py authentik-server:/tmp/provision-netbox.py
+    podman exec authentik-server ak shell /tmp/provision-netbox.py
+  become: true
+  when: netbox_oidc_client_id | length > 0
+  changed_when: true

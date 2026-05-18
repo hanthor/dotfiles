@@ -28,12 +28,16 @@ DB_PASS=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")
 SECRET_KEY=$(python3 -c "import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits+'!@#\$%^&*') for _ in range(50)))")
 SU_PASS=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")
 API_TOKEN=$(python3 -c "import secrets; print(secrets.token_hex(20))")
+OIDC_CLIENT_ID=$(python3 -c "import secrets; print(secrets.token_hex(16))")
+OIDC_CLIENT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 
 echo "Creating NetBox secrets in Bitwarden..."
 create_item "netbox-db-password"        "$DB_PASS"
 create_item "netbox-secret-key"         "$SECRET_KEY"
 create_item "netbox-superuser-password" "$SU_PASS"
 create_item "netbox-api-token"          "$API_TOKEN"
+create_item "netbox-oidc-client-id"     "$OIDC_CLIENT_ID"
+create_item "netbox-oidc-client-secret" "$OIDC_CLIENT_SECRET"
 
 echo ""
 echo "Done. NetBox superuser login: admin / $SU_PASS"
