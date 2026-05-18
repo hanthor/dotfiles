@@ -1,9 +1,17 @@
 ---
+- name: Check if dmidecode is installed
+  ansible.builtin.command: which dmidecode
+  register: dmidecode_check
+  failed_when: false
+  changed_when: false
+
 - name: Install system dependencies for hardware discovery
   ansible.builtin.package:
     name: dmidecode
     state: present
   become: true
+  when: dmidecode_check.rc != 0
+  ignore_errors: true
 
 - name: Install netbox-agent in virtualenv
   ansible.builtin.pip:
