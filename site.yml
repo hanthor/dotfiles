@@ -100,4 +100,4 @@
       when: (is_desktop | bool or inventory_hostname == 'bihar') and not skip_lima | default(false)
     - role: netbox_agent
       tags: [services, secrets, netbox, netbox_agent]
-      when: inventory_hostname not in groups.get('desktop', [])
+      when: inventory_hostname not in groups.get('desktop', []) or inventory_hostname == 'karnataka'

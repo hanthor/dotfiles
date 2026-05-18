@@ -6,6 +6,8 @@
         "--directory",
         "tools/netbox-mcp-rw",
         "run",
+        "--python",
+        "python3.13",
         "server.py"
       ],
       "env": {

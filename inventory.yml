@@ -2,8 +2,8 @@
 all:
   hosts:
     kerala:
-      ansible_host: localhost
-      ansible_connection: local
+      ansible_host: 100.104.213.39
+      ansible_connection: ssh
     vm:
       ansible_host: localhost
       ansible_connection: local
@@ -11,8 +11,8 @@ all:
       ansible_host: localhost
       ansible_connection: local
     bihar:
-      ansible_host: localhost
-      ansible_connection: local
+      ansible_host: 100.85.9.86
+      ansible_connection: ssh
     kanpur:
       ansible_host: localhost
       ansible_connection: local
