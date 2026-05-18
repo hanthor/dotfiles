@@ -5,20 +5,44 @@
   failed_when: false
   changed_when: false
 
-- name: Install system dependencies for hardware discovery
+- name: Detect if system is immutable (bootc/atomic)
+  ansible.builtin.shell: |
+    grep -qE 'ostree|bootc' /proc/cmdline || [ -f /run/ostree-booted ]
+  register: is_immutable
+  failed_when: false
+  changed_when: false
+  check_mode: false
+
+- name: Set netbox_agent_mode
+  ansible.builtin.set_fact:
+    netbox_agent_mode: "{{ 'podman' if is_immutable.rc == 0 else 'pip' }}"
+
+- name: Install system dependencies for hardware discovery (pip mode)
   ansible.builtin.package:
-    name: dmidecode
+    name:
+      - dmidecode
+      - lshw
     state: present
   become: true
-  when: dmidecode_check.rc != 0
+  when: 
+    - dmidecode_check.rc != 0
+    - netbox_agent_mode == 'pip'
   ignore_errors: true
 
-- name: Install netbox-agent in virtualenv
+- name: Install netbox-agent in virtualenv (pip mode)
   ansible.builtin.pip:
     name: netbox-agent
     state: present
     virtualenv: /opt/netbox-agent
     virtualenv_command: python3 -m venv
+  become: true
+  when: netbox_agent_mode == 'pip'
+
+- name: Pull netbox-agent container image (podman mode)
+  ansible.builtin.command:
+    cmd: podman pull docker.io/python:3.12-slim
+  when: netbox_agent_mode == 'podman'
+  changed_when: false
   become: true
 
 - name: Create NetBox config directory
@@ -70,17 +94,24 @@
   no_log: true
   notify: Restart netbox-agent timer
 
-- name: Deploy netbox-agent systemd units
+- name: Deploy netbox-agent service unit
+  ansible.builtin.template:
+    src: netbox-agent.service.j2
+    dest: /etc/systemd/system/netbox-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd daemon
+
+- name: Deploy netbox-agent timer unit
   ansible.builtin.copy:
-    src: "{{ item }}"
+    src: netbox-agent.timer
     dest: /etc/systemd/system/
     owner: root
     group: root
     mode: "0644"
   become: true
-  loop:
-    - netbox-agent.service
-    - netbox-agent.timer
   notify: Reload systemd daemon
 
 - name: Flush handlers

@@ -1,0 +1,16 @@
+[Unit]
+Description=NetBox Agent - sync hardware inventory to NetBox
+After=network-online.target
+
+[Service]
+Type=oneshot
+{% if netbox_agent_mode == 'podman' %}
+ExecStart=/usr/bin/podman run --rm --privileged --net=host --pid=host \
+          -v /etc/netbox:/etc/netbox:ro \
+          -v /usr/sbin/dmidecode:/usr/sbin/dmidecode:ro \
+          -v /dev/mem:/dev/mem:ro \
+          docker.io/python:3.12-slim \
+          sh -c "apt-get update && apt-get install -y lshw && pip install --no-cache-dir netbox-agent && netbox_agent -c /etc/netbox/netbox_agent.yml -r"
+{% else %}
+ExecStart=/opt/netbox-agent/bin/netbox_agent -c /etc/netbox/netbox_agent.yml -r
+{% endif %}
