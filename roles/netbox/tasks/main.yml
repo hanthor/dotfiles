@@ -57,16 +57,15 @@
 
 - name: Set NetBox secret facts
   ansible.builtin.set_fact:
-    netbox_db_password: "{{ _netbox_db_password.stdout }}"
-    netbox_secret_key: "{{ _netbox_secret_key.stdout }}"
-    netbox_superuser_password: "{{ _netbox_superuser_password.stdout }}"
-    netbox_api_token: "{{ _netbox_api_token.stdout }}"
-    netbox_oidc_client_id: "{{ _netbox_oidc_client_id.stdout }}"
-    netbox_oidc_client_secret: "{{ _netbox_oidc_client_secret.stdout }}"
+    netbox_db_password: "{{ _netbox_db_password.stdout | default(netbox_db_password) }}"
+    netbox_secret_key: "{{ _netbox_secret_key.stdout | default(netbox_secret_key) }}"
+    netbox_superuser_password: "{{ _netbox_superuser_password.stdout | default(netbox_superuser_password) }}"
+    netbox_api_token: "{{ _netbox_api_token.stdout | default(netbox_api_token) }}"
+    netbox_oidc_client_id: "{{ _netbox_oidc_client_id.stdout | default(netbox_oidc_client_id) }}"
+    netbox_oidc_client_secret: "{{ _netbox_oidc_client_secret.stdout | default(netbox_oidc_client_secret) }}"
   no_log: true
   when:
     - bw_session | default('') | length > 0
-    - (_netbox_db_password.stdout | default('')) | length > 0
 
 - name: Deploy PostgreSQL credentials
   ansible.builtin.template:
@@ -78,7 +77,7 @@
   become: true
   no_log: true
   notify: Restart NetBox
-  when: netbox_db_password | default('') | length > 0
+  when: (netbox_db_password | default('')) | length > 0
 
 - name: Deploy NetBox environment config
   ansible.builtin.template:
@@ -90,7 +89,7 @@
   become: true
   no_log: true
   notify: Restart NetBox
-  when: netbox_db_password | length > 0
+  when: (netbox_db_password | default('')) | length > 0
 
 - name: Deploy Podman quadlet files
   ansible.builtin.template:

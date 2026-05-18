@@ -83,8 +83,8 @@
 
 - name: Provision NetBox in Authentik
   ansible.builtin.shell: |
-    podman cp /tmp/provision-netbox.py authentik-server:/tmp/provision-netbox.py
-    podman exec authentik-server ak shell /tmp/provision-netbox.py
+    podman exec authentik-server ak shell -c "$(cat /tmp/provision-netbox.py)"
   become: true
   when: netbox_oidc_client_id | length > 0
   changed_when: true
+  no_log: true

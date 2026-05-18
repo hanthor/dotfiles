@@ -8,6 +8,33 @@ user_email: jreilly1821@gmail.com
 user_login: james
 brew_prefix: /home/linuxbrew/.linuxbrew
 netbox_url: "https://bihar.manatee-basking.ts.net" # Tailscale MagicDNS + tailscale serve cert
+# Global services shown on ALL machine homepages
+global_services:
+  - name: AppFlowy
+    href: https://bihar.manatee-basking.ts.net/appflowy
+    icon: appflowy.png
+    description: Collaboration platform
+    group: Core
+    siteMonitor: https://bihar.manatee-basking.ts.net/appflowy
+  - name: NetBox
+    href: https://bihar.manatee-basking.ts.net:8444
+    icon: netbox.png
+    description: Network source of truth
+    group: Core
+    siteMonitor: https://bihar.manatee-basking.ts.net:8444
+  - name: Proxmox
+    href: https://bihar.manatee-basking.ts.net/proxmox
+    icon: proxmox.png
+    description: Server hypervisor
+    group: Core
+    siteMonitor: https://bihar.manatee-basking.ts.net:8006
+  - name: n8n
+    href: https://bihar.manatee-basking.ts.net/n8n
+    icon: n8n.png
+    description: Workflow automation
+    group: Core
+    siteMonitor: https://bihar.manatee-basking.ts.net/n8n
+
 # Fleet homepages — machines with a homepage instance.
 # Used to render the "Fleet" section on each machine's homepage.
 fleet:

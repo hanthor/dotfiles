@@ -6,18 +6,6 @@ tailscale_advertise_routes: "192.168.0.0/24"
 tailscale_accept_dns: false
 tailscale_operator: james
 web_services:
-  - name: Proxmox
-    href: https://bihar.manatee-basking.ts.net/proxmox
-    icon: proxmox.png
-    description: Hypervisor
-    group: Infrastructure
-    siteMonitor: https://bihar.manatee-basking.ts.net:8006
-  - name: NetBox
-    href: https://bihar.manatee-basking.ts.net:8444
-    icon: netbox.png
-    description: Network documentation
-    group: Infrastructure
-    siteMonitor: https://bihar.manatee-basking.ts.net:8444
   - name: NanoKVM
     href: http://192.168.0.99
     icon: mdi-server-network

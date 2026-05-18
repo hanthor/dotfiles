@@ -12,12 +12,19 @@ fi
 
 create_item() {
   local name="$1" value="$2"
-  if bw get item "$name" --session "$BW_SESSION" &>/dev/null; then
-    echo "  [skip] '$name' already exists"
+  local uris='[{"uri":"https://bihar.manatee-basking.ts.net:8444"},{"uri":"https://bihar.manatee-basking.ts.net/auth"}]'
+  local existing
+  
+  if existing=$(bw get item "$name" --session "$BW_SESSION" 2>/dev/null); then
+    echo "  [updating] '$name' with URIs..."
+    echo "$existing" \
+      | jq --argjson u "$uris" '.login.uris=$u | .login.username="admin"' \
+      | bw encode \
+      | bw edit item "$(echo "$existing" | jq -r .id)" --session "$BW_SESSION" > /dev/null
   else
     bw get template item --session "$BW_SESSION" \
-      | jq --arg n "$name" --arg p "$value" \
-          '.type=1 | .name=$n | .login.password=$p | .login.username=""' \
+      | jq --arg n "$name" --arg p "$value" --argjson u "$uris" \
+          '.type=1 | .name=$n | .login.password=$p | .login.username="admin" | .login.uris=$u' \
       | bw encode \
       | bw create item --session "$BW_SESSION" > /dev/null
     echo "  [created] $name"

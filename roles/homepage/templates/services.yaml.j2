@@ -1,6 +1,8 @@
-{# Show only this machine's own services, grouped by 'group' field #}
+{# Combined list of this machine's services and global fleet-wide services #}
+{% set all_svcs = (web_services | default([])) + (global_services | default([])) %}
 {% set ns = namespace(groups={}) %}
-{% for svc in web_services | default([]) %}
+
+{% for svc in all_svcs %}
 {%   set g = svc.get('group', 'Services') %}
 {%   if g not in ns.groups %}
 {%     set _ = ns.groups.update({g: []}) %}
