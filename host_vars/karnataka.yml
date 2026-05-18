@@ -1,5 +1,6 @@
 is_arm: false
 has_homepage: true
+netbox_device_role: "Desktop"
 extra_authorized_keys:
   - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBMOW8LcOS2jiQvP0lb172rs0lYyaoUqRd1HZ496HZLp termux"
 web_services:

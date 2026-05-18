@@ -4,7 +4,14 @@ netbox:
   token: "{{ netbox_api_token }}"
   ssl_verify: false
 
+device:
+  server_role: "{{ netbox_device_role | default('Server') }}"
+
 network:
   ignore_interfaces: "^(lo|veth|docker|br-|podman|tap|virbr).*"
   ignore_ips: ""
   lldp: false
+
+datacenter_location:
+  driver: "file:/etc/netbox/datacenter"
+  regex: "(.*)"

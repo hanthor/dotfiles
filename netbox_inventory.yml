@@ -3,7 +3,8 @@
 
 plugin: netbox.netbox.nb_inventory
 api_endpoint: "https://bihar.manatee-basking.ts.net:8444"
-token: "0577775040c9da23c4201101750eabadfe6df115"
+# The token should be set via NETBOX_API_TOKEN environment variable
+token: "{{ lookup('env', 'NETBOX_API_TOKEN') }}"
 validate_certs: false
 config_context: true
 group_by:

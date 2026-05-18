@@ -30,6 +30,15 @@
     group: root
   become: true
 
+- name: Deploy datacenter site file
+  ansible.builtin.copy:
+    content: "{{ netbox_site_slug | default('home') }}\n"
+    dest: /etc/netbox/datacenter
+    mode: "0644"
+    owner: root
+    group: root
+  become: true
+
 - name: Fetch NetBox API token from Bitwarden
   when:
     - netbox_api_token is not defined
