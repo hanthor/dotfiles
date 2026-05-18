@@ -18,6 +18,12 @@ web_services:
     description: Network documentation
     group: Infrastructure
     siteMonitor: https://bihar.manatee-basking.ts.net:8444
+  - name: NanoKVM
+    href: http://192.168.0.99
+    icon: mdi-server-network
+    description: IP KVM (Plugged into Karnataka)
+    group: Infrastructure
+    siteMonitor: http://192.168.0.99
   - name: Lima
     href: https://bihar.manatee-basking.ts.net/lima
     icon: mdi-virtual-machine

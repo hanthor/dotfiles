@@ -19,3 +19,8 @@ web_services:
     icon: buildstream.png
     description: Build monitor
     group: System
+  - name: NanoKVM
+    href: http://192.168.0.99
+    icon: mdi-server-network
+    description: IP KVM (Plugged into Karnataka)
+    group: Infrastructure
