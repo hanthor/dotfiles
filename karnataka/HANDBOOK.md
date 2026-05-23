@@ -984,5 +984,39 @@ This applies the following manifests in sequence:
      }'
    ```
 
+---
+
+## 14. KubeVirt Manager Web UI (Proxmox Replacement)
+
+To manage virtual machines on your existing Kubernetes cluster with a beautiful Proxmox-like web interface, we run **KubeVirt Manager** (a standalone community Angular web UI).
+
+### Overview
+
+1. **Features**: VM creation, pool resizing, disk management, VNC/Serial console access in-browser (via noVNC), and Prometheus monitoring integration.
+2. **Namespace**: `kubevirt-manager`
+3. **Tailnet Ingress**: Exposes the WebUI securely on your Tailscale network at `https://vm.manatee-basking.ts.net`.
+
+### Deployment
+
+To deploy KubeVirt Manager and its Ingress, run the deployment helper script:
+```bash
+./kubevirt-manager/deploy.sh
+```
+
+This applies the following manifests:
+* `kubevirt-manager/bundled.yaml`: Creates the namespace, ServiceAccount, priority classes, ClusterRoles, and the Deployment + Service for the manager.
+* `kubevirt-manager/ingress.yaml`: Deploys the Tailscale Ingress on port 80 mapping `vm.manatee-basking.ts.net` to the manager service.
+
+### Verification & Operations
+
+1. Verify the manager pods are Running:
+   ```bash
+   ssh core@192.168.0.6 "kubectl get pods -n kubevirt-manager"
+   ```
+2. Access the virtualization console in your browser:
+   ```text
+   https://vm.manatee-basking.ts.net
+   ```
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
