@@ -3,8 +3,14 @@ if status is-interactive
     set -g fish_greeting ""
 
     # PATH extras (prepend so brew/local bins win)
-    fish_add_path -m ~/.local/bin
-    fish_add_path -m ~/.cargo/bin
+# Fast PATH prepend without universal variable writes
+function _add_path_fast
+    for dir in $argv
+        set -gx PATH $dir $PATH
+    end
+end
+_add_path_fast ~/.local/bin
+_add_path_fast ~/.cargo/bin
 
     # Environment
     set -gx EDITOR nvim
