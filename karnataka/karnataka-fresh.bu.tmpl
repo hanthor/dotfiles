@@ -1,0 +1,84 @@
+variant: flatcar
+version: 1.0.0
+passwd:
+  users:
+    - name: core
+      groups:
+        - sudo
+        - docker
+      ssh_authorized_keys:
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEi1hAoIBP84cgmF/UqbbMSLaNKs6xlyLcY1nsg54mu0
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL3AzpxRBryzkb9PtpQgwS7ak3QfSpxgDHAGwKvAS1kB
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOboaBzY4zEHJEWRhYRsZ5l40e9tWR+BseKFVPMDM+/+
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPOZx220I8Av7KmEAOib4iAKZFCzPp8cwtzvteJJ7VB
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGR7ZHHHguM8yl4vbDsSMlk5VFg+PaLA4+kNtYLJwBxc
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDmpGEONccP2ByZ493pyJSkEJznTw8PsR8dkGKq/2SS7
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPelaWkNsfwqnceB/5gftUcnprfnflCsDlMDeQkm0Hps
+
+storage:
+  files:
+    - path: /opt/extensions/kubernetes/kubernetes-v1.33.2-x86-64.raw
+      contents:
+        source: https://extensions.flatcar.org/extensions/kubernetes-v1.33.2-x86-64.raw
+    - path: /opt/extensions/tailscale/tailscale-v1.98.3-x86-64.raw
+      contents:
+        source: https://github.com/flatcar/sysext-bakery/releases/download/tailscale-v1.98.3/tailscale-v1.98.3-x86-64.raw
+    - path: /etc/hostname
+      mode: 0644
+      contents:
+        inline: karnataka
+    - path: /etc/systemd/network/20-dhcp.network
+      mode: 0644
+      contents:
+        inline: |
+          [Match]
+          Name=enp191s0
+
+          [Network]
+          DHCP=yes
+    - path: /etc/sudoers.d/99-core-james
+      mode: 0440
+      contents:
+        inline: |
+          core ALL=(ALL) NOPASSWD: ALL
+          james ALL=(ALL) NOPASSWD: ALL
+    - path: /etc/tailscale/tailscale.env
+      mode: 0600
+      user:
+        name: root
+      group:
+        name: root
+      contents:
+        inline: |
+          TS_AUTHKEY={{TS_AUTHKEY}}
+          TS_STATE_DIR=/var/lib/tailscale
+
+  links:
+    - path: /etc/extensions/kubernetes.raw
+      target: /opt/extensions/kubernetes/kubernetes-v1.33.2-x86-64.raw
+    - path: /etc/extensions/tailscale.raw
+      target: /opt/extensions/tailscale/tailscale-v1.98.3-x86-64.raw
+
+systemd:
+  units:
+    - name: systemd-sysext.service
+      enabled: true
+    - name: systemd-sysupdate.timer
+      enabled: true
+    - name: locksmithd.service
+      mask: true
+    - name: tailscale-oneshot.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Tailscale oneshot
+        After=network-online.target
+        Wants=network-online.target
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/tailscale up
+        RemainAfterExit=yes
+
+        [Install]
+        WantedBy=multi-user.target

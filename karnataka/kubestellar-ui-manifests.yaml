@@ -1,0 +1,1145 @@
+---
+# Source: kubestellar-ui/charts/redis/templates/networkpolicy.yaml
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: kubestellar-ui-redis
+  namespace: "kubestellar"
+  labels:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.0.2
+    helm.sh/chart: redis-21.2.5
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: kubestellar-ui
+      app.kubernetes.io/name: redis
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - {}
+  ingress:
+    # Allow inbound connections
+    - ports:
+        - port: 6379
+---
+# Source: kubestellar-ui/charts/redis/templates/master/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kubestellar-ui-redis-master
+  namespace: "kubestellar"
+  labels:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.0.2
+    helm.sh/chart: redis-21.2.5
+    app.kubernetes.io/component: master
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: kubestellar-ui
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/component: master
+---
+# Source: kubestellar-ui/charts/redis/templates/master/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+automountServiceAccountToken: false
+metadata:
+  name: kubestellar-ui-redis-master
+  namespace: "kubestellar"
+  labels:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.0.2
+    helm.sh/chart: redis-21.2.5
+---
+# Source: kubestellar-ui/templates/deployment-backend.yaml
+# This chart was originally developed by @MAVRICK-1
+# Source: https://github.com/MAVRICK-1/kubestellar-ui
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-sa
+---
+# Source: kubestellar-ui/templates/secret.yaml
+# This chart was originally developed by @MAVRICK-1
+# Source: https://github.com/MAVRICK-1/kubestellar-ui
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubeconfig-secret
+type: Opaque
+data:
+  config: ""
+---
+# Source: kubestellar-ui/charts/redis/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubestellar-ui-redis-configuration
+  namespace: "kubestellar"
+  labels:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.0.2
+    helm.sh/chart: redis-21.2.5
+data:
+  redis.conf: |-
+    # User-supplied common configuration:
+    # Enable AOF https://redis.io/topics/persistence#append-only-file
+    appendonly yes
+    # Disable RDB persistence, AOF persistence already enabled.
+    save ""
+    # End of common configuration
+  master.conf: |-
+    dir /data
+    # User-supplied master configuration:
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+    # End of master configuration
+  replica.conf: |-
+    dir /data
+    # User-supplied replica configuration:
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+    # End of replica configuration
+  users.acl: |-
+---
+# Source: kubestellar-ui/charts/redis/templates/health-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubestellar-ui-redis-health
+  namespace: "kubestellar"
+  labels:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.0.2
+    helm.sh/chart: redis-21.2.5
+data:
+  ping_readiness_local.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
+    [[ -n "$REDIS_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h localhost \
+        -p $REDIS_PORT \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_liveness_local.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
+    [[ -n "$REDIS_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h localhost \
+        -p $REDIS_PORT \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
+    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ] && [ "$responseFirstWord" != "MASTERDOWN" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_readiness_master.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_MASTER_PASSWORD_FILE ]] && export REDIS_MASTER_PASSWORD="$(< "${REDIS_MASTER_PASSWORD_FILE}")"
+    [[ -n "$REDIS_MASTER_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_MASTER_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h $REDIS_MASTER_HOST \
+        -p $REDIS_MASTER_PORT_NUMBER \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_liveness_master.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_MASTER_PASSWORD_FILE ]] && export REDIS_MASTER_PASSWORD="$(< "${REDIS_MASTER_PASSWORD_FILE}")"
+    [[ -n "$REDIS_MASTER_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_MASTER_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h $REDIS_MASTER_HOST \
+        -p $REDIS_MASTER_PORT_NUMBER \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
+    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_readiness_local_and_master.sh: |-
+    script_dir="$(dirname "$0")"
+    exit_status=0
+    "$script_dir/ping_readiness_local.sh" $1 || exit_status=$?
+    "$script_dir/ping_readiness_master.sh" $1 || exit_status=$?
+    exit $exit_status
+  ping_liveness_local_and_master.sh: |-
+    script_dir="$(dirname "$0")"
+    exit_status=0
+    "$script_dir/ping_liveness_local.sh" $1 || exit_status=$?
+    "$script_dir/ping_liveness_master.sh" $1 || exit_status=$?
+    exit $exit_status
+---
+# Source: kubestellar-ui/charts/redis/templates/scripts-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubestellar-ui-redis-scripts
+  namespace: "kubestellar"
+  labels:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.0.2
+    helm.sh/chart: redis-21.2.5
+data:
+  start-master.sh: |
+    #!/bin/bash
+
+    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
+    if [[ -f /opt/bitnami/redis/mounted-etc/master.conf ]];then
+        cp /opt/bitnami/redis/mounted-etc/master.conf /opt/bitnami/redis/etc/master.conf
+    fi
+    if [[ -f /opt/bitnami/redis/mounted-etc/redis.conf ]];then
+        cp /opt/bitnami/redis/mounted-etc/redis.conf /opt/bitnami/redis/etc/redis.conf
+    fi
+    if [[ -f /opt/bitnami/redis/mounted-etc/users.acl ]];then
+        cp /opt/bitnami/redis/mounted-etc/users.acl /opt/bitnami/redis/etc/users.acl
+    fi
+    ARGS=("--port" "${REDIS_PORT}")
+    ARGS+=("--protected-mode" "no")
+    ARGS+=("--include" "/opt/bitnami/redis/etc/redis.conf")
+    ARGS+=("--include" "/opt/bitnami/redis/etc/master.conf")
+    exec redis-server "${ARGS[@]}"
+---
+# Source: kubestellar-ui/templates/configmap-nginx.yaml
+# Nginx configuration for frontend to properly proxy API calls
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  labels:
+    app: frontend
+    component: webserver
+data:
+  default.conf: |
+    # Use Kubernetes DNS resolver
+    resolver kube-dns.kube-system.svc.cluster.local valid=10s;
+    
+    server {
+        listen 80;
+        server_name localhost;
+
+        root /usr/share/nginx/html;
+        index index.html;
+        
+        location / {
+            try_files $uri /index.html;
+        }
+
+        error_page 404 /index.html;
+
+        # Login endpoint - proxy to backend
+        location /login {
+            set $backend backend.default.svc.cluster.local:4000;
+            proxy_pass http://$backend/login;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # API routes - preserve full path including /api
+        location ~ ^/api/(.*)$ {
+            set $backend backend.default.svc.cluster.local:4000;
+            proxy_pass http://$backend/api/$1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+---
+# Source: kubestellar-ui/templates/configmap-postgresql.yaml
+# PostgreSQL initialization ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgresql-init
+  labels:
+    app: postgresql
+    component: database
+data:
+  000001_init_schema.up.sql: |
+    -- Create users table
+    CREATE TABLE IF NOT EXISTS users (
+    	id SERIAL PRIMARY KEY,
+    	username VARCHAR(255) UNIQUE NOT NULL,
+    	password VARCHAR(255) NOT NULL,
+    	is_admin BOOLEAN DEFAULT FALSE,
+    	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create user_permissions table
+    CREATE TABLE IF NOT EXISTS user_permissions (
+    	id SERIAL PRIMARY KEY,
+    	user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    	component VARCHAR(255) NOT NULL,
+    	permission VARCHAR(50) NOT NULL CHECK (permission IN ('read', 'write')),
+    	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    	UNIQUE(user_id, component)
+    );
+
+    -- Create indexes for better performance
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+    CREATE INDEX IF NOT EXISTS idx_users_is_admin ON users(is_admin);
+    CREATE INDEX IF NOT EXISTS idx_user_permissions_user_id ON user_permissions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_permissions_component ON user_permissions(component);
+---
+# Source: kubestellar-ui/templates/deployment-backend.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backend-admin-binding
+subjects:
+  - kind: ServiceAccount
+    name: backend-sa
+    namespace: kubestellar
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: kubestellar-ui/charts/redis/templates/headless-svc.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubestellar-ui-redis-headless
+  namespace: "kubestellar"
+  labels:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.0.2
+    helm.sh/chart: redis-21.2.5
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: tcp-redis
+      port: 6379
+      targetPort: redis
+  selector:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/name: redis
+---
+# Source: kubestellar-ui/charts/redis/templates/master/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubestellar-ui-redis-master
+  namespace: "kubestellar"
+  labels:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.0.2
+    helm.sh/chart: redis-21.2.5
+    app.kubernetes.io/component: master
+spec:
+  type: ClusterIP
+  internalTrafficPolicy: Cluster
+  sessionAffinity: None
+  ports:
+    - name: tcp-redis
+      port: 6379
+      targetPort: redis
+      nodePort: null
+  selector:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: master
+---
+# Source: kubestellar-ui/templates/service-backend.yaml
+# This chart was originally developed by @MAVRICK-1
+# Source: https://github.com/MAVRICK-1/kubestellar-ui
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app: backend
+    component: api
+  annotations:
+    # Internal service only - no external access
+    service.alpha.kubernetes.io/internal-only: "true"
+spec:
+  type: ClusterIP  # Explicitly set to ClusterIP for internal access only
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 4000
+      targetPort: 4000
+      name: http
+---
+# Source: kubestellar-ui/templates/service-frontend.yaml
+# This chart was originally developed by @MAVRICK-1
+# Source: https://github.com/MAVRICK-1/kubestellar-ui
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: NodePort
+  selector:
+    app: frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+---
+# Source: kubestellar-ui/templates/service-postgresql.yaml
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+  labels:
+    app: postgresql
+    component: database
+spec:
+  selector:
+    app: postgresql
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  type: ClusterIP
+---
+# Source: kubestellar-ui/templates/deployment-backend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      serviceAccountName: backend-sa
+      volumes:
+        - name: kubeconfig-volume
+          emptyDir: {}
+      initContainers:
+      - name: init-kubeconfig
+        image: quay.io/kubestellar/kubectl:1.30.12
+        command: ["/bin/bash", "-c"]
+        args:
+            - |
+                set -e
+                echo "Creating kubeconfig directory..."
+                mkdir -p /home/kubeconfig/
+
+                echo "Setting up the kind-kubeflex context first..."
+                # Get current cluster connection details
+                KUBERNETES_SERVICE_HOST=${KUBERNETES_SERVICE_HOST:-kubernetes.default.svc}
+                KUBERNETES_SERVICE_PORT=${KUBERNETES_SERVICE_PORT:-443}
+                CLUSTER_IP="${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}"
+
+                # Use the serviceaccount token
+                SA_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+                CA_FILE="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+                # Create initial kubeconfig for the host cluster
+                cat > /home/kubeconfig/host-config << ENDOFCONFIG
+                apiVersion: v1
+                kind: Config
+                current-context: kind-kubeflex
+                clusters:
+                - name: kind-kubeflex
+                  cluster:
+                    server: https://${CLUSTER_IP}
+                    certificate-authority: ${CA_FILE}
+                contexts:
+                - name: kind-kubeflex
+                  context:
+                    cluster: kind-kubeflex
+                    user: default-user
+                    namespace: default
+                users:
+                - name: default-user
+                  user:
+                    token: ${SA_TOKEN}
+                ENDOFCONFIG
+
+                export KUBECONFIG="/home/kubeconfig/host-config"
+
+                # Test the initial connection
+                echo "Testing initial connection..."
+                if ! kubectl get ns &>/dev/null; then
+                    echo "Initial connection failed. Checking service account token..."
+                    if [ ! -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]; then
+                        echo "Service account token file doesn't exist!"
+                        ls -la /var/run/secrets/kubernetes.io/serviceaccount/
+                    fi
+                    echo "API server details: ${CLUSTER_IP}"
+                    echo "Cannot proceed without cluster access. Exiting."
+                    exit 1
+                fi
+
+                echo "Initial connection successful. Proceeding to gather context configs..."
+
+                # Get all Control Planes
+                echo "Getting information about all ControlPlanes..."
+                if kubectl get crd controlplanes.tenancy.kflex.kubestellar.org &>/dev/null; then
+                    CPS=$(kubectl get cp -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+                    for CP in $CPS; do
+                      echo "Processing ControlPlane: $CP"
+
+                      # Get the secretRef details
+                      SECRET_NAME=$(kubectl get cp $CP -o jsonpath='{.status.secretRef.name}' 2>/dev/null || echo "")
+                      SECRET_NS=$(kubectl get cp $CP -o jsonpath='{.status.secretRef.namespace}' 2>/dev/null || echo "")
+                      IN_CLUSTER_KEY=$(kubectl get cp $CP -o jsonpath='{.status.secretRef.inClusterKey}' 2>/dev/null || echo "")
+
+                      if [ -n "$SECRET_NAME" ] && [ -n "$SECRET_NS" ] && [ -n "$IN_CLUSTER_KEY" ]; then
+                        echo "Found secret details for $CP: $SECRET_NAME in namespace $SECRET_NS, key: $IN_CLUSTER_KEY"
+
+                        # Get the kubeconfig from the secret
+                        if kubectl get secret $SECRET_NAME -n $SECRET_NS &>/dev/null; then
+                          echo "Retrieving kubeconfig for $CP..."
+                          kubectl get secret $SECRET_NAME -n $SECRET_NS -o jsonpath="{.data.$IN_CLUSTER_KEY}" | base64 -d > /home/kubeconfig/${CP}-config
+                          echo "Saved kubeconfig for $CP to /home/kubeconfig/${CP}-config"
+                        else
+                          echo "Warning: Secret $SECRET_NAME not found in namespace $SECRET_NS"
+                        fi
+                      else
+                        echo "Warning: Could not get secret details for $CP"
+                      fi
+                    done
+                else
+                    echo "ControlPlane CRD not found, skipping CP discovery"
+                fi
+
+                # Specifically check for wds1 and its1
+                echo "Checking for wds1 kubeconfig..."
+                if [ ! -f "/home/kubeconfig/wds1-config" ] && kubectl get ns wds1-system &>/dev/null; then
+                  if kubectl get secret admin-kubeconfig -n wds1-system &>/dev/null; then
+                    echo "Retrieving wds1 kubeconfig directly..."
+                    kubectl get secret admin-kubeconfig -n wds1-system -o jsonpath='{.data.kubeconfig-incluster}' | base64 -d > /home/kubeconfig/wds1-config
+                    echo "Saved kubeconfig for wds1 to /home/kubeconfig/wds1-config"
+                  else
+                    echo "admin-kubeconfig secret not found in wds1-system namespace"
+                  fi
+                fi
+
+                echo "Checking for its1 kubeconfig..."
+                if [ ! -f "/home/kubeconfig/its1-config" ] && kubectl get ns its1-system &>/dev/null; then
+                  if kubectl get secret vc-vcluster -n its1-system &>/dev/null; then
+                    echo "Retrieving its1 kubeconfig directly..."
+                    kubectl get secret vc-vcluster -n its1-system -o jsonpath='{.data.config-incluster}' | base64 -d > /home/kubeconfig/its1-config-temp && \
+                    kubectl --kubeconfig=/home/kubeconfig/its1-config-temp config rename-context $(kubectl --kubeconfig=/home/kubeconfig/its1-config-temp config current-context) its1 && \
+                    mv /home/kubeconfig/its1-config-temp /home/kubeconfig/its1-config
+                    echo "Saved kubeconfig for its1 to /home/kubeconfig/its1-config"
+                  else
+                    echo "vc-vcluster secret not found in its1-system namespace"
+                  fi
+                fi
+
+                echo "Merging all kubeconfigs..."
+                # Collect all config files
+                CONFIG_FILES="/home/kubeconfig/host-config"
+                for CONFIG in /home/kubeconfig/*-config; do
+                  if [ -f "$CONFIG" ] && [ "$CONFIG" != "/home/kubeconfig/host-config" ]; then
+                    CONFIG_FILES="$CONFIG_FILES:$CONFIG"
+                  fi
+                done
+
+                # Merge all configs
+                export KUBECONFIG="$CONFIG_FILES"
+                echo "Merged KUBECONFIG paths: $KUBECONFIG"
+
+                # Use a simpler approach to flatten the config
+                kubectl config view --flatten > /home/kubeconfig/merged-config
+                cp /home/kubeconfig/merged-config /home/kubeconfig/config
+
+                echo "Setting permissions..."
+                chmod 600 /home/kubeconfig/*
+
+                kubectl config get-contexts || echo "Error listing contexts"
+
+                # Create a startup script for the backend container to rename context
+                cat > /home/kubeconfig/rename-context.sh << 'EOF'
+                #!/bin/bash
+
+                # Function to rename context
+                rename_context() {
+                  echo "Checking for my-vcluster context..."
+
+                  # Check if my-vcluster context exists
+                  if kubectl config get-contexts my-vcluster &>/dev/null; then
+                    echo "Found my-vcluster context, renaming to its1..."
+
+                    # Try the standard rename first
+                    if kubectl config rename-context my-vcluster its1; then
+                      echo "Successfully renamed my-vcluster to its1"
+                    else
+                      echo "Standard rename failed, trying alternative method..."
+
+                      # Get details from my-vcluster context
+                      CLUSTER=$(kubectl config view -o jsonpath='{.contexts[?(@.name=="my-vcluster")].context.cluster}')
+                      USER=$(kubectl config view -o jsonpath='{.contexts[?(@.name=="my-vcluster")].context.user}')
+                      NAMESPACE=$(kubectl config view -o jsonpath='{.contexts[?(@.name=="my-vcluster")].context.namespace}')
+
+                      # Create new context with same details but different name
+                      kubectl config set-context its1 --cluster="$CLUSTER" --user="$USER" --namespace="$NAMESPACE"
+
+                      # Delete old context
+                      kubectl config delete-context my-vcluster
+
+                      echo "Created its1 context and deleted my-vcluster"
+                    fi
+                  else
+                    # Check if its1 already exists
+                    if kubectl config get-contexts its1 &>/dev/null; then
+                      echo "its1 context already exists, no action needed"
+                    else
+                      echo "my-vcluster context not found and its1 doesn't exist. Something is wrong!"
+                    fi
+                  fi
+
+                  echo "Available contexts after renaming:"
+                  kubectl config get-contexts
+                }
+
+                # Main execution
+                for i in {1..5}; do
+                  echo "Attempt $i to rename context..."
+                  rename_context
+
+                  # Check if its1 now exists
+                  if kubectl config get-contexts its1 &>/dev/null; then
+                    echo "its1 context exists, renaming successful!"
+                    break
+                  else
+                    echo "its1 context still doesn't exist, will retry in 5 seconds..."
+                    sleep 5
+                  fi
+                done
+
+                # Update the config file after renaming
+                kubectl config view --flatten > /home/kubeconfig/updated-config
+                cp /home/kubeconfig/updated-config /home/kubeconfig/config
+
+                echo "Context renaming process completed"
+                EOF
+
+                chmod +x /home/kubeconfig/rename-context.sh
+                echo "Created context renaming script for backend container"
+                echo "Init container completed successfully"
+        volumeMounts:
+          - name: kubeconfig-volume
+            mountPath: /home/kubeconfig
+      containers:
+        - name: backend
+          image: ghcr.io/kubestellar/ui/backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              # Run the context renaming script
+              echo "Running context renaming script..."
+              /home/kubeconfig/rename-context.sh
+
+              # Source the .env file if it exists (as per Dockerfile)
+              if [ -f "/root/.env" ]; then
+                echo "Sourcing environment variables from /root/.env"
+                source /root/.env
+              fi
+
+              # Execute the backend (which is in /root according to Dockerfile)
+              echo "Starting backend from /root/backend"
+              exec /root/backend
+          ports:
+            - containerPort: 4000
+          volumeMounts:
+            - name: kubeconfig-volume
+              mountPath: /home/kubeconfig
+            # Mount kubeconfig to /root/.kube as expected by the Dockerfile
+            - name: kubeconfig-volume
+              mountPath: /root/.kube
+          env:
+            - name: KUBECONFIG
+              value: "/home/kubeconfig/config"
+            # Database Configuration
+            - name: DATABASE_URL
+              value: "postgres://authuser:authpass123@postgresql:5432/authdb?sslmode=disable"
+            - name: DB_HEALTH_TIMEOUT
+              value: "5s"
+            # Redis Configuration
+            - name: REDIS_HOST
+              value: "kubestellar-ui-redis-master"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_HEALTH_TIMEOUT
+              value: "3s"
+            # Application Configuration
+            - name: PORT
+              value: "4000"
+            - name: GIN_MODE
+              value: "release"
+            - name: JWT_SECRET
+              value: "karnataka-kubestellar-secret"
+            # Service Configuration
+            - name: SERVICE_NAME
+              value: "kubestellar-ui"
+            - name: SERVICE_VERSION
+              value: "1.0.0"
+            - name: ENVIRONMENT
+              value: "production"
+            # Health Check Configuration
+            - name: ENABLE_HEALTH_ENDPOINTS
+              value: "true"
+            - name: ENABLE_METRICS
+              value: "true"
+            - name: HEALTH_ENDPOINT
+              value: "/health"
+            - name: LIVENESS_ENDPOINT
+              value: "/healthz"
+            - name: READINESS_ENDPOINT
+              value: "/readyz"
+            - name: METRICS_ENDPOINT
+              value: "/api/v1/metrics"
+            - name: HEALTH_CHECK_TIMEOUT
+              value: "10s"
+            - name: HEALTH_COMPONENTS
+              value: "database,redis,memory,disk"
+            # Performance Configuration
+            - name: MEMORY_THRESHOLD
+              value: "85"
+            - name: DISK_THRESHOLD
+              value: "90"
+            - name: DISK_PATH
+              value: "/"
+            # CORS Configuration
+            - name: CORS_ALLOWED_ORIGIN
+              value: "*"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 4000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 4000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 3
+---
+# Source: kubestellar-ui/templates/deployment-frontend.yaml
+# This chart was originally developed by @MAVRICK-1
+# Source: https://github.com/MAVRICK-1/kubestellar-ui
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-config
+      containers:
+        - name: frontend
+          image: ghcr.io/kubestellar/ui/frontend:v1.0.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          env:
+            - name: VITE_BASE_URL
+              value: "http://localhost:4000"
+            - name: VITE_SKIP_PREREQUISITES_CHECK
+              value: "true"
+            - name: VITE_APP_VERSION
+              value: "0.1.0"
+            - name: NGINX_HOST
+              value: "localhost"
+            - name: BACKEND_URL
+              value: "http://backend:4000"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+---
+# Source: kubestellar-ui/templates/deployment-postgresql.yaml
+# PostgreSQL Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+  labels:
+    app: postgresql
+    component: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+        component: database
+    spec:
+      containers:
+        - name: postgresql
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    sleep 10
+                    echo "Initializing database schema..."
+                    psql -U authuser -d authdb -f /docker-entrypoint-initdb.d/000001_init_schema.up.sql || echo "Schema already exists"
+                    echo "Database initialization completed"
+          env:
+            - name: POSTGRES_DB
+              value: authdb
+            - name: POSTGRES_USER
+              value: authuser
+            - name: POSTGRES_PASSWORD
+              value: authpass123
+            - name: POSTGRES_SHARED_PRELOAD_LIBRARIES
+              value: "pg_stat_statements"
+            - name: POSTGRES_MAX_CONNECTIONS
+              value: "100"
+            - name: POSTGRES_SHARED_BUFFERS
+              value: "256MB"
+            - name: POSTGRES_EFFECTIVE_CACHE_SIZE
+              value: "1GB"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: postgresql-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgresql-init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U authuser -d authdb
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U authuser -d authdb
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: postgresql-data
+          emptyDir: {}
+        - name: postgresql-init
+          configMap:
+            name: postgresql-init
+---
+# Source: kubestellar-ui/charts/redis/templates/master/application.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kubestellar-ui-redis-master
+  namespace: "kubestellar"
+  labels:
+    app.kubernetes.io/instance: kubestellar-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.0.2
+    helm.sh/chart: redis-21.2.5
+    app.kubernetes.io/component: master
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: kubestellar-ui
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/component: master
+  serviceName: kubestellar-ui-redis-headless
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: kubestellar-ui
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/version: 8.0.2
+        helm.sh/chart: redis-21.2.5
+        app.kubernetes.io/component: master
+      annotations:
+        checksum/configmap: 2a9ab4a5432825504d910f022638674ce88eaefe9f9f595ad8bc107377d104fb
+        checksum/health: aff24913d801436ea469d8d374b2ddb3ec4c43ee7ab24663d5f8ff1a1b6991a9
+        checksum/scripts: bdec350b84a1ace7cc118db113a21c9f160bde3425b07714e1c0c1da722621cf
+        checksum/secret: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+    spec:
+      
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: Always
+        supplementalGroups: []
+        sysctls: []
+      serviceAccountName: kubestellar-ui-redis-master
+      automountServiceAccountToken: false
+      affinity:
+        podAffinity:
+          
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/instance: kubestellar-ui
+                    app.kubernetes.io/name: redis
+                    app.kubernetes.io/component: master
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+        nodeAffinity:
+          
+      enableServiceLinks: true
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: redis
+          image: ghcr.io/kubestellar/ui/redis:latest
+          imagePullPolicy: "IfNotPresent"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 1001
+            runAsNonRoot: true
+            runAsUser: 1001
+            seLinuxOptions: {}
+            seccompProfile:
+              type: RuntimeDefault
+          command:
+            - /bin/bash
+          args:
+            - -ec
+            - /opt/bitnami/scripts/start-scripts/start-master.sh
+          env:
+            - name: BITNAMI_DEBUG
+              value: "false"
+            - name: REDIS_REPLICATION_MODE
+              value: master
+            - name: ALLOW_EMPTY_PASSWORD
+              value: "yes"
+            - name: REDIS_TLS_ENABLED
+              value: "no"
+            - name: REDIS_PORT
+              value: "6379"
+          ports:
+            - name: redis
+              containerPort: 6379
+          livenessProbe:
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            # One second longer than command timeout should prevent generation of zombie processes.
+            timeoutSeconds: 6
+            successThreshold: 1
+            failureThreshold: 5
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - "/health/ping_liveness_local.sh 5"
+          readinessProbe:
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 5
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - "/health/ping_readiness_local.sh 1"
+          resources:
+            limits:
+              cpu: 150m
+              ephemeral-storage: 2Gi
+              memory: 192Mi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 50Mi
+              memory: 128Mi
+          volumeMounts:
+            - name: start-scripts
+              mountPath: /opt/bitnami/scripts/start-scripts
+            - name: health
+              mountPath: /health
+            - name: redis-data
+              mountPath: /data
+            - name: config
+              mountPath: /opt/bitnami/redis/mounted-etc
+            - name: empty-dir
+              mountPath: /opt/bitnami/redis/etc/
+              subPath: app-conf-dir
+            - name: empty-dir
+              mountPath: /tmp
+              subPath: tmp-dir
+      volumes:
+        - name: start-scripts
+          configMap:
+            name: kubestellar-ui-redis-scripts
+            defaultMode: 0755
+        - name: health
+          configMap:
+            name: kubestellar-ui-redis-health
+            defaultMode: 0755
+        - name: config
+          configMap:
+            name: kubestellar-ui-redis-configuration
+        - name: empty-dir
+          emptyDir: {}
+  volumeClaimTemplates:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: redis-data
+        labels:
+          app.kubernetes.io/instance: kubestellar-ui
+          app.kubernetes.io/name: redis
+          app.kubernetes.io/component: master
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "8Gi"
+---
+# Source: kubestellar-ui/templates/ingress.yaml
+# Simple automatic ingress - routes everything to frontend, frontend handles API proxying
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubestellar-ui-simple
+spec:
+  rules:
+    # Handle all requests - frontend nginx will proxy /api/* to backend internally
+    - http:
+        paths:
+          # All routes go to frontend (which has nginx config to proxy /api/* to backend)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+---
+# Source: kubestellar-ui/templates/pvc-postgresql.yaml
+# PostgreSQL PVC
+

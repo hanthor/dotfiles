@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-service
+  namespace: vllm
+  labels:
+    app: vllm-rocm
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+  selector:
+    app: vllm-rocm
+  type: ClusterIP
