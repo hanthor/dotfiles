@@ -16,6 +16,12 @@ passwd:
         - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPelaWkNsfwqnceB/5gftUcnprfnflCsDlMDeQkm0Hps
 
 storage:
+  filesystems:
+    - device: /dev/disk/by-uuid/efcecc3a-1350-4ea0-9668-04fd71590ccf
+      format: ext4
+      path: /var/lib/state
+      wipe_filesystem: false
+
   files:
     - path: /opt/extensions/kubernetes/kubernetes-v1.33.2-x86-64.raw
       contents:
@@ -58,6 +64,12 @@ storage:
       target: /opt/extensions/kubernetes/kubernetes-v1.33.2-x86-64.raw
     - path: /etc/extensions/tailscale.raw
       target: /opt/extensions/tailscale/tailscale-v1.98.3-x86-64.raw
+    - path: /etc/kubernetes
+      target: /var/lib/state/etc-kubernetes
+    - path: /var/lib/etcd
+      target: /var/lib/state/etcd
+    - path: /var/lib/kubelet
+      target: /var/lib/state/kubelet
 
 systemd:
   units:

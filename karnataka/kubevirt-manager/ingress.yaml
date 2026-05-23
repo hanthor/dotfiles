@@ -4,15 +4,12 @@ metadata:
   name: kubevirt-manager-ingress
   namespace: kubevirt-manager
 spec:
+  defaultBackend:
+    service:
+      name: kubevirt-manager
+      port:
+        number: 8080
   ingressClassName: tailscale
-  rules:
-  - host: vm.manatee-basking.ts.net
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: kubevirt-manager
-            port:
-              number: 80
+  tls:
+  - hosts:
+    - vm

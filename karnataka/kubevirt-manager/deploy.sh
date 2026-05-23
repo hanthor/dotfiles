@@ -9,8 +9,13 @@ echo "========================================================="
 echo " Deploying KubeVirt Manager Web UI to Karnataka over SSH..."
 echo "========================================================="
 
-# Apply KubeVirt Manager core components and Ingress
-cat "${SCRIPT_DIR}/bundled.yaml" "${SCRIPT_DIR}/ingress.yaml" | ssh core@${KARNATAKA_IP} "kubectl apply -f -"
+# Apply KubeVirt Manager core components and Ingress with explicit document boundaries
+(
+  cat "${SCRIPT_DIR}/bundled.yaml"
+  echo ""
+  echo "---"
+  cat "${SCRIPT_DIR}/ingress.yaml"
+) | ssh core@${KARNATAKA_IP} "kubectl apply -f -"
 
 echo "========================================================="
 echo " Deployment Manifests Applied Successfully!"
