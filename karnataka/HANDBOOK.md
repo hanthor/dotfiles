@@ -994,7 +994,7 @@ To manage virtual machines on your existing Kubernetes cluster with a beautiful 
 
 1. **Features**: VM creation, pool resizing, disk management, VNC/Serial console access in-browser (via noVNC), and Prometheus monitoring integration.
 2. **Namespace**: `kubevirt-manager`
-3. **Tailnet Ingress**: Exposes the WebUI securely on your Tailscale network at `https://vm.manatee-basking.ts.net`.
+3. **Tailnet Ingress**: Exposes the WebUI securely on your Tailscale network at `https://vm-1.manatee-basking.ts.net`.
 
 ### Deployment
 
@@ -1005,7 +1005,8 @@ To deploy KubeVirt Manager and its Ingress, run the deployment helper script:
 
 This applies the following manifests:
 * `kubevirt-manager/bundled.yaml`: Creates the namespace, ServiceAccount, priority classes, ClusterRoles, and the Deployment + Service for the manager.
-* `kubevirt-manager/ingress.yaml`: Deploys the Tailscale Ingress on port 80 mapping `vm.manatee-basking.ts.net` to the manager service.
+* `kubevirt-manager/ingress.yaml`: Deploys the Tailscale Ingress on port 80 mapping the manager service to your Tailnet.
+   * *Note on Hostname*: Because the hostname `vm` was occupied by an offline device, the Tailscale Operator automatically registered it as **`vm-1.manatee-basking.ts.net`**.
 
 ### Verification & Operations
 
@@ -1015,7 +1016,7 @@ This applies the following manifests:
    ```
 2. Access the virtualization console in your browser:
    ```text
-   https://vm.manatee-basking.ts.net
+   https://vm-1.manatee-basking.ts.net
    ```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
