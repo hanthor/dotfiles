@@ -64,12 +64,6 @@ storage:
       target: /opt/extensions/kubernetes/kubernetes-v1.33.2-x86-64.raw
     - path: /etc/extensions/tailscale.raw
       target: /opt/extensions/tailscale/tailscale-v1.98.3-x86-64.raw
-    - path: /etc/kubernetes
-      target: /var/lib/state/etc-kubernetes
-    - path: /var/lib/etcd
-      target: /var/lib/state/etcd
-    - path: /var/lib/kubelet
-      target: /var/lib/state/kubelet
 
 systemd:
   units:
@@ -92,5 +86,71 @@ systemd:
         ExecStart=/usr/bin/tailscale up
         RemainAfterExit=yes
 
+        [Install]
+        WantedBy=multi-user.target
+
+    # Mount the persistent NVMe partition early in the boot sequence
+    - name: var-lib-state.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Mount Persistent NVMe Partition
+        Before=local-fs.target
+        [Mount]
+        What=/dev/disk/by-uuid/efcecc3a-1350-4ea0-9668-04fd71590ccf
+        Where=/var/lib/state
+        Type=ext4
+        Options=defaults,noatime
+        [Install]
+        WantedBy=multi-user.target
+
+    # Systemd Bind Mount for ETCD cluster database
+    - name: var-lib-etcd.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Bind Mount Persistent ETCD Storage
+        Requires=var-lib-state.mount
+        After=var-lib-state.mount
+        Before=kubelet.service
+        [Mount]
+        What=/var/lib/state/etcd
+        Where=/var/lib/etcd
+        Type=none
+        Options=bind
+        [Install]
+        WantedBy=multi-user.target
+
+    # Systemd Bind Mount for Kubelet pod configuration
+    - name: var-lib-kubelet.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Bind Mount Persistent Kubelet Storage
+        Requires=var-lib-state.mount
+        After=var-lib-state.mount
+        Before=kubelet.service
+        [Mount]
+        What=/var/lib/state/kubelet
+        Where=/var/lib/kubelet
+        Type=none
+        Options=bind
+        [Install]
+        WantedBy=multi-user.target
+
+    # Systemd Bind Mount for Kubernetes configuration and certs
+    - name: etc-kubernetes.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Bind Mount Persistent Kubernetes Configuration
+        Requires=var-lib-state.mount
+        After=var-lib-state.mount
+        Before=kubelet.service
+        [Mount]
+        What=/var/lib/state/etc-kubernetes
+        Where=/etc/kubernetes
+        Type=none
+        Options=bind
         [Install]
         WantedBy=multi-user.target
