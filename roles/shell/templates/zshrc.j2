@@ -26,14 +26,27 @@ export PATH="$HOME/.local/bin:$PATH"
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
 # ── Completion ───────────────────────────────────────────────────
+# Use a compilation cache to speed up startup (rebuilt once a day)
+_comp_dumpfile="${XDG_CACHE_HOME:-$HOME/.cache}/zcompdump"
 autoload -Uz compinit
-compinit -d "${XDG_CACHE_HOME:-$HOME/.cache}/zcompdump"
+# Ensure EXTENDED_GLOB is set for the glob qualifier
+setopt EXTENDED_GLOB
+if [[ -n "$_comp_dumpfile"(#qN.mh-24) ]]; then
+  compinit -C -d "$_comp_dumpfile"
+else
+  compinit -d "$_comp_dumpfile"
+  # Compile the completion dump file for faster loading in the background
+  { zcompile "$_comp_dumpfile" } &!
+fi
 zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'  # case-insensitive
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 
 # ── Bluefin CLI (eza, bat, zoxide, starship, atuin, fzf) ─────────
-command -v bluefin-cli &>/dev/null && eval "$(bluefin-cli init zsh)"
+if command -v bluefin-cli &>/dev/null; then
+  # Intercept and bypass the slow MOTD execution to speed up startup
+  eval "$(bluefin-cli init zsh | sed 's/bluefin-cli motd show/true/')"
+fi
 
 # ── direnv ───────────────────────────────────────────────────────
 command -v direnv &>/dev/null && eval "$(direnv hook zsh)"

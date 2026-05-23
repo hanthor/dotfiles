@@ -159,8 +159,22 @@
 
 # bw sync is handled by the bitwarden role earlier in the play — skip here.
 
-# Skip BW round-trip when already logged in — atuin key file is the source of truth.
-- name: Check if atuin already has a key on disk
+# Skip BW round-trip when already logged in — atuin sync status is the source of truth.
+- name: Check Atuin sync status
+  ansible.builtin.command: atuin status
+  register: atuin_status_cmd
+  changed_when: false
+  failed_when: false
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  tags: [secrets]
+
+- name: Set Atuin logged in fact
+  ansible.builtin.set_fact:
+    atuin_logged_in: "{{ atuin_status_cmd.rc == 0 and '[Sync]' in atuin_status_cmd.stdout }}"
+  tags: [secrets]
+
+- name: Check if atuin key exists
   ansible.builtin.stat:
     path: ~/.local/share/atuin/key
   register: atuin_existing_key
@@ -175,16 +189,16 @@
   no_log: true
   changed_when: false
   failed_when: false
-  when: not atuin_existing_key.stat.exists
+  when: not atuin_logged_in
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   tags: [secrets]
 
-- name: Skip atuin login (already keyed)
+- name: Skip atuin login (already logged in)
   ansible.builtin.set_fact:
     atuin_bw_item: { rc: 1, stdout: "" }
-  when: atuin_existing_key.stat.exists
+  when: atuin_logged_in
   tags: [secrets]
 
 - name: Warn if atuin.sh not found in Bitwarden
@@ -193,7 +207,7 @@
       Bitwarden item 'atuin.sh' not found or vault locked — skipping atuin login.
       Run 'bw unlock' on this machine and re-run, or log in to atuin manually.
   when:
-    - not atuin_existing_key.stat.exists
+    - not atuin_logged_in
     - atuin_bw_item.rc != 0 or (atuin_bw_item.stdout | default('')) | length == 0
   tags: [secrets]
 
@@ -209,20 +223,13 @@
 # NOTE: We do NOT write atuin_key (mnemonic) to ~/.local/share/atuin/key directly.
 # Atuin expects that file to be a base64-encoded binary key.
 # Running 'atuin login -k' with the mnemonic correctly generates the binary key file.
-- name: Check if atuin key exists (indicates already logged in)
-  ansible.builtin.stat:
-    path: ~/.local/share/atuin/key
-  register: atuin_session
-  when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
-  tags: [secrets]
-
 - name: Remove atuin data directory before fresh login
   ansible.builtin.file:
     path: ~/.local/share/atuin
     state: absent
   when: >
     atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
-    and not atuin_session.stat.exists
+    and not atuin_existing_key.stat.exists
   tags: [secrets]
 
 - name: Login to atuin sync
@@ -230,7 +237,7 @@
     atuin login -u "{{ atuin_username }}" -p "{{ atuin_password }}" -k "{{ atuin_key }}"
   when: >
     atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
-    and not atuin_session.stat.exists
+    and not atuin_logged_in
   changed_when: true
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"

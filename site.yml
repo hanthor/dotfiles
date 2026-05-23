@@ -29,6 +29,8 @@
       tags: [system, packages, apk]
     - role: homebrew
       tags: [packages, homebrew]
+    - role: bitwarden
+      tags: [secrets, bitwarden]
     - role: shell
       tags: [dotfiles, shell]
     - role: git
@@ -37,8 +39,6 @@
       tags: [dotfiles, neovim, editor]
 
     # Phase 2: Secrets + auth
-    - role: bitwarden
-      tags: [secrets, bitwarden]
     - role: ssh_keys
       tags: [secrets, ssh, ssh_keys]
     - role: github
