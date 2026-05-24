@@ -4,11 +4,11 @@ set -e
 KARNATAKA_IP="192.168.0.6"
 
 echo "Fetching frontend pod name from karnataka..."
-POD=$(ssh -o StrictHostKeyChecking=no core@$KARNATAKA_IP "kubectl get pod -l app=frontend -n kubestellar -o jsonpath='{.items[0].metadata.name}'")
+POD=$(ssh -o StrictHostKeyChecking=no core@$KARNATAKA_IP "sudo KUBECONFIG=/etc/kubernetes/admin.conf kubectl get pod -l app=frontend -n kubestellar -o jsonpath='{.items[0].metadata.name}'")
 echo "Found frontend pod: $POD"
 
 echo "Downloading index-BUr-cMfJ.js from pod to bihar..."
-ssh -o StrictHostKeyChecking=no core@$KARNATAKA_IP "kubectl exec deployment/frontend -n kubestellar -- cat /usr/share/nginx/html/assets/index-BUr-cMfJ.js" > /tmp/index-BUr-cMfJ.js
+ssh -o StrictHostKeyChecking=no core@$KARNATAKA_IP "sudo KUBECONFIG=/etc/kubernetes/admin.conf kubectl exec deployment/frontend -n kubestellar -- cat /usr/share/nginx/html/assets/index-BUr-cMfJ.js" > /tmp/index-BUr-cMfJ.js
 
 echo "Patching file on bihar using Python 3..."
 python3 -c '
@@ -42,7 +42,7 @@ echo "Uploading patched file to karnataka..."
 scp -o StrictHostKeyChecking=no /tmp/index-BUr-cMfJ.js core@$KARNATAKA_IP:/tmp/index-BUr-cMfJ.js
 
 echo "Copying file into the frontend pod on karnataka..."
-ssh -o StrictHostKeyChecking=no core@$KARNATAKA_IP "kubectl cp /tmp/index-BUr-cMfJ.js kubestellar/$POD:/usr/share/nginx/html/assets/index-BUr-cMfJ.js && rm /tmp/index-BUr-cMfJ.js"
+ssh -o StrictHostKeyChecking=no core@$KARNATAKA_IP "sudo KUBECONFIG=/etc/kubernetes/admin.conf kubectl cp /tmp/index-BUr-cMfJ.js kubestellar/$POD:/usr/share/nginx/html/assets/index-BUr-cMfJ.js && rm /tmp/index-BUr-cMfJ.js"
 
 # Clean up locally
 rm /tmp/index-BUr-cMfJ.js

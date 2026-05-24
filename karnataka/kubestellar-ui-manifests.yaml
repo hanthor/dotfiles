@@ -285,7 +285,7 @@ data:
 
         # Login endpoint - proxy to backend
         location /login {
-            set $backend backend.default.svc.cluster.local:4000;
+            set $backend backend.kubestellar.svc.cluster.local:4000;
             proxy_pass http://$backend/login;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -295,7 +295,7 @@ data:
 
         # API routes - preserve full path including /api
         location ~ ^/api/(.*)$ {
-            set $backend backend.default.svc.cluster.local:4000;
+            set $backend backend.kubestellar.svc.cluster.local:4000;
             proxy_pass http://$backend/api/$1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
