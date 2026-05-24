@@ -154,3 +154,20 @@ systemd:
         Options=bind
         [Install]
         WantedBy=multi-user.target
+
+    # Systemd Bind Mount for Tailscale node credentials
+    - name: var-lib-tailscale.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Bind Mount Persistent Tailscale Storage
+        Requires=var-lib-state.mount
+        After=var-lib-state.mount
+        Before=tailscaled.service
+        [Mount]
+        What=/var/lib/state/tailscale
+        Where=/var/lib/tailscale
+        Type=none
+        Options=bind
+        [Install]
+        WantedBy=multi-user.target
