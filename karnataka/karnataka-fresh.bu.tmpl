@@ -58,6 +58,11 @@ storage:
         inline: |
           TS_AUTHKEY={{TS_AUTHKEY}}
           TS_STATE_DIR=/var/lib/tailscale
+    - path: /etc/modules-load.d/amdgpu.conf
+      mode: 0644
+      contents:
+        inline: |
+          amdgpu
 
   links:
     - path: /etc/extensions/kubernetes.raw
@@ -67,6 +72,68 @@ storage:
 
 systemd:
   units:
+    - name: prepare-overlay-dirs.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Prepare Writable Overlay Directories
+        Requires=var-lib-state.mount
+        After=var-lib-state.mount
+        Before=usr-lib-modules.mount usr-lib-firmware.mount
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/mkdir -p /var/lib/state/modules /var/lib/state/modules_work /var/lib/state/firmware /var/lib/state/firmware_work
+        RemainAfterExit=yes
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: usr-lib-modules.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Overlay for Writable Kernel Modules
+        Requires=var-lib-state.mount prepare-overlay-dirs.service
+        After=prepare-overlay-dirs.service
+        Before=systemd-modules-load.service
+        [Mount]
+        What=overlay
+        Where=/usr/lib/modules
+        Type=overlay
+        Options=lowerdir=/usr/lib/modules,upperdir=/var/lib/state/modules,workdir=/var/lib/state/modules_work
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: run-depmod.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Regenerate Kernel Module Dependencies
+        Requires=usr-lib-modules.mount
+        After=usr-lib-modules.mount
+        Before=systemd-modules-load.service
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/sbin/depmod -a
+        RemainAfterExit=yes
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: usr-lib-firmware.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Overlay for Writable Firmware
+        Requires=var-lib-state.mount prepare-overlay-dirs.service
+        After=prepare-overlay-dirs.service
+        Before=systemd-modules-load.service
+        [Mount]
+        What=overlay
+        Where=/usr/lib/firmware
+        Type=overlay
+        Options=lowerdir=/usr/lib/firmware,upperdir=/var/lib/state/firmware,workdir=/var/lib/state/firmware_work
+        [Install]
+        WantedBy=multi-user.target
+
     - name: systemd-sysext.service
       enabled: true
     - name: systemd-sysupdate.timer
