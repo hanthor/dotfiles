@@ -9,12 +9,16 @@ echo "========================================================="
 echo " Deploying vLLM ROCm to Karnataka over SSH..."
 echo "========================================================="
 
-# Apply manifests in order
-cat "${SCRIPT_DIR}/00-namespace.yaml" \
+# Apply namespace first and wait
+ssh core@${KARNATAKA_IP} "sudo KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f -" < "${SCRIPT_DIR}/00-namespace.yaml"
+sleep 1
+
+# Apply the rest of the manifests
+cat "${SCRIPT_DIR}/00-amd-gpu-device-plugin.yaml" \
     "${SCRIPT_DIR}/01-pvc.yaml" \
     "${SCRIPT_DIR}/02-deployment-rocm.yaml" \
     "${SCRIPT_DIR}/03-service.yaml" \
-    "${SCRIPT_DIR}/04-ingress.yaml" | ssh core@${KARNATAKA_IP} "kubectl apply -f -"
+    "${SCRIPT_DIR}/04-ingress.yaml" | ssh core@${KARNATAKA_IP} "sudo KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f -"
 
 echo "========================================================="
 echo " Manifests applied successfully!"

@@ -21,7 +21,7 @@ spec:
         imagePullPolicy: IfNotPresent
         args:
         - --model
-        - Qwen/Qwen2.5-Coder-7B-Instruct
+        - Qwen/Qwen3.6-27B-FP8
         - --trust-remote-code
         - --max-model-len
         - "4096"
@@ -36,11 +36,11 @@ spec:
         resources:
           requests:
             cpu: "4"
-            memory: 16Gi
+            memory: 32Gi
             amd.com/gpu: "1"
           limits:
             cpu: "8"
-            memory: 48Gi
+            memory: 60Gi
             amd.com/gpu: "1"
         securityContext:
           privileged: true # Allow raw access to direct rendering and memory architectures
