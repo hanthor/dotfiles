@@ -77,7 +77,7 @@ else
     for manifest in "${KARNATAKA_DIR}/vllm"/*.yaml; do
         manifest_name=$(basename "${manifest}")
         echo "  Testing manifest: ${manifest_name}..."
-        if cat "${manifest}" | ssh -o BatchMode=yes -o StrictHostKeyChecking=no core@${KARNATAKA_IP} "kubectl apply --dry-run=client -f -" > /dev/null 2>&1; then
+        if cat "${manifest}" | ssh -o BatchMode=yes -o StrictHostKeyChecking=no core@${KARNATAKA_IP} "sudo KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply --dry-run=client -f -" > /dev/null 2>&1; then
             echo "    -> Valid"
         else
             echo -e "    -> ${RED}Invalid manifest syntax or API mismatch${NC}"
