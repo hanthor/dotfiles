@@ -58,11 +58,6 @@ storage:
         inline: |
           TS_AUTHKEY={{TS_AUTHKEY}}
           TS_STATE_DIR=/var/lib/tailscale
-    - path: /etc/modules-load.d/amdgpu.conf
-      mode: 0644
-      contents:
-        inline: |
-          amdgpu
 
   links:
     - path: /etc/extensions/kubernetes.raw
@@ -94,7 +89,6 @@ systemd:
         Description=Overlay for Writable Kernel Modules
         Requires=var-lib-state.mount prepare-overlay-dirs.service
         After=prepare-overlay-dirs.service
-        Before=systemd-modules-load.service
         [Mount]
         What=overlay
         Where=/usr/lib/modules
@@ -107,13 +101,14 @@ systemd:
       enabled: true
       contents: |
         [Unit]
-        Description=Regenerate Kernel Module Dependencies
+        Description=Regenerate Kernel Module Dependencies and Load AMDGPU
         Requires=usr-lib-modules.mount
         After=usr-lib-modules.mount
-        Before=systemd-modules-load.service
+        Before=kubelet.service
         [Service]
         Type=oneshot
         ExecStart=/usr/sbin/depmod -a
+        ExecStartPost=/usr/sbin/modprobe amdgpu
         RemainAfterExit=yes
         [Install]
         WantedBy=multi-user.target
@@ -125,7 +120,6 @@ systemd:
         Description=Overlay for Writable Firmware
         Requires=var-lib-state.mount prepare-overlay-dirs.service
         After=prepare-overlay-dirs.service
-        Before=systemd-modules-load.service
         [Mount]
         What=overlay
         Where=/usr/lib/firmware
