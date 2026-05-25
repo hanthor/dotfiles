@@ -267,3 +267,42 @@
   changed_when: false
   failed_when: false
   tags: [shell]
+
+# ── AI Coding Tools configuration ────────────────────────────────
+- name: Create OpenCode configuration directory
+  ansible.builtin.file:
+    path: ~/.config/opencode
+    state: directory
+    mode: "0755"
+
+- name: Deploy OpenCode config
+  ansible.builtin.copy:
+    src: opencode.json
+    dest: ~/.config/opencode/opencode.json
+    mode: "0644"
+
+- name: Create OpenCode auth directory
+  ansible.builtin.file:
+    path: ~/.local/share/opencode
+    state: directory
+    mode: "0755"
+
+- name: Deploy OpenCode auth key
+  ansible.builtin.copy:
+    src: opencode-auth.json
+    dest: ~/.local/share/opencode/auth.json
+    mode: "0600"
+
+- name: Create pi-coding-agent directory
+  ansible.builtin.file:
+    path: ~/.pi/agent
+    state: directory
+    mode: "0755"
+
+- name: Deploy pi-coding-agent models config
+  ansible.builtin.copy:
+    src: pi-models.json
+    dest: ~/.pi/agent/models.json
+    mode: "0644"
+
+

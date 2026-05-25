@@ -1,5 +1,5 @@
 #!ipxe
-set base-url http://192.168.0.5:8888
-kernel ${base-url}/flatcar_production_pxe.vmlinuz initrd=flatcar_production_pxe_image.cpio.gz flatcar.first_boot=1 ignition.config.url=http://192.168.0.5:8888/karnataka-fresh.ign
+set base-url http://192.168.0.10:8888
+kernel ${base-url}/flatcar_production_pxe.vmlinuz initrd=flatcar_production_pxe_image.cpio.gz flatcar.first_boot=1 ignition.config.url=http://192.168.0.10:8888/karnataka-fresh.ign
 initrd ${base-url}/flatcar_production_pxe_image.cpio.gz
 boot

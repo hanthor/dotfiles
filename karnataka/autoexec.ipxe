@@ -1,2 +1,14 @@
 #!ipxe
-chain http://192.168.0.5:8888/flatcar.ipxe
+
+# Raspberry Pi PXE Server
+set pxe-server 192.168.0.10
+
+# Identify host by MAC address
+# Karnataka: 9c:bf:0d:00:e5:0f
+# Bihar:     a8:a1:59:e1:6d:84
+
+iseq ${mac:hexhyp} 9c:bf:0d:00:e5:0f && chain http://${pxe-server}:8888/flatcar.ipxe ||
+iseq ${mac:hexhyp} a8:a1:59:e1:6d:84 && chain http://${pxe-server}:8888/bihar.ipxe ||
+
+:generic
+chain http://${pxe-server}:8888/flatcar.ipxe

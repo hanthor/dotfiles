@@ -31,14 +31,13 @@ The NVMe drives are **not mounted** in the current netboot configuration. The en
 
 | Host | IP | MAC | Notes |
 |------|----|-----|-------|
-| karnataka | `192.168.0.6` | `9C:BF:0D:00:E5:0F` | This server |
-| bihar | `192.168.0.5` | `A8:A1:59:E1:6D:84` | PXE server / homelab host (Proxmox) |
-| raspberrypi | `192.168.0.10` | `D8:3A:DD:E9:C7:1D` | — |
+| karnataka | `192.168.0.6` | `9C:BF:0D:00:E5:0F` | Flatcar K8s Node 1 |
+| bihar | `192.168.0.5` | `A8:A1:59:E1:6D:84` | Flatcar K8s Node 2 (Intel CPU) |
+| raspberrypi | `192.168.0.10` | `D8:3A:DD:E9:C7:1D` | PXE server (dnsmasq) |
 | kvm | `192.168.0.99` | `48:DA:35:6F:A9:20` | KVM host |
 
-DHCP range: `192.168.0.10–254` (dnsmasq on `bihar:vmbr0`)  
-Tailscale network: `manatee-basking.ts.net`  
-Tailscale hostname: `karnataka.manatee-basking.ts.net`
+DHCP range: `192.168.0.10–254` (dnsmasq on `raspberrypi:eth0`)  
+Tailscale network: `manatee-basking.ts.net`
 
 ---
 
@@ -46,37 +45,32 @@ Tailscale hostname: `karnataka.manatee-basking.ts.net`
 
 | Field | Value |
 |-------|-------|
-| OS | Flatcar Container Linux 4593.2.1 (Oklo) |
-| Kernel | 6.12.87-flatcar |
-| Container runtime | containerd 2.1.5 |
+| OS | Flatcar Container Linux |
 | Boot method | PXE (iPXE) — fully diskless, runs in RAM |
 | Login user | `core` (also `james` via Tailscale/SSH) |
 
-SSH: `ssh core@192.168.0.6` or `ssh core@karnataka.manatee-basking.ts.net`
+SSH: `ssh core@192.168.0.6` or `ssh core@192.168.0.5`
 
 ---
 
-## PXE Boot Infrastructure (on bihar)
+## PXE Boot Infrastructure (on Raspberry Pi)
 
-All files live on **bihar** (`192.168.0.5`). The boot chain:
+All files live on **raspberrypi** (`192.168.0.10`). The boot chain:
 
 ```
-DHCP (dnsmasq) → TFTP autoexec.ipxe → HTTP flatcar.ipxe → Flatcar kernel + Ignition
+DHCP (dnsmasq) → TFTP autoexec.ipxe → HTTP {flatcar,bihar}.ipxe → Flatcar kernel + Ignition
 ```
 
-### File locations on bihar (Consolidated in Repository)
+### File locations on Raspberry Pi
 
 | System Path | Repository File | Purpose |
 |-------------|-----------------|---------|
-| `/etc/dnsmasq.d/pxe.conf` | [dnsmasq-pxe.conf](file:///home/james/dev/karnataka/dnsmasq-pxe.conf) | DHCP + TFTP config (interface: `vmbr0`) |
-| `/var/lib/pxe/tftp/autoexec.ipxe` | [autoexec.ipxe](file:///home/james/dev/karnataka/autoexec.ipxe) | Entry iPXE script; chains to HTTP server |
-| `/var/lib/pxe/tftp/iPXE/ipxe.efi` | — | UEFI iPXE binary |
-| `/var/lib/pxe/tftp/iPXE/undionly.kpxe` | — | Legacy BIOS iPXE binary |
-| `/var/lib/pxe/http/flatcar.ipxe` | [flatcar.ipxe](file:///home/james/dev/karnataka/flatcar.ipxe) | Main iPXE boot script |
-| `/var/lib/pxe/http/flatcar_production_pxe.vmlinuz` | — | Flatcar kernel |
-| `/var/lib/pxe/http/flatcar_production_pxe_image.cpio.gz` | — | Flatcar initramfs |
-| `/var/lib/pxe/http/karnataka-fresh.ign` | [karnataka-fresh.ign](file:///home/james/dev/karnataka/karnataka-fresh.ign) / [karnataka-fresh.bu](file:///home/james/dev/karnataka/karnataka-fresh.bu) | Ignition JSON & Butane source config |
-| `/etc/systemd/system/pxe-http.service` | — | systemd unit: `python3 -m http.server 8888` serving `/var/lib/pxe/http` |
+| `/etc/dnsmasq.d/pxe.conf` | [dnsmasq-pxe.conf](file:///home/james/dev/karnataka/dnsmasq-pxe.conf) | DHCP + TFTP config |
+| `/var/lib/pxe/tftp/autoexec.ipxe` | [autoexec.ipxe](file:///home/james/dev/karnataka/autoexec.ipxe) | Entry iPXE script; chains by MAC |
+| `/var/lib/pxe/http/flatcar.ipxe` | [flatcar.ipxe](file:///home/james/dev/karnataka/flatcar.ipxe) | Karnataka iPXE boot script |
+| `/var/lib/pxe/http/bihar.ipxe` | [bihar.ipxe](file:///home/james/dev/karnataka/bihar.ipxe) | Bihar iPXE boot script |
+| `/var/lib/pxe/http/karnataka-fresh.ign` | — | Generated Karnataka Ignition |
+| `/var/lib/pxe/http/bihar-fresh.ign` | — | Generated Bihar Ignition |
 
 
 ### Starting the HTTP server (required before rebooting karnataka)

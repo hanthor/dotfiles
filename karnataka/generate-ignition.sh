@@ -1,13 +1,14 @@
 #!/bin/bash
 set -eo pipefail
 
-# Secure Ignition Generator for Karnataka
+# Secure Ignition Generator for Flatcar Nodes
 # Dynamically injects Tailscale secrets from Bitwarden without checking them into Git.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-TEMPLATE_FILE="${SCRIPT_DIR}/karnataka-fresh.bu.tmpl"
+HOST="${1:-karnataka}"
+TEMPLATE_FILE="${SCRIPT_DIR}/${HOST}-fresh.bu.tmpl"
 PXE_OUTPUT_DIR="/var/lib/pxe/http"
-OUTPUT_FILE="${PXE_OUTPUT_DIR}/karnataka-fresh.ign"
+OUTPUT_FILE="${PXE_OUTPUT_DIR}/${HOST}-fresh.ign"
 
 # BW CLI Path
 BW_PATH="/home/linuxbrew/.linuxbrew/bin/bw"
@@ -33,15 +34,15 @@ if [ -z "${TS_AUTHKEY}" ] || [ "${TS_AUTHKEY}" == "null" ]; then
     exit 1
 fi
 
-echo "Generating temporary Butane file..."
-TMP_BU=$(mktemp /tmp/karnataka-fresh.XXXXXX.bu)
+echo "Generating temporary Butane file for ${HOST}..."
+TMP_BU=$(mktemp /tmp/${HOST}-fresh.XXXXXX.bu)
 trap 'rm -f "${TMP_BU}"' EXIT
 
 # Substitute placeholder
 sed "s/{{TS_AUTHKEY}}/${TS_AUTHKEY}/g" "${TEMPLATE_FILE}" > "${TMP_BU}"
 
 echo "Transpiling Butane template to Ignition JSON using Podman..."
-TMP_IGN=$(mktemp /tmp/karnataka-fresh.XXXXXX.ign)
+TMP_IGN=$(mktemp /tmp/${HOST}-fresh.XXXXXX.ign)
 trap 'rm -f "${TMP_BU}" "${TMP_IGN}"' EXIT
 
 # Run Butane in Podman
@@ -53,15 +54,18 @@ fi
 echo "Writing secure Ignition config directly to PXE directory: ${OUTPUT_FILE}..."
 if [ ! -d "${PXE_OUTPUT_DIR}" ]; then
     echo "ERROR: PXE HTTP directory ${PXE_OUTPUT_DIR} does not exist on this host."
-    exit 1
+    echo "If you are running this on a non-PXE server, you may need to copy the resulting .ign file manually."
+    
+    # Save to current directory as fallback
+    cp "${TMP_IGN}" "${SCRIPT_DIR}/${HOST}-fresh.ign"
+    echo "Saved to local directory instead: ${SCRIPT_DIR}/${HOST}-fresh.ign"
+else
+    # Move file using sudo since /var/lib/pxe/http is system-owned
+    sudo cp "${TMP_IGN}" "${OUTPUT_FILE}"
+    sudo chmod 644 "${OUTPUT_FILE}"
+    echo "========================================================="
+    echo " SUCCESS: ${HOST}-fresh.ign generated securely!"
+    echo " Serving at: http://192.168.0.4:8888/${HOST}-fresh.ign"
+    echo " (No secrets were checked into Git)"
+    echo "========================================================="
 fi
-
-# Move file using sudo since /var/lib/pxe/http is system-owned
-sudo cp "${TMP_IGN}" "${OUTPUT_FILE}"
-sudo chmod 644 "${OUTPUT_FILE}"
-
-echo "========================================================="
-echo " SUCCESS: karnataka-fresh.ign generated securely!"
-echo " Serving at: http://192.168.0.5:8888/karnataka-fresh.ign"
-echo " (No secrets were checked into Git)"
-echo "========================================================="

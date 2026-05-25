@@ -14,6 +14,18 @@ passwd:
         - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGR7ZHHHguM8yl4vbDsSMlk5VFg+PaLA4+kNtYLJwBxc
         - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDmpGEONccP2ByZ493pyJSkEJznTw8PsR8dkGKq/2SS7
         - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPelaWkNsfwqnceB/5gftUcnprfnflCsDlMDeQkm0Hps
+    - name: james
+      groups:
+        - sudo
+        - docker
+      ssh_authorized_keys:
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEi1hAoIBP84cgmF/UqbbMSLaNKs6xlyLcY1nsg54mu0
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL3AzpxRBryzkb9PtpQgwS7ak3QfSpxgDHAGwKvAS1kB
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOboaBzY4zEHJEWRhYRsZ5l40e9tWR+BseKFVPMDM+/+
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPOZx220I8Av7KmEAOib4iAKZFCzPp8cwtzvteJJ7VB
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGR7ZHHHguM8yl4vbDsSMlk5VFg+PaLA4+kNtYLJwBxc
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDmpGEONccP2ByZ493pyJSkEJznTw8PsR8dkGKq/2SS7
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPelaWkNsfwqnceB/5gftUcnprfnflCsDlMDeQkm0Hps
 
 storage:
   filesystems:
@@ -71,13 +83,13 @@ systemd:
       enabled: true
       contents: |
         [Unit]
-        Description=Prepare Writable Overlay Directories
+        Description=Prepare Writable Overlay and Bind-mount Directories
         Requires=var-lib-state.mount
         After=var-lib-state.mount
-        Before=usr-lib-modules.mount usr-lib-firmware.mount
+        Before=usr-lib-modules.mount usr-lib-firmware.mount var-lib-etcd.mount var-lib-kubelet.mount etc-kubernetes.mount var-lib-tailscale.mount
         [Service]
         Type=oneshot
-        ExecStart=/usr/bin/mkdir -p /var/lib/state/modules /var/lib/state/modules_work /var/lib/state/firmware /var/lib/state/firmware_work
+        ExecStart=/usr/bin/mkdir -p /var/lib/state/modules /var/lib/state/modules_work /var/lib/state/firmware /var/lib/state/firmware_work /var/lib/state/etcd /var/lib/state/kubelet /var/lib/state/etc-kubernetes /var/lib/state/tailscale
         RemainAfterExit=yes
         [Install]
         WantedBy=multi-user.target
@@ -115,7 +127,7 @@ systemd:
 
     - name: usr-lib-firmware.mount
       enabled: true
-      contents: |
+      contents: | |
         [Unit]
         Description=Overlay for Writable Firmware
         Requires=var-lib-state.mount prepare-overlay-dirs.service
