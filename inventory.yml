@@ -1,7 +1,7 @@
 ---
 all:
   hosts:
-    doctor-fleet:
+    goa:
       ansible_host: localhost
       ansible_connection: local
     kerala:
@@ -28,13 +28,13 @@ all:
   children:
     desktop:
       hosts:
+        goa:
         doctor-fleet:
         kerala:
         karnataka:
         kanpur:
         himachal:
         dilli:
-        goa:
     llm:
       hosts:
         karnataka:
