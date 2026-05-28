@@ -1436,6 +1436,124 @@ def cmd_kubevirt_logs(args: argparse.Namespace) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  Completions
+# ═══════════════════════════════════════════════════════════════════
+
+_COMMANDS = ["create", "start", "stop", "list", "info", "delete",
+             "viewer", "eject", "logs", "completion"]
+_CREATE_FLAGS = ["--kubevirt", "-k", "--mem", "--cpu", "--disk", "--iso",
+                 "--qcow", "--force", "--container-disk", "--pvc",
+                 "--namespace", "-n", "--node", "--cloud-init-password",
+                 "--cloud-init"]
+
+
+def _all_vm_names() -> list[str]:
+    """Collect VM names from both backends."""
+    names: list[str] = []
+    # QEMU VMs from local dir
+    if BASE_DIR.exists():
+        for item in BASE_DIR.iterdir():
+            if item.is_dir() and item.name != "cache" and (item / "metadata.json").exists():
+                names.append(item.name)
+    # KubeVirt VMs from cluster
+    try:
+        res = _kubectl(["get", "vms", "-A", "-o", "jsonpath={.items[*].metadata.name}"])
+        if res.returncode == 0:
+            names.extend(res.stdout.strip().split())
+    except Exception:
+        pass
+    return sorted(set(names))
+
+
+def _generate_completion_bash() -> str:
+    return '''# tailvm bash completion
+_tailvm_completion() {
+    local cur prev words cword
+    _init_completion || return
+    COMPREPLY=($(tailvm _complete bash "${COMP_WORDS[*]}" "$COMP_CWORD"))
+}
+complete -F _tailvm_completion tailvm
+'''
+
+
+def _generate_completion_zsh() -> str:
+    return '''#compdef tailvm
+# tailvm zsh completion
+_tailvm() {
+    local -a completions
+    completions=(${(f)"$(tailvm _complete zsh "${words[*]}" "$CURRENT")"})
+    compadd -a completions
+}
+_tailvm
+'''
+
+
+def _generate_completion_fish() -> str:
+    return '''# tailvm fish completion
+function __tailvm_complete
+    tailvm _complete fish "$argv" (math (count (commandline -opc)) + 1)
+end
+complete -c tailvm -f -a '(__tailvm_complete (commandline -opc))'
+'''
+
+
+def _handle_complete(args_str: str, cword: int) -> None:
+    """Internal completer: prints matching completions, one per line."""
+    words = args_str.split()
+    # Remove the program name (tailvm)
+    if words and words[0] in ("tailvm", os.path.basename(sys.argv[0])):
+        words = words[1:]
+        cword -= 1
+
+    # cword beyond len(words) means completing at the end (trailing space)
+    cur = words[cword] if cword < len(words) else ""
+
+    # Completing the command name (first word, or no words yet)
+    if cword <= 0:
+        for cmd in _COMMANDS:
+            if cur == "" or cmd.startswith(cur):
+                print(cmd)
+        return
+
+    command = words[0]
+
+    # create: complete flags (cword 2+)
+    if command == "create":
+        if cur.startswith("-"):
+            for flag in _CREATE_FLAGS:
+                if cur == "" or flag.startswith(cur):
+                    print(flag)
+        return
+
+    # completion: complete shell names
+    if command == "completion":
+        for shell in ["bash", "zsh", "fish"]:
+            if cur == "" or shell.startswith(cur):
+                print(shell)
+        return
+
+    # Commands that take a VM name (second argument)
+    if command in ("start", "stop", "info", "delete", "viewer", "eject", "logs"):
+        for name in _all_vm_names():
+            if cur == "" or name.startswith(cur):
+                print(name)
+        return
+
+
+_CMD_COMPLETIONS = {
+    "completion": lambda args: (
+        print(f"# tailvm {args.shell} completion — source this file or add to your shell rc:"),
+        print(f"#   tailvm completion {args.shell} > ~/.tailvm-completion.{args.shell}"),
+        print(f"#   echo 'source ~/.tailvm-completion.{args.shell}' >> ~/.{args.shell}rc"),
+        print(),
+        print({ "bash": _generate_completion_bash(),
+                "zsh": _generate_completion_zsh(),
+                "fish": _generate_completion_fish(),
+              }.get(args.shell, ""))),
+}
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  Dispatcher
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1455,6 +1573,9 @@ _KUBEVIRT_CMDS = {
 
 
 def _dispatch(command: str, args: argparse.Namespace) -> None:
+    if command == "completion":
+        _CMD_COMPLETIONS[command](args)
+        return
     if command == "create":
         backend = "kubevirt" if args.kubevirt else "qemu"
         handler = (_KUBEVIRT_CMDS if backend == "kubevirt" else _QEMU_CMDS)[command]
@@ -1483,6 +1604,11 @@ def _dispatch(command: str, args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════
 
 def main() -> None:
+    # Internal completion mode: tailvm _complete <shell> "<words>" <cword>
+    if len(sys.argv) >= 4 and sys.argv[1] == "_complete":
+        _handle_complete(sys.argv[3], int(sys.argv[4]))
+        return
+
     parser = argparse.ArgumentParser(
         description="TailVM — QEMU/KubeVirt VMs with Tailscale VNC",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1530,6 +1656,11 @@ def main() -> None:
 
     # list
     sub.add_parser("list", help="List all VMs (both backends)")
+
+    # completion
+    comp = sub.add_parser("completion", help="Generate shell completions")
+    comp.add_argument("shell", choices=["bash", "zsh", "fish"],
+                       help="Shell to generate completions for")
 
     args = parser.parse_args()
     if not args.command:
