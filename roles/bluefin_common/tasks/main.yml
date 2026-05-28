@@ -143,6 +143,12 @@
     dest: "~/.local/bin/bluefin-wallpaper-rotate.py"
     mode: "0755"
 
+- name: Deploy TailVM script
+  ansible.builtin.copy:
+    src: tailvm
+    dest: "~/.local/bin/tailvm"
+    mode: "0755"
+
 - name: Ensure systemd user directory exists
   ansible.builtin.file:
     path: "~/.config/systemd/user"

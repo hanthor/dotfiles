@@ -1,0 +1,5 @@
+# Contains cluster PKI secrets — never commit. Seeded into Bitwarden,
+# fetched onto desktops by the `kube` Ansible role.
+talosconfig
+controlplane.yaml
+worker.yaml

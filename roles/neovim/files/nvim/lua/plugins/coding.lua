@@ -85,6 +85,7 @@ return {
     lazy = true,
     dependencies = {
       "nvim-lua/plenary.nvim",
+      "nvim-neotest/nvim-nio",       -- required by neotest since v4
       "nvim-treesitter/nvim-treesitter",
       "nvim-neotest/neotest-python",
       "nvim-neotest/neotest-go",
@@ -96,12 +97,15 @@ return {
       { "<leader>ts", function() require("neotest").summary.toggle() end,     desc = "Test summary" },
     },
     opts = function()
-      return {
-        adapters = {
-          require("neotest-python"),
-          require("neotest-go"),
-        },
-      }
+      -- Neotest adapters are constructor functions; calling them returns
+      -- the adapter instance. Wrap in pcall so an adapter being missing
+      -- doesn't break the rest of the plugin.
+      local adapters = {}
+      for _, mod in ipairs({ "neotest-python", "neotest-go" }) do
+        local ok, adapter = pcall(require, mod)
+        if ok then table.insert(adapters, adapter({})) end
+      end
+      return { adapters = adapters }
     end,
   },
 

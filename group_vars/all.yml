@@ -7,7 +7,6 @@ user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james
 brew_prefix: /home/linuxbrew/.linuxbrew
-netbox_url: "https://bihar.manatee-basking.ts.net" # Tailscale MagicDNS + tailscale serve cert
 # Global services shown on ALL machine homepages
 global_services:
   - name: AppFlowy
@@ -16,12 +15,6 @@ global_services:
     description: Collaboration platform
     group: Core
     siteMonitor: https://bihar.manatee-basking.ts.net/appflowy
-  - name: NetBox
-    href: https://bihar.manatee-basking.ts.net/netbox
-    icon: netbox.png
-    description: Network source of truth
-    group: Core
-    siteMonitor: https://bihar.manatee-basking.ts.net/netbox
   - name: Proxmox
     href: https://bihar.manatee-basking.ts.net/proxmox
     icon: proxmox.png
@@ -104,6 +97,7 @@ core_brews:
   - fd
   - fzf
   - just
+  - make
   - ripgrep
   - shellcheck
   - shfmt
@@ -129,6 +123,8 @@ desktop_brews:
   - syncthing
   - uutils-coreutils
   - gcc
+  - mdbook
+  - nmap
   - gcc@11
   - gdb
   - go

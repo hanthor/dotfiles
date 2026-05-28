@@ -29,7 +29,6 @@ all:
     desktop:
       hosts:
         goa:
-        doctor-fleet:
         kerala:
         karnataka:
         kanpur:

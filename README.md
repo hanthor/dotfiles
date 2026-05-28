@@ -68,8 +68,9 @@ Repo is public — no secrets in git, ever. All secrets are fetched from Bitward
 
 ## Documentation
 
+Full handbook lives in [`docs/`](docs/) and is published as an mdbook — run `just docs` to serve it locally.
+
+- [Talos cluster handbook](docs/cluster.md) — Bihar + Karnataka, vLLM, KubeVirt
 - [Adding a new machine](docs/new-machine.md)
 - [Roles reference](docs/roles.md)
 - [Bitwarden vault setup](docs/bitwarden.md)
-- [Bluefin-ification guide](BLUEFIN-IFICATION.md)
-- [NetBox MCP integration](MCP.md)

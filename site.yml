@@ -45,6 +45,9 @@
       tags: [secrets, github]
     - role: tailscale
       tags: [secrets, tailscale]
+    - role: kube
+      tags: [secrets, kube]
+      when: is_desktop | bool and not skip_kube | default(false)
 
     # Phase 3: Desktop apps
     - role: flatpak
@@ -69,9 +72,6 @@
       when: inventory_hostname not in groups.get('vps', []) and not skip_syncthing | default(false)
     - role: systemd
       tags: [services, systemd]
-    - role: netbox
-      tags: [services, secrets, netbox]
-      when: inventory_hostname in groups.get('server', [])
     - role: homepage
       tags: [services, homepage]
       when: inventory_hostname not in groups.get('vps', []) and not skip_homepage | default(false)
@@ -98,6 +98,3 @@
     - role: lima
       tags: [services, lima]
       when: (is_desktop | bool or inventory_hostname == 'bihar') and not skip_lima | default(false)
-    - role: netbox_agent
-      tags: [services, secrets, netbox, netbox_agent]
-      when: not skip_netbox_agent | default(false)

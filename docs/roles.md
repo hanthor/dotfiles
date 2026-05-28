@@ -4,12 +4,12 @@
 
 | Tag | Roles | Needs BW? |
 |-----|-------|-----------|
-| `system` | sshd | No |
+| `system` | sshd, sudo, apk_packages | No |
 | `packages` | homebrew, flatpak | No |
-| `dotfiles` | shell, git | No |
-| `secrets` | bitwarden, ssh_keys, github, tailscale | Yes |
-| `desktop` | flatpak, gnome, zen_browser | No (desktop only) |
-| `services` | syncthing, systemd | No |
+| `dotfiles` | shell, git, neovim | No |
+| `secrets` | bitwarden, ssh_keys, github, tailscale, kube | Yes |
+| `desktop` | flatpak, gnome, zen_browser, bluefin_common | No (desktop only) |
+| `services` | syncthing, systemd, proxy, homepage, monitoring, cockpit, lima | No |
 
 ---
 
@@ -66,6 +66,9 @@ Also:
 - Installs Tailscale (if needed)
 - Fetches the reusable auth key from Bitwarden (`tailscale-authkey`)
 - Joins the Tailscale network if not already connected
+
+### `kube` *(secrets, desktop only)*
+Fetches `kubeconfig` and `talosconfig` from Bitwarden (as secure notes) and writes them to `~/.kube/config` and `~/.talos/config` with mode `0600`. Both items are seeded by `just seed-kube` from any machine that already has working configs. Missing items produce a warning, not a failure — skip the role entirely on a host with `skip_kube: true` in its `host_vars`.
 
 ### `flatpak` *(desktop only)*
 Installs flatpak apps from Flathub. Split into:

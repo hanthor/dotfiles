@@ -1,11 +1,14 @@
 return {
   -- Treesitter — syntax highlighting & text objects
+  -- Pinned to `master`: the `main` branch is a pre-1.0 rewrite that removed
+  -- `require("nvim-treesitter.configs").setup`, breaking this config.
   {
     "nvim-treesitter/nvim-treesitter",
+    branch = "master",
     build = ":TSUpdate",
     event = { "BufReadPost", "BufNewFile" },
     dependencies = {
-      "nvim-treesitter/nvim-treesitter-textobjects",
+      { "nvim-treesitter/nvim-treesitter-textobjects", branch = "master" },
       "nvim-treesitter/nvim-treesitter-context",
     },
     opts = {
@@ -53,7 +56,7 @@ return {
     opts = { ui = { border = "rounded" } },
   },
 
-  -- mason-lspconfig bridge
+  -- mason-lspconfig bridge (v2 API: `automatic_enable` replaced `automatic_installation`)
   {
     "williamboman/mason-lspconfig.nvim",
     event = { "BufReadPre", "BufNewFile" },
@@ -64,11 +67,14 @@ return {
         "ts_ls", "bashls", "yamlls", "jsonls", "taplo",
         "dockerls", "ansiblels",
       },
-      automatic_installation = true,
+      automatic_enable = true,
     },
   },
 
-  -- nvim-lspconfig
+  -- LSP — uses the nvim 0.11+ `vim.lsp.config` / `vim.lsp.enable` API.
+  -- nvim-lspconfig is loaded only as a *registry* of per-server defaults
+  -- (file types, command names, root patterns). We do not call its
+  -- deprecated `lspconfig[name].setup{}` framework anywhere.
   {
     "neovim/nvim-lspconfig",
     event = { "BufReadPre", "BufNewFile" },
@@ -76,32 +82,33 @@ return {
       "williamboman/mason.nvim",
       "williamboman/mason-lspconfig.nvim",
       "hrsh7th/cmp-nvim-lsp",
-      { "folke/neodev.nvim", opts = {} },   -- Lua LSP for nvim config
+      { "folke/lazydev.nvim", ft = "lua", opts = {} },   -- Lua LSP for nvim config (neodev successor)
     },
     config = function()
       local capabilities = require("cmp_nvim_lsp").default_capabilities()
       capabilities.textDocument.foldingRange = { dynamicRegistration = false, lineFoldingOnly = true }
 
-      local on_attach = function(_, buffer)
-        local map = function(keys, func, desc)
-          vim.keymap.set("n", keys, func, { buffer = buffer, desc = "LSP: " .. desc })
-        end
-        map("gd",         vim.lsp.buf.definition,       "Go to definition")
-        map("gD",         vim.lsp.buf.declaration,      "Go to declaration")
-        map("gr",         vim.lsp.buf.references,       "References")
-        map("gI",         vim.lsp.buf.implementation,   "Implementation")
-        map("gy",         vim.lsp.buf.type_definition,  "Type definition")
-        map("K",          vim.lsp.buf.hover,            "Hover docs")
-        map("<leader>cr", vim.lsp.buf.rename,           "Rename")
-        map("<leader>ca", vim.lsp.buf.code_action,      "Code action")
-        map("<leader>cf", vim.lsp.buf.format,           "Format")
-        map("<leader>ci", vim.lsp.buf.incoming_calls,   "Incoming calls")
-        map("<leader>co", vim.lsp.buf.outgoing_calls,   "Outgoing calls")
-      end
+      -- Buffer-local LSP keymaps
+      vim.api.nvim_create_autocmd("LspAttach", {
+        callback = function(ev)
+          local map = function(keys, func, desc)
+            vim.keymap.set("n", keys, func, { buffer = ev.buf, desc = "LSP: " .. desc })
+          end
+          map("gd",         vim.lsp.buf.definition,       "Go to definition")
+          map("gD",         vim.lsp.buf.declaration,      "Go to declaration")
+          map("gr",         vim.lsp.buf.references,       "References")
+          map("gI",         vim.lsp.buf.implementation,   "Implementation")
+          map("gy",         vim.lsp.buf.type_definition,  "Type definition")
+          map("K",          vim.lsp.buf.hover,            "Hover docs")
+          map("<leader>cr", vim.lsp.buf.rename,           "Rename")
+          map("<leader>ca", vim.lsp.buf.code_action,      "Code action")
+          map("<leader>cf", function() vim.lsp.buf.format({ async = true }) end, "Format")
+          map("<leader>ci", vim.lsp.buf.incoming_calls,   "Incoming calls")
+          map("<leader>co", vim.lsp.buf.outgoing_calls,   "Outgoing calls")
+        end,
+      })
 
-      local lspconfig = require("lspconfig")
-
-      -- Default servers
+      -- Per-server config. Pure data — the new API consumes this directly.
       local servers = {
         gopls = {},
         ts_ls = {},
@@ -130,39 +137,37 @@ return {
           },
         },
         pyright = {
-          settings = {
-            python = { analysis = { typeCheckingMode = "basic" } },
-          },
+          settings = { python = { analysis = { typeCheckingMode = "basic" } } },
         },
         ruff = {},
         rust_analyzer = {
           settings = {
             ["rust-analyzer"] = {
               cargo = { allFeatures = true },
-              checkOnSave = { command = "clippy" },
+              -- `check`, not `checkOnSave.command` — the latter is deprecated upstream.
+              check = { command = "clippy" },
             },
           },
         },
       }
 
-      for server, config in pairs(servers) do
-        lspconfig[server].setup(vim.tbl_deep_extend("force", {
-          capabilities = capabilities,
-          on_attach = on_attach,
-        }, config))
-      end
-
-      -- Diagnostic signs
-      local signs = { Error = " ", Warn = " ", Hint = "󰠠 ", Info = " " }
-      for type, icon in pairs(signs) do
-        local hl = "DiagnosticSign" .. type
-        vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
+      for name, opts in pairs(servers) do
+        vim.lsp.config(name, vim.tbl_deep_extend("force", { capabilities = capabilities }, opts))
+        vim.lsp.enable(name)
       end
 
       vim.diagnostic.config({
         virtual_text = { prefix = "●" },
         severity_sort = true,
         float = { border = "rounded" },
+        signs = {
+          text = {
+            [vim.diagnostic.severity.ERROR] = " ",
+            [vim.diagnostic.severity.WARN]  = " ",
+            [vim.diagnostic.severity.HINT]  = "󰠠 ",
+            [vim.diagnostic.severity.INFO]  = " ",
+          },
+        },
       })
     end,
   },
@@ -173,7 +178,7 @@ return {
     event = "BufWritePre",
     cmd = "ConformInfo",
     keys = {
-      { "<leader>cf", function() require("conform").format({ async = true, lsp_fallback = true }) end,
+      { "<leader>cf", function() require("conform").format({ async = true, lsp_format = "fallback" }) end,
         desc = "Format" },
     },
     opts = {
@@ -191,7 +196,7 @@ return {
         sh         = { "shfmt" },
         fish       = { "fish_indent" },
       },
-      format_on_save = { timeout_ms = 500, lsp_fallback = true },
+      format_on_save = { timeout_ms = 500, lsp_format = "fallback" },
     },
   },
 

@@ -1,0 +1,641 @@
+#!/usr/bin/env python3
+import sys
+import os
+import argparse
+import subprocess
+import shutil
+import socket
+import json
+import time
+from pathlib import Path
+
+# Paths
+BASE_DIR = Path("/var/home/james/tailvms")
+CACHE_DIR = BASE_DIR / "cache"
+SYSTEMD_USER_DIR = Path("/var/home/james/.config/systemd/user")
+
+# Premium CLI output colors
+class Colors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+def print_success(msg):
+    print(f"{Colors.OKGREEN}✔ {msg}{Colors.ENDC}")
+
+def print_info(msg):
+    print(f"{Colors.OKCYAN}ℹ {msg}{Colors.ENDC}")
+
+def print_warning(msg):
+    print(f"{Colors.WARNING}⚠ {msg}{Colors.ENDC}")
+
+def print_error(msg):
+    print(f"{Colors.FAIL}✘ {msg}{Colors.ENDC}", file=sys.stderr)
+
+def get_tailscale_ip():
+    """Retrieves the host's Tailscale IPv4 address."""
+    # First check using tailscale binary
+    tailscale_path = shutil.which("tailscale")
+    if tailscale_path:
+        try:
+            res = subprocess.run([tailscale_path, "ip", "-4"], capture_output=True, text=True, check=True)
+            ip = res.stdout.strip()
+            if ip:
+                return ip
+        except Exception:
+            pass
+            
+    # Fallback to scanning interfaces if tailscale command fails
+    try:
+        res = subprocess.run(["ip", "-4", "addr", "show", "dev", "tailscale0"], capture_output=True, text=True)
+        for line in res.stdout.split("\n"):
+            if "inet " in line:
+                return line.split()[1].split("/")[0]
+    except Exception:
+        pass
+
+    return None
+
+def find_qemu_binaries():
+    """Finds the path to qemu-system-x86_64 and qemu-img, searching common/custom paths."""
+    qemu_path = shutil.which("qemu-system-x86_64")
+    qemu_img_path = shutil.which("qemu-img")
+    
+    # Custom fallback search for Homebrew on Bluefin
+    homebrew_bin = Path("/home/linuxbrew/.linuxbrew/bin")
+    if not qemu_path and (homebrew_bin / "qemu-system-x86_64").exists():
+        qemu_path = str(homebrew_bin / "qemu-system-x86_64")
+    if not qemu_img_path and (homebrew_bin / "qemu-img").exists():
+        qemu_img_path = str(homebrew_bin / "qemu-img")
+        
+    return qemu_path, qemu_img_path
+
+def get_assigned_displays():
+    """Scans all VM folders to find which VNC display numbers are already allocated."""
+    displays = set()
+    if not BASE_DIR.exists():
+        return displays
+    for item in BASE_DIR.iterdir():
+        if item.is_dir():
+            meta_file = item / "metadata.json"
+            if meta_file.exists():
+                try:
+                    with open(meta_file, "r") as f:
+                        data = json.load(f)
+                        if "vnc_display" in data:
+                            displays.add(int(data["vnc_display"]))
+                except Exception:
+                    pass
+    return displays
+
+def find_free_vnc_display(ip):
+    """Finds a free VNC display port, avoiding both assigned metadata displays and currently bound ports."""
+    assigned = get_assigned_displays()
+    display = 1
+    while True:
+        if display in assigned:
+            display += 1
+            continue
+        
+        port = 5900 + display
+        # Test if port is currently open/bindable
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind((ip if ip else "0.0.0.0", port))
+                return display
+        except OSError:
+            display += 1
+
+def download_file(url, dest_path):
+    """Downloads a file from a URL to a local destination showing progress."""
+    import urllib.request
+    from urllib.parse import urlparse
+    
+    print_info(f"Downloading: {url}")
+    
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    temp_path = dest_path.with_suffix(".tmp")
+    
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req) as response:
+            total_size = int(response.info().get('Content-Length', 0))
+            block_size = 1024 * 64 # 64 KB blocks
+            downloaded = 0
+            
+            with open(temp_path, "wb") as f:
+                while True:
+                    buffer = response.read(block_size)
+                    if not buffer:
+                        break
+                    downloaded += len(buffer)
+                    f.write(buffer)
+                    
+                    if total_size > 0:
+                        percent = downloaded * 100 / total_size
+                        bar_len = 30
+                        filled_len = int(bar_len * downloaded // total_size)
+                        bar = '=' * filled_len + '-' * (bar_len - filled_len)
+                        print(f"\r  [{bar}] {percent:.1f}% ({downloaded / (1024*1024):.1f} MB / {total_size / (1024*1024):.1f} MB)", end="", flush=True)
+                    else:
+                        print(f"\r  Downloaded: {downloaded / (1024*1024):.1f} MB", end="", flush=True)
+            print()
+            
+        if temp_path.exists():
+            temp_path.rename(dest_path)
+        print_success("Download complete and cached!")
+    except Exception as e:
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+        print_error(f"Download failed: {e}")
+        sys.exit(1)
+
+def resolve_source(source_str):
+    """Resolves a local path or a remote URL, downloading and caching if remote."""
+    if not source_str:
+        return None
+        
+    if source_str.startswith("http://") or source_str.startswith("https://"):
+        from urllib.parse import urlparse
+        parsed = urlparse(source_str)
+        filename = os.path.basename(parsed.path)
+        if not filename:
+            import hashlib
+            filename = hashlib.md5(source_str.encode()).hexdigest()
+            
+        cached_path = CACHE_DIR / filename
+        
+        # Check cache
+        if cached_path.exists():
+            print_success(f"Using cached image: {cached_path.name}")
+            return str(cached_path)
+            
+        # Download otherwise
+        download_file(source_str, cached_path)
+        return str(cached_path)
+    else:
+        local_path = Path(source_str).resolve()
+        if not local_path.exists():
+            print_error(f"Local file does not exist: {local_path}")
+            sys.exit(1)
+        return str(local_path)
+
+def generate_systemd_unit(name, qemu_path, mem, cpu, disk_path, iso_path, tailscale_ip, vnc_display, has_iso):
+    """Generates the systemd user service file content."""
+    vm_dir = BASE_DIR / name
+    
+    iso_args = ""
+    if has_iso and iso_path:
+        iso_args = f"-cdrom {iso_path} -boot once=d,menu=on"
+        
+    vnc_target = f"{tailscale_ip}:{vnc_display}" if tailscale_ip else f"127.0.0.1:{vnc_display}"
+
+    return f"""[Unit]
+Description=TailVM Virtual Machine - {name}
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={vm_dir}
+ExecStart={qemu_path} \\
+  -enable-kvm \\
+  -cpu host \\
+  -smp {cpu} \\
+  -m {mem} \\
+  -drive file={disk_path},if=virtio,cache=writeback \\
+  {iso_args} \\
+  -vnc {vnc_target} \\
+  -vga virtio \\
+  -device virtio-net-pci,netdev=net0 \\
+  -netdev user,id=net0
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+"""
+
+def daemon_reload():
+    """Reloads systemd user daemon."""
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+
+def cmd_create(args):
+    qemu_path, qemu_img_path = find_qemu_binaries()
+    if not qemu_path or not qemu_img_path:
+        print_error("Required QEMU binaries (qemu-system-x86_64 or qemu-img) not found!")
+        sys.exit(1)
+        
+    vm_dir = BASE_DIR / args.name
+    if vm_dir.exists() and not args.force:
+        print_error(f"VM directory {vm_dir} already exists. Use --force to overwrite, or choose another name.")
+        sys.exit(1)
+        
+    # Get tailscale ip
+    ip = get_tailscale_ip()
+    if not ip:
+        print_warning("Tailscale IP not found or offline. Defaulting VNC to localhost (127.0.0.1)")
+        ip = "127.0.0.1"
+    else:
+        print_info(f"Using Tailscale IP: {ip}")
+        
+    # Resolve ISO and QCOW sources if any
+    resolved_iso = resolve_source(args.iso) if args.iso else None
+    resolved_qcow = resolve_source(args.qcow) if args.qcow else None
+
+    # Allocate free VNC display
+    display = find_free_vnc_display(ip)
+    port = 5900 + display
+    print_info(f"Allocating VNC display :{display} (Port {port})")
+
+    # Setup directories
+    vm_dir.mkdir(parents=True, exist_ok=True)
+    SYSTEMD_USER_DIR.mkdir(parents=True, exist_ok=True)
+    
+    disk_path = vm_dir / "disk.qcow2"
+    
+    # Handle disk creation or copy
+    if resolved_qcow:
+        print_info(f"Copying pre-built QCOW2 image template to {disk_path}...")
+        try:
+            shutil.copy2(resolved_qcow, disk_path)
+            # Make sure it's writable
+            os.chmod(disk_path, 0o644)
+        except Exception as e:
+            print_error(f"Failed to copy QCOW2 template: {e}")
+            sys.exit(1)
+            
+        # Resize disk if specified
+        if args.disk:
+            print_info(f"Resizing deployed disk to {args.disk}...")
+            try:
+                subprocess.run([qemu_img_path, "resize", str(disk_path), args.disk], check=True, capture_output=True)
+            except subprocess.CalledProcessError as e:
+                print_error(f"Failed to resize virtual disk: {e.stderr.decode().strip()}")
+                sys.exit(1)
+    else:
+        # Default disk size to 20G if no template is specified and size not overridden
+        disk_size = args.disk if args.disk else "20G"
+        print_info(f"Creating {disk_size} QCOW2 virtual disk...")
+        try:
+            subprocess.run([qemu_img_path, "create", "-f", "qcow2", str(disk_path), disk_size], check=True, capture_output=True)
+        except subprocess.CalledProcessError as e:
+            print_error(f"Failed to create virtual disk: {e.stderr.decode().strip()}")
+            sys.exit(1)
+
+    # Write systemd service file
+    service_path = SYSTEMD_USER_DIR / f"tailvm-{args.name}.service"
+    service_content = generate_systemd_unit(
+        name=args.name,
+        qemu_path=qemu_path,
+        mem=args.mem,
+        cpu=args.cpu,
+        disk_path=str(disk_path),
+        iso_path=resolved_iso,
+        tailscale_ip=ip,
+        vnc_display=display,
+        has_iso=True if resolved_iso else False
+    )
+    
+    with open(service_path, "w") as f:
+        f.write(service_content)
+        
+    # Save metadata
+    metadata = {
+        "name": args.name,
+        "iso": resolved_iso,
+        "has_iso": True if resolved_iso else False,
+        "qcow_template": resolved_qcow,
+        "disk_size": args.disk if args.disk else ("Template Default" if resolved_qcow else "20G"),
+        "memory": args.mem,
+        "cpu": args.cpu,
+        "vnc_display": display,
+        "vnc_port": port,
+        "tailscale_ip": ip,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S")
+    }
+    with open(vm_dir / "metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
+        
+    daemon_reload()
+    print_success(f"VM '{args.name}' successfully created!")
+    print_info(f"To start the VM, run: tailvm start {args.name}")
+
+def cmd_start(args):
+    vm_dir = BASE_DIR / args.name
+    service_name = f"tailvm-{args.name}"
+    service_path = SYSTEMD_USER_DIR / f"{service_name}.service"
+    
+    if not vm_dir.exists() or not service_path.exists():
+        print_error(f"VM '{args.name}' does not exist!")
+        sys.exit(1)
+        
+    # Fetch metadata
+    meta_path = vm_dir / "metadata.json"
+    if not meta_path.exists():
+        print_error("VM metadata.json is missing!")
+        sys.exit(1)
+        
+    with open(meta_path, "r") as f:
+        meta = json.load(f)
+        
+    vnc_port = meta.get("vnc_port")
+    ip = meta.get("tailscale_ip")
+    vnc_url = f"vnc://{ip}:{vnc_port}"
+    
+    # Check if already active
+    res = subprocess.run(["systemctl", "--user", "is-active", service_name], capture_output=True, text=True)
+    if res.stdout.strip() == "active":
+        print_info(f"VM '{args.name}' is already running.")
+    else:
+        print_info(f"Starting VM '{args.name}' systemd user service...")
+        try:
+            subprocess.run(["systemctl", "--user", "start", service_name], check=True)
+            print_success(f"VM '{args.name}' started successfully!")
+        except subprocess.CalledProcessError:
+            print_error(f"Failed to start VM service '{service_name}'. Run 'tailvm logs {args.name}' to investigate.")
+            sys.exit(1)
+            
+    print(f"\n{Colors.BOLD}VNC Connection Details:{Colors.ENDC}")
+    print(f"  URL:  {Colors.OKGREEN}{vnc_url}{Colors.ENDC}")
+    print(f"  Port: {vnc_port}")
+    
+    # Spawning viewer
+    if not args.no_viewer:
+        print_info("Spawning virt-viewer (Remote Viewer)...")
+        flatpak_path = shutil.which("flatpak")
+        if flatpak_path:
+            subprocess.Popen(
+                [flatpak_path, "run", "org.virt_manager.virt-viewer", vnc_url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            print_success("virt-viewer spawned!")
+        else:
+            print_warning("flatpak not found. Cannot launch virt-viewer automatically.")
+
+def cmd_stop(args):
+    service_name = f"tailvm-{args.name}"
+    print_info(f"Stopping VM '{args.name}'...")
+    try:
+        subprocess.run(["systemctl", "--user", "--quiet", "stop", service_name], check=True)
+        print_success(f"VM '{args.name}' stopped successfully.")
+    except subprocess.CalledProcessError:
+        print_error(f"Failed to stop VM service '{service_name}' or it wasn't running.")
+
+def cmd_list(args):
+    if not BASE_DIR.exists():
+        print_info("No VMs found (storage directory does not exist).")
+        return
+        
+    vms = []
+    for item in BASE_DIR.iterdir():
+        if item.is_dir() and item.name != "cache":
+            meta_path = item / "metadata.json"
+            if meta_path.exists():
+                try:
+                    with open(meta_path, "r") as f:
+                        meta = json.load(f)
+                        
+                    service_name = f"tailvm-{meta['name']}"
+                    res = subprocess.run(["systemctl", "--user", "is-active", service_name], capture_output=True, text=True)
+                    status = res.stdout.strip()
+                    meta["status"] = status
+                    vms.append(meta)
+                except Exception:
+                    pass
+                    
+    if not vms:
+        print_info("No registered VMs found.")
+        return
+        
+    print(f"{Colors.BOLD}{'VM NAME':<20} {'STATUS':<10} {'VNC PORT':<10} {'CPU':<5} {'MEM':<6} {'DISK':<12} {'TAILNET IP'}{Colors.ENDC}")
+    print("-" * 75)
+    for vm in vms:
+        status_color = Colors.OKGREEN if vm["status"] == "active" else Colors.FAIL if vm["status"] == "failed" else Colors.ENDC
+        status_str = f"{status_color}{vm['status']}{Colors.ENDC}"
+        print(f"{vm['name']:<20} {status_str:<10} {vm['vnc_port']:<10} {vm['cpu']:<5} {vm['memory']:<6} {vm['disk_size']:<12} {vm['tailscale_ip']}")
+
+def cmd_info(args):
+    vm_dir = BASE_DIR / args.name
+    service_name = f"tailvm-{args.name}"
+    
+    if not vm_dir.exists():
+        print_error(f"VM '{args.name}' does not exist!")
+        sys.exit(1)
+        
+    meta_path = vm_dir / "metadata.json"
+    if not meta_path.exists():
+        print_error(f"Metadata file is missing for VM '{args.name}'!")
+        sys.exit(1)
+        
+    with open(meta_path, "r") as f:
+        meta = json.load(f)
+        
+    res = subprocess.run(["systemctl", "--user", "status", service_name], capture_output=True, text=True)
+    status_output = res.stdout
+    
+    is_active = "active (running)" in status_output or "active" in status_output.split("\n")[2] if len(status_output.split("\n")) > 2 else False
+    status_str = f"{Colors.OKGREEN}Running{Colors.ENDC}" if is_active else f"{Colors.FAIL}Stopped/Inactive{Colors.ENDC}"
+    
+    print(f"{Colors.BOLD}--- VM Info: {args.name} ---{Colors.ENDC}")
+    print(f"Status:       {status_str}")
+    print(f"Tailscale IP: {meta['tailscale_ip']}")
+    print(f"VNC Port:     {meta['vnc_port']} (Display :{meta['vnc_display']})")
+    print(f"VNC URL:      {Colors.OKGREEN}vnc://{meta['tailscale_ip']}:{meta['vnc_port']}{Colors.ENDC}")
+    print(f"CPU Cores:    {meta['cpu']}")
+    print(f"Memory:       {meta['memory']}")
+    print(f"Disk Size:    {meta['disk_size']}")
+    print(f"QCOW Base:    {meta.get('qcow_template') if meta.get('qcow_template') else 'None'}")
+    print(f"ISO File:     {meta['iso'] if meta['iso'] else 'None'}")
+    print(f"ISO Attached: {'Yes' if meta.get('has_iso', False) else 'No'}")
+    print(f"Created At:   {meta['created_at']}")
+    print(f"\n{Colors.BOLD}Systemd Status snippet:{Colors.ENDC}")
+    lines = status_output.split("\n")
+    for l in lines[:10]:
+        print("  " + l)
+
+def cmd_delete(args):
+    vm_dir = BASE_DIR / args.name
+    service_name = f"tailvm-{args.name}"
+    service_path = SYSTEMD_USER_DIR / f"{service_name}.service"
+    
+    if not vm_dir.exists() and not service_path.exists():
+        print_error(f"VM '{args.name}' does not exist!")
+        sys.exit(1)
+        
+    print_info("Stopping VM service if running...")
+    subprocess.run(["systemctl", "--user", "stop", service_name], capture_output=True)
+    subprocess.run(["systemctl", "--user", "disable", service_name], capture_output=True)
+    
+    if service_path.exists():
+        print_info("Removing systemd service file...")
+        service_path.unlink()
+        daemon_reload()
+        
+    if vm_dir.exists():
+        print_info("Deleting VM directory and disk files...")
+        shutil.rmtree(vm_dir)
+        
+    print_success(f"VM '{args.name}' and all associated files deleted successfully.")
+
+def cmd_viewer(args):
+    vm_dir = BASE_DIR / args.name
+    if not vm_dir.exists():
+        print_error(f"VM '{args.name}' does not exist!")
+        sys.exit(1)
+        
+    with open(vm_dir / "metadata.json", "r") as f:
+        meta = json.load(f)
+        
+    vnc_url = f"vnc://{meta['tailscale_ip']}:{meta['vnc_port']}"
+    print_info(f"Spawning virt-viewer for {vnc_url}...")
+    flatpak_path = shutil.which("flatpak")
+    if flatpak_path:
+        subprocess.Popen(
+            [flatpak_path, "run", "org.virt_manager.virt-viewer", vnc_url],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        print_success("virt-viewer spawned!")
+    else:
+        print_error("flatpak not found. Cannot launch virt-viewer.")
+
+def cmd_eject(args):
+    vm_dir = BASE_DIR / args.name
+    service_name = f"tailvm-{args.name}"
+    service_path = SYSTEMD_USER_DIR / f"{service_name}.service"
+    
+    if not vm_dir.exists() or not service_path.exists():
+        print_error(f"VM '{args.name}' does not exist!")
+        sys.exit(1)
+        
+    with open(vm_dir / "metadata.json", "r") as f:
+        meta = json.load(f)
+        
+    if not meta.get("has_iso", False):
+        print_info("No ISO is currently attached to this VM.")
+        return
+        
+    print_info("Ejecting ISO and removing CD-ROM drive configuration...")
+    
+    meta["has_iso"] = False
+    with open(vm_dir / "metadata.json", "w") as f:
+        json.dump(meta, f, indent=2)
+        
+    qemu_path, _ = find_qemu_binaries()
+    disk_path = vm_dir / "disk.qcow2"
+    service_content = generate_systemd_unit(
+        name=meta["name"],
+        qemu_path=qemu_path,
+        mem=meta["memory"],
+        cpu=meta["cpu"],
+        disk_path=str(disk_path),
+        iso_path=None,
+        tailscale_ip=meta["tailscale_ip"],
+        vnc_display=meta["vnc_display"],
+        has_iso=False
+    )
+    
+    with open(service_path, "w") as f:
+        f.write(service_content)
+        
+    daemon_reload()
+    
+    res = subprocess.run(["systemctl", "--user", "is-active", service_name], capture_output=True, text=True)
+    if res.stdout.strip() == "active":
+        print_warning("The VM is currently running. Please restart it ('tailvm stop' then 'tailvm start') for the CD-ROM ejection to take effect.")
+    else:
+        print_success("CD-ROM ejected successfully. The next time the VM starts, it will boot directly from the virtual disk.")
+
+def cmd_logs(args):
+    service_name = f"tailvm-{args.name}"
+    print_info(f"Displaying last logs for {service_name}:")
+    try:
+        subprocess.run(["journalctl", "--user", "-u", service_name, "-n", "50", "-f"])
+    except KeyboardInterrupt:
+        print()
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=f"{Colors.BOLD}TailVM{Colors.ENDC} - A wrapper command to spin up and manage VMs with secure VNC access over Tailscale.",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    subparsers = parser.add_subparsers(dest="command", help="Subcommand to run")
+    
+    # Create command
+    p_create = subparsers.add_parser("create", help="Create a new virtual machine")
+    p_create.add_argument("name", help="Name of the VM")
+    p_create.add_argument("--iso", help="Path or URL to the ISO file to boot from", default=None)
+    p_create.add_argument("--qcow", help="Path or URL to a pre-built QCOW2 virtual disk image", default=None)
+    p_create.add_argument("--disk", help="Virtual disk size to resize/allocate (e.g. 20G, 40G)", default=None)
+    p_create.add_argument("--mem", help="Memory allocation (default: 4G)", default="4G")
+    p_create.add_argument("--cpu", help="Number of CPU cores (default: 2)", type=int, default=2)
+    p_create.add_argument("--force", help="Force overwrite existing VM directory", action="store_true")
+    
+    # Start command
+    p_start = subparsers.add_parser("start", help="Start a virtual machine")
+    p_start.add_argument("name", help="Name of the VM")
+    p_start.add_argument("--no-viewer", help="Do not spawn virt-viewer automatically", action="store_true")
+    
+    # Stop command
+    p_stop = subparsers.add_parser("stop", help="Stop a virtual machine")
+    p_stop.add_argument("name", help="Name of the VM")
+    
+    # List command
+    subparsers.add_parser("list", help="List all registered virtual machines")
+    
+    # Info command
+    p_info = subparsers.add_parser("info", help="Show details of a virtual machine")
+    p_info.add_argument("name", help="Name of the VM")
+    
+    # Delete command
+    p_delete = subparsers.add_parser("delete", help="Delete a virtual machine and its files")
+    p_delete.add_argument("name", help="Name of the VM")
+    
+    # Viewer command
+    p_viewer = subparsers.add_parser("viewer", help="Launch virt-viewer for a running VM")
+    p_viewer.add_argument("name", help="Name of the VM")
+    
+    # Eject command
+    p_eject = subparsers.add_parser("eject", help="Eject the ISO/CD-ROM from the VM configuration")
+    p_eject.add_argument("name", help="Name of the VM")
+    
+    # Logs command
+    p_logs = subparsers.add_parser("logs", help="View journalctl logs for the VM service")
+    p_logs.add_argument("name", help="Name of the VM")
+    
+    args = parser.parse_args()
+    
+    if not args.command:
+        parser.print_help()
+        sys.exit(0)
+        
+    cmds = {
+        "create": cmd_create,
+        "start": cmd_start,
+        "stop": cmd_stop,
+        "list": cmd_list,
+        "info": cmd_info,
+        "delete": cmd_delete,
+        "viewer": cmd_viewer,
+        "eject": cmd_eject,
+        "logs": cmd_logs
+    }
+    
+    try:
+        cmds[args.command](args)
+    except KeyboardInterrupt:
+        print_warning("\nOperation interrupted by user.")
+        sys.exit(130)
+
+if __name__ == "__main__":
+    main()

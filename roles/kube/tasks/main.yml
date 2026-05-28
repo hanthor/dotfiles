@@ -1,0 +1,66 @@
+---
+# Fetches kubeconfig + talosconfig from Bitwarden and writes them locally.
+# Seed Bitwarden with `scripts/bw-seed-kube.sh` from a machine that already
+# has working configs.
+
+- name: Resolve Bitwarden session
+  ansible.builtin.set_fact:
+    _kube_bw_session: "{{ bw_session | default(lookup('env', 'BW_SESSION')) | default('', true) }}"
+  no_log: true
+
+- name: Skip if Bitwarden session unavailable
+  ansible.builtin.debug:
+    msg: "BW_SESSION not set — skipping kubeconfig/talosconfig deploy"
+  when: _kube_bw_session | length == 0
+
+- name: Deploy kube + talos configs
+  when: _kube_bw_session | length > 0
+  environment:
+    BW_SESSION: "{{ _kube_bw_session }}"
+    PATH: "{{ ansible_env_path }}"
+  block:
+    - name: Ensure ~/.kube and ~/.talos exist
+      ansible.builtin.file:
+        path: "{{ ansible_facts['env']['HOME'] }}/{{ item }}"
+        state: directory
+        mode: "0700"
+      loop:
+        - .kube
+        - .talos
+
+    - name: Fetch kubeconfig from Bitwarden
+      ansible.builtin.command: bw get notes kubeconfig
+      register: _kubeconfig
+      changed_when: false
+      no_log: true
+      failed_when: false
+
+    - name: Fetch talosconfig from Bitwarden
+      ansible.builtin.command: bw get notes talosconfig
+      register: _talosconfig
+      changed_when: false
+      no_log: true
+      failed_when: false
+
+    - name: Write kubeconfig
+      ansible.builtin.copy:
+        content: "{{ _kubeconfig.stdout }}"
+        dest: "{{ ansible_facts['env']['HOME'] }}/.kube/config"
+        mode: "0600"
+      when: _kubeconfig.rc == 0 and (_kubeconfig.stdout | length) > 0
+      no_log: true
+
+    - name: Write talosconfig
+      ansible.builtin.copy:
+        content: "{{ _talosconfig.stdout }}"
+        dest: "{{ ansible_facts['env']['HOME'] }}/.talos/config"
+        mode: "0600"
+      when: _talosconfig.rc == 0 and (_talosconfig.stdout | length) > 0
+      no_log: true
+
+    - name: Warn if either config missing in Bitwarden
+      ansible.builtin.debug:
+        msg: >-
+          {% if _kubeconfig.rc != 0 %}kubeconfig missing in BW — seed it with scripts/bw-seed-kube.sh.{% endif %}
+          {% if _talosconfig.rc != 0 %}talosconfig missing in BW — seed it with scripts/bw-seed-kube.sh.{% endif %}
+      when: _kubeconfig.rc != 0 or _talosconfig.rc != 0

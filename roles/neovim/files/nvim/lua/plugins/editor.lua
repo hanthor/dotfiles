@@ -48,8 +48,10 @@ return {
     config = function(_, opts)
       local telescope = require("telescope")
       telescope.setup(opts)
-      telescope.load_extension("fzf")
-      telescope.load_extension("ui-select")
+      -- fzf-native is a compiled extension; on a freshly cloned machine
+      -- (before `make` has run) it won't load. Don't kill telescope over it.
+      pcall(telescope.load_extension, "fzf")
+      pcall(telescope.load_extension, "ui-select")
     end,
   },
 

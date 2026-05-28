@@ -99,7 +99,9 @@
     scope: user
     enabled: true
     state: started
+    daemon_reload: true
   when: not (is_laptop | bool)
+  ignore_errors: "{{ ansible_check_mode }}"
 
 - name: Deploy atuin daemon service
   ansible.builtin.copy:

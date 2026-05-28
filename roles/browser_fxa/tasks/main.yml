@@ -141,27 +141,34 @@
     # TOTP is optional — proceed even if not stored in BW (accounts without 2FA)
 
 # ── Sign-in ───────────────────────────────────────────────────────────────────
+# Script stdout/stderr is safe to surface (no credentials are logged) so we
+# intentionally drop no_log here — silent failure is what made this hard to
+# debug previously. Sign-in failure does not abort the play; sync can be
+# completed by signing in manually in the browser.
 
 - name: Sign in to Firefox Accounts
   ansible.builtin.command: >
     {{ fxa_venv_path }}/bin/python {{ ansible_facts['env']['HOME'] }}/.local/bin/fxa_signin.py
   register: _fxa_signin_result
-  no_log: true
   changed_when: "'Wrote signedInUser.json' in _fxa_signin_result.stdout"
-  failed_when: _fxa_signin_result.rc not in [0]
+  failed_when: false
   when:
     - _fxa_email is defined and (_fxa_email | length) > 0
     - _fxa_password is defined and (_fxa_password | length) > 0
-    # TOTP is optional — accounts without 2FA can sign in without it
   environment:
     FXA_EMAIL: "{{ _fxa_email | default('') }}"
     FXA_PASSWORD: "{{ _fxa_password | default('') }}"
     FXA_TOTP: "{{ _fxa_totp | default('') }}"
     BROWSER_TYPE: "{{ browser_fxa_browser }}"
 
-- name: Show Firefox Accounts sign-in result
+- name: Firefox Accounts sign-in result
   ansible.builtin.debug:
-    msg: "{{ _fxa_signin_result.stdout }}"
-  when:
-    - _fxa_signin_result is defined
-    - (_fxa_signin_result.stdout | default('')) | length > 0
+    msg: |
+      rc={{ _fxa_signin_result.rc | default('skipped') }}
+      stdout: {{ _fxa_signin_result.stdout | default('') }}
+      stderr: {{ _fxa_signin_result.stderr | default('') }}
+      {% if (_fxa_signin_result.rc | default(0)) != 0 %}
+      Sign-in did not complete. Open Zen/Firefox and sign in manually once;
+      the role will skip on subsequent runs.
+      {% endif %}
+  when: _fxa_signin_result is defined and _fxa_signin_result.skipped is not defined

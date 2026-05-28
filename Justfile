@@ -48,21 +48,21 @@ apply *args:
           echo "WARNING: Bitwarden not logged in on this machine."
           echo "  Run 'just apply-remote {{ machine }}' from karnataka, or run 'bw login' manually first."
           echo "Continuing without secrets..."
-          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
+          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
         fi
         echo "Unlocking Bitwarden..."
         if ! export BW_SESSION=$(bw unlock --raw 2>/dev/null); then
           echo "WARNING: Bitwarden unlock failed. Continuing without secrets..."
-          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
+          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
         fi
         (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
       fi
     fi
-    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }}
+    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }}
 
 # Apply only specific tags (e.g. just apply-tags homepage,proxy)
 apply-tags tags:
-    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }}
+    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }}
 
 # Apply to a remote machine with specific tags (e.g. just apply-remote-tags bihar homepage,proxy)
 apply-remote-tags name tags:
@@ -79,11 +79,11 @@ apply-remote-tags name tags:
 
 # Apply only dotfile configs (shell, git, tmux, etc.)
 dotfiles:
-    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --tags dotfiles
+    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --tags dotfiles
 
 # Apply only packages (Homebrew + Flatpak)
 packages:
-    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --tags packages
+    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --tags packages
 
 # Apply to a remote machine, forwarding your local BW session over SSH
 apply-remote name *args:
@@ -161,6 +161,19 @@ apply-remote name *args:
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply {{ args }}
     "
     just push-terminfo {{ name }}
+
+# Purge a machine from inventory + host_vars, then commit + push
+# Usage: just purge <name>
+# Does NOT delete the machine's BW items (SSH key, tailscale key) — that's manual.
+purge name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{ dotfiles_dir }}
+    git pull --ff-only
+    python3 scripts/purge-machine.py {{ name }} inventory.yml
+    git add inventory.yml "host_vars/{{ name }}.yml" 2>/dev/null || true
+    git diff --cached --quiet || git commit -m "inventory: remove {{ name }}"
+    git push
 
 # Register a new machine in inventory and print bootstrap instructions
 
@@ -352,32 +365,6 @@ sync-brews:
     ./scripts/sync-brews.sh
     git diff group_vars/all.yml
 
-# Apply to all machines in parallel via Ansible (run from karnataka)
-
-# Unlocks BW locally and passes session via extra-var; uses SSH connection to remotes
-apply-ansible:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd {{ dotfiles_dir }}
-    git pull --ff-only
-    if [ -z "${BW_SESSION:-}" ]; then
-      if [ -f /tmp/bw_session ]; then
-        export BW_SESSION=$(cat /tmp/bw_session)
-      else
-        echo "Unlocking Bitwarden..."
-        export BW_SESSION=$(bw unlock --raw)
-        (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
-      fi
-    fi
-    ansible-playbook site.yml \
-      --forks 10 \
-      -e "bw_session=${BW_SESSION}" \
-      -e "target=all" \
-      "$@"
-
-
-    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --check --diff
-
 # Install a flatpak system-wide and persist it to dotfiles
 flatpak-install app:
     #!/usr/bin/env bash
@@ -423,7 +410,7 @@ lint:
 
 # Dry-run apply (no changes) — quick way to see what would change
 check *args:
-    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} site.yml --check --diff {{ args }}
+    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --check --diff {{ args }}
 
 # Health check: verify this machine is in a good state
 doctor:
@@ -470,6 +457,36 @@ doctor:
       warn "dotfiles-update timer/service not active"
     fi
     exit $fail
+
+# Inventory the local LAN with nmap + Tailscale (no NetBox required)
+# Usage: just inventory               (defaults to 192.168.0.0/24)
+#        just inventory 10.0.0.0/24
+inventory subnet="192.168.0.0/24":
+    @{{ dotfiles_dir }}/scripts/nmap-inventory.sh {{ subnet }}
+
+# Serve the docs/ mdbook locally with live reload (Ctrl+C to stop)
+docs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v mdbook >/dev/null; then
+      echo "mdbook not installed — brew install mdbook" >&2
+      exit 1
+    fi
+    cd {{ dotfiles_dir }}/docs && mdbook serve --open
+
+# Build the docs into target/book/ as static HTML
+docs-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v mdbook >/dev/null; then
+      echo "mdbook not installed — brew install mdbook" >&2
+      exit 1
+    fi
+    cd {{ dotfiles_dir }}/docs && mdbook build
+
+# Seed Bitwarden with this machine's kubeconfig + talosconfig (so other machines can fetch)
+seed-kube:
+    @{{ dotfiles_dir }}/scripts/bw-seed-kube.sh
 
 # Show all online fleet machines' doctor status in parallel
 doctor-fleet:
