@@ -1436,8 +1436,399 @@ def cmd_kubevirt_logs(args: argparse.Namespace) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  Completions
+#  VNC Proxy management (KubeVirt → tailnet)
 # ═══════════════════════════════════════════════════════════════════
+
+_VNC_PROXY_IMAGE = "alpine:latest"
+_VNC_PROXY_MANIFEST = '''apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {name}-vnc-proxy
+  namespace: {ns}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tailvm-vnc-proxy
+      vm: "{name}"
+  template:
+    metadata:
+      labels:
+        app: tailvm-vnc-proxy
+        vm: "{name}"
+    spec:
+      serviceAccountName: tailvm-{name}-vnc
+      securityContext:
+        seccompProfile: {{type: RuntimeDefault}}
+      initContainers:
+        - name: install-virtctl
+          image: {image}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {{drop: [ALL]}}
+            seccompProfile: {{type: RuntimeDefault}}
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache curl >/dev/null 2>&1
+              curl -sSL "https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/virtctl-v1.8.2-linux-amd64" -o /tmp/virtctl
+              chmod +x /tmp/virtctl
+          volumeMounts:
+            - name: virtctl
+              mountPath: /tmp
+      containers:
+        - name: vnc-proxy
+          image: {image}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {{drop: [ALL]}}
+            seccompProfile: {{type: RuntimeDefault}}
+          command:
+            - sh
+            - -c
+            - |
+              /tmp/virtctl vnc {name} -n {ns} --proxy-only --address=0.0.0.0 --port=5900
+          ports:
+            - containerPort: 5900
+              name: vnc
+              protocol: TCP
+          volumeMounts:
+            - name: virtctl
+              mountPath: /tmp
+      volumes:
+        - name: virtctl
+          emptyDir: {{}}
+'''
+
+
+def _vnc_proxy_rbac(name: str, ns: str) -> str:
+    return f'''apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tailvm-{name}-vnc
+  namespace: {ns}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tailvm-{name}-vnc
+  namespace: {ns}
+rules:
+  - apiGroups: ["subresources.kubevirt.io"]
+    resources: ["virtualmachineinstances/vnc"]
+    verbs: ["get"]
+  - apiGroups: ["kubevirt.io"]
+    resources: ["virtualmachineinstances"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tailvm-{name}-vnc
+  namespace: {ns}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tailvm-{name}-vnc
+subjects:
+  - kind: ServiceAccount
+    name: tailvm-{name}-vnc
+'''
+
+
+def _vnc_proxy_svc(name: str, ns: str, node_port: int) -> str:
+    return f'''apiVersion: v1
+kind: Service
+metadata:
+  name: {name}-vnc
+  namespace: {ns}
+spec:
+  type: NodePort
+  selector:
+    app: tailvm-vnc-proxy
+    vm: "{name}"
+  ports:
+    - port: 5900
+      targetPort: 5900
+      nodePort: {node_port}
+      name: vnc
+      protocol: TCP
+'''
+
+
+def _vnc_proxy_get_nodeport(name: str, ns: str) -> int | None:
+    """Get the NodePort assigned to a VNC proxy service, or None."""
+    try:
+        res = _kubectl(["get", "svc", f"{name}-vnc", "-n", ns, "-o", "json"])
+        if res.returncode != 0:
+            return None
+        svc = json.loads(res.stdout)
+        for port in svc.get("spec", {}).get("ports", []):
+            if port.get("name") == "vnc":
+                return port.get("nodePort")
+    except Exception:
+        pass
+    return None
+
+
+def _vnc_proxy_status(name: str, ns: str) -> str:
+    """Return 'on', 'pending', or 'off' for VNC proxy status."""
+    try:
+        res = _kubectl(["get", "deploy", f"{name}-vnc-proxy", "-n", ns, "-o", "json"])
+        if res.returncode != 0:
+            return "off"
+        deploy = json.loads(res.stdout)
+        ready = deploy.get("status", {}).get("readyReplicas", 0)
+        if ready > 0:
+            return "on"
+        return "pending"
+    except Exception:
+        return "off"
+
+
+def _vnc_proxy_enable(name: str, ns: str) -> None:
+    """Enable VNC proxy for a KubeVirt VM."""
+    # Assign NodePort based on a hash of the name to keep it stable
+    ports = {"bluefin": 30590, "bluefin-lts": 30591}
+    node_port = ports.get(name, 30590 + hash(name) % 100)
+
+    gum_spin("Creating VNC RBAC", ["kubectl", "apply", "-f", "-"],
+             input=_vnc_proxy_rbac(name, ns), text=True, capture_output=True, check=True)
+    gum_spin("Creating VNC Service", ["kubectl", "apply", "-f", "-"],
+             input=_vnc_proxy_svc(name, ns, node_port), text=True, capture_output=True, check=True)
+    gum_spin("Creating VNC proxy", ["kubectl", "apply", "-f", "-"],
+             input=_VNC_PROXY_MANIFEST.format(name=name, ns=ns, image=_VNC_PROXY_IMAGE),
+             text=True, capture_output=True, check=True)
+    print_success(f"VNC proxy enabled for {name} (port {node_port})")
+
+
+def _vnc_proxy_disable(name: str, ns: str) -> None:
+    """Disable VNC proxy for a KubeVirt VM."""
+    for resource in ["deploy", "svc", "sa", "role", "rolebinding"]:
+        rname = f"{name}-vnc-proxy" if resource == "deploy" else (
+            f"{name}-vnc" if resource == "svc" else f"tailvm-{name}-vnc")
+        subprocess.run(["kubectl", "delete", resource, rname, "-n", ns, "--ignore-not-found"],
+                       capture_output=True)
+    print_success(f"VNC proxy disabled for {name}")
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Interactive TUI (gum-based)
+# ═══════════════════════════════════════════════════════════════════
+
+def _gum_choose(options: list[str], prompt: str = "Choose:", height: int = 0) -> str | None:
+    """Present a gum choose list, return selected item or None."""
+    if not GUM:
+        print(prompt)
+        for i, o in enumerate(options):
+            print(f"  {i+1}. {o}")
+        try:
+            idx = int(input("> ")) - 1
+            return options[idx] if 0 <= idx < len(options) else None
+        except (ValueError, EOFError):
+            return None
+    args = [GUM, "choose", "--cursor.foreground", "212"]
+    if height:
+        args.extend(["--height", str(height)])
+    res = subprocess.run(args, input="\n".join(options),
+                         capture_output=True, text=True)
+    return res.stdout.strip() if res.returncode == 0 else None
+
+
+def _gum_confirm(prompt: str) -> bool:
+    """Ask y/n confirmation."""
+    if not GUM:
+        return input(f"{prompt} [y/N] ").lower().startswith("y")
+    return subprocess.run([GUM, "confirm", prompt], capture_output=True).returncode == 0
+
+
+def _kubevirt_vm_list_items() -> list[dict]:
+    """Return list of KubeVirt VMs with metadata for the TUI."""
+    items = []
+    try:
+        res = _kubectl(["get", "vms", "-A", "-o", "json"])
+        if res.returncode != 0:
+            return items
+        vms = json.loads(res.stdout).get("items", [])
+        for vm in vms:
+            md = vm.get("metadata", {})
+            name = md.get("name", "?")
+            ns = md.get("namespace", "?")
+            spec = vm.get("spec", {})
+            tmpl = spec.get("template", {}).get("spec", {})
+            dom = tmpl.get("domain", {})
+            cpu = dom.get("cpu", {}).get("cores", "?")
+            mem = dom.get("memory", {}).get("guest", "?")
+            ready = vm.get("status", {}).get("ready", False)
+            running = spec.get("running", False)
+            iso_status = _get_datavolume_status(name, ns)
+            if ready:
+                status = "● Running"
+            elif iso_status:
+                status = iso_status
+            elif running:
+                status = "◐ Starting"
+            else:
+                status = "○ Stopped"
+            vnc = _vnc_proxy_status(name, ns)
+            items.append({
+                "name": name, "ns": ns, "cpu": cpu, "mem": mem,
+                "status": status, "ready": ready, "running": running,
+                "vnc": vnc,
+            })
+    except Exception:
+        pass
+    return items
+
+
+def _qemu_vm_list_items() -> list[dict]:
+    """Return list of QEMU VMs with metadata."""
+    items = []
+    if not BASE_DIR.exists():
+        return items
+    for d in sorted(BASE_DIR.iterdir()):
+        if not d.is_dir() or d.name == "cache":
+            continue
+        meta_file = d / "metadata.json"
+        if not meta_file.exists():
+            continue
+        try:
+            meta = json.loads(meta_file.read_text())
+            svc = f"tailvm-{meta['name']}"
+            res = subprocess.run(["systemctl", "--user", "is-active", svc],
+                                 capture_output=True, text=True)
+            is_active = res.stdout.strip() == "active"
+            items.append({
+                "name": meta["name"], "ns": "—", "cpu": meta.get("cpu", "?"),
+                "mem": meta.get("memory", "?"),
+                "status": "● Running" if is_active else "○ Stopped",
+                "ready": is_active, "running": is_active,
+                "vnc": "—",
+            })
+        except Exception:
+            pass
+    return items
+
+
+def _edit_menu(vm: dict) -> None:
+    """Edit toggles for a VM: VNC, SSH, RDP."""
+    name = vm["name"]
+    ns = vm.get("ns", "default")
+    backend = require_backend(name)
+
+    if backend != "kubevirt":
+        print_info("Edit menu is for KubeVirt VMs only.")
+        return
+
+    while True:
+        vnc_status = _vnc_proxy_status(name, ns)
+        vnc_port = _vnc_proxy_get_nodeport(name, ns)
+        vnc_label = f"VNC  [{vnc_status.upper()}]"
+        if vnc_status == "on" and vnc_port:
+            vnc_label += f"  — port {vnc_port}"
+        ssh_label = f"SSH  [OFF]"
+        rdp_label = f"RDP  [OFF]"
+
+        choice = _gum_choose(
+            [vnc_label, ssh_label, rdp_label, "← Back"],
+            prompt=f"Edit {name} — toggle services:",
+            height=6,
+        )
+        if not choice or "Back" in choice:
+            return
+        if "VNC" in choice:
+            if vnc_status == "on":
+                _vnc_proxy_disable(name, ns)
+            else:
+                _vnc_proxy_enable(name, ns)
+            time.sleep(0.5)
+        if "SSH" in choice:
+            print_info("SSH toggle coming soon.")
+        if "RDP" in choice:
+            print_info("RDP toggle coming soon.")
+
+
+def _action_menu(vm: dict) -> None:
+    """Action menu for a selected VM."""
+    name = vm["name"]
+    ns = vm.get("ns", "default")
+    backend = require_backend(name)
+    ready = vm.get("ready", False)
+    running = vm.get("running", False)
+
+    actions = []
+    if not ready:
+        actions.append("▶  Start")
+    if ready or running:
+        actions.append("■  Stop")
+    actions.append("ℹ  Info")
+    if backend == "kubevirt":
+        actions.append("🖵  Viewer (VNC)")
+    actions.append("✎  Edit (VNC/SSH/RDP)")
+    actions.append("✕  Delete")
+    actions.append("← Back")
+
+    choice = _gum_choose(actions, prompt=f"{name} ({backend}):", height=10)
+    if not choice or "Back" in choice:
+        return
+
+    if "Start" in choice:
+        if backend == "kubevirt":
+            cmd_kubevirt_start(argparse.Namespace(name=name, no_viewer=False))
+        else:
+            cmd_qemu_start(argparse.Namespace(name=name, no_viewer=True))
+    elif "Stop" in choice:
+        if backend == "kubevirt":
+            cmd_kubevirt_stop(argparse.Namespace(name=name))
+        else:
+            cmd_qemu_stop(argparse.Namespace(name=name))
+    elif "Info" in choice:
+        if backend == "kubevirt":
+            cmd_kubevirt_info(argparse.Namespace(name=name))
+        else:
+            cmd_qemu_info(argparse.Namespace(name=name))
+    elif "Viewer" in choice:
+        if backend == "kubevirt":
+            cmd_kubevirt_viewer(argparse.Namespace(name=name))
+    elif "Edit" in choice:
+        _edit_menu(vm)
+    elif "Delete" in choice:
+        if backend == "kubevirt":
+            cmd_kubevirt_delete(argparse.Namespace(name=name, force=False))
+        else:
+            cmd_qemu_delete(argparse.Namespace(name=name, force=False))
+
+
+def cmd_menu() -> None:
+    """Interactive TUI: list VMs → select → action/edit."""
+    while True:
+        # Refresh VM lists
+        qemu_vms = _qemu_vm_list_items()
+        kubevirt_vms = _kubevirt_vm_list_items()
+        all_vms = qemu_vms + kubevirt_vms
+
+        if not all_vms:
+            gum_print_header("TailVM — No VMs found")
+            print_info("Create one:  tailvm create <name>")
+            print_info("  tailvm create <name> --kubevirt  (for KubeVirt)")
+            return
+
+        # Build display list: "NAME  STATUS  VNC  CPU/MEM"
+        lines = []
+        for vm in all_vms:
+            vnc_icon = "🔵" if vm.get("vnc") == "on" else ("⏳" if vm.get("vnc") == "pending" else "○")
+            lines.append(f"{vm['name']:20s}  {vm['status']:16s}  VNC:{vnc_icon}  CPU:{vm['cpu']}  MEM:{vm['mem']}")
+
+        choice = _gum_choose(lines + ["← Quit"], prompt="TailVM — select a VM:", height=min(len(lines) + 2, 15))
+        if not choice or "Quit" in choice:
+            return
+
+        # Extract VM name from display line
+        vm_name = choice.split()[0]
+        vm = next((v for v in all_vms if v["name"] == vm_name), None)
+        if vm:
+            _action_menu(vm)
 
 _COMMANDS = ["create", "start", "stop", "list", "info", "delete",
              "viewer", "eject", "logs", "completion"]
@@ -1664,8 +2055,8 @@ def main() -> None:
 
     args = parser.parse_args()
     if not args.command:
-        parser.print_help()
-        sys.exit(0)
+        cmd_menu()
+        return
 
     try:
         _dispatch(args.command, args)
