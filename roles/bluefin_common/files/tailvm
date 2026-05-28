@@ -1257,13 +1257,18 @@ def cmd_kubevirt_list() -> None:
         mem = dom.get("memory", {}).get("guest", "?")
         node = tmpl.get("nodeSelector", {}).get("kubernetes.io/hostname", "—")
         ready = vm.get("status", {}).get("ready", False)
-        status = "● Running" if ready else "○ Stopped"
-        iso_status = _get_datavolume_status(name, ns) or ""
-        rows.append([name, "kubevirt", status, ns, str(cpu), str(mem), str(node), iso_status])
+        iso_status = _get_datavolume_status(name, ns)
+        if ready:
+            status = "● Running"
+        elif iso_status:
+            status = iso_status
+        else:
+            status = "○ Stopped"
+        rows.append([name, "kubevirt", status, ns, str(cpu), str(mem), str(node)])
 
     if rows:
         gum_table(
-            ["NAME", "BACKEND", "STATUS", "NAMESPACE", "CPU", "MEM", "NODE", "ISO"],
+            ["NAME", "BACKEND", "STATUS", "NAMESPACE", "CPU", "MEM", "NODE"],
             rows,
         )
 
