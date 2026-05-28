@@ -305,4 +305,39 @@
     dest: ~/.pi/agent/models.json
     mode: "0644"
 
+# ── pi-coding-agent auth from Bitwarden ──────────────────────────
+- name: Fetch DeepSeek API key from Bitwarden
+  ansible.builtin.shell: |
+    SESSION="${BW_SESSION:-$(cat /tmp/bw_session 2>/dev/null)}"
+    [ -z "$SESSION" ] && exit 1
+    bw get password "deepseek-api-key" --session "$SESSION"
+  register: deepseek_key
+  no_log: true
+  changed_when: false
+  failed_when: false
+  environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  tags: [secrets]
+
+- name: Write pi-coding-agent auth.json
+  ansible.builtin.copy:
+    content: |
+      {
+        "deepseek": { "type": "api_key", "key": "{{ deepseek_key.stdout | trim }}" }
+      }
+    dest: ~/.pi/agent/auth.json
+    mode: "0600"
+  no_log: true
+  when: deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0
+  tags: [secrets]
+
+- name: Warn if deepseek-api-key not found in Bitwarden
+  ansible.builtin.debug:
+    msg: >-
+      Bitwarden item 'deepseek-api-key' not found or vault locked — skipping pi auth config.
+      Run: bw create item ... or seed it manually.
+  when: deepseek_key.rc != 0 or deepseek_key.stdout | trim | length == 0
+  tags: [secrets]
+
 
