@@ -102,7 +102,8 @@ core_tap_brews:
   - ublue-os/experimental-tap/bluefin-cli
 # ── Desktop-only packages ────────────────────────────────────────
 # Trimmed to essentials — Bluefin already ships gcc, python, node, etc.
-desktop_taps: []
+desktop_taps:
+  - hanthor/tap
 desktop_brews:
   - btop
   - rclone
@@ -110,6 +111,7 @@ desktop_brews:
   - nmap
   - go
   - glab
+  - hanthor/tap/oramalama
   - k9s
   - kubernetes-cli
   - kubectx
