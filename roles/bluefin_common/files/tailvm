@@ -1088,7 +1088,7 @@ def _launch_virt_viewer(vnc_url: str) -> None:
 
 def cmd_kubevirt_create(args: argparse.Namespace) -> None:
     name = args.name
-    ns = args.namespace or "default"
+    ns = args.namespace or "tailvm"
     _enforce_unique_name(name, args.force)
     password = args.cloud_init_password or _random_password()
 
