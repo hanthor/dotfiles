@@ -2,3 +2,7 @@
 is_arm: true
 has_homepage: true
 web_services: []
+# Container DNS is broken on this Pi (rootless podman can't resolve quay.io
+# through the tailscale-managed resolv.conf). Re-enable once DNS is fixed,
+# e.g. `tailscale up --accept-dns=false` plus a stable /etc/resolv.conf.
+skip_monitoring: true
