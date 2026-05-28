@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          pip install yamllint ansible-lint
+          sudo apt-get install -y shellcheck
+
+      - name: yamllint
+        run: |
+          yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, comments-indentation: disable}}" .
+
+      - name: ansible-lint
+        run: ansible-lint site.yml
+
+      - name: shellcheck
+        run: |
+          find . -name "*.sh" -not -path "./.git/*" -print0 | xargs -0 shellcheck -x
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python syntax check
+        run: |
+          python3 -m py_compile roles/bluefin_common/files/tailvm
+          echo "tailvm: OK"
+
+      - name: Python AST import check
+        run: |
+          python3 -c "
+          import ast, sys
+          with open('roles/bluefin_common/files/tailvm') as f:
+              ast.parse(f.read())
+          print('tailvm AST: OK')
+          "
+
+      - name: Check JSON validity
+        run: |
+          for f in $(find . -name "*.json" -not -path "./.git/*"); do
+            python3 -m json.tool "$f" > /dev/null && echo "$f: OK" || { echo "$f: INVALID"; exit 1; }
+          done
+
+      - name: tailvm completions smoke test
+        run: |
+          python3 roles/bluefin_common/files/tailvm completion bash > /dev/null
+          python3 roles/bluefin_common/files/tailvm completion zsh > /dev/null
+          python3 roles/bluefin_common/files/tailvm completion fish > /dev/null
+          # Test internal completer
+          python3 roles/bluefin_common/files/tailvm _complete bash "" 0 | grep -q create
+          python3 roles/bluefin_common/files/tailvm _complete bash "tailvm start" 1 | grep -q start
+          python3 roles/bluefin_common/files/tailvm _complete bash "tailvm completion" 1 | grep -q completion
+          echo "Completions: OK"
+
+  justfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Validate Justfile
+        run: just --justfile Justfile --list

@@ -638,13 +638,13 @@ def generate_kubevirt_vm_manifest(
     volumes: list[dict] = []
 
     if iso_url:
-        # ISO boot: attach ISO as CD-ROM + create a boot disk PVC
+        # ISO boot: attach ISO as CD-ROM (bootOrder 1) + boot disk (bootOrder 2)
         volumes.append({
             "name": "iso",
             "persistentVolumeClaim": {"claimName": f"{name}-iso"},
         })
         domain["devices"]["disks"].append({
-            "name": "iso", "cdrom": {"bus": "sata"},
+            "name": "iso", "cdrom": {"bus": "sata"}, "bootOrder": 1,
         })
         claim = f"{name}-disk"
         volumes.append({
@@ -652,7 +652,7 @@ def generate_kubevirt_vm_manifest(
             "persistentVolumeClaim": {"claimName": claim},
         })
         domain["devices"]["disks"].append({
-            "name": "rootdisk", "disk": {"bus": "virtio"},
+            "name": "rootdisk", "disk": {"bus": "virtio"}, "bootOrder": 2,
         })
     elif container_disk:
         volumes.append({
