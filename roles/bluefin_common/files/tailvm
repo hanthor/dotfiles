@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+"""
+TailVM — Spin up and manage QEMU/KubeVirt VMs with secure VNC access.
+
+Usage: tailvm create|start|stop|list|info|delete|viewer|eject|logs [args...]
+
+Backends:
+  qemu      Local QEMU/KVM via systemd user services (default)
+  kubevirt  Kubernetes VMs via KubeVirt CRDs
+
+Powered by Charmbracelet gum for a delightful TUI experience.
+When --kubevirt is passed to create, the choice is persisted and all subsequent
+commands (start, stop, viewer, …) know which backend to use without flags.
+"""
 import sys
 import os
 import argparse
@@ -7,206 +20,568 @@ import shutil
 import socket
 import json
 import time
+import string
+import secrets
+import tempfile
 from pathlib import Path
+from typing import Optional
 
-# Paths
-BASE_DIR = Path("/var/home/james/tailvms")
+# ── Paths ────────────────────────────────────────────────────────
+HOME = Path.home()
+BASE_DIR = HOME / "tailvms"
 CACHE_DIR = BASE_DIR / "cache"
-SYSTEMD_USER_DIR = Path("/var/home/james/.config/systemd/user")
+SYSTEMD_USER_DIR = HOME / ".config" / "systemd" / "user"
+REGISTRY_DIR = HOME / ".local" / "share" / "tailvm"
+REGISTRY_FILE = REGISTRY_DIR / "registry.json"
 
-# Premium CLI output colors
-class Colors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
+# ── Charm gum integration ────────────────────────────────────────
+GUM = shutil.which("gum")
 
-def print_success(msg):
-    print(f"{Colors.OKGREEN}✔ {msg}{Colors.ENDC}")
+# Fallback ANSI colours (used when gum is not available)
+_FALLBACK = {
+    "fg":    "\033[38;5;255m",
+    "green": "\033[92m",
+    "cyan":  "\033[96m",
+    "yellow":"\033[93m",
+    "red":   "\033[91m",
+    "bold":  "\033[1m",
+    "dim":   "\033[2m",
+    "reset": "\033[0m",
+}
 
-def print_info(msg):
-    print(f"{Colors.OKCYAN}ℹ {msg}{Colors.ENDC}")
 
-def print_warning(msg):
-    print(f"{Colors.WARNING}⚠ {msg}{Colors.ENDC}")
+def _gum(*args: str, **kwargs) -> subprocess.CompletedProcess:
+    """Run a gum command. Falls back gracefully if gum is not installed."""
+    defaults = {"text": True}
+    defaults.update(kwargs)
+    return subprocess.run([GUM, *args], **defaults)  # type: ignore[arg-type]
 
-def print_error(msg):
-    print(f"{Colors.FAIL}✘ {msg}{Colors.ENDC}", file=sys.stderr)
 
-def get_tailscale_ip():
-    """Retrieves the host's Tailscale IPv4 address."""
-    # First check using tailscale binary
-    tailscale_path = shutil.which("tailscale")
-    if tailscale_path:
+def _gum_style(text: str, **flags) -> str:
+    """Return text wrapped in gum style markup (or ANSI fallback)."""
+    if GUM:
+        return text  # gum style is used via subprocess, not inline
+    # Build fallback ANSI
+    pre = ""
+    for flag, val in flags.items():
+        if flag == "foreground" and val in _FALLBACK:
+            pre += _FALLBACK[val]
+        elif flag == "bold" and val:
+            pre += _FALLBACK["bold"]
+        elif flag == "faint" and val:
+            pre += _FALLBACK["dim"]
+    return f"{pre}{text}{_FALLBACK['reset']}" if pre else text
+
+
+def gum_spin(title: str, cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
+    """Run *cmd* wrapped in a gum spinner with *title*."""
+    if GUM:
+        return subprocess.run(
+            [GUM, "spin", "--title", title, "--"] + cmd,
+            **kwargs,
+        )
+    # Fallback: just print the title and run
+    print(f"{_FALLBACK['cyan']}⏳ {title}…{_FALLBACK['reset']}")
+    return subprocess.run(cmd, **kwargs)
+
+
+def gum_spin_shell(title: str, script: str, **kwargs) -> subprocess.CompletedProcess:
+    """Run a shell script under a gum spinner."""
+    if GUM:
+        return subprocess.run(
+            [GUM, "spin", "--title", title, "--", "bash", "-c", script],
+            shell=False, **kwargs,
+        )
+    print(f"{_FALLBACK['cyan']}⏳ {title}…{_FALLBACK['reset']}")
+    return subprocess.run(["bash", "-c", script], **kwargs)
+
+
+def gum_table(headers: list[str], rows: list[list[str]]) -> None:
+    """Render a table via gum table (or fallback to formatted print)."""
+    if GUM and rows:
+        csv = ",".join(headers) + "\n"
+        for row in rows:
+            csv += ",".join(str(c) for c in row) + "\n"
         try:
-            res = subprocess.run([tailscale_path, "ip", "-4"], capture_output=True, text=True, check=True)
+            subprocess.run(
+                [GUM, "table", "--print"], input=csv, text=True,
+            )
+            return
+        except Exception:
+            pass  # fall through to fallback
+
+    # Fallback: simple aligned print
+    if not rows:
+        return
+    cols = len(headers)
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(str(cell)))
+    fmt = "  ".join(f"{{:<{w}}}" for w in widths)
+    print(_FALLBACK["bold"] + fmt.format(*headers) + _FALLBACK["reset"])
+    print("─" * (sum(widths) + 2 * (cols - 1)))
+    for row in rows:
+        print(fmt.format(*[str(c) for c in row]))
+
+
+def gum_confirm(prompt: str, default: bool = False) -> bool:
+    """Ask for confirmation. Returns True/False."""
+    if GUM:
+        args = [GUM, "confirm", prompt]
+        if default:
+            args.append("--default")
+        res = subprocess.run(args, capture_output=False)
+        return res.returncode == 0
+    # Fallback
+    yn = "Y/n" if default else "y/N"
+    try:
+        answer = input(f"{_FALLBACK['yellow']}? {prompt} [{yn}] {_FALLBACK['reset']}")
+        return answer.lower().startswith("y") if default else answer.lower() == "y"
+    except (KeyboardInterrupt, EOFError):
+        return False
+
+
+def gum_filter(choices: list[str], placeholder: str = "Select…") -> str:
+    """Let the user pick one item from a fuzzy-filterable list."""
+    if not GUM:
+        # Fallback: numbered list
+        for i, c in enumerate(choices, 1):
+            print(f"  {i}. {c}")
+        try:
+            idx = int(input(f"{_FALLBACK['yellow']}> {_FALLBACK['reset']}")) - 1
+            return choices[idx]
+        except (ValueError, IndexError, KeyboardInterrupt):
+            print()
+            sys.exit(1)
+
+    try:
+        res = subprocess.run(
+            [GUM, "filter", "--placeholder", placeholder],
+            input="\n".join(choices), text=True, capture_output=True,
+        )
+        return res.stdout.strip()
+    except KeyboardInterrupt:
+        print()
+        sys.exit(0)
+
+
+def gum_print_header(title: str) -> None:
+    """Print a styled header with gum style."""
+    if GUM:
+        subprocess.run(
+            [GUM, "style",
+             "--foreground", "212",
+             "--bold",
+             "--border", "rounded",
+             "--padding", "0 1",
+             title],
+        )
+    else:
+        print(f"\n{_FALLBACK['bold']}═══ {title} ═══{_FALLBACK['reset']}\n")
+
+
+def gum_print_success(msg: str) -> None:
+    """gum-style a success message."""
+    if GUM:
+        subprocess.run(
+            [GUM, "style",
+             "--foreground", "#04B575",
+             f"✔ {msg}"],
+        )
+    else:
+        print(f"{_FALLBACK['green']}✔ {msg}{_FALLBACK['reset']}")
+
+
+def gum_print_warn(msg: str) -> None:
+    if GUM:
+        subprocess.run(
+            [GUM, "style",
+             "--foreground", "#F2A900",
+             f"⚠ {msg}"],
+        )
+    else:
+        print(f"{_FALLBACK['yellow']}⚠ {msg}{_FALLBACK['reset']}")
+
+
+def gum_print_err(msg: str) -> None:
+    if GUM:
+        subprocess.run(
+            [GUM, "style",
+             "--foreground", "#FF4672",
+             f"✘ {msg}"],
+        )
+    else:
+        print(f"{_FALLBACK['red']}✘ {msg}{_FALLBACK['reset']}", file=sys.stderr)
+
+
+# Shorthand aliases matching old print_* functions
+print_success = gum_print_success
+print_warning = gum_print_warn
+print_error   = gum_print_err
+
+
+def gum_print_info(msg: str) -> None:
+    if GUM:
+        subprocess.run(
+            [GUM, "style",
+             "--foreground", "#8BE9FD",
+             f"ℹ {msg}"],
+        )
+    else:
+        print(f"{_FALLBACK['cyan']}ℹ {msg}{_FALLBACK['reset']}")
+
+
+print_info = gum_print_info
+
+
+def gum_section(title: str) -> None:
+    """Print a section heading with gum style."""
+    if GUM:
+        subprocess.run(
+            [GUM, "style",
+             "--foreground", "#BD93F9",
+             "--bold",
+             f"  ▸ {title}"],
+        )
+    else:
+        print(f"{_FALLBACK['bold']}  ▸ {title}{_FALLBACK['reset']}")
+
+
+def gum_kv(key: str, value: str, val_color: str = "255") -> None:
+    """Print a key-value pair nicely."""
+    if GUM:
+        subprocess.run(
+            [GUM, "style",
+             "--foreground", "#6272A4",
+             f"  {key}: "],
+        )
+        subprocess.run(
+            [GUM, "style",
+             "--foreground", val_color,
+             "--bold",
+             f"  {value}"],
+        )
+    else:
+        key_colored = f"{_FALLBACK['dim']}{key}:{_FALLBACK['reset']}"
+        val_colored = f"{_FALLBACK['bold']}{value}{_FALLBACK['reset']}"
+        print(f"  {key_colored}  {val_colored}")
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Registry
+# ═══════════════════════════════════════════════════════════════════
+
+def _load_registry() -> dict:
+    if not REGISTRY_FILE.exists():
+        return {}
+    try:
+        return json.loads(REGISTRY_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_registry(reg: dict) -> None:
+    REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = REGISTRY_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(reg, indent=2))
+    tmp.rename(REGISTRY_FILE)
+
+
+def registry_set(name: str, backend: str, extra: dict | None = None) -> None:
+    reg = _load_registry()
+    reg[name] = {"backend": backend, **(extra or {})}
+    _save_registry(reg)
+
+
+def registry_get(name: str) -> dict | None:
+    return _load_registry().get(name)
+
+
+def registry_remove(name: str) -> None:
+    reg = _load_registry()
+    reg.pop(name, None)
+    _save_registry(reg)
+
+
+def registry_list() -> dict:
+    return _load_registry()
+
+
+def registry_all_names() -> list[str]:
+    """Return sorted list of all registered VM names (both backends)."""
+    names = list(_load_registry().keys())
+    # Also discover local VMs not in registry (backward compat)
+    if BASE_DIR.exists():
+        for d in BASE_DIR.iterdir():
+            if d.is_dir() and d.name != "cache" and (d / "metadata.json").exists():
+                if d.name not in names:
+                    names.append(d.name)
+    # Also discover KubeVirt VMs not in registry
+    try:
+        res = subprocess.run(
+            ["kubectl", "get", "vms", "-A", "-o",
+             "jsonpath={range .items[*]}{.metadata.name}{\"\\n\"}{end}"],
+            capture_output=True, text=True,
+        )
+        for name in res.stdout.strip().split("\n"):
+            if name and name not in names:
+                names.append(name)
+    except Exception:
+        pass
+    return sorted(names)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Shared helpers
+# ═══════════════════════════════════════════════════════════════════
+
+def resolve_backend(name: str) -> str | None:
+    entry = registry_get(name)
+    if entry:
+        return entry["backend"]
+    if _kubevirt_vm_exists(name):
+        return "kubevirt"
+    if (BASE_DIR / name).exists():
+        return "qemu"
+    return None
+
+
+def require_backend(name: str) -> str:
+    backend = resolve_backend(name)
+    if backend is None:
+        print_error(f"VM '{name}' does not exist.")
+        sys.exit(1)
+    return backend
+
+
+def _interactive_name(command: str) -> str:
+    """Use gum filter to pick a VM name when one isn't provided."""
+    names = registry_all_names()
+    if not names:
+        print_info("No VMs found. Create one first:")
+        print_info("  tailvm create <name>")
+        sys.exit(0)
+    if len(names) == 1:
+        return names[0]
+    return gum_filter(names, f"Pick a VM to {command}…")
+
+
+# ── KubeVirt helpers ─────────────────────────────────────────────
+
+def _kubectl(args: list[str], **kwargs) -> subprocess.CompletedProcess:
+    defaults = {"capture_output": True, "text": True}
+    defaults.update(kwargs)
+    return subprocess.run(["kubectl"] + args, **defaults)  # type: ignore[arg-type]
+
+
+def _kubevirt_vm_exists(name: str, namespace: str = "default") -> bool:
+    try:
+        return _kubectl(
+            ["get", "vm", name, "-n", namespace, "-o", "name"],
+        ).returncode == 0
+    except FileNotFoundError:
+        return False
+
+
+def _ensure_virtctl() -> str:
+    path = shutil.which("virtctl")
+    if path:
+        return path
+    brew = shutil.which("brew")
+    if brew:
+        print_info("Installing virtctl via Homebrew …")
+        try:
+            subprocess.run(
+                [brew, "install", "virtctl"],
+                check=True, capture_output=True, text=True,
+            )
+            path = shutil.which("virtctl")
+            if path:
+                print_success("virtctl installed.")
+                return path
+        except subprocess.CalledProcessError as e:
+            print_error(f"brew install virtctl failed: {e.stderr.strip()}")
+            sys.exit(1)
+    print_error("virtctl required. Install: brew install kubevirt-cli")
+    sys.exit(1)
+
+
+def _kubevirt_namespace(name: str) -> str:
+    entry = registry_get(name)
+    return (entry or {}).get("namespace", "default")
+
+
+# ── Tailscale ────────────────────────────────────────────────────
+
+def get_tailscale_ip() -> str | None:
+    path = shutil.which("tailscale")
+    if path:
+        try:
+            res = subprocess.run(
+                [path, "ip", "-4"], capture_output=True, text=True, check=True,
+            )
             ip = res.stdout.strip()
             if ip:
                 return ip
         except Exception:
             pass
-            
-    # Fallback to scanning interfaces if tailscale command fails
     try:
-        res = subprocess.run(["ip", "-4", "addr", "show", "dev", "tailscale0"], capture_output=True, text=True)
+        res = subprocess.run(
+            ["ip", "-4", "addr", "show", "dev", "tailscale0"],
+            capture_output=True, text=True,
+        )
         for line in res.stdout.split("\n"):
             if "inet " in line:
                 return line.split()[1].split("/")[0]
     except Exception:
         pass
-
     return None
 
-def find_qemu_binaries():
-    """Finds the path to qemu-system-x86_64 and qemu-img, searching common/custom paths."""
-    qemu_path = shutil.which("qemu-system-x86_64")
-    qemu_img_path = shutil.which("qemu-img")
-    
-    # Custom fallback search for Homebrew on Bluefin
-    homebrew_bin = Path("/home/linuxbrew/.linuxbrew/bin")
-    if not qemu_path and (homebrew_bin / "qemu-system-x86_64").exists():
-        qemu_path = str(homebrew_bin / "qemu-system-x86_64")
-    if not qemu_img_path and (homebrew_bin / "qemu-img").exists():
-        qemu_img_path = str(homebrew_bin / "qemu-img")
-        
-    return qemu_path, qemu_img_path
 
-def get_assigned_displays():
-    """Scans all VM folders to find which VNC display numbers are already allocated."""
-    displays = set()
+# ── QEMU helpers ─────────────────────────────────────────────────
+
+def find_qemu_binaries() -> tuple[str | None, str | None]:
+    qemu = shutil.which("qemu-system-x86_64")
+    qemu_img = shutil.which("qemu-img")
+    hb = Path("/home/linuxbrew/.linuxbrew/bin")
+    if not qemu and (hb / "qemu-system-x86_64").exists():
+        qemu = str(hb / "qemu-system-x86_64")
+    if not qemu_img and (hb / "qemu-img").exists():
+        qemu_img = str(hb / "qemu-img")
+    return qemu, qemu_img
+
+
+def get_assigned_displays() -> set[int]:
+    displays: set[int] = set()
     if not BASE_DIR.exists():
         return displays
     for item in BASE_DIR.iterdir():
-        if item.is_dir():
-            meta_file = item / "metadata.json"
-            if meta_file.exists():
-                try:
-                    with open(meta_file, "r") as f:
-                        data = json.load(f)
-                        if "vnc_display" in data:
-                            displays.add(int(data["vnc_display"]))
-                except Exception:
-                    pass
+        if not item.is_dir():
+            continue
+        meta = item / "metadata.json"
+        if meta.exists():
+            try:
+                data = json.loads(meta.read_text())
+                if "vnc_display" in data:
+                    displays.add(int(data["vnc_display"]))
+            except Exception:
+                pass
     return displays
 
-def find_free_vnc_display(ip):
-    """Finds a free VNC display port, avoiding both assigned metadata displays and currently bound ports."""
+
+def find_free_vnc_display(ip: str) -> int:
     assigned = get_assigned_displays()
-    display = 1
+    d = 1
     while True:
-        if display in assigned:
-            display += 1
+        if d in assigned:
+            d += 1
             continue
-        
-        port = 5900 + display
-        # Test if port is currently open/bindable
+        port = 5900 + d
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 s.bind((ip if ip else "0.0.0.0", port))
-                return display
+                return d
         except OSError:
-            display += 1
+            d += 1
 
-def download_file(url, dest_path):
-    """Downloads a file from a URL to a local destination showing progress."""
+
+# ── Downloads ────────────────────────────────────────────────────
+
+def download_file(url: str, dest: Path) -> None:
     import urllib.request
-    from urllib.parse import urlparse
-    
+
     print_info(f"Downloading: {url}")
-    
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    temp_path = dest_path.with_suffix(".tmp")
-    
+    tmp = dest.with_suffix(".tmp")
+
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-        with urllib.request.urlopen(req) as response:
-            total_size = int(response.info().get('Content-Length', 0))
-            block_size = 1024 * 64 # 64 KB blocks
-            downloaded = 0
-            
-            with open(temp_path, "wb") as f:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req) as resp:
+            total = int(resp.info().get("Content-Length", 0))
+            blk = 64 * 1024
+            dled = 0
+            with open(tmp, "wb") as f:
                 while True:
-                    buffer = response.read(block_size)
-                    if not buffer:
+                    buf = resp.read(blk)
+                    if not buf:
                         break
-                    downloaded += len(buffer)
-                    f.write(buffer)
-                    
-                    if total_size > 0:
-                        percent = downloaded * 100 / total_size
-                        bar_len = 30
-                        filled_len = int(bar_len * downloaded // total_size)
-                        bar = '=' * filled_len + '-' * (bar_len - filled_len)
-                        print(f"\r  [{bar}] {percent:.1f}% ({downloaded / (1024*1024):.1f} MB / {total_size / (1024*1024):.1f} MB)", end="", flush=True)
+                    dled += len(buf)
+                    f.write(buf)
+                    if total > 0:
+                        pct = dled * 100 / total
+                        bar_w = 30
+                        fill = int(bar_w * dled // total)
+                        bar = "=" * fill + "-" * (bar_w - fill)
+                        print(
+                            f"\r  [{bar}] {pct:.1f}% "
+                            f"({dled / (1024*1024):.1f} MB / "
+                            f"{total / (1024*1024):.1f} MB)",
+                            end="", flush=True,
+                        )
                     else:
-                        print(f"\r  Downloaded: {downloaded / (1024*1024):.1f} MB", end="", flush=True)
+                        print(
+                            f"\r  Downloaded: {dled / (1024*1024):.1f} MB",
+                            end="", flush=True,
+                        )
             print()
-            
-        if temp_path.exists():
-            temp_path.rename(dest_path)
+        if tmp.exists():
+            tmp.rename(dest)
         print_success("Download complete and cached!")
     except Exception as e:
-        if temp_path.exists():
-            try:
-                temp_path.unlink()
-            except OSError:
-                pass
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
         print_error(f"Download failed: {e}")
         sys.exit(1)
 
-def resolve_source(source_str):
-    """Resolves a local path or a remote URL, downloading and caching if remote."""
+
+def resolve_source(source_str: str | None) -> str | None:
     if not source_str:
         return None
-        
-    if source_str.startswith("http://") or source_str.startswith("https://"):
+    if source_str.startswith(("http://", "https://")):
         from urllib.parse import urlparse
+        import hashlib
+
         parsed = urlparse(source_str)
-        filename = os.path.basename(parsed.path)
-        if not filename:
-            import hashlib
-            filename = hashlib.md5(source_str.encode()).hexdigest()
-            
-        cached_path = CACHE_DIR / filename
-        
-        # Check cache
-        if cached_path.exists():
-            print_success(f"Using cached image: {cached_path.name}")
-            return str(cached_path)
-            
-        # Download otherwise
-        download_file(source_str, cached_path)
-        return str(cached_path)
-    else:
-        local_path = Path(source_str).resolve()
-        if not local_path.exists():
-            print_error(f"Local file does not exist: {local_path}")
-            sys.exit(1)
-        return str(local_path)
+        filename = os.path.basename(parsed.path) or hashlib.md5(
+            source_str.encode()
+        ).hexdigest()
+        cached = CACHE_DIR / filename
+        if cached.exists():
+            print_success(f"Using cached: {cached.name}")
+            return str(cached)
+        download_file(source_str, cached)
+        return str(cached)
+    lp = Path(source_str).resolve()
+    if not lp.exists():
+        print_error(f"Local file not found: {lp}")
+        sys.exit(1)
+    return str(lp)
 
-def generate_systemd_unit(name, qemu_path, mem, cpu, disk_path, iso_path, tailscale_ip, vnc_display, has_iso):
-    """Generates the systemd user service file content."""
-    vm_dir = BASE_DIR / name
-    
-    iso_args = ""
-    if has_iso and iso_path:
-        iso_args = f"-cdrom {iso_path} -boot once=d,menu=on"
-        
-    vnc_target = f"{tailscale_ip}:{vnc_display}" if tailscale_ip else f"127.0.0.1:{vnc_display}"
 
+# ── systemd unit (QEMU) ──────────────────────────────────────────
+
+def generate_systemd_unit(
+    name: str, qemu_path: str, mem: str, cpu: int,
+    disk_path: str, iso_path: str | None,
+    tailscale_ip: str, vnc_display: int, has_iso: bool,
+) -> str:
+    iso_args = (
+        f"-cdrom {iso_path} -boot once=d,menu=on"
+        if has_iso and iso_path else ""
+    )
+    vnc_target = (
+        f"{tailscale_ip}:{vnc_display}"
+        if tailscale_ip else f"127.0.0.1:{vnc_display}"
+    )
     return f"""[Unit]
 Description=TailVM Virtual Machine - {name}
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory={vm_dir}
+WorkingDirectory={BASE_DIR / name}
 ExecStart={qemu_path} \\
   -enable-kvm \\
   -cpu host \\
@@ -224,418 +599,920 @@ Restart=on-failure
 WantedBy=default.target
 """
 
-def daemon_reload():
-    """Reloads systemd user daemon."""
+
+def daemon_reload() -> None:
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
 
-def cmd_create(args):
+
+# ═══════════════════════════════════════════════════════════════════
+#  KubeVirt manifests
+# ═══════════════════════════════════════════════════════════════════
+
+def _random_password(length: int = 16) -> str:
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def _mem_to_mib(mem: str) -> int:
+    mem = mem.upper()
+    if mem.endswith("G"):
+        return int(mem[:-1]) * 1024
+    if mem.endswith("M"):
+        return int(mem[:-1])
+    return int(mem)
+
+
+def generate_kubevirt_vm_manifest(
+    name: str, namespace: str, cpu: int, mem: str,
+    container_disk: str | None, pvc_name: str | None,
+    disk_size: str | None, cloud_init_password: str | None,
+    iso_url: str | None = None,
+    cloud_init_extra: str | None = None,
+) -> dict:
+    mem_mib = _mem_to_mib(mem)
+    domain: dict = {
+        "cpu": {"cores": cpu},
+        "memory": {"guest": f"{mem_mib}Mi"},
+        "devices": {"disks": []},
+    }
+    volumes: list[dict] = []
+
+    if iso_url:
+        # ISO boot: attach ISO as CD-ROM + create a boot disk PVC
+        volumes.append({
+            "name": "iso",
+            "persistentVolumeClaim": {"claimName": f"{name}-iso"},
+        })
+        domain["devices"]["disks"].append({
+            "name": "iso", "cdrom": {"bus": "sata"},
+        })
+        claim = f"{name}-disk"
+        volumes.append({
+            "name": "rootdisk",
+            "persistentVolumeClaim": {"claimName": claim},
+        })
+        domain["devices"]["disks"].append({
+            "name": "rootdisk", "disk": {"bus": "virtio"},
+        })
+    elif container_disk:
+        volumes.append({
+            "name": "containerdisk",
+            "containerDisk": {"image": container_disk},
+        })
+        domain["devices"]["disks"].append({
+            "name": "containerdisk", "disk": {"bus": "virtio"},
+        })
+    elif pvc_name:
+        volumes.append({
+            "name": "rootdisk",
+            "persistentVolumeClaim": {"claimName": pvc_name},
+        })
+        domain["devices"]["disks"].append({
+            "name": "rootdisk", "disk": {"bus": "virtio"},
+        })
+    else:
+        claim = f"{name}-disk"
+        volumes.append({
+            "name": "rootdisk",
+            "persistentVolumeClaim": {"claimName": claim},
+        })
+        domain["devices"]["disks"].append({
+            "name": "rootdisk", "disk": {"bus": "virtio"},
+        })
+
+    if disk_size and container_disk:
+        volumes.append({
+            "name": "datadisk",
+            "persistentVolumeClaim": {"claimName": f"{name}-data"},
+        })
+        domain["devices"]["disks"].append({
+            "name": "datadisk", "disk": {"bus": "virtio"},
+        })
+
+    pwd = cloud_init_password or _random_password()
+    cloud_init_userdata = (
+        "#cloud-config\n"
+        f"password: {pwd}\n"
+        "chpasswd:\n  expire: False\n"
+        "ssh_pwauth: true\n"
+    )
+    if cloud_init_extra:
+        cloud_init_userdata += cloud_init_extra
+    volumes.append({
+        "name": "cloudinitdisk",
+        "cloudInitNoCloud": {
+            "userData": cloud_init_userdata,
+        },
+    })
+    domain["devices"]["disks"].append({
+        "name": "cloudinitdisk", "disk": {"bus": "virtio"},
+    })
+
+    return {
+        "apiVersion": "kubevirt.io/v1",
+        "kind": "VirtualMachine",
+        "metadata": {
+            "name": name, "namespace": namespace,
+            "labels": {"tailvm": name},
+        },
+        "spec": {
+            "running": False,
+            "template": {
+                "metadata": {"labels": {"kubevirt.io/vm": name}},
+                "spec": {"domain": domain, "volumes": volumes},
+            },
+        },
+    }
+
+
+def generate_pvc_manifest(
+    name: str, namespace: str, size: str,
+    storage_class: str = "local-path",
+) -> dict:
+    return {
+        "apiVersion": "v1",
+        "kind": "PersistentVolumeClaim",
+        "metadata": {
+            "name": name, "namespace": namespace,
+            "labels": {"tailvm": name.rsplit("-", 1)[0]},
+        },
+        "spec": {
+            "accessModes": ["ReadWriteOnce"],
+            "resources": {"requests": {"storage": size}},
+            "storageClassName": storage_class,
+        },
+    }
+
+
+def generate_iso_pvc_manifest(
+    name: str, namespace: str, url: str,
+    storage_class: str = "local-path",
+) -> dict:
+    """Generate a CDI DataVolume to import an ISO from a URL.
+
+    Uses DataVolume (not raw PVC+annotations) so it works with
+    WaitForFirstConsumer storage classes like local-path.
+    """
+    return {
+        "apiVersion": "cdi.kubevirt.io/v1beta1",
+        "kind": "DataVolume",
+        "metadata": {
+            "name": name,
+            "namespace": namespace,
+            "labels": {"tailvm": name.removesuffix("-iso")},
+        },
+        "spec": {
+            "source": {
+                "http": {"url": url},
+            },
+            "pvc": {
+                "accessModes": ["ReadWriteOnce"],
+                "resources": {"requests": {"storage": "6Gi"}},
+                "storageClassName": storage_class,
+            },
+        },
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  QEMU commands
+# ═══════════════════════════════════════════════════════════════════
+
+def cmd_qemu_create(args: argparse.Namespace) -> None:
     qemu_path, qemu_img_path = find_qemu_binaries()
     if not qemu_path or not qemu_img_path:
-        print_error("Required QEMU binaries (qemu-system-x86_64 or qemu-img) not found!")
+        print_error("QEMU binaries not found. Install: brew install qemu")
         sys.exit(1)
-        
+
     vm_dir = BASE_DIR / args.name
     if vm_dir.exists() and not args.force:
-        print_error(f"VM directory {vm_dir} already exists. Use --force to overwrite, or choose another name.")
+        print_error(f"VM '{args.name}' already exists. Use --force to overwrite.")
         sys.exit(1)
-        
-    # Get tailscale ip
+
     ip = get_tailscale_ip()
     if not ip:
-        print_warning("Tailscale IP not found or offline. Defaulting VNC to localhost (127.0.0.1)")
+        print_warning("Tailscale offline — VNC will use localhost.")
         ip = "127.0.0.1"
     else:
-        print_info(f"Using Tailscale IP: {ip}")
-        
-    # Resolve ISO and QCOW sources if any
+        print_info(f"Tailscale IP: {ip}")
+
     resolved_iso = resolve_source(args.iso) if args.iso else None
     resolved_qcow = resolve_source(args.qcow) if args.qcow else None
 
-    # Allocate free VNC display
     display = find_free_vnc_display(ip)
     port = 5900 + display
-    print_info(f"Allocating VNC display :{display} (Port {port})")
+    print_info(f"VNC display :{display} (port {port})")
 
-    # Setup directories
     vm_dir.mkdir(parents=True, exist_ok=True)
     SYSTEMD_USER_DIR.mkdir(parents=True, exist_ok=True)
-    
-    disk_path = vm_dir / "disk.qcow2"
-    
-    # Handle disk creation or copy
-    if resolved_qcow:
-        print_info(f"Copying pre-built QCOW2 image template to {disk_path}...")
-        try:
-            shutil.copy2(resolved_qcow, disk_path)
-            # Make sure it's writable
-            os.chmod(disk_path, 0o644)
-        except Exception as e:
-            print_error(f"Failed to copy QCOW2 template: {e}")
-            sys.exit(1)
-            
-        # Resize disk if specified
-        if args.disk:
-            print_info(f"Resizing deployed disk to {args.disk}...")
-            try:
-                subprocess.run([qemu_img_path, "resize", str(disk_path), args.disk], check=True, capture_output=True)
-            except subprocess.CalledProcessError as e:
-                print_error(f"Failed to resize virtual disk: {e.stderr.decode().strip()}")
-                sys.exit(1)
-    else:
-        # Default disk size to 20G if no template is specified and size not overridden
-        disk_size = args.disk if args.disk else "20G"
-        print_info(f"Creating {disk_size} QCOW2 virtual disk...")
-        try:
-            subprocess.run([qemu_img_path, "create", "-f", "qcow2", str(disk_path), disk_size], check=True, capture_output=True)
-        except subprocess.CalledProcessError as e:
-            print_error(f"Failed to create virtual disk: {e.stderr.decode().strip()}")
-            sys.exit(1)
 
-    # Write systemd service file
-    service_path = SYSTEMD_USER_DIR / f"tailvm-{args.name}.service"
+    disk_path = vm_dir / "disk.qcow2"
+
+    if resolved_qcow:
+        print_info("Copying QCOW2 template …")
+        shutil.copy2(resolved_qcow, disk_path)
+        os.chmod(disk_path, 0o644)
+        if args.disk:
+            print_info(f"Resizing to {args.disk} …")
+            gum_spin(
+                f"Resizing disk to {args.disk}",
+                [qemu_img_path, "resize", str(disk_path), args.disk],
+                capture_output=True, check=True,
+            )
+    else:
+        disk_size = args.disk or "20G"
+        print_info(f"Creating {disk_size} QCOW2 disk …")
+        gum_spin(
+            f"Creating {disk_size} virtual disk",
+            [qemu_img_path, "create", "-f", "qcow2",
+             str(disk_path), disk_size],
+            capture_output=True, check=True,
+        )
+
     service_content = generate_systemd_unit(
-        name=args.name,
-        qemu_path=qemu_path,
-        mem=args.mem,
-        cpu=args.cpu,
-        disk_path=str(disk_path),
-        iso_path=resolved_iso,
-        tailscale_ip=ip,
-        vnc_display=display,
-        has_iso=True if resolved_iso else False
+        name=args.name, qemu_path=qemu_path, mem=args.mem,
+        cpu=args.cpu, disk_path=str(disk_path),
+        iso_path=resolved_iso, tailscale_ip=ip,
+        vnc_display=display, has_iso=bool(resolved_iso),
     )
-    
-    with open(service_path, "w") as f:
-        f.write(service_content)
-        
-    # Save metadata
+    (SYSTEMD_USER_DIR / f"tailvm-{args.name}.service").write_text(service_content)
+
     metadata = {
         "name": args.name,
         "iso": resolved_iso,
-        "has_iso": True if resolved_iso else False,
+        "has_iso": bool(resolved_iso),
         "qcow_template": resolved_qcow,
-        "disk_size": args.disk if args.disk else ("Template Default" if resolved_qcow else "20G"),
+        "disk_size": args.disk or ("Template Default" if resolved_qcow else "20G"),
         "memory": args.mem,
         "cpu": args.cpu,
         "vnc_display": display,
         "vnc_port": port,
         "tailscale_ip": ip,
-        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S")
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
-    with open(vm_dir / "metadata.json", "w") as f:
-        json.dump(metadata, f, indent=2)
-        
+    (vm_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
+    registry_set(args.name, "qemu", {"namespace": "default"})
     daemon_reload()
-    print_success(f"VM '{args.name}' successfully created!")
-    print_info(f"To start the VM, run: tailvm start {args.name}")
 
-def cmd_start(args):
-    vm_dir = BASE_DIR / args.name
-    service_name = f"tailvm-{args.name}"
-    service_path = SYSTEMD_USER_DIR / f"{service_name}.service"
-    
-    if not vm_dir.exists() or not service_path.exists():
-        print_error(f"VM '{args.name}' does not exist!")
-        sys.exit(1)
-        
-    # Fetch metadata
-    meta_path = vm_dir / "metadata.json"
-    if not meta_path.exists():
-        print_error("VM metadata.json is missing!")
-        sys.exit(1)
-        
-    with open(meta_path, "r") as f:
-        meta = json.load(f)
-        
-    vnc_port = meta.get("vnc_port")
-    ip = meta.get("tailscale_ip")
-    vnc_url = f"vnc://{ip}:{vnc_port}"
-    
-    # Check if already active
-    res = subprocess.run(["systemctl", "--user", "is-active", service_name], capture_output=True, text=True)
-    if res.stdout.strip() == "active":
-        print_info(f"VM '{args.name}' is already running.")
-    else:
-        print_info(f"Starting VM '{args.name}' systemd user service...")
-        try:
-            subprocess.run(["systemctl", "--user", "start", service_name], check=True)
-            print_success(f"VM '{args.name}' started successfully!")
-        except subprocess.CalledProcessError:
-            print_error(f"Failed to start VM service '{service_name}'. Run 'tailvm logs {args.name}' to investigate.")
-            sys.exit(1)
-            
-    print(f"\n{Colors.BOLD}VNC Connection Details:{Colors.ENDC}")
-    print(f"  URL:  {Colors.OKGREEN}{vnc_url}{Colors.ENDC}")
-    print(f"  Port: {vnc_port}")
-    
-    # Spawning viewer
-    if not args.no_viewer:
-        print_info("Spawning virt-viewer (Remote Viewer)...")
-        flatpak_path = shutil.which("flatpak")
-        if flatpak_path:
-            subprocess.Popen(
-                [flatpak_path, "run", "org.virt_manager.virt-viewer", vnc_url],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            print_success("virt-viewer spawned!")
-        else:
-            print_warning("flatpak not found. Cannot launch virt-viewer automatically.")
+    gum_print_header(f"VM '{args.name}' created!")
+    print_info(f"Start it:  tailvm start {args.name}")
+    print_info(f"VNC URL:    vnc://{ip}:{port}")
 
-def cmd_stop(args):
-    service_name = f"tailvm-{args.name}"
-    print_info(f"Stopping VM '{args.name}'...")
-    try:
-        subprocess.run(["systemctl", "--user", "--quiet", "stop", service_name], check=True)
-        print_success(f"VM '{args.name}' stopped successfully.")
-    except subprocess.CalledProcessError:
-        print_error(f"Failed to stop VM service '{service_name}' or it wasn't running.")
 
-def cmd_list(args):
-    if not BASE_DIR.exists():
-        print_info("No VMs found (storage directory does not exist).")
-        return
-        
-    vms = []
-    for item in BASE_DIR.iterdir():
-        if item.is_dir() and item.name != "cache":
-            meta_path = item / "metadata.json"
-            if meta_path.exists():
-                try:
-                    with open(meta_path, "r") as f:
-                        meta = json.load(f)
-                        
-                    service_name = f"tailvm-{meta['name']}"
-                    res = subprocess.run(["systemctl", "--user", "is-active", service_name], capture_output=True, text=True)
-                    status = res.stdout.strip()
-                    meta["status"] = status
-                    vms.append(meta)
-                except Exception:
-                    pass
-                    
-    if not vms:
-        print_info("No registered VMs found.")
-        return
-        
-    print(f"{Colors.BOLD}{'VM NAME':<20} {'STATUS':<10} {'VNC PORT':<10} {'CPU':<5} {'MEM':<6} {'DISK':<12} {'TAILNET IP'}{Colors.ENDC}")
-    print("-" * 75)
-    for vm in vms:
-        status_color = Colors.OKGREEN if vm["status"] == "active" else Colors.FAIL if vm["status"] == "failed" else Colors.ENDC
-        status_str = f"{status_color}{vm['status']}{Colors.ENDC}"
-        print(f"{vm['name']:<20} {status_str:<10} {vm['vnc_port']:<10} {vm['cpu']:<5} {vm['memory']:<6} {vm['disk_size']:<12} {vm['tailscale_ip']}")
+def cmd_qemu_start(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("start")
+    vm_dir = BASE_DIR / name
+    svc = f"tailvm-{name}"
+    svc_path = SYSTEMD_USER_DIR / f"{svc}.service"
 
-def cmd_info(args):
-    vm_dir = BASE_DIR / args.name
-    service_name = f"tailvm-{args.name}"
-    
-    if not vm_dir.exists():
-        print_error(f"VM '{args.name}' does not exist!")
+    if not vm_dir.exists() or not svc_path.exists():
+        print_error(f"VM '{name}' does not exist!")
         sys.exit(1)
-        
-    meta_path = vm_dir / "metadata.json"
-    if not meta_path.exists():
-        print_error(f"Metadata file is missing for VM '{args.name}'!")
-        sys.exit(1)
-        
-    with open(meta_path, "r") as f:
-        meta = json.load(f)
-        
-    res = subprocess.run(["systemctl", "--user", "status", service_name], capture_output=True, text=True)
-    status_output = res.stdout
-    
-    is_active = "active (running)" in status_output or "active" in status_output.split("\n")[2] if len(status_output.split("\n")) > 2 else False
-    status_str = f"{Colors.OKGREEN}Running{Colors.ENDC}" if is_active else f"{Colors.FAIL}Stopped/Inactive{Colors.ENDC}"
-    
-    print(f"{Colors.BOLD}--- VM Info: {args.name} ---{Colors.ENDC}")
-    print(f"Status:       {status_str}")
-    print(f"Tailscale IP: {meta['tailscale_ip']}")
-    print(f"VNC Port:     {meta['vnc_port']} (Display :{meta['vnc_display']})")
-    print(f"VNC URL:      {Colors.OKGREEN}vnc://{meta['tailscale_ip']}:{meta['vnc_port']}{Colors.ENDC}")
-    print(f"CPU Cores:    {meta['cpu']}")
-    print(f"Memory:       {meta['memory']}")
-    print(f"Disk Size:    {meta['disk_size']}")
-    print(f"QCOW Base:    {meta.get('qcow_template') if meta.get('qcow_template') else 'None'}")
-    print(f"ISO File:     {meta['iso'] if meta['iso'] else 'None'}")
-    print(f"ISO Attached: {'Yes' if meta.get('has_iso', False) else 'No'}")
-    print(f"Created At:   {meta['created_at']}")
-    print(f"\n{Colors.BOLD}Systemd Status snippet:{Colors.ENDC}")
-    lines = status_output.split("\n")
-    for l in lines[:10]:
-        print("  " + l)
 
-def cmd_delete(args):
-    vm_dir = BASE_DIR / args.name
-    service_name = f"tailvm-{args.name}"
-    service_path = SYSTEMD_USER_DIR / f"{service_name}.service"
-    
-    if not vm_dir.exists() and not service_path.exists():
-        print_error(f"VM '{args.name}' does not exist!")
-        sys.exit(1)
-        
-    print_info("Stopping VM service if running...")
-    subprocess.run(["systemctl", "--user", "stop", service_name], capture_output=True)
-    subprocess.run(["systemctl", "--user", "disable", service_name], capture_output=True)
-    
-    if service_path.exists():
-        print_info("Removing systemd service file...")
-        service_path.unlink()
-        daemon_reload()
-        
-    if vm_dir.exists():
-        print_info("Deleting VM directory and disk files...")
-        shutil.rmtree(vm_dir)
-        
-    print_success(f"VM '{args.name}' and all associated files deleted successfully.")
-
-def cmd_viewer(args):
-    vm_dir = BASE_DIR / args.name
-    if not vm_dir.exists():
-        print_error(f"VM '{args.name}' does not exist!")
-        sys.exit(1)
-        
-    with open(vm_dir / "metadata.json", "r") as f:
-        meta = json.load(f)
-        
+    meta = json.loads((vm_dir / "metadata.json").read_text())
     vnc_url = f"vnc://{meta['tailscale_ip']}:{meta['vnc_port']}"
-    print_info(f"Spawning virt-viewer for {vnc_url}...")
-    flatpak_path = shutil.which("flatpak")
-    if flatpak_path:
-        subprocess.Popen(
-            [flatpak_path, "run", "org.virt_manager.virt-viewer", vnc_url],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        print_success("virt-viewer spawned!")
-    else:
-        print_error("flatpak not found. Cannot launch virt-viewer.")
 
-def cmd_eject(args):
-    vm_dir = BASE_DIR / args.name
-    service_name = f"tailvm-{args.name}"
-    service_path = SYSTEMD_USER_DIR / f"{service_name}.service"
-    
-    if not vm_dir.exists() or not service_path.exists():
-        print_error(f"VM '{args.name}' does not exist!")
-        sys.exit(1)
-        
-    with open(vm_dir / "metadata.json", "r") as f:
-        meta = json.load(f)
-        
-    if not meta.get("has_iso", False):
-        print_info("No ISO is currently attached to this VM.")
-        return
-        
-    print_info("Ejecting ISO and removing CD-ROM drive configuration...")
-    
-    meta["has_iso"] = False
-    with open(vm_dir / "metadata.json", "w") as f:
-        json.dump(meta, f, indent=2)
-        
-    qemu_path, _ = find_qemu_binaries()
-    disk_path = vm_dir / "disk.qcow2"
-    service_content = generate_systemd_unit(
-        name=meta["name"],
-        qemu_path=qemu_path,
-        mem=meta["memory"],
-        cpu=meta["cpu"],
-        disk_path=str(disk_path),
-        iso_path=None,
-        tailscale_ip=meta["tailscale_ip"],
-        vnc_display=meta["vnc_display"],
-        has_iso=False
+    res = subprocess.run(
+        ["systemctl", "--user", "is-active", svc],
+        capture_output=True, text=True,
     )
-    
-    with open(service_path, "w") as f:
-        f.write(service_content)
-        
-    daemon_reload()
-    
-    res = subprocess.run(["systemctl", "--user", "is-active", service_name], capture_output=True, text=True)
     if res.stdout.strip() == "active":
-        print_warning("The VM is currently running. Please restart it ('tailvm stop' then 'tailvm start') for the CD-ROM ejection to take effect.")
+        print_info(f"VM '{name}' is already running.")
     else:
-        print_success("CD-ROM ejected successfully. The next time the VM starts, it will boot directly from the virtual disk.")
+        gum_spin(
+            f"Starting VM '{name}'",
+            ["systemctl", "--user", "start", svc],
+            check=True,
+        )
+        print_success(f"VM '{name}' started!")
 
-def cmd_logs(args):
-    service_name = f"tailvm-{args.name}"
-    print_info(f"Displaying last logs for {service_name}:")
+    gum_section("VNC Connection")
+    gum_kv("URL", vnc_url, "212")
+    gum_kv("Port", str(meta["vnc_port"]), "255")
+
+    if not args.no_viewer:
+        _launch_virt_viewer(vnc_url)
+
+
+def cmd_qemu_stop(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("stop")
+    svc = f"tailvm-{name}"
+    gum_spin(
+        f"Stopping VM '{name}'",
+        ["systemctl", "--user", "--quiet", "stop", svc],
+        check=True,
+    )
+    print_success(f"VM '{name}' stopped.")
+
+
+def cmd_qemu_list() -> None:
+    if not BASE_DIR.exists():
+        return
+    rows: list[list[str]] = []
+    for item in sorted(BASE_DIR.iterdir()):
+        if not item.is_dir() or item.name == "cache":
+            continue
+        meta_file = item / "metadata.json"
+        if not meta_file.exists():
+            continue
+        try:
+            meta = json.loads(meta_file.read_text())
+            svc = f"tailvm-{meta['name']}"
+            res = subprocess.run(
+                ["systemctl", "--user", "is-active", svc],
+                capture_output=True, text=True,
+            )
+            status = res.stdout.strip()
+            status_icon = "●" if status == "active" else "○"
+            rows.append([
+                meta["name"],
+                "qemu",
+                f"{status_icon} {status}",
+                str(meta.get("vnc_port", "—")),
+                str(meta["cpu"]),
+                meta["memory"],
+                meta.get("disk_size", "—"),
+                meta["tailscale_ip"],
+            ])
+        except Exception:
+            pass
+
+    if rows:
+        gum_table(
+            ["NAME", "BACKEND", "STATUS", "VNC", "CPU", "MEM", "DISK", "IP"],
+            rows,
+        )
+
+
+def cmd_qemu_info(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("view details for")
+    vm_dir = BASE_DIR / name
+    if not vm_dir.exists():
+        print_error(f"VM '{name}' does not exist!")
+        sys.exit(1)
+
+    meta = json.loads((vm_dir / "metadata.json").read_text())
+    svc = f"tailvm-{name}"
+    res = subprocess.run(
+        ["systemctl", "--user", "is-active", svc],
+        capture_output=True, text=True,
+    )
+    is_active = res.stdout.strip() == "active"
+
+    gum_print_header(f"VM: {name}  (qemu)")
+
+    status_icon = "● Running" if is_active else "○ Stopped"
+    status_color = "212" if is_active else "255"
+    gum_kv("Status", status_icon, status_color)
+    gum_kv("Tailscale IP", meta["tailscale_ip"], "255")
+    gum_kv("VNC", f"vnc://{meta['tailscale_ip']}:{meta['vnc_port']}", "212")
+    gum_kv("CPU Cores", str(meta["cpu"]), "255")
+    gum_kv("Memory", meta["memory"], "255")
+    gum_kv("Disk", meta.get("disk_size", "—"), "255")
+    gum_kv("QCOW Base", meta.get("qcow_template") or "None", "255")
+    gum_kv("ISO", meta.get("iso") or "None", "255")
+    gum_kv("ISO Attached", "Yes" if meta.get("has_iso") else "No", "255")
+    gum_kv("Created", meta.get("created_at", "—"), "255")
+
+
+def cmd_qemu_delete(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("delete")
+    if not args.force and not gum_confirm(f"Delete VM '{name}' and all its disks?"):
+        print_info("Cancelled.")
+        return
+
+    vm_dir = BASE_DIR / name
+    svc = f"tailvm-{name}"
+    svc_path = SYSTEMD_USER_DIR / f"{svc}.service"
+
+    gum_spin("Stopping service", ["systemctl", "--user", "stop", svc],
+             capture_output=True)
+    subprocess.run(["systemctl", "--user", "disable", svc], capture_output=True)
+
+    if svc_path.exists():
+        svc_path.unlink()
+        daemon_reload()
+    if vm_dir.exists():
+        shutil.rmtree(vm_dir)
+
+    registry_remove(name)
+    print_success(f"VM '{name}' deleted.")
+
+
+def cmd_qemu_viewer(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("view")
+    vm_dir = BASE_DIR / name
+    if not vm_dir.exists():
+        print_error(f"VM '{name}' does not exist!")
+        sys.exit(1)
+    meta = json.loads((vm_dir / "metadata.json").read_text())
+    _launch_virt_viewer(f"vnc://{meta['tailscale_ip']}:{meta['vnc_port']}")
+
+
+def cmd_qemu_eject(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("eject ISO from")
+    vm_dir = BASE_DIR / name
+    svc = f"tailvm-{name}"
+    svc_path = SYSTEMD_USER_DIR / f"{svc}.service"
+
+    if not vm_dir.exists() or not svc_path.exists():
+        print_error(f"VM '{name}' does not exist!")
+        sys.exit(1)
+
+    meta = json.loads((vm_dir / "metadata.json").read_text())
+    if not meta.get("has_iso"):
+        print_info("No ISO attached.")
+        return
+
+    print_info("Ejecting ISO …")
+    meta["has_iso"] = False
+    (vm_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
+
+    qemu_path, _ = find_qemu_binaries()
+    svc_path.write_text(generate_systemd_unit(
+        name=name, qemu_path=qemu_path or "qemu-system-x86_64",
+        mem=meta["memory"], cpu=meta["cpu"],
+        disk_path=str(vm_dir / "disk.qcow2"),
+        iso_path=None, tailscale_ip=meta["tailscale_ip"],
+        vnc_display=meta["vnc_display"], has_iso=False,
+    ))
+    daemon_reload()
+
+    res = subprocess.run(
+        ["systemctl", "--user", "is-active", svc],
+        capture_output=True, text=True,
+    )
+    if res.stdout.strip() == "active":
+        print_warning("VM is running — restart for ejection to take effect.")
+    else:
+        print_success("CD-ROM ejected.")
+
+
+def cmd_qemu_logs(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("view logs for")
+    svc = f"tailvm-{name}"
+    gum_section(f"Logs: {svc}")
     try:
-        subprocess.run(["journalctl", "--user", "-u", service_name, "-n", "50", "-f"])
+        subprocess.run(["journalctl", "--user", "-u", svc, "-n", "50", "-f"])
     except KeyboardInterrupt:
         print()
 
-def main():
-    parser = argparse.ArgumentParser(
-        description=f"{Colors.BOLD}TailVM{Colors.ENDC} - A wrapper command to spin up and manage VMs with secure VNC access over Tailscale.",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+
+def _launch_virt_viewer(vnc_url: str) -> None:
+    print_info("Launching virt-viewer …")
+    flatpak = shutil.which("flatpak")
+    if flatpak:
+        subprocess.Popen(
+            [flatpak, "run", "org.virt_manager.virt-viewer", vnc_url],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        print_success("virt-viewer launched!")
+    else:
+        print_warning("flatpak not found — open manually:")
+        print_info(f"  {vnc_url}")
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  KubeVirt commands
+# ═══════════════════════════════════════════════════════════════════
+
+def cmd_kubevirt_create(args: argparse.Namespace) -> None:
+    name = args.name
+    ns = args.namespace or "default"
+    password = args.cloud_init_password or _random_password()
+
+    has_iso = bool(args.iso)
+    has_container = bool(args.container_disk)
+    has_existing_pvc = bool(args.pvc)
+
+    # Create PVCs
+    if has_iso:
+        # Create DataVolume to import the ISO from URL
+        iso_dv = generate_iso_pvc_manifest(f"{name}-iso", ns, args.iso)
+        gum_spin(
+            f"Creating DataVolume {name}-iso (CDI will download the ISO)",
+            ["kubectl", "apply", "-f", "-"],
+            input=json.dumps(iso_dv), text=True, capture_output=True, check=True,
+        )
+        print_info(f"ISO DataVolume: {name}-iso (importing from {args.iso})")
+        # Create boot disk PVC for install target
+        disk_size = args.disk or "20G"
+        boot_pvc = generate_pvc_manifest(f"{name}-disk", ns, disk_size)
+        gum_spin(
+            f"Creating boot disk PVC {name}-disk",
+            ["kubectl", "apply", "-f", "-"],
+            input=json.dumps(boot_pvc), text=True, capture_output=True, check=True,
+        )
+        print_info(f"Boot PVC: {name}-disk ({disk_size})")
+    elif has_existing_pvc:
+        pass
+    elif has_container:
+        if args.disk:
+            pvc = generate_pvc_manifest(f"{name}-data", ns, args.disk)
+            gum_spin(
+                f"Creating data PVC {name}-data",
+                ["kubectl", "apply", "-f", "-"],
+                input=json.dumps(pvc), text=True, capture_output=True, check=True,
+            )
+            print_info(f"Data PVC: {name}-data ({args.disk})")
+    else:
+        disk_size = args.disk or "20G"
+        pvc = generate_pvc_manifest(f"{name}-disk", ns, disk_size)
+        gum_spin(
+            f"Creating boot PVC {name}-disk",
+            ["kubectl", "apply", "-f", "-"],
+            input=json.dumps(pvc), text=True, capture_output=True, check=True,
+        )
+        print_info(f"Boot PVC: {name}-disk ({disk_size})")
+
+    # Build and apply VM
+    # Load extra cloud-init if --cloud-init points to a file or inline YAML
+    cloud_init_extra = None
+    if args.cloud_init:
+        if os.path.isfile(os.path.expanduser(args.cloud_init)):
+            cloud_init_extra = open(os.path.expanduser(args.cloud_init)).read()
+        else:
+            cloud_init_extra = args.cloud_init
+
+    manifest = generate_kubevirt_vm_manifest(
+        name=name, namespace=ns, cpu=args.cpu, mem=args.mem,
+        container_disk=args.container_disk if not has_iso else None,
+        pvc_name=args.pvc,
+        disk_size=args.disk if (has_container and not has_iso) else None,
+        cloud_init_password=password,
+        iso_url=args.iso if has_iso else None,
+        cloud_init_extra=cloud_init_extra,
     )
-    subparsers = parser.add_subparsers(dest="command", help="Subcommand to run")
-    
-    # Create command
-    p_create = subparsers.add_parser("create", help="Create a new virtual machine")
-    p_create.add_argument("name", help="Name of the VM")
-    p_create.add_argument("--iso", help="Path or URL to the ISO file to boot from", default=None)
-    p_create.add_argument("--qcow", help="Path or URL to a pre-built QCOW2 virtual disk image", default=None)
-    p_create.add_argument("--disk", help="Virtual disk size to resize/allocate (e.g. 20G, 40G)", default=None)
-    p_create.add_argument("--mem", help="Memory allocation (default: 4G)", default="4G")
-    p_create.add_argument("--cpu", help="Number of CPU cores (default: 2)", type=int, default=2)
-    p_create.add_argument("--force", help="Force overwrite existing VM directory", action="store_true")
-    
-    # Start command
-    p_start = subparsers.add_parser("start", help="Start a virtual machine")
-    p_start.add_argument("name", help="Name of the VM")
-    p_start.add_argument("--no-viewer", help="Do not spawn virt-viewer automatically", action="store_true")
-    
-    # Stop command
-    p_stop = subparsers.add_parser("stop", help="Stop a virtual machine")
-    p_stop.add_argument("name", help="Name of the VM")
-    
-    # List command
-    subparsers.add_parser("list", help="List all registered virtual machines")
-    
-    # Info command
-    p_info = subparsers.add_parser("info", help="Show details of a virtual machine")
-    p_info.add_argument("name", help="Name of the VM")
-    
-    # Delete command
-    p_delete = subparsers.add_parser("delete", help="Delete a virtual machine and its files")
-    p_delete.add_argument("name", help="Name of the VM")
-    
-    # Viewer command
-    p_viewer = subparsers.add_parser("viewer", help="Launch virt-viewer for a running VM")
-    p_viewer.add_argument("name", help="Name of the VM")
-    
-    # Eject command
-    p_eject = subparsers.add_parser("eject", help="Eject the ISO/CD-ROM from the VM configuration")
-    p_eject.add_argument("name", help="Name of the VM")
-    
-    # Logs command
-    p_logs = subparsers.add_parser("logs", help="View journalctl logs for the VM service")
-    p_logs.add_argument("name", help="Name of the VM")
-    
+    if args.node:
+        manifest["spec"]["template"]["spec"]["nodeSelector"] = {
+            "kubernetes.io/hostname": args.node,
+        }
+
+    gum_spin(
+        f"Creating KubeVirt VM '{name}'",
+        ["kubectl", "apply", "-f", "-"],
+        input=json.dumps(manifest), text=True, capture_output=True, check=True,
+    )
+
+    registry_set(name, "kubevirt", {
+        "namespace": ns,
+        "cloud_init_password": password,
+    })
+
+    gum_print_header(f"VM '{name}' created in ns/{ns}")
+    if has_iso:
+        gum_section("ISO Mode")
+        print_info("CDI is importing the ISO — wait for the import to complete:")
+        print_info(f"  kubectl get pvc {name}-iso -n {ns} -w")
+        gum_section("Cloud-init password (save this!)")
+        if GUM:
+            subprocess.run([GUM, "style", "--foreground", "212", "--bold", "--border", "double", "--padding", "0 2", password])
+        else:
+            print(f"  {password}")
+    elif not has_container:
+        gum_section("Cloud-init password (save this!)")
+        if GUM:
+            subprocess.run([GUM, "style", "--foreground", "212", "--bold", "--border", "double", "--padding", "0 2", password])
+        else:
+            print(f"  {password}")
+    print_info("Start it:  tailvm start " + name)
+
+
+def cmd_kubevirt_start(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("start")
+    ns = _kubevirt_namespace(name)
+    virtctl = _ensure_virtctl()
+
+    gum_spin(
+        f"Starting KubeVirt VM '{name}'",
+        [virtctl, "start", name, "-n", ns],
+        check=True,
+    )
+    print_success(f"VM '{name}' started!")
+
+    try:
+        res = _kubectl(["get", "vmi", name, "-n", ns, "-o", "json"])
+        if res.returncode == 0:
+            vmi = json.loads(res.stdout)
+            phase = vmi.get("status", {}).get("phase", "?")
+            gum_kv("VMI phase", phase, "212" if "running" in phase.lower() else "255")
+    except Exception:
+        pass
+
+    if not args.no_viewer:
+        print_info(f"VNC:  virtctl vnc {name} -n {ns}")
+
+
+def cmd_kubevirt_stop(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("stop")
+    ns = _kubevirt_namespace(name)
+    virtctl = _ensure_virtctl()
+    gum_spin(
+        f"Stopping KubeVirt VM '{name}'",
+        [virtctl, "stop", name, "-n", ns],
+        check=True,
+    )
+    print_success(f"VM '{name}' stopped.")
+
+
+def cmd_kubevirt_list() -> None:
+    try:
+        res = _kubectl(["get", "vms", "-A", "-o", "json"])
+        if res.returncode != 0:
+            return
+        vms = json.loads(res.stdout).get("items", [])
+    except Exception:
+        return
+
+    rows: list[list[str]] = []
+    for vm in vms:
+        md = vm.get("metadata", {})
+        name = md.get("name", "?")
+        ns = md.get("namespace", "?")
+        spec = vm.get("spec", {})
+        tmpl = spec.get("template", {}).get("spec", {})
+        dom = tmpl.get("domain", {})
+        cpu = dom.get("cpu", {}).get("cores", "?")
+        mem = dom.get("memory", {}).get("guest", "?")
+        node = tmpl.get("nodeSelector", {}).get("kubernetes.io/hostname", "—")
+        ready = vm.get("status", {}).get("ready", False)
+        status = "● Running" if ready else "○ Stopped"
+        rows.append([name, "kubevirt", status, ns, str(cpu), str(mem), str(node)])
+
+    if rows:
+        gum_table(
+            ["NAME", "BACKEND", "STATUS", "NAMESPACE", "CPU", "MEM", "NODE"],
+            rows,
+        )
+
+
+def cmd_kubevirt_info(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("view details for")
+    ns = _kubevirt_namespace(name)
+    entry = registry_get(name)
+
+    gum_print_header(f"VM: {name}  (kubevirt)")
+    gum_kv("Namespace", ns, "255")
+
+    try:
+        res = _kubectl(["get", "vm", name, "-n", ns, "-o", "json"])
+        if res.returncode == 0:
+            vm = json.loads(res.stdout)
+            spec = vm.get("spec", {})
+            tmpl = spec.get("template", {}).get("spec", {})
+            dom = tmpl.get("domain", {})
+            running = spec.get("running", False)
+            ready = vm.get("status", {}).get("ready", False)
+
+            status = ("● Running" if ready else "◐ Pending" if running else "○ Stopped")
+            status_color = "212" if ready else "255"
+            gum_kv("Status", status, status_color)
+            gum_kv("CPU Cores", str(dom.get("cpu", {}).get("cores", "?")), "255")
+            gum_kv("Memory", str(dom.get("memory", {}).get("guest", "?")), "255")
+
+            for vol in tmpl.get("volumes", []):
+                vname = vol.get("name", "?")
+                if "containerDisk" in vol:
+                    gum_kv("ContainerDisk", vol["containerDisk"].get("image", "?"), "212")
+                elif "persistentVolumeClaim" in vol:
+                    gum_kv(f"PVC ({vname})", vol["persistentVolumeClaim"].get("claimName", "?"), "255")
+                elif "cloudInitNoCloud" in vol:
+                    gum_kv("Cloud-init", "attached", "255")
+    except Exception:
+        pass
+
+    try:
+        res = _kubectl(["get", "vmi", name, "-n", ns, "-o", "json"])
+        if res.returncode == 0:
+            vmi = json.loads(res.stdout)
+            gum_kv("VMI Phase", vmi.get("status", {}).get("phase", "?"), "255")
+            gum_kv("Node", vmi.get("status", {}).get("nodeName", "?"), "255")
+    except Exception:
+        pass
+
+    if entry and "cloud_init_password" in entry:
+        gum_kv("Cloud-init pwd", entry["cloud_init_password"], "212")
+
+    gum_section("VNC")
+    print_info(f"  virtctl vnc {name} -n {ns}")
+
+
+def cmd_kubevirt_delete(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("delete")
+    ns = _kubevirt_namespace(name)
+
+    if not args.force and not gum_confirm(f"Delete KubeVirt VM '{name}' and its PVCs?"):
+        print_info("Cancelled.")
+        return
+
+    try:
+        virtctl = _ensure_virtctl()
+        subprocess.run([virtctl, "stop", name, "-n", ns], capture_output=True)
+    except Exception:
+        pass
+
+    gum_spin(
+        f"Deleting VM '{name}'",
+        ["kubectl", "delete", "vm", name, "-n", ns, "--ignore-not-found"],
+        capture_output=True, check=True,
+    )
+
+    for suffix in ["disk", "data", "iso"]:
+        pvc_name = f"{name}-{suffix}"
+        try:
+            res = _kubectl([
+                "delete", "pvc", pvc_name, "-n", ns, "--ignore-not-found",
+            ])
+            if "deleted" in (res.stdout + res.stderr):
+                print_info(f"Deleted PVC: {pvc_name}")
+        except Exception:
+            pass
+        # Also clean up any DataVolume with the same name
+        try:
+            res = _kubectl([
+                "delete", "datavolume", pvc_name, "-n", ns, "--ignore-not-found",
+            ])
+            if "deleted" in (res.stdout + res.stderr):
+                print_info(f"Deleted DataVolume: {pvc_name}")
+        except Exception:
+            pass
+
+    registry_remove(name)
+    print_success(f"VM '{name}' deleted.")
+
+
+def cmd_kubevirt_viewer(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("view")
+    ns = _kubevirt_namespace(name)
+    virtctl = _ensure_virtctl()
+
+    # Try xdg-open with virtctl proxy, fall back to virtctl vnc directly
+    xdg_open = shutil.which("xdg-open")
+    if xdg_open:
+        import tempfile, threading, time
+        port = 5901
+        # Find a free port
+        import socket
+        for p in range(5901, 5910):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(("127.0.0.1", p)) != 0:
+                    port = p
+                    break
+
+        print_info(f"Starting VNC proxy on localhost:{port} …")
+        # Start virtctl proxy in background
+        proxy = subprocess.Popen(
+            [virtctl, "vnc", name, "-n", ns, "--proxy-only", f"--port={port}"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        # Give it a moment to start
+        time.sleep(1)
+        print_info(f"Opening vnc://localhost:{port} …")
+        subprocess.Popen([xdg_open, f"vnc://localhost:{port}"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print_success(f"VNC viewer launched! Proxy PID: {proxy.pid}")
+        print_info("Close the viewer or press Ctrl+C to stop the proxy.")
+        try:
+            proxy.wait()
+        except KeyboardInterrupt:
+            proxy.terminate()
+            print()
+    else:
+        print_info(f"Launching VNC for '{name}' …")
+        os.execvp(virtctl, [virtctl, "vnc", name, "-n", ns])
+
+
+def cmd_kubevirt_logs(args: argparse.Namespace) -> None:
+    name = args.name or _interactive_name("view logs for")
+    ns = _kubevirt_namespace(name)
+    try:
+        res = _kubectl([
+            "get", "pods", "-n", ns,
+            "-l", f"kubevirt.io/vm={name}",
+            "-o", "jsonpath={.items[0].metadata.name}",
+        ])
+        pod = res.stdout.strip()
+        if not pod:
+            print_error(f"No virt-launcher pod for VM '{name}'.")
+            sys.exit(1)
+        gum_section(f"Logs: pod/{pod}")
+        subprocess.run(["kubectl", "logs", "-f", pod, "-n", ns])
+    except KeyboardInterrupt:
+        print()
+    except Exception as e:
+        print_error(f"Failed: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Dispatcher
+# ═══════════════════════════════════════════════════════════════════
+
+_QEMU_CMDS = {
+    "create": cmd_qemu_create, "start": cmd_qemu_start,
+    "stop": cmd_qemu_stop, "list": cmd_qemu_list,
+    "info": cmd_qemu_info, "delete": cmd_qemu_delete,
+    "viewer": cmd_qemu_viewer, "eject": cmd_qemu_eject,
+    "logs": cmd_qemu_logs,
+}
+_KUBEVIRT_CMDS = {
+    "create": cmd_kubevirt_create, "start": cmd_kubevirt_start,
+    "stop": cmd_kubevirt_stop, "list": cmd_kubevirt_list,
+    "info": cmd_kubevirt_info, "delete": cmd_kubevirt_delete,
+    "viewer": cmd_kubevirt_viewer, "logs": cmd_kubevirt_logs,
+}
+
+
+def _dispatch(command: str, args: argparse.Namespace) -> None:
+    if command == "create":
+        backend = "kubevirt" if args.kubevirt else "qemu"
+        handler = (_KUBEVIRT_CMDS if backend == "kubevirt" else _QEMU_CMDS)[command]
+    elif command == "list":
+        cmd_qemu_list()
+        cmd_kubevirt_list()
+        return
+    else:
+        name = getattr(args, "name", None)
+        if not name:
+            # Interactive mode — ask user which VM
+            name = _interactive_name(command)
+            args.name = name
+        backend = require_backend(name)
+        cmds = _KUBEVIRT_CMDS if backend == "kubevirt" else _QEMU_CMDS
+        if command not in cmds:
+            print_error(f"'{command}' not supported for backend '{backend}'.")
+            sys.exit(1)
+        handler = cmds[command]
+
+    handler(args)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  CLI
+# ═══════════════════════════════════════════════════════════════════
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="TailVM — QEMU/KubeVirt VMs with Tailscale VNC",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    # create
+    pc = sub.add_parser("create", help="Create a VM")
+    pc.add_argument("name", help="VM name")
+    pc.add_argument("--kubevirt", "-k", action="store_true",
+                    help="Use KubeVirt backend")
+    pc.add_argument("--mem", default="4G", help="Memory (default: 4G)")
+    pc.add_argument("--cpu", type=int, default=2, help="CPU cores (default: 2)")
+    pc.add_argument("--disk", default=None, help="Disk size (default: 20G)")
+    # QEMU / KubeVirt
+    pc.add_argument("--iso", default=None,
+                    help="ISO path/URL (QEMU: local ISO, KubeVirt: CDI imports from URL into PVC)")
+    pc.add_argument("--qcow", default=None, help="[qemu] QCOW2 template")
+    pc.add_argument("--force", action="store_true", help="Overwrite existing VM")
+    # KubeVirt
+    pc.add_argument("--container-disk", default=None,
+                    help="[kubevirt] Container disk image")
+    pc.add_argument("--pvc", default=None, help="[kubevirt] Existing PVC")
+    pc.add_argument("--namespace", "-n", default="default", help="[kubevirt] Namespace")
+    pc.add_argument("--node", default=None, help="[kubevirt] Schedule on node")
+    pc.add_argument("--cloud-init-password", default=None,
+                    help="[kubevirt] Cloud-init password")
+    pc.add_argument("--cloud-init", default=None,
+                    help="[kubevirt] Extra cloud-init user-data YAML (e.g. Tailscale/SSH keys)")
+
+    # start / stop / info / delete / viewer / eject / logs
+    for cmd, help_text in [
+        ("start", "Start a VM"), ("stop", "Stop a VM"),
+        ("info", "Show VM details"), ("delete", "Delete a VM"),
+        ("viewer", "Launch VNC viewer"), ("eject", "Eject ISO (QEMU)"),
+        ("logs", "Tail VM logs"),
+    ]:
+        sp = sub.add_parser(cmd, help=help_text)
+        sp.add_argument("name", nargs="?", default=None, help="VM name (omit to pick interactively)")
+        if cmd == "start":
+            sp.add_argument("--no-viewer", action="store_true")
+        if cmd == "delete":
+            sp.add_argument("--force", "-f", action="store_true",
+                            help="Skip confirmation")
+
+    # list
+    sub.add_parser("list", help="List all VMs (both backends)")
+
     args = parser.parse_args()
-    
     if not args.command:
         parser.print_help()
         sys.exit(0)
-        
-    cmds = {
-        "create": cmd_create,
-        "start": cmd_start,
-        "stop": cmd_stop,
-        "list": cmd_list,
-        "info": cmd_info,
-        "delete": cmd_delete,
-        "viewer": cmd_viewer,
-        "eject": cmd_eject,
-        "logs": cmd_logs
-    }
-    
+
     try:
-        cmds[args.command](args)
+        _dispatch(args.command, args)
     except KeyboardInterrupt:
-        print_warning("\nOperation interrupted by user.")
+        print()
         sys.exit(130)
+    except subprocess.CalledProcessError as e:
+        print_error(f"Command failed: {e}")
+        sys.exit(e.returncode)
+
 
 if __name__ == "__main__":
     main()
