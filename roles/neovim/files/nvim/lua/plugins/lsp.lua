@@ -18,7 +18,10 @@ return {
         "regex", "rust", "toml", "tsx", "typescript", "vim", "vimdoc", "yaml",
         "fish", "dockerfile", "hcl", "nix",
       },
-      auto_install = true,
+      -- Keep parser installation deterministic: TSUpdate handles it.
+      -- auto_install retries on every buffer open and produces noisy compile
+      -- errors when a parser has a non-standard layout (e.g. markdown).
+      auto_install = false,
       highlight = { enable = true, additional_vim_regex_highlighting = false },
       indent = { enable = true },
       textobjects = {

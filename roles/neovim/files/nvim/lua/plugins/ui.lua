@@ -6,7 +6,9 @@ return {
     dependencies = { "nvim-tree/nvim-web-devicons" },
     opts = {
       options = {
-        theme = "catppuccin",
+        -- "auto" picks up the active colorscheme without requiring the
+        -- catppuccin/lualine-theme module to be present.
+        theme = "auto",
         globalstatus = true,
         disabled_filetypes = { statusline = { "dashboard", "lazy" } },
       },
