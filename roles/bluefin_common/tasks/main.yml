@@ -149,19 +149,11 @@
     dest: "~/.local/bin/tailvm"
     mode: "0755"
 
-- name: Check if Go is available
-  ansible.builtin.command: which go
-  register: go_available
-  changed_when: false
-  failed_when: false
-
-- name: Build and install tailvm-go
-  ansible.builtin.shell: |
-    cd ~/.local/share/dotfiles/tailvm-go && go build -o ~/.local/bin/tailvm-go .
-  args:
-    creates: ~/.local/bin/tailvm-go
-  when: go_available.rc == 0
-  changed_when: false
+- name: Install tailvm-go (pre-built binary)
+  ansible.builtin.copy:
+    src: "tailvm-go-linux-{{ ansible_architecture | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}"
+    dest: ~/.local/bin/tailvm-go
+    mode: "0755"
 
 - name: Ensure systemd user directory exists
   ansible.builtin.file:
