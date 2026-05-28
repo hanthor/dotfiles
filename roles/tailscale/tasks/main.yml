@@ -80,8 +80,7 @@
   become: true
   when:
     - tailscale_status.rc == 0
-    - inventory_hostname not in tailscale_prefs.stdout
-  changed_when: true
+  changed_when: false
 
 - name: Fix resolv.conf when systemd-resolved is not active
   ansible.builtin.copy:
