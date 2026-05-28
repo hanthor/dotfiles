@@ -269,30 +269,6 @@
   tags: [shell]
 
 # ── AI Coding Tools configuration ────────────────────────────────
-- name: Create OpenCode configuration directory
-  ansible.builtin.file:
-    path: ~/.config/opencode
-    state: directory
-    mode: "0755"
-
-- name: Deploy OpenCode config
-  ansible.builtin.copy:
-    src: opencode.json
-    dest: ~/.config/opencode/opencode.json
-    mode: "0644"
-
-- name: Create OpenCode auth directory
-  ansible.builtin.file:
-    path: ~/.local/share/opencode
-    state: directory
-    mode: "0755"
-
-- name: Deploy OpenCode auth key
-  ansible.builtin.copy:
-    src: opencode-auth.json
-    dest: ~/.local/share/opencode/auth.json
-    mode: "0600"
-
 - name: Create pi-coding-agent directory
   ansible.builtin.file:
     path: ~/.pi/agent
@@ -318,7 +294,6 @@
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
-  tags: [secrets]
 
 - name: Write pi-coding-agent auth.json
   ansible.builtin.copy:
@@ -330,7 +305,6 @@
     mode: "0600"
   no_log: true
   when: deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0
-  tags: [secrets]
 
 - name: Warn if deepseek-api-key not found in Bitwarden
   ansible.builtin.debug:
@@ -338,6 +312,5 @@
       Bitwarden item 'deepseek-api-key' not found or vault locked — skipping pi auth config.
       Run: bw create item ... or seed it manually.
   when: deepseek_key.rc != 0 or deepseek_key.stdout | trim | length == 0
-  tags: [secrets]
 
 
