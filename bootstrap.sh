@@ -268,6 +268,19 @@ write_machine_name() {
   echo "Machine name written to $MACHINE_FILE"
 }
 
+# ── Set system hostname ───────────────────────────────────────────
+set_hostname() {
+  local current
+  current=$(hostname)
+  if [ "$current" = "$MACHINE_NAME" ]; then
+    echo "✓ Hostname already set to: $MACHINE_NAME"
+    return
+  fi
+  echo "Setting hostname: $current → $MACHINE_NAME"
+  sudo hostnamectl set-hostname "$MACHINE_NAME"
+  echo "✓ Hostname set to: $MACHINE_NAME"
+}
+
 # ── Ensure passwordless sudo ──────────────────────────────────────
 ensure_sudo() {
   local sudo_file="/etc/sudoers.d/zz-$USER"
@@ -403,6 +416,7 @@ main() {
   get_machine_type
   register_in_inventory
   write_machine_name
+  set_hostname
   ensure_sudo
   ensure_tailscale
   install_collections

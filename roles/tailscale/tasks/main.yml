@@ -63,6 +63,7 @@
 - name: Advertise subnet routes (only when routes differ from current prefs)
   ansible.builtin.command: >
     tailscale up
+    --hostname={{ inventory_hostname }}
     --advertise-routes={{ tailscale_advertise_routes }}
     {% if tailscale_accept_dns is defined and not tailscale_accept_dns %}--accept-dns=false{% endif %}
     {% if tailscale_operator is defined %}--operator={{ tailscale_operator }}{% endif %}
