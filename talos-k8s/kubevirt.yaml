@@ -1,0 +1,183 @@
+---
+# KubeVirt operator Deployment — overrides the upstream manifest's hard
+# control-plane node affinity.  Without this patch, cordoning the control-plane
+# node (kubectl cordon) prevents the operator from scheduling anywhere because
+# the default requiredDuringScheduling affinity demands a control-plane label.
+#
+# Apply this AFTER the upstream kubevirt-operator.yaml to fix the affinity.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: virt-operator
+  namespace: kubevirt
+  labels:
+    kubevirt.io: virt-operator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      kubevirt.io: virt-operator
+  template:
+    metadata:
+      labels:
+        kubevirt.io: virt-operator
+        name: virt-operator
+        np.kubevirt.io/allow-access-cluster-services: "true"
+        prometheus.kubevirt.io: "true"
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/worker
+                    operator: DoesNotExist
+              weight: 100
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: kubevirt.io
+                      operator: In
+                      values:
+                        - virt-operator
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+      containers:
+        - command:
+            - virt-operator
+          args:
+            - --port
+            - "8443"
+            - -v
+            - "2"
+          env:
+            - name: VIRT_OPERATOR_IMAGE
+              value: quay.io/kubevirt/virt-operator:v1.8.2
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['olm.targetNamespaces']
+            - name: KUBEVIRT_VERSION
+              value: v1.8.2
+          image: quay.io/kubevirt/virt-operator:v1.8.2
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          name: virt-operator
+          ports:
+            - containerPort: 8443
+              name: metrics
+              protocol: TCP
+            - containerPort: 8444
+              name: webhooks
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 450Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - mountPath: /etc/virt-operator/certificates
+              name: kubevirt-operator-certs
+              readOnly: true
+            - mountPath: /profile-data
+              name: profile-data
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: kubevirt-cluster-critical
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: kubevirt-operator
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+      volumes:
+        - name: kubevirt-operator-certs
+          secret:
+            defaultMode: 420
+            optional: true
+            secretName: kubevirt-operator-certs
+        - emptyDir: {}
+          name: profile-data
+---
+# KubeVirt CR — configures the KubeVirt operator deployment.
+# Fix: infra.nodePlacement removes the hard control-plane node affinity so
+# cordoning the control-plane doesn't take down virt-api/virt-controller.
+# Infra pods will schedule on any linux node with the control-plane toleration.
+---
+apiVersion: kubevirt.io/v1
+kind: KubeVirt
+metadata:
+  name: kubevirt
+  namespace: kubevirt
+spec:
+  certificateRotateStrategy: {}
+  configuration:
+    developerConfiguration:
+      featureGates:
+        - Snapshot
+    imagePullPolicy: IfNotPresent
+  customizeComponents: {}
+  imagePullPolicy: IfNotPresent
+  infra:
+    nodePlacement:
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+  workloadUpdateStrategy: {}
+---
+# ServiceMonitor: tells Prometheus to scrape KubeVirt infra metrics
+# Requires the Prometheus Operator CRDs (installed by kube-prometheus-stack).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kubevirt
+  namespace: kubevirt
+  labels:
+    kubevirt.io: ""
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      prometheus.kubevirt.io: "true"
+  namespaceSelector:
+    matchNames:
+      - kubevirt
+  endpoints:
+    - port: metrics
+      scheme: https
+      tlsConfig:
+        insecureSkipVerify: true
+      honorLabels: true
+      interval: 30s

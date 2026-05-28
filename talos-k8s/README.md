@@ -72,11 +72,33 @@ Once deployed, the labeller automatically detects the APU and assigns hardware c
 We installed **KubeVirt v1.8.2** to run hypervisor-based VM workloads side-by-side with containers.
 
 ### Core Installation
-The operator handles provisioning all virtualization APIs:
+
+First, apply the upstream operator manifest to create the namespace, RBAC, and CRDs:
 ```bash
 kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
-kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-cr.yaml
 ```
+
+Then apply our local manifest ([`kubevirt.yaml`](kubevirt.yaml)), which:
+- Patches the virt-operator Deployment to **remove the hard control-plane node affinity** (otherwise cordoning the control-plane prevents the operator from scheduling).
+- Creates the KubeVirt CR with `spec.infra.nodePlacement` so virt-api and virt-controller also tolerate running on any linux node.
+- Creates a ServiceMonitor so Prometheus scrapes KubeVirt infra metrics.
+
+```bash
+kubectl apply -f kubevirt.yaml
+```
+
+If you already have KubeVirt installed, `kubectl apply -f kubevirt.yaml` will update the deployment and CR in-place.
+
+### Node Placement Fix
+
+By default, KubeVirt infra components (virt-operator, virt-api, virt-controller) have a
+`requiredDuringScheduling` affinity for `node-role.kubernetes.io/control-plane`. On a
+2-node cluster where the control-plane is also the only node that can be cordoned for
+maintenance, this is brittle — cordoning the control-plane kills KubeVirt.
+
+Our manifest removes that hard requirement. Infra pods use a soft
+`preferredDuringScheduling` preference for the control-plane instead, and tolerate the
+control-plane taint, so they can run on any node.
 
 ### KubeVirt Manager Web UI
 To manage virtual machines through a rich dashboard instead of manual YAML, we installed the community **KubeVirt Manager**:
@@ -120,7 +142,54 @@ Key features implemented in the vLLM deployment:
 
 ---
 
-## 7. How to Redeploy or Interact
+## 7. Cluster Monitoring (Prometheus + Grafana + metrics-server)
+
+### metrics-server
+
+Enables `kubectl top` and HPA. Manifest at [`metrics-server.yaml`](metrics-server.yaml).
+
+```bash
+kubectl apply -f metrics-server.yaml
+```
+
+Includes `--kubelet-insecure-tls` (required for Talos self-signed kubelet certs).
+
+### kube-prometheus-stack (Prometheus + Grafana)
+
+Full monitoring stack with Prometheus, Grafana, node-exporter, and kube-state-metrics.
+Installed via Helm with values tuned for this 2-node cluster:
+
+```bash
+# Pre-create namespace with privileged PodSecurity (node-exporter needs hostPath/hostNetwork)
+kubectl create ns monitoring
+kubectl label ns monitoring pod-security.kubernetes.io/enforce=privileged
+
+# Install
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --values kube-prometheus-stack-values.yaml
+```
+
+- **Grafana**: port-forward port 3000, default login `admin`/`admin`
+- **Prometheus**: port-forward port 9090
+- **Retention**: 7 days / 8GB
+- **Alertmanager**: disabled (not needed for home use)
+
+The monitoring namespace must be labeled `privileged` because `prometheus-node-exporter`
+uses hostNetwork, hostPID, and hostPath volumes.
+
+### ServiceMonitors
+
+- KubeVirt metrics are scraped via [`kubevirt.yaml`](kubevirt.yaml)'s ServiceMonitor.
+- Built-in ServiceMonitors cover: apiserver, coredns, kubelet, kube-proxy, node-exporter,
+  kube-state-metrics, and Prometheus itself.
+- `kube-controller-manager`, `kube-scheduler`, and `kube-proxy` targets show as `down` on
+  Talos because these run as static pods with different networking — this is expected.
+
+---
+
+## 8. How to Redeploy or Interact
 
 Use `talosctl` directly for secure node operations (bypassing any external SaaS tool like Omni):
 ```bash

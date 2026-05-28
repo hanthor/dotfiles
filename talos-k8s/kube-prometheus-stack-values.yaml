@@ -1,0 +1,109 @@
+# kube-prometheus-stack Helm values — tuned for a 2-node home cluster
+# Install: helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#   --namespace monitoring --create-namespace \
+#   --values talos-k8s/kube-prometheus-stack-values.yaml
+
+# --- Alertmanager: disabled (not needed for home cluster) ---
+alertmanager:
+  enabled: false
+
+# --- Prometheus ---
+prometheus:
+  enabled: true
+  prometheusSpec:
+    # Scrape any ServiceMonitor with release: kube-prometheus-stack label
+    serviceMonitorSelector:
+      matchLabels:
+        release: kube-prometheus-stack
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelector:
+      matchLabels:
+        release: kube-prometheus-stack
+    podMonitorNamespaceSelector: {}
+    # Retention & resources: keep it small for home use
+    retention: 7d
+    retentionSize: 8GB
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    # Tolerate control-plane taint so Prometheus can run on any node
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+
+# --- Grafana ---
+grafana:
+  enabled: true
+  adminPassword: admin  # change after first login
+  # Lightweight resources
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  # Persist dashboards
+  persistence:
+    enabled: true
+    size: 2Gi
+  # Tolerate control-plane taint
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+  # Pre-installed dashboards
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+# --- Prometheus Operator ---
+prometheusOperator:
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+# --- kube-state-metrics ---
+kube-state-metrics:
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+# --- node-exporter ---
+prometheus-node-exporter:
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+# --- Disable unnecessary scrapers ---
+defaultRules:
+  create: true
+  rules:
+    alertmanager: false  # alertmanager is disabled anyway
+
+# --- CoreDNS monitoring ---
+# kubeDns service is auto-discovered; prometheus will scrape it
