@@ -306,6 +306,31 @@
   no_log: true
   when: deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0
 
+# ── tailvm shell completions ──────────────────────────────────────
+- name: Deploy tailvm bash completion
+  ansible.builtin.copy:
+    src: tailvm-completion.bash
+    dest: ~/.tailvm-completion.bash
+    mode: "0644"
+
+- name: Deploy tailvm zsh completion
+  ansible.builtin.copy:
+    src: tailvm-completion.zsh
+    dest: ~/.tailvm-completion.zsh
+    mode: "0644"
+
+- name: Ensure fish completions directory exists
+  ansible.builtin.file:
+    path: ~/.config/fish/completions
+    state: directory
+    mode: "0755"
+
+- name: Deploy tailvm fish completion
+  ansible.builtin.copy:
+    src: tailvm-completion.fish
+    dest: ~/.config/fish/completions/tailvm.fish
+    mode: "0644"
+
 - name: Warn if deepseek-api-key not found in Bitwarden
   ansible.builtin.debug:
     msg: >-
