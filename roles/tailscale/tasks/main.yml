@@ -76,7 +76,7 @@
   changed_when: true
 
 - name: Sync Tailscale hostname to match machine hostname
-  ansible.builtin.command: tailscale up --hostname={{ inventory_hostname }}
+  ansible.builtin.command: tailscale set --hostname={{ inventory_hostname }}
   become: true
   when:
     - tailscale_status.rc == 0
