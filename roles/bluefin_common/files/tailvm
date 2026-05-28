@@ -1215,6 +1215,27 @@ def cmd_kubevirt_stop(args: argparse.Namespace) -> None:
     print_success(f"VM '{name}' stopped.")
 
 
+def _get_datavolume_status(name: str, ns: str) -> str | None:
+    """Return a status string for a VM's ISO DataVolume, or None if no DV."""
+    try:
+        res = _kubectl(["get", "datavolume", f"{name}-iso", "-n", ns, "-o", "json"])
+        if res.returncode != 0:
+            return None
+        dv = json.loads(res.stdout)
+        phase = dv.get("status", {}).get("phase", "?")
+        progress = dv.get("status", {}).get("progress", "")
+        if phase in ("Succeeded",):
+            return "✓ ready"
+        if phase in ("ImportInProgress", "ImportScheduled"):
+            pct = f" {progress}" if progress else ""
+            return f"↓{pct}"
+        if phase in ("Pending", "PVCBound", "WaitForFirstConsumer"):
+            return "↓ queued"
+        return f"↓ {phase}"
+    except Exception:
+        return None
+
+
 def cmd_kubevirt_list() -> None:
     try:
         res = _kubectl(["get", "vms", "-A", "-o", "json"])
@@ -1237,11 +1258,12 @@ def cmd_kubevirt_list() -> None:
         node = tmpl.get("nodeSelector", {}).get("kubernetes.io/hostname", "—")
         ready = vm.get("status", {}).get("ready", False)
         status = "● Running" if ready else "○ Stopped"
-        rows.append([name, "kubevirt", status, ns, str(cpu), str(mem), str(node)])
+        iso_status = _get_datavolume_status(name, ns) or ""
+        rows.append([name, "kubevirt", status, ns, str(cpu), str(mem), str(node), iso_status])
 
     if rows:
         gum_table(
-            ["NAME", "BACKEND", "STATUS", "NAMESPACE", "CPU", "MEM", "NODE"],
+            ["NAME", "BACKEND", "STATUS", "NAMESPACE", "CPU", "MEM", "NODE", "ISO"],
             rows,
         )
 
@@ -1292,6 +1314,11 @@ def cmd_kubevirt_info(args: argparse.Namespace) -> None:
 
     if entry and "cloud_init_password" in entry:
         gum_kv("Cloud-init pwd", entry["cloud_init_password"], "212")
+
+    # Show ISO DataVolume status if present
+    iso_status = _get_datavolume_status(name, ns)
+    if iso_status:
+        gum_kv("ISO import", iso_status, "212" if "ready" in iso_status else "255")
 
     gum_section("VNC")
     print_info(f"  virtctl vnc {name} -n {ns}")
