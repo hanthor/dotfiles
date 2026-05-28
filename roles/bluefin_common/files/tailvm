@@ -1538,35 +1538,43 @@ subjects:
 
 
 def _vnc_proxy_svc(name: str, ns: str, node_port: int) -> str:
+    """Service exposed via Tailscale operator (tailscale.com/expose)."""
     return f'''apiVersion: v1
 kind: Service
 metadata:
   name: {name}-vnc
   namespace: {ns}
+  annotations:
+    tailscale.com/expose: "true"
+    tailscale.com/hostname: "{name}-vm"
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: tailvm-vnc-proxy
     vm: "{name}"
   ports:
     - port: 5900
       targetPort: 5900
-      nodePort: {node_port}
       name: vnc
       protocol: TCP
 '''
 
 
+def _vnc_proxy_tailnet_host(name: str) -> str:
+    """Return the Tailscale DNS name for a VNC proxy."""
+    return f"{name}-vm.manatee-basking.ts.net"
+
+
 def _vnc_proxy_get_nodeport(name: str, ns: str) -> int | None:
-    """Get the NodePort assigned to a VNC proxy service, or None."""
+    """Get the Tailscale hostname for the VNC proxy, or None."""
     try:
         res = _kubectl(["get", "svc", f"{name}-vnc", "-n", ns, "-o", "json"])
         if res.returncode != 0:
             return None
         svc = json.loads(res.stdout)
-        for port in svc.get("spec", {}).get("ports", []):
-            if port.get("name") == "vnc":
-                return port.get("nodePort")
+        ann = svc.get("metadata", {}).get("annotations", {})
+        if ann.get("tailscale.com/expose") == "true":
+            return 5900  # Tailscale-exposed, return standard port
     except Exception:
         pass
     return None
@@ -1588,19 +1596,16 @@ def _vnc_proxy_status(name: str, ns: str) -> str:
 
 
 def _vnc_proxy_enable(name: str, ns: str) -> None:
-    """Enable VNC proxy for a KubeVirt VM."""
-    # Assign NodePort based on a hash of the name to keep it stable
-    ports = {"bluefin": 30590, "bluefin-lts": 30591}
-    node_port = ports.get(name, 30590 + hash(name) % 100)
-
+    """Enable VNC proxy for a KubeVirt VM. Exposes via Tailscale operator."""
     gum_spin("Creating VNC RBAC", ["kubectl", "apply", "-f", "-"],
              input=_vnc_proxy_rbac(name, ns), text=True, capture_output=True, check=True)
     gum_spin("Creating VNC Service", ["kubectl", "apply", "-f", "-"],
-             input=_vnc_proxy_svc(name, ns, node_port), text=True, capture_output=True, check=True)
+             input=_vnc_proxy_svc(name, ns, 0), text=True, capture_output=True, check=True)
     gum_spin("Creating VNC proxy", ["kubectl", "apply", "-f", "-"],
              input=_VNC_PROXY_MANIFEST.format(name=name, ns=ns, image=_VNC_PROXY_IMAGE),
              text=True, capture_output=True, check=True)
-    print_success(f"VNC proxy enabled for {name} (port {node_port})")
+    host = _vnc_proxy_tailnet_host(name)
+    print_success(f"VNC enabled: vnc://{host}")
 
 
 def _vnc_proxy_disable(name: str, ns: str) -> None:
@@ -1723,10 +1728,10 @@ def _edit_menu(vm: dict) -> None:
 
     while True:
         vnc_status = _vnc_proxy_status(name, ns)
-        vnc_port = _vnc_proxy_get_nodeport(name, ns)
         vnc_label = f"VNC  [{vnc_status.upper()}]"
-        if vnc_status == "on" and vnc_port:
-            vnc_label += f"  — port {vnc_port}"
+        if vnc_status == "on":
+            host = _vnc_proxy_tailnet_host(name)
+            vnc_label += f"  — vnc://{host}"
         ssh_label = f"SSH  [OFF]"
         rdp_label = f"RDP  [OFF]"
 
@@ -1802,6 +1807,12 @@ def _action_menu(vm: dict) -> None:
 
 def cmd_menu() -> None:
     """Interactive TUI: list VMs → select → action/edit."""
+    # Fall back to plain list if not in a terminal
+    if not sys.stdin.isatty():
+        cmd_qemu_list()
+        cmd_kubevirt_list()
+        return
+
     while True:
         # Refresh VM lists
         qemu_vms = _qemu_vm_list_items()
