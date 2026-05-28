@@ -86,56 +86,29 @@ core_brews:
   - fish
   - zsh
   - bash-preexec
-  - starship
   - tmux
-  - carapace
-  - atuin
-  - bat
-  - colordiff
   - direnv
-  - eza
-  - fd
-  - fzf
   - just
   - make
-  - ripgrep
   - shellcheck
   - shfmt
-  - tealdeer
   - unzip
-  - television
   - trash-cli
-  - ugrep
   - yq
-  - zoxide
+  # bluefin-cli provides: atuin, bat, eza, fd, fzf, starship, carapace, ripgrep, tealdeer, zoxide, colordiff, television, ugrep
 core_taps:
   - ublue-os/experimental-tap
 core_tap_brews:
   - ublue-os/experimental-tap/bluefin-cli
 # ── Desktop-only packages ────────────────────────────────────────
+# Trimmed to essentials — Bluefin already ships gcc, python, node, etc.
 desktop_taps: []
 desktop_brews:
-  - aria2
   - btop
-  - dysk
   - rclone
-  - stress-ng
   - syncthing
-  - uutils-coreutils
-  - gcc
-  - mdbook
   - nmap
-  - gcc@11
-  - gdb
   - go
-  - node
-  - pipx
-  - python@3.13
-  - rust
-  - rust-analyzer
-  - rustup
-  - gemini-cli
-  - ramalama
   - glab
   - k9s
   - kubernetes-cli
