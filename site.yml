@@ -91,7 +91,7 @@
       when: inventory_hostname not in groups.get('vps', []) and not skip_proxy | default(false)
     - role: tailscale_cert
       tags: [services, tailscale_cert]
-      when: inventory_hostname not in groups.get('vps', [])
+      when: inventory_hostname not in groups.get('vps', []) and not skip_tailscale_cert | default(false)
     - role: cockpit
       tags: [services, cockpit]
       when: (is_desktop | bool or inventory_hostname in groups.get('server', [])) and not skip_cockpit | default(false)

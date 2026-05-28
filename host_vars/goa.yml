@@ -10,3 +10,4 @@ web_services: []
 skip_monitoring: true
 skip_homepage: true
 skip_proxy: true
+skip_tailscale_cert: true
