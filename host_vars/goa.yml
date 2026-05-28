@@ -1,13 +1,4 @@
 ---
 is_arm: true
-# Container DNS is broken on this Pi (rootless podman can't resolve external
-# hosts through the tailscale-managed resolv.conf). Both monitoring
-# (node-exporter) and homepage rely on container pulls, so they're skipped
-# until DNS is fixed. Try: `tailscale up --accept-dns=false` + a stable
-# /etc/resolv.conf, then unset these flags.
-has_homepage: false
+has_homepage: true
 web_services: []
-skip_monitoring: true
-skip_homepage: true
-skip_proxy: true
-skip_tailscale_cert: true
