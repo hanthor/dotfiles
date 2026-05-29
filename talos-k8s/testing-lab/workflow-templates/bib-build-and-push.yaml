@@ -367,17 +367,21 @@ spec:
             echo 'bluefin-test ALL=(ALL) NOPASSWD:ALL' > "${ROOT}/etc/sudoers.d/bluefin-test"
             chmod 440 "${ROOT}/etc/sudoers.d/bluefin-test"
 
-            # Install gnome-ponytail-daemon for AT-SPI test automation (see issue #159)
-            # rpm2cpio extract into deploy root — avoids chroot dnf issues on bootc image
-            if dnf download --quiet --destdir /tmp/gpd gnome-ponytail-daemon 2>/dev/null; then
-              for rpm_file in /tmp/gpd/gnome-ponytail-daemon*.rpm; do
-                [[ -f "${rpm_file}" ]] || continue
-                (cd "${ROOT}" && rpm2cpio "${rpm_file}" | cpio -idm --quiet 2>/dev/null)
-                echo "Extracted $(basename ${rpm_file}) into deploy root"
-              done
-            else
-              echo "WARNING: could not download gnome-ponytail-daemon RPM" >&2
-            fi
+            # Install gnome-ponytail-daemon for AT-SPI test automation (see issues #159, #161)
+            # Wrapped in subshell so failures are non-fatal (warning only)
+            (
+              dnf install -y -q cpio 2>/dev/null
+              if dnf download --quiet --destdir /tmp/gpd gnome-ponytail-daemon 2>/dev/null; then
+                for rpm_file in /tmp/gpd/gnome-ponytail-daemon*.rpm; do
+                  [[ -f "${rpm_file}" ]] || continue
+                  (cd "${ROOT}" && rpm2cpio "${rpm_file}" | cpio -idm --quiet 2>/dev/null)
+                  echo "Extracted $(basename ${rpm_file}) into deploy root"
+                done
+              else
+                echo "WARNING: could not download gnome-ponytail-daemon RPM" >&2
+                exit 1
+              fi
+            ) || echo "WARNING: gnome-ponytail-daemon install failed (non-fatal)" >&2
 
             # Enable gnome-ponytail-daemon as user service for the test user
             mkdir -p "${VAR}/home/bluefin-test/.config/systemd/user/graphical-session.target.wants/"
