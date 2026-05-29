@@ -1,0 +1,59 @@
+# Matrix workflow: runs latest + lts in parallel.
+# Submit with: argo submit argo/workflow-templates/bluefin-test-matrix.yaml -n argo [-p compute-node=<node>]
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: bluefin-test-matrix
+  namespace: argo
+  labels:
+    app.kubernetes.io/part-of: bluefin-test-suite
+spec:
+  serviceAccountName: argo
+  entrypoint: matrix
+  arguments:
+    parameters:
+      - name: compute-node
+        value: "karnataka"
+      - name: pr-title
+        value: ""
+      - name: pr-number
+        value: ""
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+  templates:
+    - name: matrix
+      steps:
+        - - name: latest
+            templateRef:
+              name: bluefin-qa-pipeline
+              template: pipeline
+            arguments:
+              parameters:
+                - name: image
+                  value: "ghcr.io/ublue-os/bluefin:latest"
+                - name: image-tag
+                  value: "latest"
+                - name: namespace
+                  value: "bluefin-test"
+                - name: suites
+                  value: "smoke,developer"
+                - name: variant
+                  value: "bluefin"
+          - name: lts
+            templateRef:
+              name: bluefin-qa-pipeline
+              template: pipeline
+            arguments:
+              parameters:
+                - name: image
+                  value: "ghcr.io/ublue-os/bluefin:lts"
+                - name: image-tag
+                  value: "lts"
+                - name: namespace
+                  value: "bluefin-lts-test"
+                - name: suites
+                  value: "smoke"
+                - name: variant
+                  value: "bluefin-lts"

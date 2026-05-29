@@ -1,0 +1,181 @@
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"argoproj.io/v1alpha1","kind":"CronWorkflow","metadata":{"annotations":{},"labels":{"app.kubernetes.io/part-of":"testing-lab","bluefin.io/trigger":"pr-scanner"},"name":"pr-scanner","namespace":"argo"},"spec":{"concurrencyPolicy":"Forbid","schedules":["*/30 * * * *"],"startingDeadlineSeconds":300,"timezone":"UTC","workflowMetadata":{"labels":{"app.kubernetes.io/part-of":"bluefin-test-suite","bluefin.io/trigger":"pr-scanner"}},"workflowSpec":{"entrypoint":"scan-and-submit","podGC":{"strategy":"OnWorkflowSuccess"},"serviceAccountName":"argo","templates":[{"name":"scan-and-submit","steps":[[{"name":"scan-prs","template":"scan-prs"}],[{"arguments":{"parameters":[{"name":"pr-list","value":"{{steps.scan-prs.outputs.result}}"}]},"name":"submit-tests","template":"submit-tests"}]]},{"metadata":{"labels":{"bluefin.io/step":"scan-prs"}},"name":"scan-prs","script":{"command":["bash"],"env":[{"name":"GITHUB_TOKEN","valueFrom":{"secretKeyRef":{"key":"token","name":"github-token"}}}],"image":"python:3.12-slim","resources":{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"100m","memory":"1Gi".*memory":"512Mi"}},"source":"set -euo pipefail\napt-get update -qq \u0026\u0026 apt-get install -y -qq curl 2\u003e\u00261 | tail -1\ncurl -sSLo /usr/local/bin/kubectl \"https://dl.k8s.io/release/$(curl -sSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl\"\nchmod +x /usr/local/bin/kubectl\npython3 \u003c\u003c 'PYEOF'\nimport json, subprocess, sys, concurrent.futures\npr_list_raw = \"\"\"{{inputs.parameters.pr-list}}\"\"\"\ntry: prs = json.loads(pr_list_raw)\nexcept: print(\"No PRs.\"); sys.exit(0)\nif not prs: print(\"No PRs.\"); sys.exit(0)\ndef submit(pr):\n    repo, pr_num, title, sha = pr[\"repo\"], pr[\"number\"], pr[\"title\"], pr[\"head_sha\"]\n    nl = repo.lower()\n    if \"dakota\" in nl: variant, suites, img, tag = \"dakota\", \"smoke\", \"ghcr.io/ublue-os/bluefin:latest\", \"latest\"\n    elif \"bluefin\" in nl or \"common\" in nl: variant, suites, img, tag = \"bluefin\", \"smoke,developer\", \"ghcr.io/ublue-os/bluefin:latest\", \"latest\"\n    else: return (\"skip\", repo, pr_num, title)\n    wf_name = f\"pr-{repo.replace('/','-')}-{pr_num}-{sha[:8]}\"[:63].rstrip(\"-\")\n    m = {\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Workflow\",\"metadata\":{\"name\":wf_name,\"namespace\":\"argo\",\"labels\":{\"bluefin.io/trigger\":\"pr-test\",\"bluefin.io/pr-repo\":repo,\"bluefin.io/pr-number\":str(pr_num)}},\"spec\":{\"serviceAccountName\":\"argo\",\"entrypoint\":\"pipeline\",\"onExit\":\"teardown\",\"podGC\":{\"strategy\":\"OnWorkflowSuccess\"},\"tolerations\":[{\"key\":\"node-role.kubernetes.io/control-plane\",\"operator\":\"Exists\",\"effect\":\"NoSchedule\"}],\"arguments\":{\"parameters\":[{\"name\":\"compute-node\",\"value\":\"karnataka\"},{\"name\":\"image\",\"value\":img},{\"name\":\"image-tag\",\"value\":tag},{\"name\":\"namespace\",\"value\":\"bluefin-test\"},{\"name\":\"suites\",\"value\":suites},{\"name\":\"variant\",\"value\":variant},{\"name\":\"ssh-key-secret\",\"value\":\"bluefin-test-ssh-key\"},{\"name\":\"branch\",\"value\":\"main\"}]},\"workflowTemplateRef\":{\"name\":\"bluefin-qa-pipeline\"}}}\n    try:\n        r = subprocess.run([\"kubectl\",\"create\",\"-f\",\"-\"],input=json.dumps(m),capture_output=True,text=True,timeout=30)\n        if r.returncode==0: return (\"ok\",wf_name,repo,pr_num,title)\n        elif \"AlreadyExists\" in r.stderr: return (\"exists\",wf_name,repo,pr_num,title)\n        else: return (\"err\",r.stderr.strip()[:200],repo,pr_num,title)\n    except Exception as e: return (\"err\",str(e)[:200],repo,pr_num,title)\nprint(f\"Submitting {len(prs)} PRs...\")\nok,sk,er=0,0,0\nwith concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:\n    for f in concurrent.futures.as_completed([ex.submit(submit,p) for p in prs]):\n        r=f.result()\n        if r[0]==\"ok\": print(f\"  OK {r[1]}: {r[2]}#{r[3]}\"); ok+=1\n        elif r[0]==\"skip\": print(f\"  SKIP {r[1]}#{r[2]}\"); sk+=1\n        elif r[0]==\"exists\": print(f\"  EXIST {r[1]}\"); sk+=1\n        else: print(f\"  ERR {r[2]}#{r[3]}: {r[1]}\"); er+=1\nprint(f\"Done: {ok} submitted, {sk} skipped, {er} errors\")\nPYEOF\n"}}],"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/control-plane","operator":"Exists"}],"ttlStrategy":{"secondsAfterCompletion":3600},"volumes":[{"name":"github-token","secret":{"secretName":"github-token"}}]}}}
+  creationTimestamp: "2026-05-28T19:38:34Z"
+  generation: 5
+  labels:
+    app.kubernetes.io/part-of: testing-lab
+    bluefin.io/trigger: pr-scanner
+  name: pr-scanner
+  namespace: argo
+  resourceVersion: "369930"
+  uid: c228f872-c112-40a9-86e0-96074d1cb501
+spec:
+  concurrencyPolicy: Forbid
+  schedules:
+  - '*/30 * * * *'
+  startingDeadlineSeconds: 300
+  timezone: UTC
+  workflowMetadata:
+    labels:
+      app.kubernetes.io/part-of: bluefin-test-suite
+      bluefin.io/trigger: pr-scanner
+  workflowSpec:
+    entrypoint: scan-and-submit
+    podGC:
+      strategy: OnWorkflowSuccess
+    serviceAccountName: argo
+    templates:
+    - name: scan-and-submit
+      steps:
+      - - name: scan-prs
+          template: scan-prs
+      - - arguments:
+            parameters:
+            - name: pr-list
+              value: '{{steps.scan-prs.outputs.result}}'
+          name: submit-tests
+          template: submit-tests
+    - metadata:
+        labels:
+          bluefin.io/step: scan-prs
+      name: scan-prs
+      script:
+        command:
+        - bash
+        env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: token
+              name: github-token
+        image: python:3.12-slim
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        source: |
+          set -euo pipefail
+          apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1
+          pip install --quiet requests >/dev/null 2>&1
+          curl -sSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -sSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" 2>/dev/null
+          chmod +x /usr/local/bin/kubectl
+          python3 << 'PYEOF'
+          import json, os, subprocess, sys
+          from datetime import datetime, timezone, timedelta
+          token = os.environ["GITHUB_TOKEN"]
+          headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+          import requests
+          print("Fetching repos...", file=sys.stderr)
+          repos = []
+          page = 1
+          while True:
+              r = requests.get(f"https://api.github.com/orgs/projectbluefin/repos?per_page=100&page={page}&sort=updated", headers=headers, timeout=30)
+              r.raise_for_status()
+              batch = r.json()
+              if not batch: break
+              repos.extend(batch)
+              page += 1
+              if len(batch) < 100: break
+          print(f"Found {len(repos)} repos", file=sys.stderr)
+          skip_keywords = ["branding", ".github", "renovate", "brew", "website", "documentation", "finpilot", ".project", "bluefin-mcp"]
+          all_prs = []
+          for repo in repos:
+              if repo.get("fork") or repo.get("archived"): continue
+              if any(k in repo["name"].lower() for k in skip_keywords): continue
+              try:
+                  pr_r = requests.get(f"https://api.github.com/repos/{repo['full_name']}/pulls?state=open&per_page=30", headers=headers, timeout=30)
+                  pr_r.raise_for_status()
+                  for pr in pr_r.json():
+                      all_prs.append({"repo": repo["full_name"], "number": pr["number"], "title": pr["title"], "head_sha": pr["head"]["sha"], "updated_at": pr["updated_at"], "html_url": pr["html_url"]})
+                  if pr_r.json(): print(f"  {repo['full_name']}: {len(pr_r.json())} open PRs", file=sys.stderr)
+              except Exception as e: print(f"  WARNING: {repo['full_name']}: {e}", file=sys.stderr)
+          print(f"Total open PRs (filtered): {len(all_prs)}", file=sys.stderr)
+          tested_prs = set()
+          try:
+              result = subprocess.run(["kubectl", "get", "workflows", "-n", "argo", "-l", "bluefin.io/trigger=pr-test", "-o", "json"], capture_output=True, text=True, timeout=30)
+              if result.returncode == 0 and result.stdout.strip():
+                  for wf in json.loads(result.stdout).get("items", []):
+                      labels = wf.get("metadata", {}).get("labels", {})
+                      if labels.get("bluefin.io/pr-repo") and labels.get("bluefin.io/pr-number"):
+                          tested_prs.add(f"{labels['bluefin.io/pr-repo']}#{labels['bluefin.io/pr-number']}")
+          except: pass
+          untested = [pr for pr in all_prs if f"{pr['repo']}#{pr['number']}" not in tested_prs]
+          print(f"Untested PRs: {len(untested)}", file=sys.stderr)
+          for pr in untested[:10]: print(f"  {pr['repo']}#{pr['number']}: {pr['title'][:80]}", file=sys.stderr)
+          print(json.dumps(untested[:20]))
+          PYEOF
+    - inputs:
+        parameters:
+        - name: pr-list
+      metadata:
+        labels:
+          bluefin.io/step: submit-tests
+      name: submit-tests
+      script:
+        command:
+        - bash
+        image: python:3.12-slim
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        source: |
+          set -euo pipefail
+          apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1
+          curl -sSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -sSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" 2>/dev/null
+          chmod +x /usr/local/bin/kubectl
+          python3 << 'PYEOF'
+          import json, subprocess, sys, concurrent.futures
+          pr_list_raw = """{{inputs.parameters.pr-list}}"""
+          try: prs = json.loads(pr_list_raw)
+          except: print("No PRs."); sys.exit(0)
+          if not prs: print("No PRs."); sys.exit(0)
+          def submit(pr):
+              repo, pr_num, title, sha = pr["repo"], pr["number"], pr["title"], pr["head_sha"]
+              nl = repo.lower()
+              if "dakota" in nl: variant, suites, img, tag = "dakota", "smoke", "ghcr.io/ublue-os/bluefin:latest", "latest"
+              elif "bluefin" in nl or "common" in nl: variant, suites, img, tag = "bluefin", "smoke,developer", "ghcr.io/ublue-os/bluefin:latest", "latest"
+              else: return ("skip", repo, pr_num, title)
+              wf_name = f"pr-{repo.replace('/','-')}-{pr_num}-{sha[:8]}"[:63].rstrip("-")
+              m = {"apiVersion":"argoproj.io/v1alpha1","kind":"Workflow","metadata":{"name":wf_name,"namespace":"argo","labels":{"bluefin.io/trigger":"pr-test","bluefin.io/pr-repo":repo.replace("/","-"),"bluefin.io/pr-number":str(pr_num)}},"spec":{"serviceAccountName":"argo","entrypoint":"pipeline","onExit":"teardown","podGC":{"strategy":"OnWorkflowSuccess"},"tolerations":[{"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"}],"arguments":{"parameters":[{"name":"compute-node","value":"karnataka"},{"name":"image","value":img},{"name":"image-tag","value":tag},{"name":"namespace","value":"bluefin-test"},{"name":"suites","value":suites},{"name":"variant","value":variant},{"name":"ssh-key-secret","value":"bluefin-test-ssh-key"},{"name":"branch","value":"main"}]},"workflowTemplateRef":{"name":"bluefin-qa-pipeline"}}}
+              try:
+                  r = subprocess.run(["kubectl","create","-f","-"],input=json.dumps(m),capture_output=True,text=True,timeout=30)
+                  if r.returncode==0: return ("ok",wf_name,repo,pr_num,title)
+                  elif "AlreadyExists" in r.stderr: return ("exists",wf_name,repo,pr_num,title)
+                  else: return ("err",r.stderr.strip()[:200],repo,pr_num,title)
+              except Exception as e: return ("err",str(e)[:200],repo,pr_num,title)
+          print(f"Submitting {len(prs)} PRs...")
+          ok,sk,er=0,0,0
+          with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
+              for f in concurrent.futures.as_completed([ex.submit(submit,p) for p in prs]):
+                  r=f.result()
+                  if r[0]=="ok": print(f"  OK {r[1]}: {r[2]}#{r[3]}"); ok+=1
+                  elif r[0]=="skip": print(f"  SKIP {r[1]}#{r[2]}"); sk+=1
+                  elif r[0]=="exists": print(f"  EXIST {r[1]}"); sk+=1
+                  else: print(f"  ERR {r[2]}#{r[3]}: {r[1]}"); er+=1
+          print(f"Done: {ok} submitted, {sk} skipped, {er} errors")
+          PYEOF
+    tolerations:
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/control-plane
+      operator: Exists
+    ttlStrategy:
+      secondsAfterCompletion: 3600
+    volumes:
+    - name: github-token
+      secret:
+        secretName: github-token
+status:
+  failed: 1
+  phase: ""
+  succeeded: 1

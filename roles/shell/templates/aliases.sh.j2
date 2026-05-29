@@ -76,3 +76,6 @@ fi
 {% if is_desktop | bool %}
 alias open='xdg-open'
 {% endif %}
+
+# ── Local secrets (not committed to git) ──────────────────────────
+[ -f ~/.config/shell/secrets.sh ] && source ~/.config/shell/secrets.sh

@@ -1,0 +1,94 @@
+# Tears down ephemeral test VMs and cleans hostDisk clones.
+# Adapted: added compute-node parameter, control-plane tolerations.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: teardown-bluefin-vm
+  namespace: argo
+spec:
+  serviceAccountName: argo
+  arguments:
+    parameters:
+      - name: compute-node
+        value: "karnataka"
+        description: "Node where hostDisk files live"
+  templates:
+    - name: teardown-vm
+      inputs:
+        parameters:
+          - name: vm-name
+          - name: namespace
+            value: "bluefin-test"
+          - name: test-root
+            value: "/var/tmp/bluefin-test"
+      steps:
+        - - name: delete-vm
+            template: delete-vm
+            arguments:
+              parameters:
+                - name: vm-name
+                  value: "{{inputs.parameters.vm-name}}"
+                - name: namespace
+                  value: "{{inputs.parameters.namespace}}"
+        - - name: delete-hostdisk
+            template: delete-hostdisk
+            arguments:
+              parameters:
+                - name: vm-name
+                  value: "{{inputs.parameters.vm-name}}"
+                - name: test-root
+                  value: "{{inputs.parameters.test-root}}"
+
+    - name: delete-vm
+      inputs:
+        parameters:
+          - name: vm-name
+          - name: namespace
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      resource:
+        action: delete
+        manifest: |
+          apiVersion: kubevirt.io/v1
+          kind: VirtualMachine
+          metadata:
+            name: "{{inputs.parameters.vm-name}}"
+            namespace: "{{inputs.parameters.namespace}}"
+
+    - name: delete-hostdisk
+      inputs:
+        parameters:
+          - name: vm-name
+          - name: test-root
+            value: "/var/tmp/bluefin-test"
+      nodeSelector:
+        kubernetes.io/hostname: "{{workflow.parameters.compute-node}}"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      volumes:
+        - name: test-disks
+          hostPath:
+            path: "{{inputs.parameters.test-root}}"
+      script:
+        image: cgr.dev/chainguard/bash:latest
+        securityContext:
+          runAsUser: 0
+        command: [bash]
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        volumeMounts:
+          - name: test-disks
+            mountPath: "{{inputs.parameters.test-root}}"
+        source: |
+          DISK="{{inputs.parameters.test-root}}/{{inputs.parameters.vm-name}}.raw"
+          rm -f "${DISK}"
+          echo "Cleaned: ${DISK}"

@@ -1,0 +1,140 @@
+# Main QA pipeline: ensure golden disk → provision VM → run tests → teardown.
+# Adapted from projectbluefin/testing-lab:
+#   - Added compute-node parameter (see issue #149)
+#   - Added control-plane tolerations (see issue #150)
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: bluefin-qa-pipeline
+  namespace: argo
+  labels:
+    app.kubernetes.io/component: qa-pipeline
+    app.kubernetes.io/part-of: bluefin-test-suite
+spec:
+  serviceAccountName: argo
+  entrypoint: pipeline
+  onExit: teardown
+  arguments:
+    parameters:
+      - name: compute-node
+        value: "karnataka"
+        description: "Node with hostPath storage for golden + test disks"
+      - name: image
+        value: "ghcr.io/ublue-os/bluefin"
+      - name: image-tag
+        value: "latest"
+      - name: namespace
+        value: "bluefin-test"
+      - name: suites
+        value: "smoke,developer"
+      - name: variant
+        value: "bluefin"
+      - name: ssh-key-secret
+        value: "bluefin-test-ssh-key"
+      - name: branch
+        value: "main"
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: ensure-disk
+            templateRef:
+              name: bib-build-and-push
+              template: ensure-disk
+            arguments:
+              parameters:
+                - name: image
+                  value: "{{workflow.parameters.image}}"
+                - name: image-tag
+                  value: "{{workflow.parameters.image-tag}}"
+
+          - name: provision
+            dependencies: [ensure-disk]
+            templateRef:
+              name: provision-bluefin-vm
+              template: provision-vm
+            arguments:
+              parameters:
+                - name: image-tag
+                  value: "{{workflow.parameters.image-tag}}"
+                - name: vm-name
+                  value: "bluefin-test-{{workflow.uid}}"
+                - name: namespace
+                  value: "{{workflow.parameters.namespace}}"
+
+          - name: run-smoke
+            dependencies: [provision]
+            when: "'{{workflow.parameters.suites}}' =~ 'smoke'"
+            templateRef:
+              name: run-gnome-tests
+              template: run-gnome-tests
+            arguments:
+              parameters:
+                - name: vm-ip
+                  value: "{{tasks.provision.outputs.parameters.vm-ip}}"
+                - name: suite
+                  value: "smoke"
+                - name: variant
+                  value: "{{workflow.parameters.variant}}"
+                - name: ssh-key-secret
+                  value: "{{workflow.parameters.ssh-key-secret}}"
+                - name: branch
+                  value: "{{workflow.parameters.branch}}"
+
+          - name: run-developer
+            dependencies: [run-smoke]
+            when: "'{{workflow.parameters.suites}}' =~ 'developer'"
+            templateRef:
+              name: run-gnome-tests
+              template: run-gnome-tests
+            arguments:
+              parameters:
+                - name: vm-ip
+                  value: "{{tasks.provision.outputs.parameters.vm-ip}}"
+                - name: suite
+                  value: "developer"
+                - name: variant
+                  value: "{{workflow.parameters.variant}}"
+                - name: ssh-key-secret
+                  value: "{{workflow.parameters.ssh-key-secret}}"
+                - name: branch
+                  value: "{{workflow.parameters.branch}}"
+
+          - name: run-software
+            dependencies: [run-developer]
+            when: "'{{workflow.parameters.suites}}' =~ 'software'"
+            templateRef:
+              name: run-gnome-tests
+              template: run-gnome-tests
+            arguments:
+              parameters:
+                - name: vm-ip
+                  value: "{{tasks.provision.outputs.parameters.vm-ip}}"
+                - name: suite
+                  value: "software"
+                - name: variant
+                  value: "{{workflow.parameters.variant}}"
+                - name: ssh-key-secret
+                  value: "{{workflow.parameters.ssh-key-secret}}"
+                - name: branch
+                  value: "{{workflow.parameters.branch}}"
+
+    - name: teardown
+      dag:
+        tasks:
+          - name: teardown-vm
+            templateRef:
+              name: teardown-bluefin-vm
+              template: teardown-vm
+            arguments:
+              parameters:
+                - name: vm-name
+                  value: "bluefin-test-{{workflow.uid}}"
+                - name: image-tag
+                  value: "{{workflow.parameters.image-tag}}"
+                - name: namespace
+                  value: "{{workflow.parameters.namespace}}"

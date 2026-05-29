@@ -1,0 +1,399 @@
+# Builds a Bluefin golden disk.raw via BIB on the compute node's hostPath.
+# Adapted from projectbluefin/testing-lab:
+#   - Added compute-node parameter (see issue #149)
+#   - Added control-plane tolerations (see issue #150)
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: bib-build-and-push
+  namespace: argo
+spec:
+  serviceAccountName: argo
+  arguments:
+    parameters:
+      - name: compute-node
+        value: "karnataka"
+        description: "Node with hostPath storage for golden disks"
+  templates:
+    - name: ensure-disk
+      inputs:
+        parameters:
+          - name: image
+            value: "ghcr.io/ublue-os/bluefin:latest"
+          - name: image-tag
+            value: "latest"
+          - name: golden-root
+            value: "/var/tmp/bluefin-golden"
+      steps:
+        - - name: check
+            template: bib-disk-check
+            arguments:
+              parameters:
+                - name: image
+                  value: "{{inputs.parameters.image}}"
+                - name: image-tag
+                  value: "{{inputs.parameters.image-tag}}"
+                - name: golden-root
+                  value: "{{inputs.parameters.golden-root}}"
+        - - name: pull-image
+            template: bib-img-pull
+            when: "{{steps.check.outputs.result}} != exists"
+            arguments:
+              parameters:
+                - name: image
+                  value: "{{inputs.parameters.image}}"
+        - - name: build
+            template: bib-img-build
+            when: "{{steps.check.outputs.result}} != exists"
+            arguments:
+              parameters:
+                - name: image
+                  value: "{{inputs.parameters.image}}"
+                - name: image-tag
+                  value: "{{inputs.parameters.image-tag}}"
+        - - name: configure
+            template: bib-disk-configure
+            when: "{{steps.check.outputs.result}} != exists"
+            arguments:
+              parameters:
+                - name: image
+                  value: "{{inputs.parameters.image}}"
+                - name: image-tag
+                  value: "{{inputs.parameters.image-tag}}"
+                - name: golden-root
+                  value: "{{inputs.parameters.golden-root}}"
+
+    - name: bib-disk-check
+      inputs:
+        parameters:
+          - name: image
+          - name: image-tag
+          - name: golden-root
+            value: "/var/tmp/bluefin-golden"
+      nodeSelector:
+        kubernetes.io/hostname: "{{workflow.parameters.compute-node}}"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      volumes:
+        - name: golden
+          hostPath:
+            path: "{{inputs.parameters.golden-root}}"
+            type: DirectoryOrCreate
+      script:
+        image: quay.io/podman/stable:latest
+        command: [bash]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+          - name: golden
+            mountPath: "{{inputs.parameters.golden-root}}"
+        source: |
+          set -euo pipefail
+          TAG="{{inputs.parameters.image-tag}}"
+          IMAGE_REF="{{inputs.parameters.image}}"
+          GOLDEN_ROOT="{{inputs.parameters.golden-root}}"
+          if [[ "${IMAGE_REF}" != *:* ]]; then
+            IMAGE_REF="${IMAGE_REF}:${TAG}"
+          fi
+          GOLDEN_DIR="${GOLDEN_ROOT}/${TAG}"
+          DISK="${GOLDEN_DIR}/disk.raw"
+          MARKER="${GOLDEN_DIR}/source-digest"
+
+          if [[ ! -f "${DISK}" ]]; then
+            echo -n "missing"
+            exit 0
+          fi
+
+          REMOTE=$(skopeo inspect --no-tags --format '{{.Digest}}' "docker://${IMAGE_REF}" 2>/dev/null || true)
+          if [[ -z "${REMOTE}" ]]; then
+            echo "skopeo inspect failed for ${IMAGE_REF}; treating as stale to force rebuild" >&2
+            echo -n "stale"
+            exit 0
+          fi
+
+          STORED=""
+          if [[ -f "${MARKER}" ]]; then
+            STORED=$(cat "${MARKER}")
+          fi
+
+          if [[ "${REMOTE}" == "${STORED}" ]]; then
+            echo -n "exists"
+          else
+            echo "Disk stale: stored=${STORED:-<none>} remote=${REMOTE}" >&2
+            echo -n "stale"
+          fi
+
+    - name: bib-img-pull
+      inputs:
+        parameters:
+          - name: image
+      nodeSelector:
+        kubernetes.io/hostname: "{{workflow.parameters.compute-node}}"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      volumes:
+        - name: containers-storage
+          hostPath:
+            path: /var/tmp/containers-storage
+      container:
+        image: quay.io/podman/stable:latest
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        resources:
+          requests:
+            cpu: "2"
+            memory: 2Gi
+          limits:
+            cpu: "4"
+            memory: 4Gi
+        volumeMounts:
+          - name: containers-storage
+            mountPath: /var/lib/containers/storage
+        command: [bash, -c]
+        args:
+          - |
+            set -euo pipefail
+            IMAGE="{{inputs.parameters.image}}"
+            podman pull "${IMAGE}"
+
+    - name: bib-img-build
+      inputs:
+        parameters:
+          - name: image
+          - name: image-tag
+      synchronization:
+        mutexes:
+          - name: compute-heavy
+      nodeSelector:
+        kubernetes.io/hostname: "{{workflow.parameters.compute-node}}"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      volumes:
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: bib-output
+          hostPath:
+            path: /var/tmp/bib-output
+            type: DirectoryOrCreate
+        - name: containers-storage
+          hostPath:
+            path: /var/tmp/containers-storage
+      container:
+        image: quay.io/centos-bootc/bootc-image-builder:latest
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        resources:
+          requests:
+            cpu: "4"
+            memory: 8Gi
+          limits:
+            cpu: "8"
+            memory: 16Gi
+        volumeMounts:
+          - name: dev
+            mountPath: /dev
+          - name: bib-output
+            mountPath: /output
+          - name: containers-storage
+            mountPath: /var/lib/containers/storage
+        command: [bash, -c]
+        args:
+          - |
+            set -euo pipefail
+            TAG="{{inputs.parameters.image-tag}}"
+            OUT="/output/${TAG}"
+            mkdir -p "${OUT}"
+            if [[ -f "${OUT}/image/disk.raw" ]]; then
+              echo "disk.raw already exists at ${OUT}/image/disk.raw, skipping BIB build"
+              exit 0
+            fi
+            bootc-image-builder build \
+              --type raw --rootfs ext4 \
+              --output "${OUT}" \
+              {{inputs.parameters.image}} 2>&1 | tee "${OUT}/bib-build.log"
+            echo "BIB exit: ${PIPESTATUS[0]}"
+            exit ${PIPESTATUS[0]}
+
+    - name: bib-disk-configure
+      inputs:
+        parameters:
+          - name: image
+          - name: image-tag
+          - name: golden-root
+            value: "/var/tmp/bluefin-golden"
+      synchronization:
+        mutexes:
+          - name: compute-heavy
+      nodeSelector:
+        kubernetes.io/hostname: "{{workflow.parameters.compute-node}}"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      volumes:
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: bib-output
+          hostPath:
+            path: /var/tmp/bib-output
+        - name: golden
+          hostPath:
+            path: "{{inputs.parameters.golden-root}}"
+            type: DirectoryOrCreate
+        - name: containers-storage
+          hostPath:
+            path: /var/tmp/containers-storage
+      container:
+        image: quay.io/podman/stable:latest
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        resources:
+          requests:
+            cpu: "2"
+            memory: 4Gi
+          limits:
+            cpu: "4"
+            memory: 8Gi
+        env:
+          - name: SSH_PUBKEY
+            valueFrom:
+              secretKeyRef:
+                name: bluefin-test-ssh-key
+                key: id_ed25519.pub
+        volumeMounts:
+          - name: dev
+            mountPath: /dev
+          - name: bib-output
+            mountPath: /var/tmp/bib-output
+          - name: golden
+            mountPath: "{{inputs.parameters.golden-root}}"
+          - name: containers-storage
+            mountPath: /var/lib/containers/storage
+        command: [bash, -c]
+        args:
+          - |
+            set -euo pipefail
+            TAG="{{inputs.parameters.image-tag}}"
+            IMAGE_REF="{{inputs.parameters.image}}"
+            if [[ "${IMAGE_REF}" != *:* ]]; then
+              IMAGE_REF="${IMAGE_REF}:${TAG}"
+            fi
+            DISK="/var/tmp/bib-output/${TAG}/image/disk.raw"
+            PUBKEY="${SSH_PUBKEY}"
+            if [[ -z "${PUBKEY}" ]]; then
+              echo "ERROR: SSH_PUBKEY from bluefin-test-ssh-key secret is empty" >&2
+              exit 1
+            fi
+            echo "Using pubkey: ${PUBKEY}"
+
+            # Idempotency: another workflow may have already configured and moved the disk (see issue #154)
+            if [[ ! -f "${DISK}" ]]; then
+              GOLDEN_DISK="{{inputs.parameters.golden-root}}/${TAG}/disk.raw"
+              if [[ -f "${GOLDEN_DISK}" ]]; then
+                echo "disk.raw already moved to golden by another workflow: ${GOLDEN_DISK}"
+                exit 0
+              fi
+              echo "ERROR: disk.raw missing at ${DISK} and not in golden either" >&2
+              exit 1
+            fi
+
+            echo "=== Configuring golden disk: ${DISK} ==="
+            LOOP=$(losetup -f --show -P "${DISK}")
+            echo "Loop: ${LOOP}"
+
+            mkdir -p /mnt/btroot /mnt/btboot
+            if blkid "${LOOP}p4" | grep -q 'TYPE="btrfs"'; then
+              mount -o subvol=root "${LOOP}p4" /mnt/btroot
+            else
+              mount "${LOOP}p4" /mnt/btroot
+            fi
+            mount "${LOOP}p3" /mnt/btboot
+
+            DEPLOY=$(ls /mnt/btroot/ostree/deploy/default/deploy/ | head -1)
+            ROOT="/mnt/btroot/ostree/deploy/default/deploy/${DEPLOY}"
+            VAR="/mnt/btroot/ostree/deploy/default/var"
+
+            # Enable sshd
+            mkdir -p "${ROOT}/etc/systemd/system/multi-user.target.wants/"
+            ln -sf /usr/lib/systemd/system/sshd.service \
+              "${ROOT}/etc/systemd/system/multi-user.target.wants/sshd.service"
+
+            # Create bluefin-test system account
+            if ! grep -q '^bluefin-test:' "${ROOT}/etc/passwd"; then
+                BFT_UID=1001
+                echo "bluefin-test:x:${BFT_UID}:${BFT_UID}:Bluefin Test User:/var/home/bluefin-test:/bin/bash" \
+                    >> "${ROOT}/etc/passwd"
+                echo "bluefin-test:!:19000:0:99999:7:::" >> "${ROOT}/etc/shadow"
+                echo "bluefin-test:x:${BFT_UID}:" >> "${ROOT}/etc/group"
+                echo "Created bluefin-test user (uid ${BFT_UID})"
+            else
+                BFT_UID=$(grep '^bluefin-test:' "${ROOT}/etc/passwd" | cut -d: -f3)
+                echo "bluefin-test user exists (uid ${BFT_UID})"
+            fi
+
+            # SSH key
+            mkdir -p "${VAR}/home/bluefin-test/.ssh"
+            printf '%s\n' "${PUBKEY}" > "${VAR}/home/bluefin-test/.ssh/authorized_keys"
+            test -s "${VAR}/home/bluefin-test/.ssh/authorized_keys" || {
+              echo "ERROR: authorized_keys empty or not written" >&2; exit 1
+            }
+            chown -R "${BFT_UID}:${BFT_UID}" "${VAR}/home/bluefin-test"
+            chmod 750 "${VAR}/home/bluefin-test"
+            chmod 700 "${VAR}/home/bluefin-test/.ssh"
+            chmod 600 "${VAR}/home/bluefin-test/.ssh/authorized_keys"
+
+            # Allow SSH sessions to see AT-SPI env vars (required for Dogtail)
+            mkdir -p "${ROOT}/etc/ssh/sshd_config.d/"
+            printf 'PermitUserEnvironment yes\n' > "${ROOT}/etc/ssh/sshd_config.d/99-bluefin-test.conf"
+            chmod 600 "${ROOT}/etc/ssh/sshd_config.d/99-bluefin-test.conf"
+
+            # Sudoers
+            echo 'bluefin-test ALL=(ALL) NOPASSWD:ALL' > "${ROOT}/etc/sudoers.d/bluefin-test"
+            chmod 440 "${ROOT}/etc/sudoers.d/bluefin-test"
+
+            # selinux=0 in BLS entry (bootc uses loader/entries/*.conf)
+            for conf in /mnt/btboot/loader/entries/*.conf; do
+              [[ -f "${conf}" ]] || continue
+              sed -i '/^options / { /selinux=0/! s/$/ selinux=0/ }' "${conf}"
+              echo "Patched: $(grep '^options ' ${conf} | head -1)"
+            done
+
+            sync
+            umount /mnt/btboot
+            umount /mnt/btroot
+            losetup -d "${LOOP}"
+
+            # Move to golden hostPath
+            GOLDEN_DIR="{{inputs.parameters.golden-root}}/${TAG}"
+            mkdir -p "${GOLDEN_DIR}"
+            mv "${DISK}" "${GOLDEN_DIR}/disk.raw"
+            rmdir "/var/tmp/bib-output/${TAG}/image" 2>/dev/null || true
+            rmdir "/var/tmp/bib-output/${TAG}" 2>/dev/null || true
+
+            # Record source digest for freshness checks
+            DIGEST=$(podman image inspect --format '{{.Digest}}' "${IMAGE_REF}" 2>/dev/null || true)
+            if [[ -n "${DIGEST}" ]]; then
+              printf '%s' "${DIGEST}" > "${GOLDEN_DIR}/source-digest"
+              echo "Recorded source digest: ${DIGEST}"
+            else
+              echo "WARNING: could not record source digest for ${IMAGE_REF}" >&2
+            fi
+
+            echo "=== Golden disk ready: ${GOLDEN_DIR}/disk.raw ==="
+            ls -lh "${GOLDEN_DIR}/disk.raw"

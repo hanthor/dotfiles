@@ -306,6 +306,30 @@
   no_log: true
   when: deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0
 
+# ── Forgejo API token for MCP server ─────────────────────────────
+- name: Fetch Forgejo API token from Bitwarden
+  ansible.builtin.shell: |
+    SESSION="${BW_SESSION:-$(cat /tmp/bw_session 2>/dev/null)}"
+    [ -z "$SESSION" ] && exit 1
+    bw get notes forgejo --session "$SESSION" | grep "API Token:" | sed 's/API Token: //'
+  register: forgejo_token
+  no_log: true
+  changed_when: false
+  failed_when: false
+  environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+
+- name: Write shell secrets file
+  ansible.builtin.copy:
+    content: |
+      # Managed by dotfiles playbook — DO NOT EDIT
+      export FORGEJO_TOKEN={{ forgejo_token.stdout | trim }}
+    dest: ~/.config/shell/secrets.sh
+    mode: "0600"
+  no_log: true
+  when: forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0
+
 # ── tailvm shell completions ──────────────────────────────────────
 - name: Deploy tailvm bash completion
   ansible.builtin.copy:

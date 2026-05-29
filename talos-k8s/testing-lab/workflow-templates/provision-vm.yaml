@@ -1,0 +1,244 @@
+# Provisions a Bluefin test VM via btrfs reflink from golden disk.
+# Adapted from projectbluefin/testing-lab:
+#   - Added compute-node parameter (see issue #149)
+#   - Added control-plane tolerations (see issue #150)
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: provision-bluefin-vm
+  namespace: argo
+spec:
+  serviceAccountName: argo
+  arguments:
+    parameters:
+      - name: compute-node
+        value: "karnataka"
+        description: "Node with hostPath storage (must match bib-build-and-push)"
+  templates:
+    - name: provision-vm
+      metadata: {}
+      inputs:
+        parameters:
+          - name: image-tag
+            value: "latest"
+          - name: vm-name
+          - name: namespace
+            value: "bluefin-test"
+          - name: golden-root
+            value: "/var/tmp/bluefin-golden"
+          - name: test-root
+            value: "/var/tmp/bluefin-test"
+      outputs:
+        parameters:
+          - name: vm-ip
+            valueFrom:
+              parameter: '{{steps.wait-for-vm.outputs.result}}'
+      steps:
+        - - name: reflink-disk
+            template: reflink-disk
+            arguments:
+              parameters:
+                - name: image-tag
+                  value: '{{inputs.parameters.image-tag}}'
+                - name: vm-name
+                  value: '{{inputs.parameters.vm-name}}'
+                - name: golden-root
+                  value: '{{inputs.parameters.golden-root}}'
+                - name: test-root
+                  value: '{{inputs.parameters.test-root}}'
+        - - name: create-vm
+            template: create-vm
+            arguments:
+              parameters:
+                - name: image-tag
+                  value: '{{inputs.parameters.image-tag}}'
+                - name: vm-name
+                  value: '{{inputs.parameters.vm-name}}'
+                - name: namespace
+                  value: '{{inputs.parameters.namespace}}'
+                - name: test-root
+                  value: '{{inputs.parameters.test-root}}'
+        - - name: wait-for-vm
+            template: wait-for-vm-ready
+            arguments:
+              parameters:
+                - name: image-tag
+                  value: '{{inputs.parameters.image-tag}}'
+                - name: vm-name
+                  value: '{{inputs.parameters.vm-name}}'
+                - name: namespace
+                  value: '{{inputs.parameters.namespace}}'
+
+    - name: reflink-disk
+      metadata:
+        labels:
+          bluefin.io/step: reflink-disk
+          bluefin.io/variant: "{{inputs.parameters.image-tag}}"
+      inputs:
+        parameters:
+          - name: image-tag
+          - name: vm-name
+          - name: golden-root
+            value: "/var/tmp/bluefin-golden"
+          - name: test-root
+            value: "/var/tmp/bluefin-test"
+      nodeSelector:
+        kubernetes.io/hostname: "{{workflow.parameters.compute-node}}"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      outputs: {}
+      volumes:
+        - name: golden
+          hostPath:
+            path: "{{inputs.parameters.golden-root}}"
+        - name: test-disks
+          hostPath:
+            path: "{{inputs.parameters.test-root}}"
+            type: DirectoryOrCreate
+      script:
+        image: quay.io/podman/stable:latest
+        command:
+          - bash
+        securityContext:
+          runAsUser: 0
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+          - name: golden
+            mountPath: "{{inputs.parameters.golden-root}}"
+          - name: test-disks
+            mountPath: "{{inputs.parameters.test-root}}"
+        source: |
+          set -euo pipefail
+          TAG="{{inputs.parameters.image-tag}}"
+          VM="{{inputs.parameters.vm-name}}"
+          GOLDEN="{{inputs.parameters.golden-root}}/${TAG}/disk.raw"
+          DEST="{{inputs.parameters.test-root}}/${VM}.raw"
+
+          if [[ ! -f "${GOLDEN}" ]]; then
+            echo "ERROR: golden disk not found: ${GOLDEN}" >&2
+            exit 1
+          fi
+
+          START=$(date +%s%N)
+          cp --reflink=auto "${GOLDEN}" "${DEST}"
+          chown 107:107 "${DEST}"
+          chmod 664 "${DEST}"
+          chcon -t svirt_sandbox_file_t "${DEST}" 2>/dev/null || true
+          ELAPSED=$(( ($(date +%s%N) - START) / 1000000 ))
+          echo "reflink clone: ${ELAPSED}ms → ${DEST}"
+
+    - name: create-vm
+      metadata:
+        labels:
+          bluefin.io/step: create-vm
+          bluefin.io/variant: "{{inputs.parameters.image-tag}}"
+      inputs:
+        parameters:
+          - name: image-tag
+          - name: vm-name
+          - name: namespace
+          - name: test-root
+            value: "/var/tmp/bluefin-test"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      outputs: {}
+      resource:
+        action: apply
+        manifest: |
+          apiVersion: kubevirt.io/v1
+          kind: VirtualMachine
+          metadata:
+            name: "{{inputs.parameters.vm-name}}"
+            namespace: "{{inputs.parameters.namespace}}"
+            labels:
+              app: bluefin-test
+              argo-workflow: "{{workflow.name}}"
+          spec:
+            runStrategy: Always
+            template:
+              metadata:
+                labels:
+                  kubevirt.io/vm: "{{inputs.parameters.vm-name}}"
+              spec:
+                nodeSelector:
+                  kubernetes.io/hostname: "{{workflow.parameters.compute-node}}"
+                domain:
+                  cpu:
+                    cores: 4
+                  memory:
+                    guest: 8Gi
+                  devices:
+                    disks:
+                      - name: rootdisk
+                        disk:
+                          bus: virtio
+                        bootOrder: 1
+                    interfaces:
+                      - name: default
+                        masquerade: {}
+                networks:
+                  - name: default
+                    pod: {}
+                volumes:
+                  - name: rootdisk
+                    hostDisk:
+                      path: "{{inputs.parameters.test-root}}/{{inputs.parameters.vm-name}}.raw"
+                      type: Disk
+
+    - name: wait-for-vm-ready
+      metadata:
+        labels:
+          bluefin.io/step: wait-for-vm
+          bluefin.io/variant: "{{inputs.parameters.image-tag}}"
+      inputs:
+        parameters:
+          - name: image-tag
+          - name: vm-name
+          - name: namespace
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      outputs: {}
+      podSpecPatch: |
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+      script:
+        image: cgr.dev/chainguard/kubectl:latest-dev
+        command:
+          - bash
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        source: |
+          set -e
+          NS="{{inputs.parameters.namespace}}"
+          VM="{{inputs.parameters.vm-name}}"
+          LABEL="kubevirt.io/vm=${VM}"
+
+          echo "Waiting for VMI ready..." >&2
+          kubectl wait vmi -n "${NS}" "${VM}" \
+            --for=condition=Ready --timeout=600s >&2
+
+          POD_IP=$(kubectl get pod -n "${NS}" -l "${LABEL}" \
+            -o jsonpath='{.items[0].status.podIP}')
+
+          echo "Waiting for SSH on ${POD_IP}..." >&2
+          timeout 120 bash -c \
+            "until bash -c 'echo >/dev/tcp/${POD_IP}/22' 2>/dev/null; do sleep 5; done"
+
+          echo "${POD_IP}"

@@ -1,0 +1,235 @@
+# Forgejo Runner — executes Actions/CI workflows
+#
+# Prerequisites (run AFTER Forgejo is up and you've created a runner token):
+#   kubectl create secret generic forgejo-runner-registration \
+#     --from-literal=token=<YOUR_RUNNER_TOKEN> -n forgejo
+#
+# Then deploy:
+#   kubectl apply -f talos-k8s/forgejo-runner.yaml
+#
+# The runner uses Docker-in-Docker (DinD) so workflows can build containers.
+# Labels:
+#   - docker        → node:20-bookworm (Node.js, common GH Actions)
+#   - ubuntu-latest  → ghcr.io/catthehacker/ubuntu:act-22.04 (GitHub-like)
+#   - self-hosted    → same as docker (for runs-on: self-hosted)
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forgejo-runner-data
+  namespace: forgejo
+  labels:
+    app: forgejo-runner
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: local-path
+---
+# Runner configuration file (mounted as ConfigMap)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: forgejo-runner-config
+  namespace: forgejo
+data:
+  config.yml: |
+    runner:
+      # Labels define which workflow jobs this runner picks up.
+      # Format: <label-name>:<type>://<default-image>
+      labels:
+        # Docker — common Node.js environment, matches many GitHub Actions
+        - docker:docker://node:20-bookworm
+        # Ubuntu-like — mimics GitHub Actions ubuntu-latest
+        - ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-22.04
+        # Ubuntu 24.04 — named runner for workflows pinned to this version
+        - ubuntu-24.04:docker://ghcr.io/catthehacker/ubuntu:act-22.04
+        # Generic self-hosted label
+        - self-hosted:docker://node:20-bookworm
+      envs:
+        # Point Docker CLI to the DinD sidecar
+        DOCKER_HOST: tcp://localhost:2375
+    container:
+      # All job/step containers also need to reach DinD
+      docker_host: tcp://localhost:2375
+      # Use host network for DinD communication
+      network: host
+      # Resource limits for job containers
+      valid_volumes:
+        - '**'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forgejo-runner-dind
+  namespace: forgejo
+  labels:
+    app: forgejo-runner
+spec:
+  clusterIP: None
+  selector:
+    app: forgejo-runner
+  ports:
+    - name: docker
+      port: 2375
+      targetPort: 2375
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forgejo-runner
+  namespace: forgejo
+  labels:
+    app: forgejo-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: forgejo-runner
+  template:
+    metadata:
+      labels:
+        app: forgejo-runner
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: karnataka
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        # Register the runner with Forgejo if not already registered
+        - name: register
+          image: data.forgejo.org/forgejo/runner:12.10.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          env:
+            - name: FORGEJO_INSTANCE_URL
+              value: http://forgejo.forgejo.svc.cluster.local:3000
+            - name: RUNNER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: forgejo-runner-registration
+                  key: token
+            - name: RUNNER_NAME
+              value: karnataka-runner
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              if [ -f /data/.runner ]; then
+                echo "Runner already registered, skipping."
+                exit 0
+              fi
+              echo "Registering runner '$RUNNER_NAME' with Forgejo at $FORGEJO_INSTANCE_URL..."
+              forgejo-runner register \
+                --instance "$FORGEJO_INSTANCE_URL" \
+                --token "$RUNNER_SECRET" \
+                --name "$RUNNER_NAME" \
+                --no-interactive
+              echo "Registration complete."
+          volumeMounts:
+            - name: runner-data
+              mountPath: /data
+      containers:
+        # Docker-in-Docker sidecar
+        - name: dind
+          image: docker:28-dind
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          command:
+            - dockerd
+            - --host=tcp://0.0.0.0:2375
+            - --host=unix:///var/run/docker.sock
+            - --storage-driver=overlay2
+          ports:
+            - containerPort: 2375
+              name: docker
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: docker-storage
+              mountPath: /var/lib/docker
+          livenessProbe:
+            exec:
+              command:
+                - docker
+                - info
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - docker
+                - info
+            initialDelaySeconds: 10
+            periodSeconds: 10
+        # Forgejo Runner daemon
+        - name: runner
+          image: data.forgejo.org/forgejo/runner:12.10.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          env:
+            - name: DOCKER_HOST
+              value: tcp://localhost:2375
+          command:
+            - /bin/sh
+            - -c
+            - |
+              if [ ! -f /data/.runner ]; then
+                echo "Not registered yet — waiting for registration token..."
+                echo "Run: kubectl create secret generic forgejo-runner-registration --from-literal=token=<TOKEN>"
+                echo "Then restart this pod."
+                sleep 3600
+                exit 1
+              fi
+              echo "Waiting for Docker daemon..."
+              for i in $(seq 1 30); do
+                if docker info >/dev/null 2>&1; then
+                  echo "Docker is ready."
+                  break
+                fi
+                sleep 2
+              done
+              exec forgejo-runner daemon --config /etc/forgejo-runner/config.yml
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: runner-data
+              mountPath: /data
+            - name: runner-config
+              mountPath: /etc/forgejo-runner
+            - name: docker-sock
+              mountPath: /var/run
+      volumes:
+        - name: runner-data
+          persistentVolumeClaim:
+            claimName: forgejo-runner-data
+        - name: runner-config
+          configMap:
+            name: forgejo-runner-config
+        - name: docker-storage
+          emptyDir:
+            sizeLimit: 10Gi
+        - name: docker-sock
+          emptyDir: {}

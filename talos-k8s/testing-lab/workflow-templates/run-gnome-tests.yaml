@@ -1,0 +1,165 @@
+# Adapted: ghost → removed hard nodeSelector, added control-plane toleration.
+# Test runner pods can run on either node; they SSH to the VM IP.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: run-gnome-tests
+  namespace: argo
+  annotations:
+    bluefin.io/stack: "qecore-headless + behave + dogtail + gnome-ponytail-daemon"
+spec:
+  serviceAccountName: argo
+  templates:
+    - name: run-gnome-tests
+      metadata:
+        labels:
+          app.kubernetes.io/part-of: bluefin-test-suite
+          bluefin.io/step: run-gnome-tests
+          bluefin.io/variant: "{{inputs.parameters.variant}}"
+          bluefin.io/suite: "{{inputs.parameters.suite}}"
+        annotations:
+          bluefin.io/vm-ip: "{{inputs.parameters.vm-ip}}"
+          bluefin.io/issue: "{{inputs.parameters.issue-title}}"
+      inputs:
+        parameters:
+          - name: vm-ip
+          - name: suite
+            value: "smoke"
+          - name: variant
+            value: "latest"
+          - name: ssh-user
+            value: "bluefin-test"
+          - name: ssh-key-secret
+            value: "bluefin-test-ssh-key"
+          - name: issue-title
+            value: "manual"
+          - name: behave-tags
+            value: ""
+          - name: branch
+            value: "main"
+      activeDeadlineSeconds: 3600
+      podSpecPatch: |
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        securityContext:
+          runAsUser: 0
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      initContainers:
+        - name: git-sync
+          image: quay.io/fedora/fedora:latest
+          env:
+            - name: BRANCH
+              value: "{{inputs.parameters.branch}}"
+          command: [bash, -c]
+          args:
+            - |
+              for attempt in 1 2 3; do
+                rm -rf /workspace/bluefin-test-suite
+                dnf install -y --quiet git 2>&1 | tail -2
+                if git clone --depth 1 --branch "${BRANCH}" \
+                    https://github.com/projectbluefin/testing-lab \
+                    /workspace/bluefin-test-suite 2>&1; then
+                  echo "Synced testing-lab @ ${BRANCH} (attempt ${attempt})"
+                  exit 0
+                fi
+                rm -rf /workspace/bluefin-test-suite
+                if git clone https://github.com/projectbluefin/testing-lab \
+                    /workspace/bluefin-test-suite 2>&1 && \
+                   git -C /workspace/bluefin-test-suite checkout "${BRANCH}" 2>&1; then
+                  echo "Synced testing-lab @ ${BRANCH} via SHA fallback (attempt ${attempt})"
+                  exit 0
+                fi
+                echo "Attempt ${attempt} failed, retrying in 15s..."
+                sleep 15
+              done
+              exit 1
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      container:
+        image: quay.io/fedora/fedora:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: "1"
+            memory: 1Gi
+          limits:
+            cpu: "2"
+            memory: 2Gi
+        env:
+          - name: VM_IP
+            value: "{{inputs.parameters.vm-ip}}"
+          - name: VM_USER
+            value: "{{inputs.parameters.ssh-user}}"
+          - name: SUITE
+            value: "{{inputs.parameters.suite}}"
+          - name: VARIANT
+            value: "{{inputs.parameters.variant}}"
+          - name: BEHAVE_TAGS
+            value: "{{inputs.parameters.behave-tags}}"
+          - name: SSH_KEY
+            value: /etc/ssh/test-key/id_ed25519
+        command: [bash, -c]
+        args:
+          - |
+            set -euo pipefail
+            echo "=== Running ${SUITE} tests on ${VM_IP} ==="
+
+            # Wait for SSH to be reachable
+            echo "Waiting for SSH on ${VM_IP}..." >&2
+            for i in $(seq 1 60); do
+              if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+                  -i "${SSH_KEY}" "${VM_USER}@${VM_IP}" "echo ready" 2>/dev/null; then
+                echo "SSH ready on attempt ${i}"
+                break
+              fi
+              sleep 10
+            done
+
+            # Install test deps on the VM
+            echo "Installing test dependencies on VM..." >&2
+            ssh -o StrictHostKeyChecking=no -i "${SSH_KEY}" "${VM_USER}@${VM_IP}" \
+              "sudo dnf install -y gnome-ponytail-daemon python3-pip python3-virtualenv 2>&1 | tail -5"
+
+            # Clone test repo and run behave
+            TEST_DIR="/workspace/bluefin-test-suite/tests/${SUITE}"
+            if [[ ! -d "${TEST_DIR}" ]]; then
+              echo "ERROR: test suite directory not found: ${TEST_DIR}" >&2
+              exit 1
+            fi
+
+            cd "${TEST_DIR}"
+
+            # Install Python deps if requirements.txt exists
+            if [[ -f requirements.txt ]]; then
+              pip3 install --quiet -r requirements.txt 2>&1 | tail -3
+            fi
+
+            # Run behave with qecore-headless
+            echo "Starting test run..." >&2
+            VM_HOST="${VM_USER}@${VM_IP}" \
+            VM_KEY="${SSH_KEY}" \
+            SUITE="${SUITE}" \
+            behave ${BEHAVE_TAGS} features/ 2>&1 || {
+              echo "TESTS_FAILED" >&2
+              exit 1
+            }
+            echo "TESTS_PASSED"
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+          - name: ssh-key
+            mountPath: /etc/ssh/test-key
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: ssh-key
+          secret:
+            secretName: "{{inputs.parameters.ssh-key-secret}}"
+            defaultMode: 0600
+            items:
+              - key: id_ed25519
+                path: id_ed25519
