@@ -106,8 +106,10 @@ spec:
         args:
           - |
             set -euo pipefail
-            # Install runner deps (see issues #157, #158)
-            dnf install -y -q openssh-clients python3-pip python3-virtualenv 2>/dev/null
+            # Install runner deps (see issues #157, #158, #162)
+            # python3-gobject + at-spi2-core required by dogtail/qecore (gi module)
+            dnf install -y -q openssh-clients python3-pip python3-virtualenv \
+              python3-gobject at-spi2-core 2>/dev/null
             echo "=== Running ${SUITE} tests on ${VM_IP} ==="
 
             # Wait for SSH to be reachable
@@ -121,11 +123,12 @@ spec:
               sleep 10
             done
 
-            # Check gnome-ponytail-daemon on VM (must be pre-baked; dnf install fails on bootc — see issue #159)
+            # Check gnome-ponytail-daemon on VM (pre-baked via bib-disk-configure — see issue #159)
             echo "Checking gnome-ponytail-daemon on VM..." >&2
-            if ssh -o StrictHostKeyChecking=no -i "${SSH_KEY}" "${VM_USER}@${VM_IP}" \
-                "command -v gnome-ponytail-daemon >/dev/null 2>&1"; then
-              echo "gnome-ponytail-daemon found on VM"
+            GPD_PATH=$(ssh -o StrictHostKeyChecking=no -i "${SSH_KEY}" "${VM_USER}@${VM_IP}" \
+              "find /usr -name 'gnome-ponytail-daemon' -type f 2>/dev/null | head -1" 2>/dev/null || true)
+            if [[ -n "${GPD_PATH}" ]]; then
+              echo "gnome-ponytail-daemon found at ${GPD_PATH}"
             else
               echo "WARNING: gnome-ponytail-daemon not found on VM (see issue #159); tests may fail" >&2
             fi
