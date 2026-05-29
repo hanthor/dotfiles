@@ -106,6 +106,8 @@ spec:
         args:
           - |
             set -euo pipefail
+            # Install runner deps (see issues #157, #158)
+            dnf install -y -q openssh-clients python3-pip python3-virtualenv 2>/dev/null
             echo "=== Running ${SUITE} tests on ${VM_IP} ==="
 
             # Wait for SSH to be reachable
@@ -119,10 +121,14 @@ spec:
               sleep 10
             done
 
-            # Install test deps on the VM
-            echo "Installing test dependencies on VM..." >&2
-            ssh -o StrictHostKeyChecking=no -i "${SSH_KEY}" "${VM_USER}@${VM_IP}" \
-              "sudo dnf install -y gnome-ponytail-daemon python3-pip python3-virtualenv 2>&1 | tail -5"
+            # Check gnome-ponytail-daemon on VM (must be pre-baked; dnf install fails on bootc — see issue #159)
+            echo "Checking gnome-ponytail-daemon on VM..." >&2
+            if ssh -o StrictHostKeyChecking=no -i "${SSH_KEY}" "${VM_USER}@${VM_IP}" \
+                "command -v gnome-ponytail-daemon >/dev/null 2>&1"; then
+              echo "gnome-ponytail-daemon found on VM"
+            else
+              echo "WARNING: gnome-ponytail-daemon not found on VM (see issue #159); tests may fail" >&2
+            fi
 
             # Clone test repo and run behave
             TEST_DIR="/workspace/bluefin-test-suite/tests/${SUITE}"
@@ -133,9 +139,12 @@ spec:
 
             cd "${TEST_DIR}"
 
-            # Install Python deps if requirements.txt exists
+            # Install Python deps (runner-side: behave, qecore, dogtail — see issue #160)
+            # qecore-headless is not on PyPI; the correct package name is qecore
             if [[ -f requirements.txt ]]; then
-              pip3 install --quiet -r requirements.txt 2>&1 | tail -3
+              pip3 install --quiet -r requirements.txt 2>&1 | tail -5
+            else
+              pip3 install --quiet behave qecore dogtail 2>&1 | tail -5
             fi
 
             # Run behave with qecore-headless
