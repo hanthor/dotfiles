@@ -8,5 +8,8 @@
     "npm:@majorgilles/pi-grill-me",
     "npm:pi-goal-x",
     "npm:pi-import-claude-history"
+  ],
+  "extensions": [
+    "claude-import.ts"
   ]
 }
