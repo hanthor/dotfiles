@@ -148,17 +148,15 @@
   changed_when: false
   failed_when: false
   loop: "{{ machines.keys() | list }}"
-  when:
-    - item != inventory_hostname
-    - hostvars[item]['ansible_connection'] | default('ssh') != 'local'
+  when: item != inventory_hostname
 
 - name: Remove stale known_hosts entries
   ansible.builtin.known_hosts:
     name: "{{ item.item }}"
     state: absent
-  loop: "{{ host_key_scan.results }}"
+  loop: "{{ host_key_scan.results | default([]) }}"
   when:
-    - host_key_scan.results is defined
+    - item.rc is defined
     - item.rc == 0
     - item.stdout | length > 0
   loop_control:
@@ -170,9 +168,9 @@
     key: "{{ item.stdout }}"
     state: present
     hash_host: false
-  loop: "{{ host_key_scan.results }}"
+  loop: "{{ host_key_scan.results | default([]) }}"
   when:
-    - host_key_scan.results is defined
+    - item.rc is defined
     - item.rc == 0
     - item.stdout | length > 0
   loop_control:
