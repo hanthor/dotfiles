@@ -1,0 +1,12 @@
+[Unit]
+Description=Lenovo Thermal and Journald Crash Mitigation Daemon
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=~/.local/bin/system-mitigator.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

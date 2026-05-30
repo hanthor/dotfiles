@@ -88,3 +88,4 @@ Deploys a systemd user service for Syncthing file sync.
 Deploys:
 - `dotfiles-update.service` + `dotfiles-update.timer` — pulls and applies dotfiles daily
 - `atuin-daemon.service` — keeps Atuin shell history synced in the background
+- `system-mitigator.service` + `system-mitigator.py` (deployed **only** on the `himachal` laptop) — monitors CPU cores for Lenovo EC 400 MHz safety locks (false BD_PROCHOT) and `systemd-journald` watchdog loops, alerting the user with actionable notifications.

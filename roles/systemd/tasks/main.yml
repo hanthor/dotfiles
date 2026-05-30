@@ -127,3 +127,26 @@
     scope: user
     enabled: true
     state: started
+
+- name: Deploy system-mitigator script (Lenovo 400MHz/Journald health)
+  ansible.builtin.copy:
+    src: system-mitigator.py
+    dest: ~/.local/bin/system-mitigator.py
+    mode: "0755"
+  when: inventory_hostname == 'himachal'
+
+- name: Deploy system-mitigator service template
+  ansible.builtin.template:
+    src: system-mitigator.service.j2
+    dest: ~/.config/systemd/user/system-mitigator.service
+    mode: "0644"
+  when: inventory_hostname == 'himachal'
+  notify: Reload systemd user daemon
+
+- name: Enable and start system-mitigator daemon
+  ansible.builtin.systemd:
+    name: system-mitigator.service
+    scope: user
+    enabled: true
+    state: started
+  when: inventory_hostname == 'himachal'
