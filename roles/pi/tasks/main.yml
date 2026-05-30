@@ -9,6 +9,12 @@
     dest: ~/.pi/agent/settings.json
     mode: "0644"
 
+- name: Ensure pi npm directory exists
+  ansible.builtin.file:
+    path: ~/.pi/agent/npm
+    state: directory
+    mode: "0755"
+
 - name: Deploy pi npm package.json (extension dependencies)
   ansible.builtin.copy:
     src: package.json
