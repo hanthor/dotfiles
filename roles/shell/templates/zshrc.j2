@@ -46,6 +46,9 @@ zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 if command -v bluefin-cli &>/dev/null; then
   # Intercept and bypass the slow MOTD execution to speed up startup
   eval "$(bluefin-cli init zsh | sed 's/bluefin-cli motd show/true/')"
+elif command -v atuin &>/dev/null; then
+  # Fallback: initialize atuin directly when bluefin-cli isn't available (e.g. Alpine)
+  eval "$(atuin init zsh)"
 fi
 
 # ── direnv ───────────────────────────────────────────────────────

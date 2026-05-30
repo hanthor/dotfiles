@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.papershell" path="/org/gnome/shell/extensions/papershell/">
+    <key name="opacity" type="d">
+      <default>0.2</default>
+      <summary>Texture Opacity</summary>
+    </key>
+    <key name="enabled-state" type="b">
+      <default>true</default>
+      <summary>Extension Toggle State</summary>
+    </key>
+    <key name="show-quick-toggle" type="b">
+      <default>true</default>
+      <summary>Show button in Quick Settings</summary>
+    </key>
+    <key name="hide-in-fullscreen" type="b">
+      <default>true</default>
+      <summary>Hide overlay in fullscreen</summary>
+    </key>
+    <key name="sync-night-light" type="b">
+      <default>false</default>
+      <summary>Sync with System Night Light</summary>
+    </key>
+  </schema>
+</schemalist>

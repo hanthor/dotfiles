@@ -1,0 +1,101 @@
+# Cleaned GNOME extension dconf settings — synced across fleet.
+# Source: dumped from dilli, redacted for machine-specific data.
+# To refresh from a source machine: dconf dump /org/gnome/shell/extensions/ > roles/gnome/files/gnome-extensions-dconf.dump
+# Then remove [gsconnect*] and [paperwm/workspaces*] sections (per-machine).
+
+[Logo-menu]
+hide-forcequit=true
+menu-button-extensions-app='com.mattjakeman.ExtensionManager.desktop'
+menu-button-icon-image=30
+menu-button-icon-size=20
+menu-button-software-center='/usr/bin/flatpak run io.github.kolunmi.Bazaar'
+menu-button-system-monitor='/usr/bin/missioncenter-helper'
+menu-button-terminal='xdg-terminal-exec'
+show-activities-button=true
+show-distroshelf=true
+show-gamemode=false
+show-lockscreen=false
+show-power-option=false
+symbolic-icon=true
+
+[blur-my-shell]
+rounded-blur-found=false
+settings-version=2
+
+[blur-my-shell/appfolder]
+brightness=0.59999999999999998
+sigma=30
+
+[blur-my-shell/dash-to-dock]
+blur=true
+brightness=0.59999999999999998
+sigma=30
+static-blur=true
+style-dash-to-dock=0
+
+[blur-my-shell/panel]
+brightness=0.59999999999999998
+sigma=30
+
+[blur-my-shell/window-list]
+brightness=0.59999999999999998
+sigma=30
+
+[caffeine]
+cli-toggle=false
+countdown-timer=1800
+indicator-position-max=3
+user-enabled=false
+
+[copyous]
+database-backend='json'
+disable-hljs-dialog=false
+
+[custom-command-list]
+command-order=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+command1=('---$(hostname)', '', '', true)
+command10=('---Help', '', '', true)
+command11=('Documentation', 'xdg-open https://docs.projectbluefin.io/', '', true)
+command12=('Ask Bluefin', 'xdg-open https://ask.projectbluefin.io', '', true)
+command2=('About', 'gnome-control-center system about', '', true)
+command3=('System Monitor', '/usr/bin/flatpak run io.missioncenter.MissionCenter', '', true)
+command4=('System Settings', 'gnome-control-center', '', true)
+command5=('---Applications', '', '', true)
+command6=('Bazaar App Store', '/usr/bin/flatpak run io.github.kolunmi.Bazaar', '', true)
+command7=('Extensions', '/usr/bin/flatpak run com.mattjakeman.ExtensionManager', '', true)
+command8=('Terminal', 'xdg-terminal-exec', '', true)
+command9=('Containers', '/usr/bin/flatpak run com.ranfdev.DistroShelf', '', true)
+menuicon-setting='ublue-logo-symbolic'
+menulocation-setting=1
+menuoptions-setting=2
+menuposition-setting=0
+
+[dash-to-dock]
+background-opacity=0.80000000000000004
+dash-max-icon-size=48
+dock-fixed=false
+dock-position='BOTTOM'
+height-fraction=0.90000000000000002
+intellihide-mode='ALL_WINDOWS'
+preferred-monitor=-2
+preferred-monitor-by-connector='eDP-1'
+
+[papershell]
+opacity=0.23999999999999999
+sync-night-light=true
+
+[paperwm]
+last-used-display-server='Wayland'
+restore-attach-modal-dialogs='true'
+restore-edge-tiling='true'
+restore-workspaces-only-on-primary='true'
+
+[search-light]
+background-color=(0.0, 0.0, 0.0, 0.80000000000000004)
+border-color=(0.23000000000000001, 0.23000000000000001, 0.23000000000000001, 1.0)
+border-radius=1.6499999999999999
+border-thickness=1
+monitor-count=1
+scale-height=0.14999999999999999
+scale-width=0.10000000000000001
+shortcut-search=['<Super>space']

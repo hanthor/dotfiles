@@ -25,7 +25,12 @@ _add_path_fast ~/.cargo/bin
     # bluefin-cli shell integration (bling + init: eza, bat, zoxide, starship, atuin, fzf)
     set -l bling "$HOME/.local/share/bluefin-cli/bling/bling.fish"
     test -f "$bling" && source "$bling"
-    command -q bluefin-cli && bluefin-cli init fish | source
+    if command -q bluefin-cli
+        bluefin-cli init fish | source
+    else if command -q atuin
+        # Fallback: initialize atuin directly when bluefin-cli isn't available (e.g. Alpine)
+        atuin init fish | source
+    end
 
     # direnv
     command -q direnv && direnv hook fish | source

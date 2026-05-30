@@ -1,0 +1,20 @@
+---
+# Test fleet VM: Fedora 41 on KubeVirt
+# Access: virtctl port-forward -n default vmi/test-fleet-fedora 22024:22
+# Then: ssh -p 22024 fedora@127.0.0.1
+is_desktop: false
+is_laptop: false
+has_homepage: false
+skip_flatpak: true
+skip_bluefin: true
+skip_gnome: true
+skip_zen_browser: true
+skip_kube: true
+skip_proxy: true
+skip_monitoring: true
+skip_syncthing: true
+skip_cockpit: true
+skip_lima: true
+skip_tailscale_cert: true
+# Test VMs use brew for atuin, but skip other brew-heavy roles
+user_login: james

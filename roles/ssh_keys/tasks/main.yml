@@ -137,6 +137,45 @@
     create: true
     mode: "0644"
 
+# ── Manage known_hosts for all fleet machines ────────────────────
+# Scan each remote fleet machine's host key, flush stale entries, then
+# add only the current key. Prevents "REMOTE HOST IDENTIFICATION CHANGED"
+# warnings when machines get rebuilt.
+- name: Scan host key for each fleet machine
+  ansible.builtin.command: >-
+    ssh-keyscan -t ed25519 -T 5 {{ hostvars[item]['ansible_host'] | default(machines[item]['hostname']) }}
+  register: host_key_scan
+  changed_when: false
+  failed_when: false
+  loop: "{{ machines.keys() | list }}"
+  when:
+    - item != inventory_hostname
+    - hostvars[item]['ansible_connection'] | default('ssh') != 'local'
+
+- name: Remove stale known_hosts entries
+  ansible.builtin.known_hosts:
+    name: "{{ item.item }}"
+    state: absent
+  loop: "{{ host_key_scan.results }}"
+  when:
+    - item.rc == 0
+    - item.stdout | length > 0
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Add current host key to known_hosts
+  ansible.builtin.known_hosts:
+    name: "{{ item.item }}"
+    key: "{{ item.stdout }}"
+    state: present
+    hash_host: false
+  loop: "{{ host_key_scan.results }}"
+  when:
+    - item.rc == 0
+    - item.stdout | length > 0
+  loop_control:
+    label: "{{ item.item }}"
+
 # ── Distribute all machine keys to authorized_keys ──
 # One bw list call to get all SSH keys, then write authorized_keys in one shot.
 - name: Fetch all machine SSH public keys from Bitwarden (batch)
@@ -167,6 +206,5 @@
 - name: Write authorized_keys with all machine public keys
   ansible.builtin.copy:
     dest: "{{ ansible_facts['env']['HOME'] }}/.ssh/authorized_keys"
-    content: "{{ (all_machine_keys.stdout_lines + extra_authorized_keys) | unique | join('\n') }}\n"
+    content: "{{ (all_machine_keys.stdout_lines | default([]) + extra_authorized_keys) | unique | join('\n') }}\n"
     mode: "0600"
-  when: all_machine_keys.stdout | length > 0

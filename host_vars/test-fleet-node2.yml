@@ -1,0 +1,19 @@
+---
+# Test fleet VM: Fedora 41 on KubeVirt (node 2)
+# Access: virtctl port-forward -n default vmi/test-fleet-node2 22026:22
+# Then: ssh -p 22026 fedora@127.0.0.1
+is_desktop: false
+is_laptop: false
+has_homepage: false
+skip_flatpak: true
+skip_bluefin: true
+skip_gnome: true
+skip_zen_browser: true
+skip_kube: true
+skip_proxy: true
+skip_monitoring: true
+skip_syncthing: true
+skip_cockpit: true
+skip_lima: true
+skip_tailscale_cert: true
+user_login: james

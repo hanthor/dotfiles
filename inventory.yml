@@ -25,6 +25,22 @@ all:
     himachal:
       ansible_host: 100.73.3.51
       ansible_connection: ssh
+    dilli:
+      ansible_host: dilli
+      ansible_connection: ssh
+    kanpur:
+      ansible_host: kanpur
+      ansible_connection: ssh
+    # ── KubeVirt test fleet VMs (accessible via virtctl port-forward) ──
+    # Requires: virtctl port-forward -n default vmi/<name> <port>:22
+    test-fleet-fedora:
+      ansible_host: 127.0.0.1
+      ansible_port: 22024
+      ansible_connection: ssh
+    test-fleet-node2:
+      ansible_host: 127.0.0.1
+      ansible_port: 22026
+      ansible_connection: ssh
   children:
     desktop:
       hosts:
@@ -41,6 +57,10 @@ all:
         vm:
         bihar:
         goa:
+    test_fleet:
+      hosts:
+        test-fleet-fedora:
+        test-fleet-node2:
     vps:
       hosts:
         matrix:

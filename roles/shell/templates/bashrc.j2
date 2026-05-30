@@ -25,9 +25,14 @@ export PATH="$HOME/.local/bin:$PATH"
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
 # ── Bluefin CLI shell integration (eza, bat, zoxide, starship, atuin, fzf) ──
-# Guard: atuin's AI keybinding calls `bind` outside its interactive check,
-# which emits "line editing not enabled" in non-interactive SSH commands.
-[[ $- == *i* ]] && command -v bluefin-cli &>/dev/null && eval "$(bluefin-cli init bash)"
+if [[ $- == *i* ]]; then
+  if command -v bluefin-cli &>/dev/null; then
+    eval "$(bluefin-cli init bash)"
+  elif command -v atuin &>/dev/null; then
+    # Fallback: initialize atuin directly when bluefin-cli isn't available (e.g. Alpine)
+    eval "$(atuin init bash)"
+  fi
+fi
 
 # ── direnv ───────────────────────────────────────────────────────
 command -v direnv &>/dev/null && eval "$(direnv hook bash)"

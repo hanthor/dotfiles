@@ -90,6 +90,54 @@
   become: true
   when: is_desktop | bool
 
+# ── GNOME Extensions — omnidirectional sync ───────────────────────
+# User extensions: copied from repo; system extensions: RPM-managed (Bluefin)
+
+- name: Ensure user GNOME extensions directory exists
+  ansible.builtin.file:
+    path: ~/.local/share/gnome-shell/extensions
+    state: directory
+    mode: "0755"
+  when: is_desktop | bool
+
+- name: Deploy user GNOME extensions
+  ansible.builtin.copy:
+    src: "extensions/{{ item }}/"
+    dest: ~/.local/share/gnome-shell/extensions/{{ item }}/
+    mode: "0644"
+    directory_mode: "0755"
+  loop:
+    - copyous@boerdereinar.dev
+    - papershell@lalovene.github.com
+    - paperwm@paperwm.github.com
+  when: is_desktop | bool
+
+- name: Load GNOME extension settings via dconf
+  ansible.builtin.shell: |
+    dconf load /org/gnome/shell/extensions/ < {{ role_path }}/files/gnome-extensions-dconf.dump
+  changed_when: false
+  failed_when: false
+  when: is_desktop | bool
+  register: dconf_load
+
+- name: Warn if dconf load failed (no D-Bus session?)
+  ansible.builtin.debug:
+    msg: >-
+      dconf load for GNOME extensions failed (rc={{ dconf_load.rc }}).
+      This is normal if SSH'd without a D-Bus session.
+      Extension settings will apply on next login.
+  when:
+    - is_desktop | bool
+    - dconf_load.rc | default(0) != 0
+
+- name: Set enabled GNOME extensions
+  community.general.dconf:
+    key: /org/gnome/shell/enabled-extensions
+    value: "{{ gnome_enabled_extensions }}"
+    state: present
+  when: is_desktop | bool
+  failed_when: false
+
 # ── GNOME Remote Desktop (RDP) ────────────────────────────────────
 - name: Enable GNOME RDP protocol
   ansible.builtin.shell: |

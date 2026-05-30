@@ -70,12 +70,18 @@ machines:
     hostname: kanpur
   goa:
     hostname: goa
+  vm:
+    hostname: vm
   bihar:
     hostname: bihar
   matrix:
     hostname: matrix.reilly.asia
   lkofoss:
     hostname: lkofoss.club
+  test-fleet-fedora:
+    hostname: test-fleet-fedora
+  test-fleet-node2:
+    hostname: test-fleet-node2
 # ── Core packages (all machines) ─────────────────────────────────
 core_brews:
   - bitwarden-cli
@@ -110,7 +116,7 @@ desktop_brews:
   - nmap
   - go
   - glab
-  - hanthor/tap/oramalama
+  - ramalama
   - k9s
   - kubernetes-cli
   - kubectx
@@ -131,7 +137,6 @@ desktop_brews:
   - gptscript-ai/tap/clio
   - gtk4
   - gum
-  - hanthor/tap/oramalama
   - helm
   - hf
   - htop
@@ -144,7 +149,6 @@ desktop_brews:
   - mistral-vibe
   - mtools
   - ncdu
-  - nmap
   - ollama
   - openai-whisper
   - opencode
@@ -157,15 +161,14 @@ desktop_brews:
   - qemu
   - qwen-code
   - sshpass
-  - steipete/tap/gogcli
+  - gogcli
   - typst
   - ublue-os/experimental-tap/bluefin-cli
   - ublue-os/experimental-tap/rocm-smi-lib
-  - ublue-os/tap/linux-mcp-server
+  - hanthor/tap/linux-mcp-server
   - uutils-diffutils
   - uutils-findutils
   - uv
-  - valkyrie00/bbrew/bbrew
   - whisper-cpp
   - yamllint
   - zellij
@@ -229,4 +232,22 @@ fxa_browsers:
   - zen
   - firefox
   - firefox-flatpak
-extra_authorized_keys: []
+# ── GNOME Extensions ───────────────────────────────────────────────
+# Canonical list of enabled extensions, synced across fleet desktops.
+# To refresh from a source machine:
+#   gsettings get org.gnome.shell enabled-extensions
+gnome_enabled_extensions:
+  - caffeine@patapon.info
+  - appindicatorsupport@rgcjonas.gmail.com
+  - blur-my-shell@aunetx
+  - dash-to-dock@micxgx.gmail.com
+  - gsconnect@andyholmes.github.io
+  - logomenu@aryan_k
+  - search-light@icedman.github.com
+  - copyous@boerdereinar.dev
+  - paperwm@paperwm.github.com
+  - papershell@lalovene.github.com
+
+extra_authorized_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP9VKRfO6q+mk43mJ1BYn2omRyKJcieTgZem0jGGEtN2 goa
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIDWQMpTXLLE8z3sxeCFpW7RBURRuNEOdxbe5XBCG2eT u0_a266@localhost (termux)
