@@ -10,8 +10,9 @@ spec:
   - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
   storageClassName: local-storage
-  local:
+  hostPath:
     path: /var/tmp/qwen3-27b
+    type: DirectoryOrCreate
   nodeAffinity:
     required:
       nodeSelectorTerms:
@@ -91,6 +92,13 @@ spec:
           value: "0"
         - name: HF_HOME
           value: /root/.cache/huggingface
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
+        - name: HF_HUB_OFFLINE
+          value: "0"  # Set to "1" after initial model download for resilience
         ports:
         - containerPort: 8000
           name: http

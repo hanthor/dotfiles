@@ -1,0 +1,6 @@
+# UserVolumeConfig for /var/mnt/storage (directory type — lives on EPHEMERAL)
+# Apply with: talosctl -n 192.168.0.6 patch mc --patch @storage-volume.yaml
+apiVersion: v1alpha1
+kind: UserVolumeConfig
+name: storage
+volumeType: directory

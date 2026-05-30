@@ -164,7 +164,6 @@ desktop_brews:
   - gogcli
   - typst
   - ublue-os/experimental-tap/bluefin-cli
-  - ublue-os/experimental-tap/rocm-smi-lib
   - hanthor/tap/linux-mcp-server
   - uutils-diffutils
   - uutils-findutils

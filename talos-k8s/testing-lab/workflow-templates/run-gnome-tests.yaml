@@ -6,7 +6,7 @@ metadata:
   name: run-gnome-tests
   namespace: argo
   annotations:
-    bluefin.io/stack: "qecore-headless + behave + dogtail + gnome-ponytail-daemon"
+    bluefin.io/stack: "qecore-headless + behave + dogtail"
 spec:
   serviceAccountName: argo
   templates:
@@ -107,9 +107,10 @@ spec:
           - |
             set -euo pipefail
             # Install runner deps (see issues #157, #158, #162)
-            # python3-gobject + at-spi2-core required by dogtail/qecore (gi module)
+            # python3-gobject + at-spi2-core + gtk3 required by dogtail/qecore (gi module)
+            # dbus-daemon provides dbus-run-session — required for AT-SPI/D-Bus init
             dnf install -y -q openssh-clients python3-pip python3-virtualenv \
-              python3-gobject at-spi2-core 2>/dev/null
+              python3-gobject at-spi2-core gtk3 dbus-daemon 2>/dev/null
             echo "=== Running ${SUITE} tests on ${VM_IP} ==="
 
             # Wait for SSH to be reachable
@@ -122,16 +123,6 @@ spec:
               fi
               sleep 10
             done
-
-            # Check gnome-ponytail-daemon on VM (pre-baked via bib-disk-configure — see issue #159)
-            echo "Checking gnome-ponytail-daemon on VM..." >&2
-            GPD_PATH=$(ssh -o StrictHostKeyChecking=no -i "${SSH_KEY}" "${VM_USER}@${VM_IP}" \
-              "find /usr -name 'gnome-ponytail-daemon' -type f 2>/dev/null | head -1" 2>/dev/null || true)
-            if [[ -n "${GPD_PATH}" ]]; then
-              echo "gnome-ponytail-daemon found at ${GPD_PATH}"
-            else
-              echo "WARNING: gnome-ponytail-daemon not found on VM (see issue #159); tests may fail" >&2
-            fi
 
             # Clone test repo and run behave
             TEST_DIR="/workspace/bluefin-test-suite/tests/${SUITE}"
@@ -150,12 +141,13 @@ spec:
               pip3 install --quiet behave qecore dogtail 2>&1 | tail -5
             fi
 
-            # Run behave with qecore-headless
+            # Run behave with qecore-headless inside a D-Bus session
+            # (AT-SPI requires a session bus; dbus-run-session provides one)
             echo "Starting test run..." >&2
             VM_HOST="${VM_USER}@${VM_IP}" \
             VM_KEY="${SSH_KEY}" \
             SUITE="${SUITE}" \
-            behave ${BEHAVE_TAGS} features/ 2>&1 || {
+            dbus-run-session -- behave ${BEHAVE_TAGS} features/ 2>&1 || {
               echo "TESTS_FAILED" >&2
               exit 1
             }

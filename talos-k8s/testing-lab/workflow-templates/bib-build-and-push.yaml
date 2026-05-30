@@ -171,9 +171,6 @@ spec:
         parameters:
           - name: image
           - name: image-tag
-      synchronization:
-        mutexes:
-          - name: compute-heavy
       nodeSelector:
         kubernetes.io/hostname: "{{workflow.parameters.compute-node}}"
       tolerations:
@@ -222,7 +219,7 @@ spec:
               exit 0
             fi
             bootc-image-builder build \
-              --type raw --rootfs ext4 \
+              --type raw --rootfs xfs \
               --output "${OUT}" \
               {{inputs.parameters.image}} 2>&1 | tee "${OUT}/bib-build.log"
             echo "BIB exit: ${PIPESTATUS[0]}"
@@ -235,9 +232,6 @@ spec:
           - name: image-tag
           - name: golden-root
             value: "/var/tmp/bluefin-golden"
-      synchronization:
-        mutexes:
-          - name: compute-heavy
       nodeSelector:
         kubernetes.io/hostname: "{{workflow.parameters.compute-node}}"
       tolerations:
@@ -366,29 +360,6 @@ spec:
             # Sudoers
             echo 'bluefin-test ALL=(ALL) NOPASSWD:ALL' > "${ROOT}/etc/sudoers.d/bluefin-test"
             chmod 440 "${ROOT}/etc/sudoers.d/bluefin-test"
-
-            # Install gnome-ponytail-daemon for AT-SPI test automation (see issues #159, #161)
-            # Wrapped in subshell so failures are non-fatal (warning only)
-            (
-              dnf install -y -q cpio 2>/dev/null
-              if dnf download --quiet --destdir /tmp/gpd gnome-ponytail-daemon 2>/dev/null; then
-                for rpm_file in /tmp/gpd/gnome-ponytail-daemon*.rpm; do
-                  [[ -f "${rpm_file}" ]] || continue
-                  (cd "${ROOT}" && rpm2cpio "${rpm_file}" | cpio -idm --quiet 2>/dev/null)
-                  echo "Extracted $(basename ${rpm_file}) into deploy root"
-                done
-              else
-                echo "WARNING: could not download gnome-ponytail-daemon RPM" >&2
-                exit 1
-              fi
-            ) || echo "WARNING: gnome-ponytail-daemon install failed (non-fatal)" >&2
-
-            # Enable gnome-ponytail-daemon as user service for the test user
-            mkdir -p "${VAR}/home/bluefin-test/.config/systemd/user/graphical-session.target.wants/"
-            ln -sf /usr/lib/systemd/user/gnome-ponytail-daemon.service \
-              "${VAR}/home/bluefin-test/.config/systemd/user/graphical-session.target.wants/gnome-ponytail-daemon.service" 2>/dev/null || true
-            chown -R "${BFT_UID}:${BFT_UID}" "${VAR}/home/bluefin-test/.config"
-            chmod 700 "${VAR}/home/bluefin-test/.config"
 
             # GDM auto-login as test user (required for GNOME session to start for AT-SPI)
             mkdir -p "${ROOT}/etc/gdm/"

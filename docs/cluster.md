@@ -63,8 +63,8 @@ The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on
 | GPU             | AMD Radeon 8060S — RDNA 3.5 (`gfx1151`), integrated |
 | NIC             | Realtek RTL8126 5GbE (`enp191s0`) — MAC `9C:BF:0D:00:E5:0F` |
 | WiFi            | MediaTek MT7925 Wi-Fi 7 |
-| Boot disk       | WD Black SN850X 931.5 GB (`/dev/nvme0n1`) |
-| Secondary       | Micron 2550 931.5 GB (`/dev/nvme1n1`) — unused |
+| Boot disk       | Crucial P3 1TB (`/dev/nvme0n1`, serial `24394B495110`) |
+| Secondary       | WD Black SN850X 1TB (`/dev/nvme1n1`, serial `251623804191`) — **FAILING** (I/O errors). Do not use. Replace with new drive. |
 
 ### Bihar (control plane)
 
@@ -132,6 +132,27 @@ machine:
 After install, the node exposes `/dev/dri/card0`, `/dev/dri/renderD128`, and `/dev/kfd` on the host.
 
 > **Talos version note:** Pinned to `v1.13.2`. `v1.13.3` had multi-arch registry pull errors on AMD64 at the time of writing.
+
+### User volume for /var/mnt/storage
+
+nvme0n1 is the **Crucial P3** (healthy, boot disk). The WD Black failed with I/O errors
+and was replaced as the boot disk. Forgejo / local-path PVCs use a `directory`-type
+user volume on the Crucial P3's EPHEMERAL partition:
+
+```bash
+# Apply the user volume config (idempotent):
+talosctl -n 192.168.0.6 patch mc --patch @storage-volume.yaml
+```
+
+The patch is stored at [`talos-k8s/storage-volume.yaml`](../talos-k8s/storage-volume.yaml).
+It creates `/var/mnt/storage` as a directory on the EPHEMERAL partition.
+The mount is automatically propagated into the kubelet namespace.
+
+> **WD Black failure (2026-05-30):** The WD Black SN850X (`/dev/nvme1n1`, serial `251623804191`)
+> developed I/O errors on its META partition during the 35B model download stress test.
+> Error: `error writing config to file: input/output error`. The drive should be
+> physically replaced. In the meantime, do not configure it as a Talos install disk
+> or user volume.
 
 ---
 
@@ -331,7 +352,16 @@ If a node is wiped or replaced:
    talosctl -n 192.168.0.5 health
    kubectl get nodes
    ```
-5. **Re-apply workloads** (idempotent):
+5. **Create user volume** (karnataka/worker only):
+   ```bash
+   talosctl -n 192.168.0.6 patch mc --patch @talos-k8s/storage-volume.yaml
+   ```
+6. **Create host directories** for local PVs (if re-creating from scratch):
+   ```bash
+   kubectl exec -n kube-system $(kubectl get pods -n kube-system --field-selector spec.nodeName=karnataka -l app=kube-flannel -o name) -- \
+     mkdir -p /proc/1/root/var/tmp/qwen3-27b
+   ```
+7. **Re-apply workloads** (idempotent):
    ```bash
    kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml
    kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-labeller.yaml
@@ -341,7 +371,11 @@ If a node is wiped or replaced:
    kubectl apply -f talos-k8s/qwen3-27b.yaml
    ```
 
-If only the worker was reset, the existing kubeconfig still works — only step 1 and 2 are needed for that node, plus re-applying any DaemonSet pods that landed on it.
+If only the worker was reset, the existing kubeconfig still works — only steps 1, 2, 5, and 6 are needed for that node, plus re-applying any DaemonSet pods.
+
+> **WD Black failure:** Do not use the WD Black (`/dev/nvme1n1`) for installs or user volumes.
+> Install only to the Crucial P3 (`/dev/nvme0n1`). Storage uses a directory-type volume
+> on the Crucial P3's EPHEMERAL partition.
 
 ---
 
@@ -382,3 +416,33 @@ talosctl -n <ip> health --wait
 talosctl -n <ip> dmesg --tail
 talosctl -n <ip> reset                   # nuclear: wipes node, requires re-apply
 ```
+
+### Container runtime crash (karnataka)
+
+**Symptoms:**
+- `kubectl get nodes` shows karnataka `NotReady`
+- `kubectl describe node karnataka` shows `Ready: False` with `container runtime is down`
+- All pods on karnataka stuck in `Terminating`/`Pending`
+- Ping to `192.168.0.6` still works (node is up, just CRI is dead)
+
+**Root cause:** Memory pressure from simultaneous large container builds exhausts
+karnataka's 62GB unified memory. The node runs vLLM (48Gi), Argo Workflow image
+builds, Forgejo Actions (podman-in-Docker), KubeVirt, and monitoring — when
+multiple 4GB image builds run concurrently, containerd OOMs and crashes.
+
+**Recovery:**
+```bash
+# Option 1: Graceful reboot via Talos
+talosctl -n 192.168.0.6 reboot
+
+# Option 2: Hard reboot via NanoKVM at 192.168.0.99
+```
+
+After reboot (~2 min), all pods recover automatically. PVC-backed services
+(Forgejo, local-path PVs) survive.
+
+**Prevention:**
+- Don't run more than one large container build concurrently on karnataka
+- Set `SKIP_CHUNKAH=1` for Forgejo builds (avoids extra 2GB memory spike)
+- Consider moving non-GPU workloads to bihar or a third node
+- The Forgejo runner has `timeout-minutes: 45` — builds that exceed this will be killed

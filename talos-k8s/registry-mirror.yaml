@@ -1,0 +1,118 @@
+# Registry mirror — pull-through cache for upstream registries
+# Speeds up builds by caching quay.io, ghcr.io, docker.io on local PVC.
+#
+# Usage from podman (inside build containers):
+#   podman pull quay.io/some/image  → automatically uses mirror
+#   Configured via /etc/containers/registries.conf.d/mirror.conf
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-mirror-data
+  namespace: forgejo
+  labels:
+    app: registry-mirror
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: local-path
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-mirror-config
+  namespace: forgejo
+data:
+  config.yml: |
+    version: 0.1
+    log:
+      level: info
+    storage:
+      filesystem:
+        rootdirectory: /var/lib/registry
+      delete:
+        enabled: true
+    proxy:
+      remoteurl: https://quay.io
+      # No auth needed for public quay.io pulls
+    http:
+      addr: :5000
+      headers:
+        X-Content-Type-Options: [nosniff]
+    health:
+      storagedriver:
+        enabled: true
+        interval: 10s
+        threshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry-mirror
+  namespace: forgejo
+  labels:
+    app: registry-mirror
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-mirror
+  template:
+    metadata:
+      labels:
+        app: registry-mirror
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: karnataka
+      containers:
+        - name: registry
+          image: registry:2
+          ports:
+            - containerPort: 5000
+              name: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+            - name: config
+              mountPath: /etc/docker/registry
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: registry-mirror-data
+        - name: config
+          configMap:
+            name: registry-mirror-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry-mirror
+  namespace: forgejo
+  labels:
+    app: registry-mirror
+spec:
+  type: ClusterIP
+  selector:
+    app: registry-mirror
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
