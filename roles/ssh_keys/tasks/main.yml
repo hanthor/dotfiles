@@ -158,6 +158,7 @@
     state: absent
   loop: "{{ host_key_scan.results }}"
   when:
+    - host_key_scan.results is defined
     - item.rc == 0
     - item.stdout | length > 0
   loop_control:
@@ -171,6 +172,7 @@
     hash_host: false
   loop: "{{ host_key_scan.results }}"
   when:
+    - host_key_scan.results is defined
     - item.rc == 0
     - item.stdout | length > 0
   loop_control:
