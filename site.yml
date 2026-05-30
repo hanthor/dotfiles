@@ -33,6 +33,8 @@
       tags: [secrets, bitwarden]
     - role: shell
       tags: [dotfiles, shell]
+    - role: pi
+      tags: [dotfiles, pi]
     - role: git
       tags: [dotfiles, git]
     - role: neovim

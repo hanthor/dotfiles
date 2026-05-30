@@ -6,7 +6,7 @@
 |-----|-------|-----------|
 | `system` | sshd, sudo, apk_packages | No |
 | `packages` | homebrew, flatpak | No |
-| `dotfiles` | shell, git, neovim | No |
+| `dotfiles` | shell, pi, git, neovim | No |
 | `secrets` | bitwarden, ssh_keys, github, tailscale, kube | Yes |
 | `desktop` | flatpak, gnome, zen_browser, bluefin_common | No (desktop only) |
 | `services` | syncthing, systemd, proxy, homepage, monitoring, cockpit, lima | No |
@@ -33,6 +33,14 @@ Deploys all shell configs:
 - `~/.ssh/config` — host aliases with short names, `SendEnv BW_SESSION`
 
 Sets `zsh` (from Homebrew) as the login shell. Ptyxis terminal is configured to use `fish` from Homebrew on desktop machines.
+
+### `pi`
+Deploys PI Coding Agent configuration:
+- `~/.pi/agent/settings.json` — provider, model, and package list
+- `~/.pi/agent/npm/package.json` + `npm install` — installs all PI extensions (subagents, grill-me, goal-x, import-claude-history, rpiv-todo, pi-beads)
+- `~/.pi/agent/extensions/forgejo-mcp.ts` — MCP bridge for Forgejo API
+
+An `auth.json` with API keys is also deployed by the shell role (from Bitwarden).
 
 ### `git`
 Deploys `~/.gitconfig` with:

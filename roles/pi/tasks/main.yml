@@ -1,0 +1,38 @@
+---
+# ── PI Coding Agent: extensions, packages, and settings ───────────────
+# Requires: ~/.pi/agent directory (created by shell role)
+# Requires: auth.json (created by shell role from Bitwarden)
+
+- name: Deploy pi settings.json (provider, model, packages)
+  ansible.builtin.copy:
+    src: settings.json
+    dest: ~/.pi/agent/settings.json
+    mode: "0644"
+
+- name: Deploy pi npm package.json (extension dependencies)
+  ansible.builtin.copy:
+    src: package.json
+    dest: ~/.pi/agent/npm/package.json
+    mode: "0644"
+
+- name: Install pi npm extension packages
+  ansible.builtin.command:
+    cmd: npm install --no-audit --no-fund --omit=dev
+    chdir: ~/.pi/agent/npm
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  register: pi_npm_install
+  changed_when: "'added' in (pi_npm_install.stdout | default('')) or 'removed' in (pi_npm_install.stdout | default('')) or 'updated' in (pi_npm_install.stdout | default('')) or 'changed' in (pi_npm_install.stdout | default(''))"
+  failed_when: false
+
+- name: Ensure pi extensions directory exists
+  ansible.builtin.file:
+    path: ~/.pi/agent/extensions
+    state: directory
+    mode: "0755"
+
+- name: Deploy forgejo-mcp extension
+  ansible.builtin.copy:
+    src: forgejo-mcp.ts
+    dest: ~/.pi/agent/extensions/forgejo-mcp.ts
+    mode: "0644"

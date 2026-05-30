@@ -1,0 +1,12 @@
+{
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-v4-pro",
+  "packages": [
+    "npm:@juicesharp/rpiv-todo",
+    "npm:pi-beads",
+    "npm:pi-subagents",
+    "npm:@majorgilles/pi-grill-me",
+    "npm:pi-goal-x",
+    "npm:pi-import-claude-history"
+  ]
+}
