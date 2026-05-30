@@ -151,7 +151,7 @@
 
 - name: Install tailvm-go (pre-built binary)
   ansible.builtin.copy:
-    src: "tailvm-go-linux-{{ ansible_architecture | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}"
+    src: "tailvm-go-linux-{{ ansible_machine | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}"
     dest: ~/.local/bin/tailvm-go
     mode: "0755"
 
