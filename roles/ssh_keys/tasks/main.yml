@@ -152,7 +152,7 @@
 
 - name: Remove stale known_hosts entries
   ansible.builtin.known_hosts:
-    name: "{{ item.item }}"
+    name: "{{ hostvars[item.item]['ansible_host'] | default(machines[item.item]['hostname']) }}"
     state: absent
   loop: "{{ host_key_scan.results | default([]) }}"
   when:
@@ -164,7 +164,7 @@
 
 - name: Add current host key to known_hosts
   ansible.builtin.known_hosts:
-    name: "{{ item.item }}"
+    name: "{{ hostvars[item.item]['ansible_host'] | default(machines[item.item]['hostname']) }}"
     key: "{{ item.stdout }}"
     state: present
     hash_host: false
