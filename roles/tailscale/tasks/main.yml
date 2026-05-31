@@ -165,27 +165,39 @@
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
 
 - name: Remove old tailscale device with same hostname
-  ansible.builtin.shell: |
-    set -euo pipefail
-    # List all devices, find any with our hostname, delete them
-    curl -sf -u "{{ tailscale_apikey.stdout }}:" \
-      "https://api.tailscale.com/api/v2/tailnet/-/devices" | \
-      python3 -c "
-import sys, json
-devices = json.load(sys.stdin).get('devices', [])
-target = '{{ inventory_hostname }}.{{ tailscale_domain }}'
-for d in devices:
-    if d.get('hostname') == target or d.get('name', '').startswith('{{ inventory_hostname }}.'):
-        print(d['id'])
-" | while read device_id; do
-      echo "Removing old device: $device_id"
-      curl -sf -u "{{ tailscale_apikey.stdout }}:" \
-        -X DELETE "https://api.tailscale.com/api/v2/device/$device_id"
-    done
-  register: tailscale_cleanup
-  changed_when: "'Removing old device' in tailscale_cleanup.stdout"
-  failed_when: false
-  no_log: true
+  block:
+    - name: Fetch tailscale device list
+      ansible.builtin.uri:
+        url: https://api.tailscale.com/api/v2/tailnet/-/devices
+        method: GET
+        user: "{{ tailscale_apikey.stdout }}"
+        password: ""
+        force_basic_auth: true
+        status_code: 200
+        headers:
+          Content-Type: application/json
+      register: ts_devices
+      failed_when: false
+      no_log: true
+
+    - name: Find old device matching our hostname
+      ansible.builtin.set_fact:
+        ts_old_device_id: >-
+          {{ (ts_devices.json.devices | default([])
+            | selectattr('hostname', 'equalto', inventory_hostname + '.' + tailscale_domain)
+            | map(attribute='id') | first) | default('') }}
+
+    - name: Delete old tailscale device
+      ansible.builtin.uri:
+        url: https://api.tailscale.com/api/v2/device/{{ ts_old_device_id }}
+        method: DELETE
+        user: "{{ tailscale_apikey.stdout }}"
+        password: ""
+        force_basic_auth: true
+        status_code: 200
+      when: ts_old_device_id | length > 0
+      no_log: true
+
   when: tailscale_apikey.stdout | default('') | length > 0
 
 - name: Join tailscale network
