@@ -1,13 +1,22 @@
-# himachal
+# Himachal
 
-Desktop machine in the hanthor fleet.
+Laptop workstation in the hanthor fleet.
 
 ## Hardware
+
+- Arch: x86_64
+- Laptop (runs on login, not periodic timer)
+- Tailscale IP: `100.73.3.51`
 
 ## OS
 
 Bluefin (Fedora Atomic)
 
-## Role
+## Services
 
-Workstation
+- Homepage dashboard
+
+## Notes
+
+- `dotfiles_update_delay_seconds: 90` — applies dotfiles 90s after login
+- PaperWM tiling, Papershell blur, Copyous clipboard — synced from fleet

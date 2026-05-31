@@ -1,13 +1,23 @@
-# dilli
+# Dilli
 
-Desktop machine in the hanthor fleet.
+Secondary workstation in the hanthor fleet.
 
 ## Hardware
+
+- Arch: x86_64
+- Tailscale IP: `100.76.126.90`
 
 ## OS
 
 Bluefin (Fedora Atomic)
 
-## Role
+## Services
 
-Workstation
+- Cockpit — system management
+- BuildStream Dashboard — build monitor
+- Homepage dashboard
+
+## Notes
+
+- PaperWM, Papershell, Copyous extensions synced from fleet
+- Brew packages managed via dotfiles playbook

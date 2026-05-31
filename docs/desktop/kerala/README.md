@@ -1,13 +1,19 @@
-# kerala
+# Kerala
 
-Desktop machine in the hanthor fleet.
+PostMarketOS mobile device in the hanthor fleet.
 
 ## Hardware
 
+- Arch: aarch64 (ARM)
+- Mobile device (laptop power profile)
+- Tailscale IP: `100.67.142.116`
+
 ## OS
 
-Bluefin (Fedora Atomic)
+PostMarketOS (Alpine/musl-based)
 
-## Role
+## Notes
 
-Workstation
+- Uses `apk` for package management (no Homebrew)
+- Packages installed via `apk_packages` role
+- Musl libc — Homebrew incompatible
