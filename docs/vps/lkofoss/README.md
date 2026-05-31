@@ -31,6 +31,16 @@ VPS node in the hanthor fleet.
 - ❌ UFW: **inactive** — ports exposed to public internet
 - ❌ Tailscale: **logged out** — SSH and k8s API exposed on public IP
 - Fleet keys deployed: bihar, dilli, goa, himachal, kanpur, karnataka, termux, bluefin
+- Cron: daily playbook at 3am (no secrets/homebrew)
+
+## Recommendations
+
+- 🚨 **4.6 GB logs** — set `SystemMaxUse=500M` in `/etc/systemd/journald.conf`
+- 🚨 **Reboot needed** — kernel update pending from unattended-upgrades
+- 🔧 **Enable swap** — 7.6G RAM with no swap is risky for K8s
+- 🔧 **Kernel livepatch** — `sudo pro attach` (Ubuntu Pro, free for personal)
+- 🔧 **SSH rate limiting** — add `MaxStartups 3:50:10` to sshd_config
+- 🔧 **UFW logging** — enable with `sudo ufw logging on` for audit trail
 
 ## Actions needed
 

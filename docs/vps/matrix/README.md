@@ -41,3 +41,12 @@ VPS node in the hanthor fleet.
 - Runs Kubernetes (kubelet + containerd ports)
 - `reilly.asia` DNS hosted on Cloudflare, not served from this VPS
 - Fleet keys deployed: bihar, dilli, goa, himachal, kanpur, karnataka, termux
+- Cron: daily playbook at 3am (no secrets/homebrew)
+
+## Recommendations
+
+- ⚠️ **NTP not synced** — time drift affects TLS, K8s certs
+- 🔧 **Enable swap** — 7.5G RAM with no swap is risky for K8s
+- 🔧 **Kernel livepatch** — `sudo pro attach` (Ubuntu Pro, free for personal)
+- 🔧 **SSH rate limiting** — protect against brute force despite fail2ban
+- 🔧 **logrotate/journald** — 731M logs, set `SystemMaxUse=500M` in journald.conf
