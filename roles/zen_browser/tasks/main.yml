@@ -33,10 +33,8 @@
 
 - name: Set Zen Browser as default browser
   ansible.builtin.shell: |
-    # Skip if Zen flatpak isn't installed yet
     test -d "{{ ansible_facts['env']['HOME'] }}/.var/app/app.zen_browser.zen" || exit 0
-    for mime in x-scheme-handler/http x-scheme-handler/https x-scheme-handler/ftp \
-                text/html text/xml application/xhtml+xml application/xml; do
+    for mime in x-scheme-handler/http x-scheme-handler/https x-scheme-handler/ftp text/html text/xml application/xhtml+xml application/xml; do
       if command -v xdg-mime &>/dev/null; then
         xdg-mime default app.zen_browser.zen.desktop "$mime"
       else
