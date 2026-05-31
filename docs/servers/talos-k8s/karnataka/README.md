@@ -5,6 +5,7 @@ Kubernetes worker node with AMD GPU. Talos Linux node.
 ## Hardware
 
 - Arch: x86_64
+- System: Framework Computer (MAC `9C:BF:0D:00:E5:0F`)
 - CPU: AMD Strix Halo APU
 - GPU: AMD integrated (exposed via KubeVirt Image Factory schematic with `siderolabs/amdgpu`)
 - Role: Worker (Talos K8s)

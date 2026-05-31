@@ -5,6 +5,8 @@ Kubernetes control plane + home server. Talos Linux node.
 ## Hardware
 
 - Arch: x86_64 (Intel)
+- Motherboard: ASRock (MAC `A8:A1:59:E1:6D:84`)
+- LAN IP: `192.168.0.5`
 - Role: Control plane (Talos K8s)
 - Tailscale IP: `100.85.9.86`
 

@@ -1,6 +1,7 @@
 # Summary
 
 - [Home](README.md)
+- [Network](network.md)
 - [Roles](roles.md)
 - [Bitwarden](bitwarden.md)
 - [New Machine](new-machine.md)
