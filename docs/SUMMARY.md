@@ -9,6 +9,8 @@
 - [KVM](network/kvm/README.md)
 - [ESP32](network/esp32/README.md)
 - [Phone](network/phone/README.md)
+- [Printer](network/printer/README.md)
+- [MacBook](network/macbook/README.md)
 
 - [Roles](roles.md)
 - [Bitwarden](bitwarden.md)

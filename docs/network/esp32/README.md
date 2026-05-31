@@ -19,8 +19,10 @@ All ports filtered or closed — no listening services detected.
 - [x] HTTP probe — no response
 - [x] Common IoT ports (ESPHome, MQTT, CoAP) — all closed
 - [x] UDP scan — only mDNS (5353) open|filtered
-- [ ] Check router DHCP lease table for hostname
-- [ ] Check router web UI for connected clients list
+- [x] Check router DHCP lease table for hostname
+- [x] Check router web UI for connected clients list
+  - **NOT in DHCP client list** — device likely has a static IP
+  - Not in address reservation list either
 - [ ] Check for Panasonic Comfort Cloud / AC WiFi adapter MAC prefix
 - [ ] Check Urban Company / native water purifier MAC ranges
 - [ ] Try power-cycling the device and re-scan during boot
@@ -31,3 +33,7 @@ All ports filtered or closed — no listening services detected.
 - **Panasonic AC WiFi adapter** — ESP32-based bridge between AC IR and WiFi
 - **Urban Company water purifier** — ESP32-based IoT controller
 - **Other IoT sensor** — no listening services, outbound-only communication
+
+## DHCP Status
+
+Not in DHCP client list or address reservation table — static IP likely configured on-device. Not getting its IP from the router.
