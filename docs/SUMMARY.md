@@ -1,7 +1,15 @@
 # Summary
 
 - [Home](README.md)
-- [Network](network.md)
+- [Network Map](network.md)
+
+### Network Devices
+
+- [Gateway](network/gateway/README.md)
+- [KVM](network/kvm/README.md)
+- [ESP32](network/esp32/README.md)
+- [Phone](network/phone/README.md)
+
 - [Roles](roles.md)
 - [Bitwarden](bitwarden.md)
 - [New Machine](new-machine.md)
