@@ -63,5 +63,3 @@
   changed_when: false
   failed_when: false
   timeout: 300
-  failed_when: false
-  timeout: 120
