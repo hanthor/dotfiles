@@ -136,7 +136,7 @@ just update        # same as dots-secrets
 ## References
 
 - [`README.md`](README.md) — short overview, machine list
-- [`docs/cluster.md`](docs/cluster.md) — Talos cluster handbook (hardware, ops, reinstall)
+- [`docs/servers/talos-k8s/cluster.md`](docs/servers/talos-k8s/cluster.md) — Talos cluster handbook (hardware, ops, reinstall)
 - [`docs/roles.md`](docs/roles.md) — every Ansible role explained
 - [`docs/new-machine.md`](docs/new-machine.md) — onboarding walkthrough
 - [`docs/bitwarden.md`](docs/bitwarden.md) — BW vault structure

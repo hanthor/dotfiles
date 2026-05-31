@@ -1,13 +1,24 @@
 # Summary
 
-[Overview](README.md)
+- [Home](README.md)
+- [Roles](roles.md)
+- [Bitwarden](bitwarden.md)
+- [New Machine](new-machine.md)
 
-# Workstations
+## Desktop
 
-- [Adding a new machine](new-machine.md)
-- [Roles reference](roles.md)
-- [Bitwarden vault](bitwarden.md)
+- [Himachal](desktop/himachal/README.md)
+- [Kanpur](desktop/kanpur/README.md)
+- [Dilli](desktop/dilli/README.md)
+- [Kerala](desktop/kerala/README.md)
 
-# Infrastructure
+## Servers
 
-- [Talos cluster handbook](cluster.md)
+- [Talos K8s Cluster](servers/talos-k8s/cluster.md)
+  - [Bihar](servers/talos-k8s/bihar/README.md)
+  - [Karnataka](servers/talos-k8s/karnataka/README.md)
+
+## VPS
+
+- [Matrix](vps/matrix/README.md)
+- [lkofoss](vps/lkofoss/README.md)
