@@ -14,6 +14,7 @@
 
 ## Servers
 
+- [Goa](servers/goa/README.md)
 - [Talos K8s Cluster](servers/talos-k8s/cluster.md)
   - [Bihar](servers/talos-k8s/bihar/README.md)
   - [Karnataka](servers/talos-k8s/karnataka/README.md)
