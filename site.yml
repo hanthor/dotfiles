@@ -100,3 +100,6 @@
     - role: lima
       tags: [services, lima]
       when: (is_desktop | bool or inventory_hostname == 'bihar') and not skip_lima | default(false)
+    - role: server_hardening
+      tags: [system, hardening, security]
+      when: inventory_hostname in groups.get('server', []) or inventory_hostname in groups.get('vps', [])

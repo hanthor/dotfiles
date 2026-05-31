@@ -1,0 +1,118 @@
+---
+# Server hardening — security + reliability for long-running hosts.
+# Skips desktops (keyboard-interactive machines with different needs).
+
+# ── Journald log limits ───────────────────────────────────────────
+- name: Set journald max disk usage
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/journald.conf
+    regexp: '^#?SystemMaxUse='
+    line: SystemMaxUse=500M
+  become: true
+  notify: Restart journald
+
+- name: Vacuum journals to stay under limit
+  ansible.builtin.command: journalctl --vacuum-size=500M
+  become: true
+  changed_when: false
+
+# ── Swap ──────────────────────────────────────────────────────────
+- name: Check if swap file exists
+  ansible.builtin.stat:
+    path: /swapfile
+  register: swapfile
+
+- name: Create 2G swap file
+  ansible.builtin.command:
+    cmd: dd if=/dev/zero of=/swapfile bs=1M count=2048
+    creates: /swapfile
+  become: true
+  when: not swapfile.stat.exists
+
+- name: Set swap file permissions
+  ansible.builtin.file:
+    path: /swapfile
+    mode: "0600"
+    owner: root
+    group: root
+  become: true
+  when: swapfile.stat.exists
+
+- name: Format swap file
+  ansible.builtin.command: mkswap /swapfile
+  become: true
+  when: swapfile.stat.exists
+  changed_when: false
+
+- name: Enable swap file
+  ansible.builtin.command: swapon /swapfile
+  become: true
+  when: swapfile.stat.exists
+  changed_when: false
+
+- name: Add swap to fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: /swapfile none swap sw 0 0
+  become: true
+
+# ── NTP time sync ─────────────────────────────────────────────────
+- name: Enable systemd-timesyncd
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+  become: true
+
+# ── SSH rate limiting ─────────────────────────────────────────────
+- name: Harden SSH rate limits
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  become: true
+  loop:
+    - { regexp: '^#?MaxStartups', line: 'MaxStartups 3:50:10' }
+    - { regexp: '^#?MaxSessions', line: 'MaxSessions 10' }
+    - { regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax 3' }
+  notify: Reload sshd
+
+# ── UFW logging ───────────────────────────────────────────────────
+- name: Check if UFW is active
+  ansible.builtin.command: ufw status
+  register: ufw_status
+  changed_when: false
+  failed_when: false
+
+- name: Enable UFW logging
+  ansible.builtin.command: ufw logging on
+  become: true
+  when:
+    - ufw_status.rc == 0
+    - "'Status: active' in ufw_status.stdout"
+
+# ── Kernel livepatch (Ubuntu Pro) ─────────────────────────────────
+- name: Check if Ubuntu Pro is attached
+  ansible.builtin.command: pro status --format json
+  register: pro_status
+  changed_when: false
+  failed_when: false
+
+- name: Enable livepatch
+  ansible.builtin.command: pro enable livepatch
+  become: true
+  when:
+    - pro_status.rc == 0
+    - "'livepatch' not in (pro_status.stdout | default('')) or 'disabled' in (pro_status.stdout | default(''))"
+  failed_when: false
+
+# ── Reboot notification ───────────────────────────────────────────
+- name: Check if reboot is needed
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_needed
+
+- name: Warn if reboot is required
+  ansible.builtin.debug:
+    msg: "🚨 REBOOT REQUIRED on {{ inventory_hostname }} — kernel was updated and needs a restart."
+  when: reboot_needed.stat.exists
