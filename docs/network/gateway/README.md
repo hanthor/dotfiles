@@ -34,3 +34,35 @@
 | **FreshTomato** | ❌ No | No AX/WiFi 6 support |
 
 Chipset: MediaTek MT7981B (Filogic 820) — dual-core ARM Cortex-A53 @ 1.3GHz. Capable chipset, but AX10 v2 support is still maturing in third-party firmware.
+
+## IPv6
+
+- **Prefix**: `2401:4900:1c83:8ac0::/64` (ISP-provided, static)
+- **Address lifetime**: 300s (privacy extensions active — host part rotates every 5 min)
+- **Default route**: `fe80::7ef1:7eff:fea8:ff74` (router link-local, derived from MAC `7C:F1:7E:A8:FF:74`)
+- **Connectivity**: ✅ Working (20ms to Google)
+
+### Making IPv6 useful
+
+Current issue: privacy extensions rotate addresses every 5 minutes — impractical for hosting services or stable SSH. Options:
+
+1. **Stable SLAAC address** — add a static token on each machine:
+   ```
+   # /etc/systemd/network/eth0.network
+   [IPv6AcceptRA]
+   Token=::1  # becomes 2401:4900:1c83:8ac0::1
+   ```
+2. **Disable privacy extensions** (EUI-64, based on MAC):
+   ```
+   net.ipv6.conf.eth0.use_tempaddr = 0
+   ```
+3. **DHCPv6** — assign static addresses from router (if supported)
+
+For fleet use: stable SLAAC tokens per machine give globally routable, static IPv6 addresses without needing Tailscale for basic SSH.
+
+### Router limitations
+
+- No IPv6 address on LAN interface (only link-local)
+- No DHCPv6 server (router doesn't assign v6 addresses)
+- No IPv6 firewall configurability in stock UI
+- IPv6 prefix delegation: ISP delegates `/64` via SLAAC only
