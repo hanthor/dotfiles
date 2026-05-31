@@ -92,6 +92,15 @@ DHCP/DNS served by **dnsmasq** on bihar. All assignments static via MAC.
 
 Run `just inventory` to rescan with nmap.
 
+### Internet — Airtel India / capped
+
+Airtel India home internet with a **3,333 GB/month** data cap. Exceeding the cap throttles
+to **1.5 Mbps** until the next billing cycle.
+
+> **May 31, 2026:** Cap hit at ~3,333 GB. Throttled to 1.5 Mbps until **June 8, 2026**.
+> No large model downloads, image pulls, or bulk data transfers until then.
+> Local LAN (192.168.0.0/24) is unaffected.
+
 ### Tailscale — `manatee-basking.ts.net`
 
 Cluster ingress goes through the [Tailscale Operator](https://tailscale.com/kb/1236/kubernetes-operator). Services with an `Ingress` resource targeting `tailscale` ingressClassName get a `<name>.manatee-basking.ts.net` URL automatically.
