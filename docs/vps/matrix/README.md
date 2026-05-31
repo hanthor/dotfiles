@@ -6,29 +6,38 @@ VPS node in the hanthor fleet.
 
 - Hostname: `matrix.reilly.asia`
 - Tailscale IP: `100.73.19.81`
+- Public IP: `37.27.84.201`
 - Arch: x86_64
-- Auth: shared fleet key (`SHA256:Sa9W11...`)
+- Auth: himachal's fleet key
 
-## OS
+## Specs
 
-Linux (VPS)
+- OS: Ubuntu 24.04.4 LTS
+- RAM: 7.5 GiB
+- Disk: 75 GB (64% used — 46G/75G)
+- Uptime: typically days
 
 ## Services
 
-- Hosts `reilly.asia` domain
+| Port | Service | Exposure |
+|------|---------|----------|
+| 22 | SSH | Tailscale only |
+| 25 | SMTP | Tailscale |
+| 6443 | k8s API | Tailscale |
+| 5432 | PostgreSQL | 🚨 Public IP exposed |
+| 10248-10259 | kubelet/containerd | localhost |
+
+## Security
+
+- ✅ SSH: no root login, no password auth
+- ✅ fail2ban: active
+- ✅ UFW: active
+- ✅ unattended-upgrades: active
+- ✅ Tailscale: running (`reilly-asia-matrix`)
+- 🚨 PostgreSQL on `37.27.84.201:5432` — should be firewalled to Tailscale IPs only
 
 ## Notes
 
-- Remote SSH access via Tailscale
-- No desktop roles — server profile (vps group)
-
-## To investigate
-
-- [ ] SSH hardening: disable password auth, non-default port?
-- [ ] fail2ban installed?
-- [ ] unattended-upgrades enabled?
-- [ ] Firewall (ufw/iptables) configured?
-- [ ] Disk/memory usage
-- [ ] What's actually running on it (nginx/caddy, certbot, etc)?
-- [ ] Monitoring — Prometheus node_exporter?
-- [ ] Run `just apply` to sync dotfiles and SSH keys
+- Runs Kubernetes (kubelet + containerd ports)
+- `reilly.asia` DNS hosted on Cloudflare, not served from this VPS
+- Fleet keys deployed: bihar, dilli, goa, himachal, kanpur, karnataka, termux
