@@ -68,6 +68,7 @@
       - podman
       - podman-compose
       - crun
+      - iptables
     state: present
     update_cache: false # Handled by previous task
   when: apk_available
