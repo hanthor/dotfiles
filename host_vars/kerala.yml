@@ -3,3 +3,5 @@
 is_arm: true
 # Laptop: runs on login, not on timer
 is_laptop: true
+# Lima requires KVM + gh CLI — not relevant on ARM postmarketOS laptop
+skip_lima: true
