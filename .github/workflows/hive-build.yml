@@ -4,7 +4,7 @@ name: Build Hive Image
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - 'talos-k8s/hive/**'
       - '.github/workflows/hive-build.yml'
