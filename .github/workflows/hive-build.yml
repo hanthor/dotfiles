@@ -49,8 +49,9 @@ jobs:
       - name: Prep build context
         working-directory: hive-src
         run: |
-          # Use our custom Dockerfile
+          # Use our custom Dockerfile and goose wrapper
           cp ../dotfiles/talos-k8s/hive/Dockerfile ./Dockerfile
+          cp ../dotfiles/talos-k8s/hive/goose-wrapper.sh ./goose-wrapper.sh
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
