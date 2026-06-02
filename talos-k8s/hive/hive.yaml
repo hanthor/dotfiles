@@ -58,6 +58,7 @@ data:
         - tuna-os/tacklebox
       ai_author: hanthor
       primary_repo: dotfiles
+      acmm_level: 3
 
     agents:
       supervisor:
@@ -70,12 +71,14 @@ data:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
+        mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
         clear_on_kick: true
       ci-maintainer:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
+        mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
         clear_on_kick: true
 
