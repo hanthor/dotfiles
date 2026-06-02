@@ -49,11 +49,12 @@ jobs:
       - name: Prep build context
         working-directory: hive-src
         run: |
-          # Apply goose CLI marker patch so hive recognizes goose sessions
-          patch -p1 < ../dotfiles/talos-k8s/hive/goose-marker.patch
+          # Add goose to hive's CLI marker list so it recognizes goose sessions
+          sed -i '/"Gemini",/a\	"goose",' v2/pkg/agent/manager.go
           # Use our custom Dockerfile and goose wrapper
           cp ../dotfiles/talos-k8s/hive/Dockerfile ./Dockerfile
           cp ../dotfiles/talos-k8s/hive/goose-wrapper.sh ./goose-wrapper.sh
+          cp ../dotfiles/talos-k8s/hive/deepseek-chat.py ./deepseek-chat.py
           cp ../dotfiles/talos-k8s/hive/deepseek-chat.py ./deepseek-chat.py
 
       - name: Set up Docker Buildx
