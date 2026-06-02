@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """DeepSeek chat CLI — OpenAI-compatible loop for hive agent sessions.
 
-Replaces goose as the hive backend. Reads prompts from stdin
-(command-line args first, then interactive stdin loop).
+Replaces goose as the hive backend. Processes --prompt args AND stdin.
 
 Usage:
     deepseek-chat [--model deepseek-v4-pro] [--prompt "initial prompt"]
@@ -18,6 +17,7 @@ import sys
 import json
 import urllib.request
 import urllib.error
+import threading
 
 
 def chat(prompt: str, api_key: str, api_host: str, model: str) -> str:
@@ -33,10 +33,7 @@ def chat(prompt: str, api_key: str, api_host: str, model: str) -> str:
         "stream": False,
     }
     req = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode(),
-        headers=headers,
-        method="POST",
+        url, data=json.dumps(body).encode(), headers=headers, method="POST"
     )
     try:
         with urllib.request.urlopen(req, timeout=300) as resp:
@@ -66,7 +63,7 @@ def main():
             initial_prompts.append(args[i + 1])
             i += 2
         elif args[i] == "--no-confirm":
-            i += 1  # hive compat, ignore
+            i += 1
         else:
             i += 1
 
@@ -74,29 +71,33 @@ def main():
         print("Error: DEEPSEEK_API_KEY not set", file=sys.stderr)
         sys.exit(1)
 
-    print(f"DeepSeek chat ready (model: {model})", flush=True)
-    print("Environment loaded", flush=True)  # AGENT_READY_MARKER for hive
+    # Print ready markers IMMEDIATELY (hive waits for "Environment loaded")
+    print("DeepSeek chat ready", flush=True)
+    print("Environment loaded", flush=True)
 
-    # Process initial prompts from command line
-    for prompt in initial_prompts:
-        if prompt.strip():
-            response = chat(prompt, api_key, api_host, model)
-            print(response, flush=True)
+    # Process CLI --prompt args asynchronously so we don't block stdin
+    def process_initial():
+        for prompt in initial_prompts:
+            if prompt.strip():
+                resp = chat(prompt, api_key, api_host, model)
+                print(resp, flush=True)
 
-    # Interactive stdin loop — read prompts line by line
+    if initial_prompts:
+        threading.Thread(target=process_initial, daemon=True).start()
+
+    # Interactive stdin loop — hive sends kicks via tmux send-keys
     while True:
         try:
             line = sys.stdin.readline()
         except KeyboardInterrupt:
             break
-        if not line:  # EOF
+        if not line:
             break
 
         line = line.strip()
         if not line:
             continue
 
-        # Skip hive internal directives
         if line.startswith("/clear"):
             continue
 
