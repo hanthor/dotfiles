@@ -51,7 +51,7 @@ RUN npm install -g @github/copilot && npm cache clean --force || \
 
 # ── goose CLI (DeepSeek backend) ──────────────────────────────────────
 RUN curl -sL "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_VERSION}/goose-x86_64-unknown-linux-gnu.tar.gz" | \
-    tar xz -C /usr/local/bin goose && \
+    tar xz -C /usr/local/bin && \
     chmod +x /usr/local/bin/goose
 
 # ── Claude Code CLI ───────────────────────────────────────────────────
