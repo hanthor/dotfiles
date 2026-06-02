@@ -1,33 +1,35 @@
 #!/bin/sh
-# goose-wrapper — tries goose v1.x with native DeepSeek support.
-# Falls back to Python deepseek-chat.py if goose isn't available.
+# goose-wrapper — launches goose v1.x with DeepSeek provider.
+# Handles hive compatibility: --no-confirm flag, telemetry prompt,
+# and prints hive's expected "Environment loaded" ready marker.
 
 set -e
 
-# If goose-real exists, use it with proper config
-if [ -x /usr/local/bin/goose-real ]; then
-    # Pre-configure goose for DeepSeek (first run only)
-    if [ ! -f /home/dev/.config/goose/config.yaml ]; then
-        mkdir -p /home/dev/.config/goose /home/dev/.local/state/goose
-        cat > /home/dev/.config/goose/config.yaml << 'YAML'
+# Pre-configure goose for DeepSeek (first run only)
+if [ ! -f /home/dev/.config/goose/config.yaml ]; then
+    mkdir -p /home/dev/.config/goose /home/dev/.local/state/goose
+    cat > /home/dev/.config/goose/config.yaml << 'YAML'
 provider: custom_deepseek
 model: deepseek-v4-pro
 YAML
-        echo '{"telemetry_enabled":false,"configured":true}' > /home/dev/.local/state/goose/state.json
-    fi
-
-    # Drop old flags, run goose session with TTY
-    while [ $# -gt 0 ]; do
-        case "$1" in
-            --no-confirm) shift ;;
-            --model) shift 2 ;;
-            *) shift ;;
-        esac
-    done
-
-    export GOOSE_PROVIDER=custom_deepseek
-    exec script -q -c "/usr/local/bin/goose-real session --max-turns 100" /dev/null
+    echo '{"telemetry_enabled":false,"configured":true}' > /home/dev/.local/state/goose/state.json
 fi
 
-# Fallback: Python DeepSeek chat loop
-exec python3 /usr/local/bin/deepseek-chat.py "$@"
+# Drop old flags that goose v1.x doesn't support
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --no-confirm) shift ;;
+        --model) shift 2 ;;
+        *) shift ;;
+    esac
+done
+
+# Print hive's expected ready markers
+echo "DeepSeek chat ready ❯"
+echo "Environment loaded"
+
+# Launch goose with TTY (script provides pseudo-TTY for telemetry prompt)
+# Answer "y" to telemetry on first run, then goose stays interactive.
+exec script -q -c "/usr/local/bin/goose-real session --max-turns 100" /dev/null << 'GOOSE_INPUT'
+y
+GOOSE_INPUT

@@ -49,6 +49,8 @@ jobs:
       - name: Prep build context
         working-directory: hive-src
         run: |
+          # Apply goose CLI marker patch so hive recognizes goose sessions
+          patch -p1 < ../dotfiles/talos-k8s/hive/goose-marker.patch
           # Use our custom Dockerfile and goose wrapper
           cp ../dotfiles/talos-k8s/hive/Dockerfile ./Dockerfile
           cp ../dotfiles/talos-k8s/hive/goose-wrapper.sh ./goose-wrapper.sh
