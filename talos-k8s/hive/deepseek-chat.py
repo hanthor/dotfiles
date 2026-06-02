@@ -18,6 +18,7 @@ import json
 import urllib.request
 import urllib.error
 import threading
+import select
 
 
 def chat(prompt: str, api_key: str, api_host: str, model: str) -> str:
@@ -46,6 +47,14 @@ def chat(prompt: str, api_key: str, api_host: str, model: str) -> str:
         return f"Error: {e}"
 
 
+def read_with_timeout(timeout=0.5):
+    """Read stdin with a short timeout. Returns line or None if no data."""
+    ready, _, _ = select.select([sys.stdin], [], [], timeout)
+    if ready:
+        return sys.stdin.readline()
+    return None
+
+
 def main():
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     api_host = os.environ.get("DEEPSEEK_API_HOST", "https://api.deepseek.com")
@@ -72,7 +81,7 @@ def main():
         sys.exit(1)
 
     # Print ready markers IMMEDIATELY (hive waits for "Environment loaded")
-    # Also print a CLI marker (❯) that hive uses to detect live agents
+    # Also include a CLI marker (❯) that hive uses to detect live agents
     print("DeepSeek chat ready ❯", flush=True)
     print("Environment loaded", flush=True)
 
@@ -86,24 +95,40 @@ def main():
     if initial_prompts:
         threading.Thread(target=process_initial, daemon=True).start()
 
-    # Interactive stdin loop — hive sends kicks via tmux send-keys
+    # Interactive stdin loop — accumulate lines with timeout to collect
+    # multi-line kicks from hive into a single prompt.
+    buffer = []
     while True:
         try:
-            line = sys.stdin.readline()
+            line = read_with_timeout(timeout=1.0)
         except KeyboardInterrupt:
             break
-        if not line:
+
+        if line is None:
+            # Timeout — flush accumulated buffer as a single prompt
+            if buffer:
+                prompt = "".join(buffer).strip()
+                buffer = []
+                if prompt and not prompt.startswith("/clear"):
+                    response = chat(prompt, api_key, api_host, model)
+                    print(response, flush=True)
+            continue
+
+        if not line:  # EOF
             break
 
-        line = line.strip()
-        if not line:
+        stripped = line.strip()
+        if not stripped:
+            # Empty line — flush
+            if buffer:
+                prompt = "".join(buffer).strip()
+                buffer = []
+                if prompt and not prompt.startswith("/clear"):
+                    response = chat(prompt, api_key, api_host, model)
+                    print(response, flush=True)
             continue
 
-        if line.startswith("/clear"):
-            continue
-
-        response = chat(line, api_key, api_host, model)
-        print(response, flush=True)
+        buffer.append(line)
 
 
 if __name__ == "__main__":
