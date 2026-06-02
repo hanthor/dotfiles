@@ -1,6 +1,6 @@
 --- a/v2/pkg/agent/manager.go
 +++ b/v2/pkg/agent/manager.go
-@@ -XXX,7 +XXX,8 @@ var cliPaneMarkers = []string{
+@@ -275,9 +275,10 @@ var cliPaneMarkers = []string{
  	"esc cancel",
  	"/ commands",
  	"? help",
@@ -9,3 +9,5 @@
  	"Gemini",
 +	"goose",
  }
+ 
+ // tmuxPaneHasCLI reports whether a CLI is running in the pane by inspecting
