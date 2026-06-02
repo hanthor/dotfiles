@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """DeepSeek chat CLI — OpenAI-compatible loop for hive agent sessions.
 
-Replaces goose as the hive backend. Reads prompts from stdin,
-calls DeepSeek API, writes responses to stdout.
+Replaces goose as the hive backend. Reads prompts from stdin
+(command-line args first, then interactive stdin loop).
 
 Usage:
-    deepseek-chat [--model deepseek-v4-pro]
+    deepseek-chat [--model deepseek-v4-pro] [--prompt "initial prompt"]
 
 Env vars:
     DEEPSEEK_API_KEY  — API key (required)
@@ -21,7 +21,7 @@ import urllib.error
 
 
 def chat(prompt: str, api_key: str, api_host: str, model: str) -> str:
-    """Send a single chat completion request."""
+    """Send a single chat completion request to DeepSeek."""
     url = f"{api_host}/v1/chat/completions"
     headers = {
         "Content-Type": "application/json",
@@ -54,24 +54,36 @@ def main():
     api_host = os.environ.get("DEEPSEEK_API_HOST", "https://api.deepseek.com")
     model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro")
 
-    # Parse CLI args
+    # Parse CLI args (hive passes --model and --prompt)
     args = sys.argv[1:]
-    # Skip --no-confirm (hive compat)
-    args = [a for a in args if a != "--no-confirm"]
-    for i, a in enumerate(args):
-        if a == "--model" and i + 1 < len(args):
+    initial_prompts = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--model" and i + 1 < len(args):
             model = args[i + 1]
-            break
+            i += 2
+        elif args[i] == "--prompt" and i + 1 < len(args):
+            initial_prompts.append(args[i + 1])
+            i += 2
+        elif args[i] == "--no-confirm":
+            i += 1  # hive compat, ignore
+        else:
+            i += 1
 
     if not api_key:
         print("Error: DEEPSEEK_API_KEY not set", file=sys.stderr)
         sys.exit(1)
 
     print(f"DeepSeek chat ready (model: {model})", flush=True)
-    print("Environment loaded", flush=True)  # AGENT_READY_MARKER
+    print("Environment loaded", flush=True)  # AGENT_READY_MARKER for hive
 
-    # Interactive loop — read prompts from stdin
-    buffer = ""
+    # Process initial prompts from command line
+    for prompt in initial_prompts:
+        if prompt.strip():
+            response = chat(prompt, api_key, api_host, model)
+            print(response, flush=True)
+
+    # Interactive stdin loop — read prompts line by line
     while True:
         try:
             line = sys.stdin.readline()
@@ -84,19 +96,12 @@ def main():
         if not line:
             continue
 
-        buffer += line + "\n"
+        # Skip hive internal directives
+        if line.startswith("/clear"):
+            continue
 
-        # Send when we have a complete prompt (ends with newline on empty line,
-        # or just process each line as a separate prompt)
-        # For hive's kick-agents, prompts come as single-line directives
-        # prefixed with the agent's instructions.
-        if not line.startswith("/") and len(buffer) > 0:
-            # Flush accumulated prompt
-            prompt = buffer.strip()
-            if prompt:
-                response = chat(prompt, api_key, api_host, model)
-                print(response, flush=True)
-            buffer = ""
+        response = chat(line, api_key, api_host, model)
+        print(response, flush=True)
 
 
 if __name__ == "__main__":
