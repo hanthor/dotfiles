@@ -99,6 +99,11 @@ data:
           scanner: 15m
           ci-maintainer: 15m
 
+    github:
+      app_id: 3942065
+      installation_id: 137498420
+      key_file: /secrets/gh-app-key.pem
+
     dashboard:
       port: 3002
 
@@ -145,6 +150,8 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/hostname: bihar
+      imagePullSecrets:
+        - name: ghcr-auth
       containers:
         - name: hive
           image: ghcr.io/hanthor/hive:latest
@@ -180,13 +187,13 @@ spec:
                   key: GOOSE_API_HOST
             - name: GOOSE_MODEL
               value: deepseek-v4-pro
-            # GitHub auth
-            - name: HIVE_GITHUB_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: hive-secrets
-                  key: HIVE_GITHUB_TOKEN
-                  optional: true
+            # GitHub App auth
+            - name: GH_APP_ID
+              value: "3942065"
+            - name: GH_APP_INSTALLATION_ID
+              value: "137498420"
+            - name: GH_APP_KEY_FILE
+              value: /secrets/gh-app-key.pem
             # ntfy notifications
             - name: NTFY_TOPIC
               valueFrom:
@@ -194,32 +201,15 @@ spec:
                   name: hive-secrets
                   key: NTFY_TOPIC
                   optional: true
-            # Dashboard auth (optional)
-            - name: HIVE_DASHBOARD_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: hive-secrets
-                  key: HIVE_DASHBOARD_TOKEN
-                  optional: true
-            # GitHub App (optional, takes precedence over HIVE_GITHUB_TOKEN)
-            - name: GH_APP_ID
-              valueFrom:
-                secretKeyRef:
-                  name: hive-secrets
-                  key: GH_APP_ID
-                  optional: true
-            - name: GH_APP_INSTALLATION_ID
-              valueFrom:
-                secretKeyRef:
-                  name: hive-secrets
-                  key: GH_APP_INSTALLATION_ID
-                  optional: true
           volumeMounts:
             - name: config
               mountPath: /etc/hive
               readOnly: true
             - name: data
               mountPath: /data
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /api/health
@@ -248,6 +238,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: hive-data
+        - name: secrets
+          secret:
+            secretName: hive-secrets
 ---
 apiVersion: v1
 kind: Service

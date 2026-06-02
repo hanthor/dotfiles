@@ -30,7 +30,12 @@ RUN echo 'dev:x:1001:1000::/home/dev:/bin/bash' >> /etc/passwd && \
 # ── goose CLI (DeepSeek backend) ──────────────────────────────────────
 RUN curl -sL "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_VERSION}/goose-x86_64-unknown-linux-gnu.tar.gz" | \
     tar xz -C /usr/local/bin && \
-    chmod +x /usr/local/bin/goose
+    mv /usr/local/bin/goose /usr/local/bin/goose-real && \
+    chmod +x /usr/local/bin/goose-real
+
+# Wrapper: translates old hive goose CLI (--no-confirm) to goose v1.x (session)
+COPY goose-wrapper.sh /usr/local/bin/goose
+RUN chmod +x /usr/local/bin/goose
 
 # ── Application ───────────────────────────────────────────────────────
 ENV HOME=/home/dev
