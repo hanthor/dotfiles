@@ -1,0 +1,169 @@
+# Kaniko build job — builds hive image on bihar (amd64) and pushes to ghcr.io
+#
+# Usage:
+#   1. Create ghcr auth secret:
+#      kubectl create secret docker-registry ghcr-auth -n hive \
+#        --docker-server=ghcr.io \
+#        --docker-username=hanthor \
+#        --docker-password=<GITHUB_PAT_WITH_PACKAGES_SCOPE>
+#
+#   2. kubectl apply -f talos-k8s/hive/build-job.yaml
+#   3. kubectl logs -n hive -f job/hive-build
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hive-build
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive-build
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: bihar
+      restartPolicy: Never
+      initContainers:
+        - name: prep
+          image: golang:1.25-alpine
+          workingDir: /workspace
+          command:
+            - sh
+            - -c
+            - |
+              set -ex
+              apk add --no-cache git curl
+
+              echo "=== Cloning kubestellar/hive (v2 branch) ==="
+              git clone --depth 1 --branch v2 https://github.com/kubestellar/hive.git /workspace/hive
+              cd /workspace/hive
+
+              echo "=== Building Go binaries (native amd64) ==="
+              GIT_HASH=$(git rev-parse HEAD)
+              GIT_SHORT=$(git rev-parse --short HEAD)
+              cd v2
+              CGO_ENABLED=0 go build -ldflags "-X main.gitHash=${GIT_HASH} -X main.gitShort=${GIT_SHORT}" -o /workspace/hive-binary ./cmd/hive
+              CGO_ENABLED=0 go build -o /workspace/bd-binary ./cmd/bd
+              ls -la /workspace/hive-binary /workspace/bd-binary
+
+              echo "=== Writing custom Dockerfile ==="
+              cat > /workspace/hive/Dockerfile << 'DOCKERFILE_EOF'
+              FROM node:24-slim
+
+              ARG GOOSE_VERSION=1.36.0
+
+              RUN apt-get update && apt-get install -y --no-install-recommends \
+                  bash curl git gosu iptables inotify-tools jq \
+                  procps python3 python3-pip python3-venv sudo tmux \
+               && rm -rf /var/lib/apt/lists/*
+
+              RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
+               && curl -sL -o /tmp/su-exec.c https://raw.githubusercontent.com/ncopa/su-exec/master/su-exec.c \
+               && gcc -Wall -o /usr/local/bin/su-exec /tmp/su-exec.c \
+               && chmod u+s /usr/local/bin/su-exec \
+               && rm /tmp/su-exec.c \
+               && apt-get purge -y gcc libc6-dev && apt-get autoremove -y
+
+              RUN echo 'dev:x:1001:1000::/home/dev:/bin/bash' >> /etc/passwd \
+               && echo 'dev:!:20000:0:99999:7:::' >> /etc/shadow \
+               && mkdir -p /home/dev && chown 1001:1000 /home/dev && chmod 755 /home/dev
+
+              RUN curl -sL -o /usr/local/bin/ttyd \
+                    "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.x86_64" \
+               && chmod +x /usr/local/bin/ttyd
+
+              ARG GH_VERSION=2.74.0
+              RUN mkdir -p /opt/hive/bin \
+               && curl -sL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" | \
+                  tar xz --strip-components=2 -C /opt/hive/bin "gh_${GH_VERSION}_linux_amd64/bin/gh" \
+               && mv /opt/hive/bin/gh /opt/hive/bin/gh-real \
+               && chmod +x /opt/hive/bin/gh-real
+
+              RUN npm install -g @github/copilot && npm cache clean --force || echo "WARN: Copilot CLI failed"
+
+              RUN curl -sL "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_VERSION}/goose-x86_64-unknown-linux-gnu.tar.gz" | \
+                  tar xz -C /usr/local/bin && chmod +x /usr/local/bin/goose
+
+              RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force || echo "WARN: Claude Code failed"
+
+              ENV HOME=/home/dev
+
+              COPY hive-binary /usr/local/bin/hive
+              COPY bd-binary /usr/local/bin/bd
+
+              COPY v2/proxy/ /opt/hive/proxy/
+              RUN cd /opt/hive/proxy && npm install --omit=dev
+
+              COPY v2/pkg/dashboard/static/index.html /opt/hive/proxy/public/
+
+              COPY bin/gh-app-token.sh bin/hive-config.sh bin/agent-launch.sh bin/git-credential-hive.sh /usr/local/bin/
+              COPY bin/gh-wrapper.sh /usr/local/bin/gh
+              COPY config/backends.conf /usr/local/etc/hive/backends.conf
+              RUN chmod +x /usr/local/bin/gh-app-token.sh /usr/local/bin/hive-config.sh \
+                  /usr/local/bin/agent-launch.sh /usr/local/bin/gh /usr/local/bin/git-credential-hive.sh
+
+              COPY dashboard/ /opt/hive/dashboard/
+              RUN chmod +x /opt/hive/dashboard/publish-snapshot*.sh 2>/dev/null || true
+
+              COPY examples/kubestellar/hive-project.yaml /etc/hive/hive-project.yaml
+              COPY examples/acmm/ /opt/hive/examples/acmm/
+              COPY examples/agents/ /opt/hive/examples/agents/
+              COPY v2/deploy/data/ /opt/hive/seed-data/
+              COPY v2/deploy/ttyd-tmux.sh /usr/local/bin/ttyd-tmux.sh
+              RUN chmod +x /usr/local/bin/ttyd-tmux.sh
+
+              COPY bin/nous-runner.sh bin/nous-sync.py bin/nous-hive-gate.py bin/nous-install.sh /tmp/hive/bin/
+              RUN chmod +x /tmp/hive/bin/*.sh
+              COPY examples/kubestellar/nous-campaign.yaml examples/kubestellar/nous-governor-campaign.yaml examples/kubestellar/nous-repo-campaign.yaml /etc/hive/
+              RUN mkdir -p /var/run/nous/governor /var/run/nous/repo /data/nous/snapshots /opt/nous \
+               && pip3 install --no-cache-dir --break-system-packages pyyaml 2>/dev/null || true \
+               && pip3 install --no-cache-dir --break-system-packages specify-cli 2>/dev/null || true
+
+              ENV GOOSE_PROVIDER=openai_compatible GOOSE_MODEL=deepseek-v4-pro
+
+              EXPOSE 3001 3002 7681
+              VOLUME ["/data", "/secrets"]
+
+              COPY v2/deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
+              RUN chmod +x /usr/local/bin/entrypoint.sh
+              RUN chown -R 1001:1000 /data /home/dev 2>/dev/null || true
+
+              ENTRYPOINT ["entrypoint.sh"]
+              CMD ["--config", "/etc/hive/hive.yaml"]
+              DOCKERFILE_EOF
+
+              echo "=== Dockerfile written ==="
+              cp /workspace/hive-binary /workspace/hive/hive-binary
+              cp /workspace/bd-binary /workspace/hive/bd-binary
+              echo "=== Build context ready ==="
+              ls /workspace/hive/
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:latest
+          args:
+            - "--context=dir:///workspace/hive"
+            - "--dockerfile=Dockerfile"
+            - "--destination=ghcr.io/hanthor/hive:latest"
+            - "--cache=true"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: docker-config
+              mountPath: /kaniko/.docker
+          env:
+            - name: DOCKER_CONFIG
+              value: /kaniko/.docker
+      volumes:
+        - name: workspace
+          emptyDir:
+            sizeLimit: 4Gi
+        - name: docker-config
+          secret:
+            secretName: ghcr-auth
+            items:
+              - key: .dockerconfigjson
+                path: config.json

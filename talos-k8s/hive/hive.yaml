@@ -1,0 +1,292 @@
+# Hive — 24/7 AI agent supervisor for GitHub repos
+#
+# Deploy:
+#   1. Create secrets first:
+#      kubectl create secret generic hive-secrets -n hive \
+#        --from-literal=DEEPSEEK_API_KEY=sk-... \
+#        --from-literal=GOOSE_API_HOST=https://api.deepseek.com \
+#        --from-literal=HIVE_GITHUB_TOKEN=ghp_... \
+#        --from-literal=NTFY_TOPIC=your-ntfy-topic \
+#        --dry-run=client -o yaml | kubectl apply -f -
+#
+#      # For GitHub App (post-setup):
+#      kubectl create secret generic hive-secrets -n hive \
+#        --from-literal=GH_APP_ID=... \
+#        --from-literal=GH_APP_INSTALLATION_ID=... \
+#        --from-file=gh-app-key.pem=/path/to/key.pem \
+#        --dry-run=client -o yaml | kubectl apply -f -
+#
+#   2. kubectl apply -f talos-k8s/hive.yaml
+#
+# Access: https://hive.manatee-basking.ts.net
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hive
+  labels:
+    app.kubernetes.io/name: hive
+    app.kubernetes.io/part-of: hive
+---
+# Secrets — create manually with kubectl, not in this file.
+# See deploy instructions above.
+# Secret name: hive-secrets
+# Required keys:
+#   DEEPSEEK_API_KEY  — DeepSeek API key (sk-...)
+#   GOOSE_API_HOST    — https://api.deepseek.com
+#   HIVE_GITHUB_TOKEN — GitHub PAT or App token
+#   NTFY_TOPIC        — ntfy.sh topic string
+# Optional:
+#   HIVE_DASHBOARD_TOKEN — mutation endpoint auth (omit for no auth)
+#   GH_APP_ID, GH_APP_INSTALLATION_ID, gh-app-key.pem — GitHub App
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hive-config
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive
+data:
+  hive.yaml: |
+    project:
+      org: hanthor
+      name: "Dotfiles + TunaOS"
+      repos:
+        - dotfiles
+        - tuna-os/tunaos
+        - tuna-os/tacklebox
+      ai_author: hanthor
+      primary_repo: dotfiles
+
+    agents:
+      supervisor:
+        enabled: true
+        backend: goose
+        model: deepseek-v4-pro
+        beads_dir: /data/beads/supervisor
+        clear_on_kick: true
+      scanner:
+        enabled: true
+        backend: goose
+        model: deepseek-v4-pro
+        beads_dir: /data/beads/scanner
+        clear_on_kick: true
+      ci-maintainer:
+        enabled: true
+        backend: goose
+        model: deepseek-v4-pro
+        beads_dir: /data/beads/ci-maintainer
+        clear_on_kick: true
+
+    governor:
+      eval_interval_s: 300
+      modes:
+        surge:
+          threshold: 20
+          scanner: 15m
+          ci-maintainer: pause
+        busy:
+          threshold: 10
+          scanner: 15m
+          ci-maintainer: 1h
+        quiet:
+          threshold: 2
+          scanner: 15m
+          ci-maintainer: 45m
+        idle:
+          threshold: 0
+          scanner: 15m
+          ci-maintainer: 15m
+
+    dashboard:
+      port: 3002
+
+    notifications:
+      ntfy:
+        server: https://ntfy.sh
+        topic: ${NTFY_TOPIC}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hive-data
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive
+    app.kubernetes.io/component: controller
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hive
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hive
+        app.kubernetes.io/component: controller
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: bihar
+      containers:
+        - name: hive
+          image: ghcr.io/hanthor/hive:latest
+          imagePullPolicy: Always
+          args:
+            - "--config"
+            - "/etc/hive/hive.yaml"
+          stdin: true
+          tty: true
+          ports:
+            - name: dashboard
+              containerPort: 3001
+              protocol: TCP
+            - name: api
+              containerPort: 3002
+              protocol: TCP
+            - name: ttyd
+              containerPort: 7681
+              protocol: TCP
+          env:
+            # DeepSeek API (goose openai_compatible provider)
+            - name: GOOSE_PROVIDER
+              value: openai_compatible
+            - name: GOOSE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hive-secrets
+                  key: DEEPSEEK_API_KEY
+            - name: GOOSE_API_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: hive-secrets
+                  key: GOOSE_API_HOST
+            - name: GOOSE_MODEL
+              value: deepseek-v4-pro
+            # GitHub auth
+            - name: HIVE_GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hive-secrets
+                  key: HIVE_GITHUB_TOKEN
+                  optional: true
+            # ntfy notifications
+            - name: NTFY_TOPIC
+              valueFrom:
+                secretKeyRef:
+                  name: hive-secrets
+                  key: NTFY_TOPIC
+                  optional: true
+            # Dashboard auth (optional)
+            - name: HIVE_DASHBOARD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hive-secrets
+                  key: HIVE_DASHBOARD_TOKEN
+                  optional: true
+            # GitHub App (optional, takes precedence over HIVE_GITHUB_TOKEN)
+            - name: GH_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: hive-secrets
+                  key: GH_APP_ID
+                  optional: true
+            - name: GH_APP_INSTALLATION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: hive-secrets
+                  key: GH_APP_INSTALLATION_ID
+                  optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /etc/hive
+              readOnly: true
+            - name: data
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: api
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: api
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: hive-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: hive-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: hive
+  ports:
+    - name: dashboard
+      port: 3001
+      targetPort: dashboard
+      protocol: TCP
+    - name: api
+      port: 3002
+      targetPort: api
+      protocol: TCP
+    - name: ttyd
+      port: 7681
+      targetPort: ttyd
+      protocol: TCP
+---
+# Tailscale Ingress — hive.manatee-basking.ts.net
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hive
+  namespace: hive
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: hive
+      port:
+        number: 3001
+  tls:
+    - hosts:
+        - hive
