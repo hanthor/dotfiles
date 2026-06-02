@@ -172,21 +172,14 @@ spec:
               containerPort: 7681
               protocol: TCP
           env:
-            # DeepSeek API (goose openai_compatible provider)
-            - name: GOOSE_PROVIDER
-              value: openai_compatible
-            - name: GOOSE_API_KEY
+            # DeepSeek API
+            - name: DEEPSEEK_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: hive-secrets
                   key: DEEPSEEK_API_KEY
-            - name: GOOSE_API_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: hive-secrets
-                  key: GOOSE_API_HOST
-            - name: GOOSE_MODEL
-              value: deepseek-v4-pro
+            - name: DEEPSEEK_API_HOST
+              value: https://api.deepseek.com
             # GitHub App auth
             - name: GH_APP_ID
               value: "3942065"
