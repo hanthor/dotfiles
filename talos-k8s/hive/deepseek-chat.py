@@ -72,7 +72,8 @@ def main():
         sys.exit(1)
 
     # Print ready markers IMMEDIATELY (hive waits for "Environment loaded")
-    print("DeepSeek chat ready", flush=True)
+    # Also print a CLI marker (❯) that hive uses to detect live agents
+    print("DeepSeek chat ready ❯", flush=True)
     print("Environment loaded", flush=True)
 
     # Process CLI --prompt args asynchronously so we don't block stdin
