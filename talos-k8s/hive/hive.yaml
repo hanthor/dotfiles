@@ -176,13 +176,13 @@ spec:
               protocol: TCP
           env:
             # DeepSeek API
+            - name: GOOSE_PROVIDER
+              value: custom_deepseek
             - name: DEEPSEEK_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: hive-secrets
                   key: DEEPSEEK_API_KEY
-            - name: DEEPSEEK_API_HOST
-              value: https://api.deepseek.com
             # GitHub App auth
             - name: GH_APP_ID
               value: "3942065"

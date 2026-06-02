@@ -8,7 +8,7 @@ FROM node:24-slim
 # ── Minimal runtime dependencies ──────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash curl git gosu iptables inotify-tools jq \
-    procps python3 sudo tmux \
+    procps python3 sudo tmux util-linux \
  && rm -rf /var/lib/apt/lists/*
 
 # ── su-exec for UID switching ─────────────────────────────────────────
@@ -25,13 +25,20 @@ RUN echo 'dev:x:1001:1000::/home/dev:/bin/bash' >> /etc/passwd && \
     echo 'dev:!:20000:0:99999:7:::' >> /etc/shadow && \
     mkdir -p /home/dev && chown 1001:1000 /home/dev && chmod 755 /home/dev
 
-# ── goose CLI (DeepSeek backend) — replaced with Python wrapper ─────
-# The original goose v1.x CLI doesn't support the --no-confirm flag
-# that hive expects. We replace it with a simple Python loop that
-# calls DeepSeek's OpenAI-compatible API directly.
+# ── goose CLI (DeepSeek backend) ──────────────────────────────────────
+# goose v1.x has native DeepSeek support via custom_deepseek provider.
+# We keep it as goose-real and use a wrapper to handle the old hive
+# --no-confirm interface. Falls back to Python if goose is missing.
+ARG GOOSE_VERSION=1.36.0
+RUN curl -sL "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_VERSION}/goose-x86_64-unknown-linux-gnu.tar.gz" | \
+    tar xz -C /usr/local/bin && \
+    mv /usr/local/bin/goose /usr/local/bin/goose-real && \
+    chmod +x /usr/local/bin/goose-real
+
+# Python fallback (direct DeepSeek API calls)
 COPY deepseek-chat.py /usr/local/bin/deepseek-chat.py
 
-# Wrapper: translates old hive goose CLI to deepseek-chat.py
+# Wrapper: translates old hive goose CLI, tries goose-real first
 COPY goose-wrapper.sh /usr/local/bin/goose
 RUN chmod +x /usr/local/bin/goose /usr/local/bin/deepseek-chat.py
 
