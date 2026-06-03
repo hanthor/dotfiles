@@ -1,6 +1,6 @@
 # Skill: Hive Operations
 
-Deploy, configure, and debug hive — the 24/7 AI agent supervisor running on the Talos K8s cluster. Hive watches GitHub repos, triages issues/PRs, and creates advisory reports using goose + DeepSeek.
+Deploy, configure, and debug hive — the 24/7 AI agent supervisor running on the Talos K8s cluster. Hive watches GitHub repos, triages issues/PRs, and creates advisory reports using pi + DeepSeek.
 
 ## When to use
 
@@ -30,10 +30,10 @@ hive (namespace)
 ```
 talos-k8s/hive/
 ├── hive.yaml              — K8s manifests (namespace, deploy, svc, ingress, configmap)
-├── Dockerfile             — Custom image (hive v2 + goose v1.36 + wrapper)
-├── goose-wrapper.sh       — Translates old hive CLI to goose v1.x session
-├── goose-marker.patch     — Adds "goose" to hive's cliPaneMarkers (source patch)
-├── deepseek-chat.py       — Python fallback (direct DeepSeek API, unused when goose works)
+├── Dockerfile             — Custom image (hive v2 + pi + pi-wrapper.sh)
+├── pi-wrapper.sh          — Wrapper: Hive tmux interface → pi interactive TUI
+├── pi-marker.patch        — Adds "pi" to hive's cliPaneMarkers (source patch)
+├── deepseek-chat.py       — Python fallback (direct DeepSeek API, unused with pi)
 ├── build-job.yaml         — Kaniko build job (deprecated, use CI now)
 ├── auto-close-boot-reports.yml — GH Action to auto-close boot reports after 7 days
 ├── hive-plan.md           — Deployment plan
@@ -44,14 +44,14 @@ talos-k8s/hive/
 `.github/workflows/hive-build.yml`:
 1. Checks out kubestellar/hive v2 source
 2. Cross-compiles Go binary for amd64
-3. Applies goose-marker.patch to add "goose" to cliPaneMarkers
-4. Builds Docker image with goose v1.36 + goose-wrapper.sh + Python fallback
+3. Applies pi-marker.patch to add "pi" to cliPaneMarkers
+4. Builds Docker image with pi + pi-wrapper.sh
 5. Pushes to `ghcr.io/hanthor/hive:latest`
 
 ## Architecture decisions
 
-### Why goose v1.x (not older goose)
-The old Block goose CLI (`--no-confirm` flag) is no longer compatible. Goose v1.36 from AAIF supports DeepSeek via the `custom_deepseek` provider. The wrapper translates `goose --no-confirm` to `goose session --max-turns 100`.
+### Why pi (not goose)
+Goose v1.x doesn't natively support DeepSeek, requiring a Python proxy that strips `reasoning_content` and injects `thinking:{type:disabled}`. Pi natively supports DeepSeek and has no permission popups — tools auto-execute without confirmation, making it ideal for unattended hive agents.
 
 ### Why GitHub App (not PAT)
 GitHub App gives hive its own rate limit pool (15,000 req/hr) vs PAT (5,000 req/hr shared). App ID 3942065 installed on tuna-os org.
@@ -64,11 +64,11 @@ L3 = CI/CD: agents can create issues and PRs, but merging requires human approva
 
 ## Debugging
 
-### Agent bare shell / not running goose
+### Agent bare shell / not running pi
 ```bash
-# Check goose processes
-kubectl exec -n hive deploy/hive -- ps aux | grep goose-real
-# Should see 6+ processes (3 agents × 2: wrapper + goose)
+# Check pi processes
+kubectl exec -n hive deploy/hive -- ps aux | grep pi-real
+# Should see 3+ processes (one per agent)
 
 # Check tmux sessions
 kubectl exec -n hive deploy/hive -- sh -c '
@@ -76,7 +76,7 @@ kubectl exec -n hive deploy/hive -- sh -c '
     tmux -S /tmp/tmux-1001/default capture-pane -t "$s" -p | tail -3
   done
 '
-# Should show goose banner "goose is ready" not "$" bash prompt
+# Should show pi editor/prompt, not "$" bash prompt
 ```
 
 ### Kicks not flowing
@@ -87,10 +87,9 @@ kubectl logs -n hive deploy/hive | grep "governor eval"
 
 ### DeepSeek API issues
 ```bash
-# Test goose directly
+# Test pi directly
 kubectl exec -n hive deploy/hive -- sh -c '
-  export DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY
-  GOOSE_PROVIDER=custom_deepseek goose-real session --max-turns 1
+  pi-real -p --provider deepseek --model deepseek-v4-flash --no-session "Say hello"
 '
 ```
 
@@ -110,10 +109,10 @@ Edit `talos-k8s/hive/hive.yaml` → `project.repos` → apply + restart
 Edit `project.acmm_level` in hive.yaml. L3 = issues+PRs, L4 = broader write access, L5 = guarded auto-merge, L6 = full autonomy.
 
 ### Add a new agent
-Add to `agents:` section in hive.yaml with `backend: goose`, `mode: ISSUES_AND_PRS`. Governor modes must include cadence for the new agent.
+Add to `agents:` section in hive.yaml with `backend: pi`, `mode: ISSUES_AND_PRS`. Governor modes must include cadence for the new agent.
 
 ### Force a kick
 The dashboard UI has a kick button. Or restart the pod — agents get boot prompts on startup.
 
-### Update goose version
-Change `GOOSE_VERSION` ARG in Dockerfile, push, CI rebuilds.
+### Update pi version
+Rebuild Docker image with updated npm package. CI rebuilds on push.

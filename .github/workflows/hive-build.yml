@@ -1,4 +1,4 @@
-# Build and push custom hive image (v2 + goose + DeepSeek) to GHCR
+# Build and push custom hive image (v2 + pi + DeepSeek) to GHCR
 name: Build Hive Image
 
 on:
@@ -49,13 +49,11 @@ jobs:
       - name: Prep build context
         working-directory: hive-src
         run: |
-          # Add goose to hive's CLI marker list so it recognizes goose sessions
-          sed -i '/"Gemini",/a\	"goose",' v2/pkg/agent/manager.go
-          # Use our custom Dockerfile and goose wrapper
+          # Add pi to hive's CLI marker list so it recognizes pi sessions
+          sed -i '/"Gemini",/a\	"pi",' v2/pkg/agent/manager.go
+          # Use our custom Dockerfile and pi wrapper
           cp ../dotfiles/talos-k8s/hive/Dockerfile ./Dockerfile
-          cp ../dotfiles/talos-k8s/hive/goose-wrapper.sh ./goose-wrapper.sh
-          cp ../dotfiles/talos-k8s/hive/deepseek-chat.py ./deepseek-chat.py
-          cp ../dotfiles/talos-k8s/hive/deepseek-chat.py ./deepseek-chat.py
+          cp ../dotfiles/talos-k8s/hive/pi-wrapper.sh ./pi-wrapper.sh
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

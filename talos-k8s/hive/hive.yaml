@@ -4,7 +4,6 @@
 #   1. Create secrets first:
 #      kubectl create secret generic hive-secrets -n hive \
 #        --from-literal=DEEPSEEK_API_KEY=sk-... \
-#        --from-literal=GOOSE_API_HOST=https://api.deepseek.com \
 #        --from-literal=HIVE_GITHUB_TOKEN=ghp_... \
 #        --from-literal=NTFY_TOPIC=your-ntfy-topic \
 #        --dry-run=client -o yaml | kubectl apply -f -
@@ -33,7 +32,6 @@ metadata:
 # Secret name: hive-secrets
 # Required keys:
 #   DEEPSEEK_API_KEY  — DeepSeek API key (sk-...)
-#   GOOSE_API_HOST    — https://api.deepseek.com
 #   HIVE_GITHUB_TOKEN — GitHub PAT or App token
 #   NTFY_TOPIC        — ntfy.sh topic string
 # Optional:
@@ -48,40 +46,148 @@ metadata:
   labels:
     app.kubernetes.io/name: hive
 data:
-  goose-wrapper.sh: |
+  pi-wrapper.sh: |
     #!/bin/sh
-    # goose-wrapper — runs goose v1.x in a restart loop so clear_on_kick works.
+    # pi-wrapper — runs pi (coding agent) in a restart loop so clear_on_kick works.
     #
-    # Why no script(1) or pipe: piping 'y' to script closes stdin after telemetry,
-    # so tmux send-keys can't reach goose. Running goose-real directly means the
-    # tmux PTY is goose's stdin — send-keys delivers boot/kick prompts correctly.
+    # Pi natively supports DeepSeek — no proxy, no litellm, no reasoning_content
+    # workaround needed. Boot/kick prompts arrive via tmux send-keys.
     #
     # Why the loop: clear_on_kick sends ^C to kill the running session. trap '' INT
-    # makes the wrapper ignore SIGINT so only goose-real is killed. The loop then
+    # makes the wrapper ignore SIGINT so only pi-real is killed. The loop then
     # re-emits the ready markers the Go binary watches for before sending the next
     # prompt via send-keys.
     trap '' INT
+
+    # ── Parse CLI args (Hive passes --no-confirm, --model, --prompt) ──
+    MODEL="deepseek-v4-pro"
     while [ $# -gt 0 ]; do
         case "$1" in
-            --no-confirm) shift ;;
-            --model) shift 2 ;;
-            --prompt) shift 2 ;;
+            --no-confirm) shift ;;  # pi has no permission popups
+            --model) MODEL="$2"; shift 2 ;;
+            --prompt) shift 2 ;;   # boot prompt comes via send-keys
             *) shift ;;
         esac
     done
-    GOOSE_CFG=/home/dev/.config/goose/config.yaml
-    mkdir -p "$(dirname "$GOOSE_CFG")" /home/dev/.local/state/goose
-    rm -f "$GOOSE_CFG"
-    cat > "$GOOSE_CFG" << 'YAML'
-    provider: custom_deepseek
-    model: deepseek-chat
-    GOOSE_TELEMETRY_ENABLED: false
-    YAML
+
+    # ── pi config ────────────────────────────────────────────────────
+    PI_CONFIG_DIR="${PI_CODING_AGENT_DIR:-/home/dev/.pi/agent}"
+    mkdir -p "$PI_CONFIG_DIR"
+    cat > "$PI_CONFIG_DIR/settings.json" << 'JSON'
+    {
+      "defaultProvider": "deepseek",
+      "defaultModel": "deepseek-v4-pro",
+      "quietStartup": true,
+      "hideThinkingBlock": true,
+      "enableInstallTelemetry": false
+    }
+    JSON
+
+    # ── Session directory (persistent across restarts) ───────────────
+    SESSION_DIR="/data/pi-sessions/${HIVE_AGENT:-agent}"
+    mkdir -p "$SESSION_DIR"
+
+    # ── Main loop ────────────────────────────────────────────────────
     while true; do
         echo "DeepSeek chat ready ❯"
         echo "Environment loaded"
-        /usr/local/bin/goose-real session --max-turns 100 || true
+        /usr/local/bin/pi-real \
+            --provider deepseek \
+            --model "$MODEL" \
+            --no-context-files \
+            --session-dir "$SESSION_DIR" || true
     done
+  backends.conf: |
+    # backends.conf — Single source of truth for CLI backends and model names.
+    # Overrides the built-in config with pi support.
+    #
+    # Usage:
+    #   source /usr/local/etc/hive/backends.conf
+    #
+    #   model=$(normalize_model_for_backend "pi" "deepseek-v4-pro")
+
+    # ── Supported backends ────────────────────────────────────────────
+    KNOWN_BACKENDS="claude copilot bob gemini codex amazonq goose aider pi"
+
+    # ── Backend → binary mapping ──────────────────────────────────────
+    backend_binary() {
+      case "$1" in
+        claude)  echo "claude" ;;
+        copilot) echo "copilot" ;;
+        gemini)  echo "gemini" ;;
+        codex)   echo "codex" ;;
+        amazonq) echo "q" ;;
+        bob)     echo "bob" ;;
+        goose)   echo "goose" ;;
+        aider)   echo "aider" ;;
+        pi)      echo "pi" ;;
+        *)       echo "$1" ;;
+      esac
+    }
+
+    # ── Backend → permission flag ─────────────────────────────────────
+    backend_perm_flag() {
+      case "$1" in
+        claude)  echo "--dangerously-skip-permissions" ;;
+        copilot) echo "--allow-all" ;;
+        bob)     echo "--accept-license" ;;
+        gemini)  echo "--yolo" ;;
+        codex)   echo "--full-auto" ;;
+        amazonq) echo "--trust-all-tools" ;;
+        goose)   echo "--no-confirm" ;;
+        aider)   echo "--yes" ;;
+        pi)      echo "" ;;  # pi has no permission popups
+        *)       echo "" ;;
+      esac
+    }
+
+    # ── Model version format normalization ────────────────────────────
+    normalize_model_for_backend() {
+      local backend="$1" model="$2"
+      case "$backend" in
+        copilot)
+          echo "$model" | sed -E 's/([0-9]+)-([0-9]+)$/\1.\2/'
+          ;;
+        claude)
+          echo "$model" | sed -E 's/([0-9]+)\.([0-9]+)$/\1-\2/'
+          ;;
+        *)
+          echo "$model"
+          ;;
+      esac
+    }
+
+    detect_backend_from_model() {
+      local model="$1"
+      case "$model" in
+        gpt-*)     echo "copilot" ;;
+        gemini-*)  echo "gemini" ;;
+        claude-*)  echo "claude" ;;
+        deepseek-*) echo "pi" ;;
+        *)         echo "unknown" ;;
+      esac
+    }
+
+    models_equal() {
+      local a="$1" b="$2"
+      local na nb
+      na=$(echo "$a" | sed -E 's/([0-9]+)\.([0-9]+)$/\1-\2/')
+      nb=$(echo "$b" | sed -E 's/([0-9]+)\.([0-9]+)$/\1-\2/')
+      [ "$na" = "$nb" ]
+    }
+
+    model_tier() {
+      case "$1" in
+        claude-haiku-4-5*|claude-haiku-4.5*)   echo "haiku" ;;
+        claude-sonnet-4-6*|claude-sonnet-4.6*) echo "sonnet" ;;
+        claude-opus-4-6*|claude-opus-4.6*)     echo "opus" ;;
+        claude-opus-4-7*|claude-opus-4.7*)     echo "opus" ;;
+        gpt-*)                                  echo "gpt" ;;
+        gemini-*)                               echo "gemini" ;;
+        deepseek-*)                             echo "deepseek" ;;
+        *)                                      echo "unknown" ;;
+      esac
+    }
   patch-dashboard.sh: |
     #!/bin/sh
     # Patch dashboard KNOWN_MODELS to include DeepSeek models.
@@ -90,10 +196,10 @@ data:
     import sys
     path = '/opt/hive/proxy/public/index.html'
     marker = "{ value: 'gpt-5.2', label: 'GPT-5.2' },"
-    inject = "\n      { value: 'deepseek-chat', label: 'DeepSeek Chat' },\n      { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner' },"
+    inject = "\n      { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },\n      { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },"
     with open(path) as f:
         c = f.read()
-    if marker in c and 'deepseek-chat' not in c:
+    if marker in c and 'deepseek-v4-flash' not in c:
         with open(path, 'w') as f:
             f.write(c.replace(marker, marker + inject, 1))
         print('patch-dashboard: injected deepseek models')
@@ -115,21 +221,21 @@ data:
     agents:
       supervisor:
         enabled: true
-        backend: goose
-        model: deepseek-chat
+        backend: pi
+        model: deepseek-v4-flash
         beads_dir: /data/beads/supervisor
         clear_on_kick: true
       scanner:
         enabled: true
-        backend: goose
-        model: deepseek-chat
+        backend: pi
+        model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
         clear_on_kick: true
       ci-maintainer:
         enabled: true
-        backend: goose
-        model: deepseek-chat
+        backend: pi
+        model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
         clear_on_kick: true
@@ -220,8 +326,9 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              cp /etc/hive/goose-wrapper.sh /usr/local/bin/goose
-              chmod +x /usr/local/bin/goose
+              cp /etc/hive/pi-wrapper.sh /usr/local/bin/pi
+              chmod +x /usr/local/bin/pi
+              cp /etc/hive/backends.conf /usr/local/etc/hive/backends.conf
               sh /etc/hive/patch-dashboard.sh
               exec /usr/local/bin/entrypoint.sh --config /etc/hive/hive.yaml
           stdin: true
@@ -237,9 +344,7 @@ spec:
               containerPort: 7681
               protocol: TCP
           env:
-            # DeepSeek API
-            - name: GOOSE_PROVIDER
-              value: custom_deepseek
+            # DeepSeek API (pi natively supports DeepSeek)
             - name: DEEPSEEK_API_KEY
               valueFrom:
                 secretKeyRef:

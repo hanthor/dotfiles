@@ -7,7 +7,7 @@
 │ pod: hive (bihar)                                    │
 │                                                      │
 │  ┌─────────┐  ┌──────────┐  ┌────────────────────┐  │
-│  │ hive    │  │ proxy    │  │ 3x goose agents    │  │
+│  │ hive    │  │ proxy    │  │ 3x pi agents       │  │
 │  │ Go bin  │  │ node.js  │  │ (tmux sessions)    │  │
 │  │ :3002   │  │ :3001    │  │                    │  │
 │  │ (API)   │  │ (web UI) │  │ supervisor ADVISORY│  │
@@ -16,7 +16,7 @@
 │       └────────────┘        └────────┬───────────┘  │
 │                                      │              │
 │  ┌───────────────────────────────────┘              │
-│  │  goose v1.36 → custom_deepseek → DeepSeek API   │
+│  │  pi → DeepSeek API (native, no proxy)           │
 │  │  GitHub App (tuna-os) → gh CLI for issues/PRs   │
 │  └─────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────┘
@@ -32,10 +32,10 @@
 
 | Component | Purpose | Details |
 |-----------|---------|---------|
-| **hive** (Go binary) | Agent manager, governor, scheduler | From kubestellar/hive v2, patched with goose marker |
+| **hive** (Go binary) | Agent manager, governor, scheduler | From kubestellar/hive v2, patched with pi marker |
 | **proxy** (Node.js) | Dashboard web UI + SSE | Serves on :3001, proxies to Go API :3002 |
-| **goose** v1.36 | AI agent CLI | Runs in tmux sessions, uses custom_deepseek provider |
-| **deepseek-chat.py** | Python fallback | Direct DeepSeek API calls if goose unavailable |
+| **pi** (coding agent) | AI agent CLI | Runs in tmux sessions, natively supports DeepSeek |
+| **pi-wrapper.sh** | Tmux interface adapter | Restart loop, ready markers, flag translation |
 
 ## Agents
 
@@ -54,6 +54,12 @@ All in `talos-k8s/hive/hive.yaml`:
 
 ## Key Fixes Applied
 
+### Pi replaces goose for DeepSeek
+Goose v1.x required a Python proxy (`deepseek-proxy.py`) to strip `reasoning_content`
+and inject `thinking:{type:disabled}` because it doesn't natively handle DeepSeek's
+reasoning tokens. Pi natively supports DeepSeek — no proxy, no litellm, no workaround.
+Tools auto-execute without confirmation (pi has no permission popups).
+
 ### IPv6 → ghcr.io pull failure
 Bihar couldn't pull images from ghcr.io over IPv6. Fixed by adding `/etc/hosts` entry on Talos:
 ```bash
@@ -64,14 +70,10 @@ talosctl -n 192.168.0.5 patch mc --patch '{
 }'
 ```
 
-### Goose CLI compatibility
-Goose v1.x removed `--no-confirm` flag and changed provider IDs. Fixed via:
-- `goose-wrapper.sh`: translates old hive CLI to `goose session --max-turns 100`
-- `goose-marker.patch`: adds "goose" to hive's `cliPaneMarkers` so agents aren't detected as crashed
-- Provider: `custom_deepseek` (not `deepseek` or `openai_compatible`)
-
-### Telemetry prompt
-Goose v1.x shows first-run telemetry prompt that blocks stdin. Workaround: `(echo y; exec cat) | goose session`
+### Pi CLI compatibility
+- `pi-wrapper.sh`: handles hive tmux interface, configures pi for DeepSeek
+- `pi-marker.patch`: adds "pi" to hive's `cliPaneMarkers` so agents aren't detected as crashed
+- Provider: `deepseek` (native, no proxy or litellm needed)
 
 ## Build & Deploy
 
@@ -79,8 +81,8 @@ Goose v1.x shows first-run telemetry prompt that blocks stdin. Workaround: `(ech
 # CI builds on push to dotfiles master
 # .github/workflows/hive-build.yml:
 #   1. Cross-compiles Go binary (amd64)
-#   2. Patches hive source for goose marker
-#   3. Builds Docker image with goose + wrapper
+#   2. Patches hive source for pi marker
+#   3. Builds Docker image with pi + pi-wrapper.sh
 #   4. Pushes to ghcr.io/hanthor/hive:latest
 
 # Deploy:
@@ -120,7 +122,7 @@ kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-1001/default capture-pane 
 | Symptom | Check |
 |---------|-------|
 | ImagePullBackOff | `/etc/hosts` on bihar has `ghcr.io` entry |
-| Agent CLI crashed | goose wrapper working? Check `ps aux \| grep goose-real` |
+| Agent CLI crashed | pi wrapper working? Check `ps aux \| grep pi-real` |
 | No kicks sent | Governor eval cycle: 5min, agent cadence: 15-45min |
 | Issues not created | GitHub App installed on tuna-os? Token in `/var/run/hive-metrics/` |
 | Dashboard 404 | Tailscale ingress `ts-hive-*` pod running? |

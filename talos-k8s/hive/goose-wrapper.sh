@@ -23,18 +23,29 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Pre-configure goose. Delete + recreate to work around root-owned config.yaml
-# (goose self-writes its config on first run as root in some code paths).
-# Dev owns the directory so it can unlink root-owned files; recreating gives
-# us a dev-owned file we can manage on future runs.
+# Start the DeepSeek proxy on first run (one proxy per pod, shared by all agents).
+# The proxy injects thinking:{type:disabled} so goose never sees reasoning_content.
+PROXY_PORT=15432
+PROXY_PID_FILE=/tmp/.deepseek-proxy.pid
+if [ ! -f "$PROXY_PID_FILE" ] || ! kill -0 "$(cat "$PROXY_PID_FILE")" 2>/dev/null; then
+    python3 /etc/hive/deepseek-proxy.py &
+    echo $! > "$PROXY_PID_FILE"
+fi
+
 GOOSE_CFG=/home/dev/.config/goose/config.yaml
 mkdir -p "$(dirname "$GOOSE_CFG")" /home/dev/.local/state/goose
 rm -f "$GOOSE_CFG"
 cat > "$GOOSE_CFG" << 'YAML'
-provider: custom_deepseek
-model: deepseek-chat
+provider: litellm
+model: deepseek-v4-flash
 GOOSE_TELEMETRY_ENABLED: false
 YAML
+
+# Switch to litellm provider — unlike custom_deepseek (hardcoded base_url),
+# litellm respects LITELLM_HOST so we can route through our local proxy.
+export GOOSE_PROVIDER=litellm
+export LITELLM_HOST=http://127.0.0.1:15432
+export LITELLM_API_KEY=$DEEPSEEK_API_KEY
 
 # Loop: emit ready markers, run goose-real, restart on exit.
 # The Go binary detects the ready markers then delivers prompts via send-keys.

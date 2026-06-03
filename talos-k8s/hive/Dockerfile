@@ -1,7 +1,8 @@
-# Hive v2 + goose (DeepSeek) — MINIMAL Dockerfile
+# Hive v2 + pi (DeepSeek) — MINIMAL Dockerfile
 #
-# Only installs goose (DeepSeek backend). Skips Claude Code, Copilot CLI,
-# ttyd, and Nous framework to keep the image small for faster pulls.
+# Only installs pi coding agent (DeepSeek backend). Skips Claude Code, Copilot CLI,
+# goose, ttyd, and Nous framework to keep the image small for faster pulls.
+# Pi natively supports DeepSeek — no proxy, no litellm workaround needed.
 
 FROM node:24-slim
 
@@ -25,22 +26,21 @@ RUN echo 'dev:x:1001:1000::/home/dev:/bin/bash' >> /etc/passwd && \
     echo 'dev:!:20000:0:99999:7:::' >> /etc/shadow && \
     mkdir -p /home/dev && chown 1001:1000 /home/dev && chmod 755 /home/dev
 
-# ── goose CLI (DeepSeek backend) ──────────────────────────────────────
-# goose v1.x has native DeepSeek support via custom_deepseek provider.
-# We keep it as goose-real and use a wrapper to handle the old hive
-# --no-confirm interface. Falls back to Python if goose is missing.
-ARG GOOSE_VERSION=1.36.0
-RUN curl -sL "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_VERSION}/goose-x86_64-unknown-linux-gnu.tar.gz" | \
-    tar xz -C /usr/local/bin && \
-    mv /usr/local/bin/goose /usr/local/bin/goose-real && \
-    chmod +x /usr/local/bin/goose-real
+# ── pi Coding Agent (DeepSeek backend) ────────────────────────────────
+# pi natively supports DeepSeek via the deepseek provider. No proxy,
+# no litellm, no reasoning_content workaround needed.
+# We keep it as pi-real and use a wrapper for the hive tmux interface.
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && \
+    mv /usr/local/bin/pi /usr/local/bin/pi-real && \
+    chmod +x /usr/local/bin/pi-real && \
+    npm cache clean --force
 
-# Python fallback (direct DeepSeek API calls)
-COPY deepseek-chat.py /usr/local/bin/deepseek-chat.py
+# Wrapper: handles hive tmux interface (restart loop, ready markers)
+COPY pi-wrapper.sh /usr/local/bin/pi
+RUN chmod +x /usr/local/bin/pi
 
-# Wrapper: translates old hive goose CLI, tries goose-real first
-COPY goose-wrapper.sh /usr/local/bin/goose
-RUN chmod +x /usr/local/bin/goose /usr/local/bin/deepseek-chat.py
+# pi config directory (wrapper also creates this at runtime)
+RUN mkdir -p /home/dev/.pi/agent && chown -R 1001:1000 /home/dev/.pi
 
 # ── Application ───────────────────────────────────────────────────────
 ENV HOME=/home/dev
@@ -70,9 +70,9 @@ COPY v2/deploy/data/ /opt/hive/seed-data/
 COPY v2/deploy/ttyd-tmux.sh /usr/local/bin/ttyd-tmux.sh
 RUN chmod +x /usr/local/bin/ttyd-tmux.sh
 
-# ── Goose defaults ────────────────────────────────────────────────────
-ENV GOOSE_PROVIDER=openai_compatible \
-    GOOSE_MODEL=deepseek-v4-pro
+# ── pi defaults ───────────────────────────────────────────────────────
+# Provider/model configured via ~/.pi/agent/settings.json at runtime.
+# DeepSeek API key passed via DEEPSEEK_API_KEY env var from K8s secret.
 
 EXPOSE 3001 3002 7681
 VOLUME ["/data", "/secrets"]
