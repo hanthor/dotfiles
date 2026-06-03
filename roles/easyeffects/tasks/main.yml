@@ -1,0 +1,55 @@
+---
+- name: Ensure Easy Effects Flatpak config directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - ~/.var/app/com.github.wwmm.easyeffects/config/easyeffects/input
+    - ~/.var/app/com.github.wwmm.easyeffects/config/easyeffects/output
+
+- name: Deploy input preset (mic noise reduction)
+  ansible.builtin.copy:
+    src: input-mic-noise-reduction.json
+    dest: ~/.var/app/com.github.wwmm.easyeffects/config/easyeffects/input/input-mic-noise-reduction.json
+    mode: "0644"
+
+- name: Deploy output preset (speaker improvement)
+  ansible.builtin.copy:
+    src: output-speaker-improvement.json
+    dest: ~/.var/app/com.github.wwmm.easyeffects/config/easyeffects/output/output-speaker-improvement.json
+    mode: "0644"
+
+- name: Pre-configure default presets in Easy Effects GSettings
+  ansible.builtin.ini_file:
+    path: ~/.var/app/com.github.wwmm.easyeffects/config/glib-2.0/settings/keyfile
+    section: "com/github/wwmm/easyeffects"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    mode: "0644"
+    create: true
+  loop:
+    - option: use-default-input
+      value: "'input-mic-noise-reduction'"
+    - option: use-default-output
+      value: "'output-speaker-improvement'"
+
+- name: Ensure systemd user directory exists
+  ansible.builtin.file:
+    path: ~/.config/systemd/user
+    state: directory
+    mode: "0755"
+
+- name: Deploy Easy Effects systemd user service
+  ansible.builtin.template:
+    src: easyeffects.service.j2
+    dest: ~/.config/systemd/user/easyeffects.service
+    mode: "0644"
+
+- name: Enable and start Easy Effects service
+  ansible.builtin.systemd:
+    name: easyeffects.service
+    scope: user
+    enabled: true
+    state: started
+    daemon_reload: true

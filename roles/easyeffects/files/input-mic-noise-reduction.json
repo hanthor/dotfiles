@@ -1,0 +1,60 @@
+{
+  "spectrum": {
+    "show": false,
+    "n-points": 100,
+    "height": 100,
+    "use-cubic": true,
+    "fill": true,
+    "show-bar-border": false,
+    "sampling-freq": 10,
+    "line-width": 2,
+    "type": "Bars",
+    "color": [1.0, 0.5, 0.0, 1.0],
+    "color-axis-labels": [1.0, 1.0, 1.0, 0.5]
+  },
+  "input": {
+    "blocklist": [],
+    "plugins": [
+      {
+        "name": "rnnoise",
+        "state": true,
+        "model-dir": "",
+        "enable-vad": true,
+        "vad-thres": 50.0,
+        "wet-ratio": 1.0,
+        "release": 20.0,
+        "input-gain": 0.0,
+        "output-gain": 0.0
+      },
+      {
+        "name": "compressor",
+        "state": true,
+        "attack": 5.0,
+        "boost-amount": 0.0,
+        "boost-threshold": -72.0,
+        "dry": -100.0,
+        "hpf-frequency": 80.0,
+        "hpf-mode": "off",
+        "input-gain": 0.0,
+        "knee": -3.0,
+        "lpf-frequency": 20000.0,
+        "lpf-mode": "off",
+        "makeup": 0.0,
+        "mode": "downward",
+        "output-gain": 0.0,
+        "ratio": 2.0,
+        "release": 100.0,
+        "sidechain": {
+          "lookahead": 0.0,
+          "mode": "split",
+          "preamp": 0.0,
+          "reactivity": 0.5,
+          "source": "middle",
+          "stereo-split-source": "left/right"
+        },
+        "threshold": -24.0,
+        "wet": 0.0
+      }
+    ]
+  }
+}

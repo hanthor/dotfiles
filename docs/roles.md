@@ -8,7 +8,8 @@
 | `packages` | homebrew, flatpak | No |
 | `dotfiles` | shell, pi, git, neovim | No |
 | `secrets` | bitwarden, ssh_keys, github, tailscale, kube | Yes |
-| `desktop` | flatpak, gnome, zen_browser, bluefin_common | No (desktop only) |
+| `desktop` | flatpak, gnome, zen_browser, bluefin_common, easyeffects | No (desktop only) |
+| `audio` | easyeffects | No (desktop only) |
 | `services` | syncthing, systemd, proxy, homepage, monitoring, cockpit, lima | No |
 
 ---
@@ -88,6 +89,14 @@ Loads custom keyboard shortcuts via `dconf`. Also sets the Ptyxis terminal defau
 
 ### `zen_browser` *(desktop only)*
 Deploys browser policies and extension config for Zen Browser (Firefox-based).
+
+### `easyeffects` *(desktop only)*
+Installs and configures Easy Effects (PipeWire audio processor) via Flatpak:
+- **Input preset** (`input-mic-noise-reduction`) — RNNoise noise suppression + downward compressor for clean mic audio
+- **Output preset** (`output-speaker-improvement`) — 15-band equalizer (loudness contour for small speakers), crystalizer for clarity, and bass enhancer
+- **Systemd user service** (`easyeffects.service`) — autostarts Easy Effects on login, keeping audio processing always active
+
+Presets are deployed to `~/.var/app/com.github.wwmm.easyeffects/config/easyeffects/` and pre-selected as defaults via GSettings.
 
 ### `syncthing`
 Deploys a systemd user service for Syncthing file sync.

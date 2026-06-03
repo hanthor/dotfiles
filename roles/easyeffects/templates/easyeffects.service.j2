@@ -1,0 +1,12 @@
+[Unit]
+Description=Easy Effects Audio Processor
+After=pipewire.service pipewire-pulse.service
+Wants=pipewire.service pipewire-pulse.service
+
+[Service]
+ExecStart=flatpak run com.github.wwmm.easyeffects --gapplication-service
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

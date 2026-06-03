@@ -1,0 +1,84 @@
+{
+  "spectrum": {
+    "show": false,
+    "n-points": 100,
+    "height": 100,
+    "use-cubic": true,
+    "fill": true,
+    "show-bar-border": false,
+    "sampling-freq": 10,
+    "line-width": 2,
+    "type": "Bars",
+    "color": [1.0, 0.5, 0.0, 1.0],
+    "color-axis-labels": [1.0, 1.0, 1.0, 0.5]
+  },
+  "output": {
+    "blocklist": [],
+    "plugins": [
+      {
+        "name": "equalizer",
+        "state": true,
+        "balance": 0.0,
+        "input-gain": 0.0,
+        "output-gain": 0.0,
+        "mode": "IIR",
+        "num-bands": 15,
+        "split-channels": false,
+        "left": {
+          "band0": { "type": "Bell", "frequency": 32.0, "gain": 6.0, "quality": 0.7 },
+          "band1": { "type": "Bell", "frequency": 64.0, "gain": 5.0, "quality": 0.7 },
+          "band2": { "type": "Bell", "frequency": 125.0, "gain": 3.0, "quality": 1.0 },
+          "band3": { "type": "Bell", "frequency": 250.0, "gain": 1.0, "quality": 1.0 },
+          "band4": { "type": "Bell", "frequency": 500.0, "gain": -2.0, "quality": 1.4 },
+          "band5": { "type": "Bell", "frequency": 750.0, "gain": -2.5, "quality": 1.4 },
+          "band6": { "type": "Bell", "frequency": 1000.0, "gain": -2.0, "quality": 1.4 },
+          "band7": { "type": "Bell", "frequency": 1500.0, "gain": 0.0, "quality": 1.4 },
+          "band8": { "type": "Bell", "frequency": 2000.0, "gain": 2.0, "quality": 1.4 },
+          "band9": { "type": "Bell", "frequency": 3000.0, "gain": 3.0, "quality": 1.4 },
+          "band10": { "type": "Bell", "frequency": 4000.0, "gain": 3.0, "quality": 1.4 },
+          "band11": { "type": "Bell", "frequency": 6000.0, "gain": 4.0, "quality": 1.4 },
+          "band12": { "type": "Bell", "frequency": 8000.0, "gain": 5.0, "quality": 1.4 },
+          "band13": { "type": "Bell", "frequency": 12000.0, "gain": 4.0, "quality": 1.4 },
+          "band14": { "type": "Bell", "frequency": 16000.0, "gain": 3.0, "quality": 1.4 }
+        },
+        "right": {
+          "band0": { "type": "Bell", "frequency": 32.0, "gain": 6.0, "quality": 0.7 },
+          "band1": { "type": "Bell", "frequency": 64.0, "gain": 5.0, "quality": 0.7 },
+          "band2": { "type": "Bell", "frequency": 125.0, "gain": 3.0, "quality": 1.0 },
+          "band3": { "type": "Bell", "frequency": 250.0, "gain": 1.0, "quality": 1.0 },
+          "band4": { "type": "Bell", "frequency": 500.0, "gain": -2.0, "quality": 1.4 },
+          "band5": { "type": "Bell", "frequency": 750.0, "gain": -2.5, "quality": 1.4 },
+          "band6": { "type": "Bell", "frequency": 1000.0, "gain": -2.0, "quality": 1.4 },
+          "band7": { "type": "Bell", "frequency": 1500.0, "gain": 0.0, "quality": 1.4 },
+          "band8": { "type": "Bell", "frequency": 2000.0, "gain": 2.0, "quality": 1.4 },
+          "band9": { "type": "Bell", "frequency": 3000.0, "gain": 3.0, "quality": 1.4 },
+          "band10": { "type": "Bell", "frequency": 4000.0, "gain": 3.0, "quality": 1.4 },
+          "band11": { "type": "Bell", "frequency": 6000.0, "gain": 4.0, "quality": 1.4 },
+          "band12": { "type": "Bell", "frequency": 8000.0, "gain": 5.0, "quality": 1.4 },
+          "band13": { "type": "Bell", "frequency": 12000.0, "gain": 4.0, "quality": 1.4 },
+          "band14": { "type": "Bell", "frequency": 16000.0, "gain": 3.0, "quality": 1.4 }
+        }
+      },
+      {
+        "name": "crystalizer",
+        "state": true,
+        "aggressive": false,
+        "input-gain": 0.0,
+        "output-gain": 0.0
+      },
+      {
+        "name": "bass_enhancer",
+        "state": true,
+        "amount": 3.0,
+        "blend": 0.5,
+        "floor-active": false,
+        "floor": 20.0,
+        "harmonics": 4.0,
+        "input-gain": 0.0,
+        "listen": false,
+        "output-gain": 0.0,
+        "scope": 80.0
+      }
+    ]
+  }
+}
