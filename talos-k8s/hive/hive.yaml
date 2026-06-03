@@ -86,7 +86,7 @@ data:
       eval_interval_s: 300
       modes:
         surge:
-          threshold: 20
+          threshold: 50
           scanner: 15m
           ci-maintainer: pause
         busy:

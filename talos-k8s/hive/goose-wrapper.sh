@@ -28,8 +28,7 @@ done
 echo "DeepSeek chat ready ❯"
 echo "Environment loaded"
 
-# Launch goose with TTY (script provides pseudo-TTY for telemetry prompt)
-# Answer "y" to telemetry on first run, then goose stays interactive.
-exec script -q -c "/usr/local/bin/goose-real session --max-turns 100" /dev/null << 'GOOSE_INPUT'
-y
-GOOSE_INPUT
+# Launch goose with TTY for the telemetry prompt (first-run only).
+# (echo y; cat) answers "y" then keeps stdin open via cat so hive
+# kicks sent via tmux send-keys reach goose.
+exec sh -c '(echo y; exec cat) | exec script -q -c "/usr/local/bin/goose-real session --max-turns 100" /dev/null'
