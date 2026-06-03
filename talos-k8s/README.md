@@ -1,6 +1,6 @@
 # Talos Linux 2-Node Kubernetes Cluster with AMD GPU Acceleration
 
-This directory contains the complete infrastructure-as-code configurations, manifests, and documentation for a highly custom, high-performance 2-node Kubernetes cluster utilizing **Talos Linux (v1.13.2)**, designed specifically for running hardware-accelerated LLM workloads (via **vLLM**) and virtualized infrastructure (via **KubeVirt**).
+This directory contains the complete infrastructure-as-code configurations, manifests, and documentation for a highly custom, high-performance 2-node Kubernetes cluster utilizing **Talos Linux (v1.13.2)**, designed specifically for running hardware-accelerated LLM workloads (via **Lemonade**) and virtualized infrastructure (via **KubeVirt**).
 
 ---
 
@@ -116,12 +116,12 @@ Once forwarded, open your browser and navigate to:
 
 ---
 
-## 6. Hardware-Accelerated vLLM (Strix Halo APU)
+## 6. Hardware-Accelerated AI with Lemonade (Strix Halo APU)
 
-The worker node `Karnataka` houses the AMD Strix Halo APU with high-bandwidth unified VRAM. Because this integrated RDNA 3.5 architecture is non-standard, PyTorch and ROCm require specific environment overrides to bypass driver bugs and compile shaders correctly.
+The worker node `Karnataka` houses the AMD Strix Halo APU with high-bandwidth unified VRAM. We use **[Lemonade](https://lemonade-sdk.github.io/)** — an AMD-optimized, open-source local AI runtime that auto-detects hardware and provides omni-modal endpoints (chat, vision, image gen, speech, transcription) via standard OpenAI-compatible APIs.
 
-### vLLM Deployment Manifest ([vllm-deployment.yaml](vllm-deployment.yaml))
-Key features implemented in the vLLM deployment:
+### Lemonade Deployment Manifest ([lemonade.yaml](lemonade.yaml))
+Key features:
 * **Node Scheduling:** Strict `nodeSelector` targeted at `karnataka` to leverage its APU.
 * **Namespace Security Bypass:** We labeled the `default` namespace as `privileged` so the container can request `hostPath` mounts, shared memory allocations, and `SYS_PTRACE` capabilities.
   ```bash
@@ -131,14 +131,13 @@ Key features implemented in the vLLM deployment:
   * `HSA_OVERRIDE_GFX_VERSION: "11.5.1"` — Forces ROCm to treat the Strix Halo RDNA 3.5 APU (gfx1151) as supported hardware.
   * `PYTORCH_ROCM_ARCH: "gfx1151"` — Compiles/runs PyTorch operators matching the exact GPU architecture.
   * `HSA_XNACK: "1"` & `HSA_FORCE_FINE_GRAIN_PCIE: "1"` — Enables unified memory and fine-grained virtual memory access.
-  * `VLLM_ROCM_USE_AITER: "0"` — Disables Aiter/Triton compilation pathways that cause GPU driver halts on RDNA 3.5.
-* **vLLM Command Arguments:**
-  * `--model Qwen/Qwen2.5-1.5B-Instruct` — Fast downloading, highly capable testing model.
-  * `--enforce-eager` — Bypasses ROCm driver graph capture hangs by forcing PyTorch eager execution.
 * **Resource and Memory Limits:**
   * Requests `amd.com/gpu: "1"` limit to map host render devices.
   * Maps an `emptyDir` memory volume to `/dev/shm` (size `16Gi`) for ROCm inter-process communications.
-  * Maps host cache `/var/tmp/huggingface` to `/root/.cache/huggingface` to persist downloaded LLM models.
+  * Persistent volumes for HuggingFace cache and llama model storage.
+* **Access:**
+  * LAN: `http://192.168.0.6:31305` (NodePort, web UI + API)
+  * Tailscale Ingress: `https://lemonade.manatee-basking.ts.net/v1`
 
 ---
 
@@ -210,6 +209,7 @@ kubectl get pods -n kubevirt
 kubectl get pods -n kubevirt-manager
 kubectl get pods -w
 
-# Check vLLM server API status
-kubectl logs -f deployment/vllm-openai
+# Check Lemonade server status & API
+kubectl logs -f deployment/lemonade
+curl http://192.168.0.6:31305/api/v1/models
 ```

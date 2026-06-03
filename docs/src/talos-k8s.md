@@ -21,11 +21,11 @@ Two-node Kubernetes cluster running on Talos Linux, managed from the `talos-k8s/
 
 ## Running Workloads
 
-### qwen3-27b
+### Lemonade
 
-[vLLM](https://docs.vllm.ai/) serving [Qwen3-27B](https://huggingface.co/Qwen/Qwen3-27B) on karnataka's integrated AMD GPU (`amdgpu` driver baked into the Talos image via [Image Factory](https://www.talos.dev/latest/talos-guides/install/boot-assets/)).
+[Lemonade](https://lemonade-sdk.github.io/) — AMD-optimized local AI runtime providing omni-modal endpoints (chat, vision, image gen, speech, transcription) on karnataka's integrated AMD GPU (`amdgpu` driver baked into the Talos image via [Image Factory](https://www.talos.dev/latest/talos-guides/install/boot-assets/)).
 
-Manifest: `talos-k8s/qwen3-27b.yaml`
+Manifest: `talos-k8s/lemonade.yaml`
 
 ### KubeVirt
 

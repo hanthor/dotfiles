@@ -61,7 +61,7 @@ llm:     karnataka                                                       # GPU h
 Two nodes: **bihar** (control plane, Intel) and **karnataka** (worker, AMD Strix Halo APU). Talos `v1.13.2`, K8s `v1.36.1`, flannel CNI. AMD GPU is exposed to Kubernetes via the Image Factory schematic that bakes `siderolabs/amdgpu` into the boot image.
 
 Production workloads (currently deployed — confirmed via `kubectl get pods -A`):
-- **`qwen3-27b`** — vLLM serving Qwen3-27B on the iGPU, manifest at [`talos-k8s/qwen3-27b.yaml`](talos-k8s/qwen3-27b.yaml)
+- **Lemonade** — AMD-optimized local AI runtime serving omni-modal models (chat, vision, image gen, speech, transcription) on the iGPU, manifest at [`talos-k8s/lemonade.yaml`](talos-k8s/lemonade.yaml)
 - **KubeVirt v1.8.2** + **KubeVirt Manager** (web UI) — VM workloads
 - **Tailscale Operator** — provides Ingress to `*.manatee-basking.ts.net` for cluster services
 

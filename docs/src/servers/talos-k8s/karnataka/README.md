@@ -25,7 +25,7 @@ Kubernetes worker node with AMD GPU. [Talos Linux](https://www.talos.dev/) node.
 
 ## K8s Workloads
 
-- **[Qwen3-27B](https://huggingface.co/Qwen/Qwen3-27B)** — [vLLM](https://docs.vllm.ai/) serving on iGPU
+- **[Lemonade](https://lemonade-sdk.github.io/)** — AMD-optimized local AI runtime ([omni-modal](https://lemonade-sdk.github.io/docs/category/endpoints): chat, vision, image gen, speech, transcription) on iGPU
 - **[KubeVirt](https://kubevirt.io/) v1.8.2** — VM workloads
 - **[Tailscale Operator](https://tailscale.com/kb/1236/kubernetes-operator)** — Ingress to `*.manatee-basking.ts.net`
 

@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: qwen3-27b-pv
+  name: lemonade-cache-pv
 spec:
   capacity:
     storage: 100Gi
@@ -11,7 +11,31 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: local-storage
   hostPath:
-    path: /var/tmp/qwen3-27b
+    path: /var/tmp/lemonade-cache
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - karnataka
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: lemonade-models-pv
+spec:
+  capacity:
+    storage: 100Gi
+  volumeMode: Filesystem
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  hostPath:
+    path: /var/tmp/lemonade-models
     type: DirectoryOrCreate
   nodeAffinity:
     required:
@@ -25,7 +49,21 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: qwen3-27b
+  name: lemonade-cache
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: local-storage
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lemonade-models
   namespace: default
 spec:
   accessModes:
@@ -39,27 +77,27 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: qwen3-27b
+  name: lemonade
   namespace: default
   labels:
-    app: qwen3-27b
+    app: lemonade
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: qwen3-27b
+      app: lemonade
   template:
     metadata:
       labels:
-        app: qwen3-27b
+        app: lemonade
     spec:
       nodeSelector:
         kubernetes.io/hostname: karnataka
       hostNetwork: true
       hostIPC: true
       containers:
-      - name: qwen3-27b
-        image: vllm/vllm-openai-rocm:latest
+      - name: lemonade
+        image: ghcr.io/lemonade-sdk/lemonade-server:latest
         securityContext:
           seccompProfile:
             type: Unconfined
@@ -67,18 +105,6 @@ spec:
           capabilities:
             add:
             - SYS_PTRACE
-        args:
-        - --model
-        - Qwen/Qwen3-27B
-        - --port
-        - "8000"
-        - --host
-        - 0.0.0.0
-        - --trust-remote-code
-        - --enforce-eager
-        - --enable-chunked-prefill
-        - --max-model-len
-        - "16384"
         env:
         - name: HSA_OVERRIDE_GFX_VERSION
           value: "11.5.1"
@@ -88,8 +114,6 @@ spec:
           value: "1"
         - name: HSA_FORCE_FINE_GRAIN_PCIE
           value: "1"
-        - name: VLLM_ROCM_USE_AITER
-          value: "0"
         - name: HF_HOME
           value: /root/.cache/huggingface
         - name: HF_TOKEN
@@ -97,10 +121,8 @@ spec:
             secretKeyRef:
               name: hf-token
               key: token
-        - name: HF_HUB_OFFLINE
-          value: "0"  # Set to "1" after initial model download for resilience
         ports:
-        - containerPort: 8000
+        - containerPort: 13305
           name: http
         resources:
           limits:
@@ -114,31 +136,36 @@ spec:
         volumeMounts:
         - name: cache-volume
           mountPath: /root/.cache/huggingface
+        - name: models-volume
+          mountPath: /opt/lemonade/llama
         - name: shm
           mountPath: /dev/shm
       volumes:
       - name: cache-volume
         persistentVolumeClaim:
-          claimName: qwen3-27b
+          claimName: lemonade-cache
+      - name: models-volume
+        persistentVolumeClaim:
+          claimName: lemonade-models
       - name: shm
         emptyDir:
           medium: Memory
           sizeLimit: "16Gi"
 ---
-# NodePort exposes vLLM OpenAI API on 192.168.0.6:30800
+# NodePort exposes Lemonade OpenAI-compatible API on 192.168.0.6:313305
 apiVersion: v1
 kind: Service
 metadata:
-  name: qwen3-27b
+  name: lemonade
   namespace: default
   labels:
-    app: qwen3-27b
+    app: lemonade
 spec:
   type: NodePort
   selector:
-    app: qwen3-27b
+    app: lemonade
   ports:
   - name: http
-    port: 8000
-    targetPort: 8000
-    nodePort: 30800
+    port: 13305
+    targetPort: 13305
+    nodePort: 31305

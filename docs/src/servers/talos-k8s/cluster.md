@@ -1,7 +1,7 @@
 # Cluster Handbook — Talos Linux on Bihar + Karnataka
 
 > **Two-node [Talos Linux](https://www.talos.dev/) [Kubernetes](https://kubernetes.io/) cluster.**
-> AMD Strix Halo GPU acceleration · [vLLM](https://docs.vllm.ai/) · [KubeVirt](https://kubevirt.io/) · [Tailscale](https://tailscale.com/) ingress.
+> AMD Strix Halo GPU acceleration · [Lemonade](https://lemonade-sdk.github.io/) · [KubeVirt](https://kubevirt.io/) · [Tailscale](https://tailscale.com/) ingress.
 > Everything you need to bring this cluster back from zero.
 
 ## Table of contents
@@ -36,7 +36,7 @@
 │   │  kube-apiserver        │   │ amdgpu-device-plugin   │    │
 │   │  etcd / scheduler /    │   │ amdgpu-labeller        │    │
 │   │  controller-manager    │   │                        │    │
-│   │  KubeVirt control      │   │ vLLM (qwen3-27b)       │    │
+│   │  KubeVirt control      │   │ Lemonade               │    │
 │   │  KubeVirt Manager      │   │ KubeVirt virt-handler  │    │
 │   └────────────────────────┘   └────────────────────────┘    │
 │                                                               │
@@ -108,7 +108,7 @@ Cluster ingress goes through the [Tailscale Operator](https://tailscale.com/kb/1
 | Service             | URL |
 |---------------------|-----|
 | KubeVirt Manager    | `https://kubevirt-manager.manatee-basking.ts.net` |
-| qwen3-27b (OpenAI)  | `https://qwen3-27b.manatee-basking.ts.net/v1` |
+| Lemonade (OpenAI-compatible) | `https://lemonade.manatee-basking.ts.net/v1` |
 
 ### Kubernetes internal
 
@@ -234,9 +234,11 @@ resources:
 
 ## 7. Production workloads
 
-### vLLM — `qwen3-27b`
+### Lemonade — AMD-optimized local AI runtime
 
-Single-replica vLLM serving **Qwen/Qwen3-27B** on the Strix Halo APU. Manifest: [`talos-k8s/qwen3-27b.yaml`](../talos-k8s/qwen3-27b.yaml).
+Single-replica [Lemonade](https://lemonade-sdk.github.io/) omni-modal server on the Strix Halo APU. Manifest: [`talos-k8s/lemonade.yaml`](../talos-k8s/lemonade.yaml).
+
+Lemonade is an AMD-optimized, open-source local AI runtime that auto-detects hardware and provides standard OpenAI-compatible endpoints for chat, vision, image generation, image editing, speech generation, and transcription. Built on llama.cpp, ONNX Runtime, whisper.cpp, and stable-diffusion.cpp.
 
 Key env overrides (RDNA 3.5 needs special handling):
 
@@ -246,14 +248,14 @@ Key env overrides (RDNA 3.5 needs special handling):
 | `PYTORCH_ROCM_ARCH` | `gfx1151` | Compile shaders for exact arch |
 | `HSA_XNACK` | `1` | Enables unified memory |
 | `HSA_FORCE_FINE_GRAIN_PCIE` | `1` | Fine-grained VM access |
-| `VLLM_ROCM_USE_AITER` | `0` | Aiter/Triton path hangs the RDNA 3.5 driver |
-| vLLM `--enforce-eager` | — | Bypasses ROCm graph-capture hangs |
 
 **Access:**
-- LAN: `http://192.168.0.6:30800/v1` (NodePort)
-- Tailscale: `https://qwen3-27b.manatee-basking.ts.net/v1`
+- LAN: `http://192.168.0.6:31305/v1` (NodePort)
+- Tailscale: `https://lemonade.manatee-basking.ts.net/v1`
 
-Model weights cached on `karnataka:/var/tmp/qwen3-27b` via a local-storage PersistentVolume (so reboots don't re-download 27B params).
+Model weights cached on `karnataka:/var/tmp/lemonade-cache` (HuggingFace) and `/var/tmp/lemonade-models` (llama models) via local-storage PersistentVolumes.
+
+**Web UI:** Point a browser at `http://192.168.0.6:31305` for the built-in control panel to download models, configure endpoints, and test chat/vision/image generation.
 
 ### KubeVirt v1.8.2
 
@@ -293,17 +295,17 @@ Example:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: qwen3-27b
+  name: lemonade
 spec:
   ingressClassName: tailscale
   defaultBackend:
     service:
-      name: qwen3-27b
+      name: lemonade
       port:
-        number: 8000
+        number: 13305
   tls:
     - hosts:
-        - qwen3-27b
+        - lemonade
 ```
 
 The operator namespace is `tailscale`. Auth keys are configured during operator install — see Tailscale docs for renewal.
@@ -327,8 +329,8 @@ talosctl -n 192.168.0.6 dmesg | grep -i amdgpu
 ```bash
 kubectl get nodes -o wide
 kubectl top nodes                        # requires metrics-server (not currently installed)
-kubectl logs -f deployment/qwen3-27b
-kubectl describe pod -l app=qwen3-27b    # check GPU scheduling / events
+kubectl logs -f deployment/lemonade
+kubectl describe pod -l app=lemonade    # check GPU scheduling / events
 ```
 
 ### Common talosctl
@@ -368,7 +370,8 @@ If a node is wiped or replaced:
 6. **Create host directories** for local PVs (if re-creating from scratch):
    ```bash
    kubectl exec -n kube-system $(kubectl get pods -n kube-system --field-selector spec.nodeName=karnataka -l app=kube-flannel -o name) -- \
-     mkdir -p /proc/1/root/var/tmp/qwen3-27b
+     mkdir -p /proc/1/root/var/tmp/lemonade-cache
+     mkdir -p /proc/1/root/var/tmp/lemonade-models
    ```
 7. **Re-apply workloads** (idempotent):
    ```bash
@@ -377,7 +380,7 @@ If a node is wiped or replaced:
    kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
    kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-cr.yaml
    kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
-   kubectl apply -f talos-k8s/qwen3-27b.yaml
+   kubectl apply -f talos-k8s/lemonade.yaml
    ```
 
 If only the worker was reset, the existing kubeconfig still works — only steps 1, 2, 5, and 6 are needed for that node, plus re-applying any DaemonSet pods.
@@ -401,13 +404,13 @@ talosctl -n 192.168.0.6 dmesg | grep -i amdgpu   # confirm driver loaded
 talosctl -n 192.168.0.6 list /dev/dri/           # confirm devices exist
 ```
 
-### vLLM pod stuck in `ContainerCreating`
+### Lemonade pod stuck in `ContainerCreating`
 
-Most often: pulling the 27B weights (~50 GB from HuggingFace). Check:
+Most often: pulling models from HuggingFace. Check:
 
 ```bash
-kubectl describe pod -l app=qwen3-27b
-kubectl get pv,pvc                       # confirm PVC bound
+kubectl describe pod -l app=lemonade
+kubectl get pv,pvc                       # confirm PVCs bound
 ```
 
 ### Tailscale Ingress not reachable
@@ -435,7 +438,7 @@ talosctl -n <ip> reset                   # nuclear: wipes node, requires re-appl
 - Ping to `192.168.0.6` still works (node is up, just CRI is dead)
 
 **Root cause:** Memory pressure from simultaneous large container builds exhausts
-karnataka's 62GB unified memory. The node runs vLLM (48Gi), Argo Workflow image
+karnataka's 62GB unified memory. The node runs Lemonade (48-56Gi), Argo Workflow image
 builds, Forgejo Actions (podman-in-Docker), KubeVirt, and monitoring — when
 multiple 4GB image builds run concurrently, containerd OOMs and crashes.
 
