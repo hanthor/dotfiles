@@ -27,4 +27,4 @@ echo "Environment loaded"
 
 # script provides TTY. printf answers telemetry prompt.
 # After printf, stdin is closed but goose stays alive via script's TTY.
-exec printf 'y\n' | exec script -q -c "/usr/local/bin/goose-real session --max-turns 100" /dev/null
+printf 'y\n' | script -q -c "/usr/local/bin/goose-real session --max-turns 100" /dev/null
