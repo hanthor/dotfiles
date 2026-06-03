@@ -212,7 +212,6 @@ data:
       name: "TunaOS"
       repos:
         - tuna-os/tunaos
-        - tuna-os/tacklebox
       ai_author: hanthor
       primary_repo: tuna-os/tunaos
 
