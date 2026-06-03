@@ -10,6 +10,8 @@ FROM node:24-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash curl git gosu iptables inotify-tools jq \
     procps python3 sudo tmux util-linux \
+    fd-find ripgrep \
+ && ln -s /usr/bin/fdfind /usr/local/bin/fd \
  && rm -rf /var/lib/apt/lists/*
 
 # ── su-exec for UID switching ─────────────────────────────────────────
