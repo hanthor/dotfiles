@@ -34,22 +34,22 @@
     - option: use-default-output
       value: "'output-speaker-improvement'"
 
-- name: Ensure systemd user directory exists
+- name: Ensure autostart directory exists
   ansible.builtin.file:
-    path: ~/.config/systemd/user
+    path: ~/.config/autostart
     state: directory
     mode: "0755"
 
-- name: Deploy Easy Effects systemd user service
-  ansible.builtin.template:
-    src: easyeffects.service.j2
-    dest: ~/.config/systemd/user/easyeffects.service
+- name: Deploy Easy Effects autostart desktop entry
+  ansible.builtin.copy:
+    content: |
+      [Desktop Entry]
+      Type=Application
+      Name=Easy Effects
+      Comment=Audio effects for PipeWire
+      Exec=flatpak run com.github.wwmm.easyeffects
+      Icon=com.github.wwmm.easyeffects
+      X-GNOME-Autostart-enabled=true
+      NoDisplay=true
+    dest: ~/.config/autostart/com.github.wwmm.easyeffects.desktop
     mode: "0644"
-
-- name: Enable and start Easy Effects service
-  ansible.builtin.systemd:
-    name: easyeffects.service
-    scope: user
-    enabled: true
-    state: started
-    daemon_reload: true

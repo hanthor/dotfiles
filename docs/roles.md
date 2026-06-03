@@ -94,7 +94,7 @@ Deploys browser policies and extension config for Zen Browser (Firefox-based).
 Installs and configures Easy Effects (PipeWire audio processor) via Flatpak:
 - **Input preset** (`input-mic-noise-reduction`) — RNNoise noise suppression + downward compressor for clean mic audio
 - **Output preset** (`output-speaker-improvement`) — 15-band equalizer (loudness contour for small speakers), crystalizer for clarity, and bass enhancer
-- **Systemd user service** (`easyeffects.service`) — autostarts Easy Effects on login, keeping audio processing always active
+- **GNOME autostart** — `.desktop` entry in `~/.config/autostart/` launches Easy Effects on login, keeping audio processing always active
 
 Presets are deployed to `~/.var/app/com.github.wwmm.easyeffects/config/easyeffects/` and pre-selected as defaults via GSettings.
 
