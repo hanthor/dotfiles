@@ -51,13 +51,12 @@ data:
   hive.yaml: |
     project:
       org: hanthor
-      name: "Dotfiles + TunaOS"
+      name: "TunaOS"
       repos:
-        - dotfiles
         - tuna-os/tunaos
         - tuna-os/tacklebox
       ai_author: hanthor
-      primary_repo: dotfiles
+      primary_repo: tuna-os/tunaos
       acmm_level: 3
 
     agents:
