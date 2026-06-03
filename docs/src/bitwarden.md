@@ -1,6 +1,6 @@
 # Secrets with Bitwarden
 
-The dotfiles repo is **fully public** — all secrets live in Bitwarden and are resolved at runtime.
+All secrets live in [Bitwarden](https://bitwarden.com/) and are resolved at runtime.
 
 ## How It Works
 
@@ -27,7 +27,7 @@ just apply-remote himachal
 | Bitwarden Item | Type | Used By |
 |---------------|------|---------|
 | `james@<machine>` | SSH Key | `ssh_keys` role — per-machine ed25519 keys |
-| `tailscale-authkey` | Secure Note | `tailscale` role — reusable auth key |
+| `tailscale-authkey` | Secure Note | `tailscale` role — reusable [Tailscale](https://tailscale.com/) auth key |
 | `kubeconfig` | Secure Note | `kube` role — cluster kubeconfig |
 | `talosconfig` | Secure Note | `kube` role — Talos cluster config |
 | `accounts.firefox.com` | Login | `browser_fxa` role — Firefox Account credentials + TOTP |

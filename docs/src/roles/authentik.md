@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** bihar only
 
-Deploys Authentik SSO (single sign-on) identity provider using Podman Quadlets.
+Deploys [Authentik](https://goauthentik.io/) SSO (single sign-on) identity provider using Podman Quadlets.
 
 ## What It Does
 

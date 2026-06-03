@@ -4,7 +4,7 @@
 **Secrets needed:** No (API keys deployed from Bitwarden by shell role)  
 **Runs on:** All machines
 
-Deploys the PI Coding Agent configuration and extensions.
+Deploys the [PI Coding Agent](https://github.com/earendil-works/pi-coding-agent) configuration and extensions.
 
 ## What It Does
 

@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** Desktop group only
 
-Configures GNOME desktop environment: keybindings, terminal, avatar, extensions, and remote desktop.
+Configures [GNOME](https://www.gnome.org/) desktop environment: keybindings, terminal, avatar, extensions, and remote desktop.
 
 ## What It Does
 
@@ -34,7 +34,7 @@ Deploys and enables extensions from `group_vars/all.yml`:
 | AppIndicator | System tray icons |
 | Blur My Shell | Blur effects |
 | Dash to Dock | macOS-style dock |
-| GSConnect | Phone integration |
+| [GSConnect](https://github.com/GSConnect/gnome-shell-extension-gsconnect) | Phone integration |
 | PaperWM | Tiling window manager |
 | PaperShell | PaperWM companion |
 | Search Light | Spotlight-style search |

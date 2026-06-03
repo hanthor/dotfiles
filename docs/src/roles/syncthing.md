@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** All except VPS
 
-Deploys Syncthing as a systemd user service for continuous file synchronization.
+Deploys [Syncthing](https://syncthing.net/) as a systemd user service for continuous file synchronization.
 
 ## What It Does
 

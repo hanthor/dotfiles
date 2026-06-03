@@ -31,8 +31,8 @@ curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.s
 ```
 
 The bootstrap script:
-1. Installs git and clones the dotfiles repo
-2. Installs Homebrew (Linux) and core packages
+1. Installs git and clones the dotfiles repo from [GitHub](https://github.com/hanthor/dotfiles)
+2. Installs [Homebrew](https://brew.sh/) (Linux) and core packages
 3. Writes `/etc/dotfiles-machine` so the playbook can self-identify
 4. Runs `just apply` for the first time
 
@@ -49,7 +49,7 @@ The bootstrap script:
 
 1. The `ssh_keys` role generates/registers ed25519 keys
 2. The `github` role registers the SSH key with GitHub
-3. The `tailscale` role joins the machine to the Tailscale network
+3. The `tailscale` role joins the machine to the [Tailscale](https://tailscale.com/) network
 4. Daily updates run via `dotfiles-update.timer` (desktops) or on-login (laptops)
 
 See [Architecture](architecture.md) for how the playbook runs on each machine.

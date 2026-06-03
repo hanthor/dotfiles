@@ -10,11 +10,11 @@ Laptop workstation in the hanthor fleet.
 
 ## OS
 
-Bluefin (Fedora Atomic)
+[Bluefin](https://projectbluefin.io/) (Fedora Atomic)
 
 ## Services
 
-- Cockpit — system management
+- [Cockpit](https://cockpit-project.org/) — system management
 - Homepage dashboard
 
 ## Notes

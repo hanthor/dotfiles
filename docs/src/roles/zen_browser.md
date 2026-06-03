@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** Desktop group only
 
-Configures Zen Browser (Firefox-based) as the default browser.
+Configures [Zen Browser](https://zen-browser.app/) (Firefox-based) as the default browser.
 
 ## What It Does
 

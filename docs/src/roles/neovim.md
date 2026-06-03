@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** All machines
 
-Deploys Neovim configuration.
+Deploys [Neovim](https://neovim.io/) configuration.
 
 ## What It Does
 
@@ -14,9 +14,9 @@ Deploys Neovim configuration.
 
 ## Key Plugins
 
-- **LSP:** nvim-lspconfig, mason.nvim (language server management)
+- **[LSP](https://microsoft.github.io/language-server-protocol/):** nvim-lspconfig, [mason.nvim](https://github.com/williamboman/mason.nvim) (language server management)
 - **Completion:** nvim-cmp with LuaSnip snippets
 - **UI:** Catppuccin theme, lualine statusline, nvim-tree file explorer
-- **Editing:** treesitter, comment.nvim, autopairs
+- **Editing:** [treesitter](https://tree-sitter.github.io/), comment.nvim, autopairs
 - **Git:** gitsigns (inline git blame/diff)
 - **Navigation:** telescope.nvim (fuzzy finder)

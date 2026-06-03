@@ -8,10 +8,10 @@ Installs and configures Tailscale mesh networking.
 
 ## What It Does
 
-1. Installs Tailscale (if not already present)
+1. Installs [Tailscale](https://tailscale.com/) (if not already present)
 2. Fetches the reusable auth key from Bitwarden (`tailscale-authkey`)
-3. Joins the Tailscale network if not already connected
-4. Configures `systemd-resolved` to work with Tailscale MagicDNS
+3. Joins the [Tailscale](https://tailscale.com/) network if not already connected
+4. Configures [systemd-resolved](https://www.freedesktop.org/software/systemd/man/latest/systemd-resolved.service.html) to work with Tailscale MagicDNS
 
 ## Notes
 

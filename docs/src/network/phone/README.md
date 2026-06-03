@@ -5,13 +5,13 @@ James's personal phone.
 ## Hardware
 
 - MAC: `86:E9:2C:CB:D2:E5`
-- Model: CMF by Nothing Phone 1
+- Model: [CMF by Nothing Phone 1](https://cmf.tech/pages/phone-1)
 
 ## Connectivity
 
 - WiFi: `192.168.0.11`
-- Tailscale: via MagicDNS
-- KDE Connect: paired with dilli via gsconnect
+- [Tailscale](https://tailscale.com/): via MagicDNS
+- [KDE Connect](https://kdeconnect.kde.org/): paired with dilli via [GSConnect](https://github.com/GSConnect/gnome-shell-extension-gsconnect)
 
 ## Notes
 

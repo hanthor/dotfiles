@@ -1,6 +1,6 @@
 # Bihar
 
-Kubernetes control plane + home server. Talos Linux node.
+Kubernetes control plane + home server. [Talos Linux](https://www.talos.dev/) node.
 
 ## Hardware
 
@@ -12,20 +12,20 @@ Kubernetes control plane + home server. Talos Linux node.
 
 ## OS
 
-Talos Linux v1.13.2 (K8s v1.36.1)
+[Talos Linux](https://www.talos.dev/) v1.13.2 ([Kubernetes](https://kubernetes.io/) v1.36.1)
 
 ## Services
 
 | Service | URL |
 |---------|-----|
-| Cockpit | `bihar.manatee-basking.ts.net/cockpit` |
-| Grafana | `bihar.manatee-basking.ts.net/grafana` |
-| Prometheus | `bihar.manatee-basking.ts.net:9091` |
+| [Cockpit](https://cockpit-project.org/) | `bihar.manatee-basking.ts.net/cockpit` |
+| [Grafana](https://grafana.com/) | `bihar.manatee-basking.ts.net/grafana` |
+| [Prometheus](https://prometheus.io/) | `bihar.manatee-basking.ts.net:9091` |
 | Alertmanager | `bihar.manatee-basking.ts.net:9093` |
-| Authentik SSO | `bihar.manatee-basking.ts.net/auth` |
-| n8n | `bihar.manatee-basking.ts.net/n8n` |
-| AppFlowy | `bihar.manatee-basking.ts.net/appflowy` |
-| Lima VM | `bihar.manatee-basking.ts.net/lima` |
+| [Authentik](https://goauthentik.io/) SSO | `bihar.manatee-basking.ts.net/auth` |
+| [n8n](https://n8n.io/) | `bihar.manatee-basking.ts.net/n8n` |
+| [AppFlowy](https://appflowy.io/) | `bihar.manatee-basking.ts.net/appflowy` |
+| [Lima](https://github.com/lima-vm/lima) VM | `bihar.manatee-basking.ts.net/lima` |
 
 ## Networking
 

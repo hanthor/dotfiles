@@ -10,15 +10,15 @@ Secondary workstation in the hanthor fleet.
 
 ## OS
 
-Bluefin (Fedora Atomic)
+[Bluefin](https://projectbluefin.io/) (Fedora Atomic)
 
 ## Services
 
-- Cockpit — system management
+- [Cockpit](https://cockpit-project.org/) — system management
 - BuildStream Dashboard — build monitor
 - Homepage dashboard
 
 ## Notes
 
-- PaperWM, Papershell, Copyous extensions synced from fleet
+- [PaperWM](https://github.com/paperwm/PaperWM), Papershell, Copyous extensions synced from fleet
 - Brew packages managed via dotfiles playbook

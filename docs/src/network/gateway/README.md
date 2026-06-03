@@ -2,7 +2,7 @@
 
 ## Hardware
 
-- Model: TP-Link Archer AX10 v2.0
+- Model: [TP-Link Archer AX10 v2.0](https://www.tp-link.com/us/home-networking/wifi-router/archer-ax10/)
 - MAC: `7C:F1:7E:A8:FF:74`
 - Type: WiFi 6 router (AX1500)
 
@@ -33,11 +33,11 @@
 
 | Firmware | Status | Notes |
 |----------|--------|-------|
-| **OpenWrt** | ⚠️ Snapshot only | MediaTek MT7981B (Filogic 820) — initial support in mainline, not in stable release yet |
-| **DD-WRT** | ❓ Forum discussion | [DD-WRT forum thread](https://forum.dd-wrt.com/phpBB2/viewtopic.php?t=335982) — community work-in-progress |
+| **[OpenWrt](https://openwrt.org/)** | ⚠️ Snapshot only | [MediaTek MT7981B](https://www.mediatek.com/products/broadband-wifi/mediatek-filogic-820) (Filogic 820) — initial support in mainline, not in stable release yet |
+| **[DD-WRT](https://dd-wrt.com/)** | ❓ Forum discussion | [DD-WRT forum thread](https://forum.dd-wrt.com/phpBB2/viewtopic.php?t=335982) — community work-in-progress |
 | **FreshTomato** | ❌ No | No AX/WiFi 6 support |
 
-Chipset: MediaTek MT7981B (Filogic 820) — dual-core ARM Cortex-A53 @ 1.3GHz. Capable chipset, but AX10 v2 support is still maturing in third-party firmware.
+Chipset: [MediaTek MT7981B](https://www.mediatek.com/products/broadband-wifi/mediatek-filogic-820) (Filogic 820) — dual-core ARM Cortex-A53 @ 1.3GHz. Capable chipset, but AX10 v2 support is still maturing in third-party firmware.
 
 ## IPv6
 

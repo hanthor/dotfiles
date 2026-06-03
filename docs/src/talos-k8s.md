@@ -15,15 +15,15 @@ Two-node Kubernetes cluster running on Talos Linux, managed from the `talos-k8s/
 |-----------|---------|-------|
 | Talos Linux | v1.13.2 | Immutable, API-driven OS |
 | Kubernetes | v1.36.1 | Via Talos |
-| CNI | flannel | Simple overlay network |
+| CNI | [flannel](https://github.com/flannel-io/flannel) | Simple overlay network |
 | Tailscale Operator | — | Ingress via `*.manatee-basking.ts.net` |
-| KubeVirt | v1.8.2 | VM workloads on K8s |
+| [KubeVirt](https://kubevirt.io/) | v1.8.2 | VM workloads on K8s |
 
 ## Running Workloads
 
 ### qwen3-27b
 
-vLLM serving Qwen3-27B on karnataka's integrated AMD GPU (`amdgpu` driver baked into the Talos image via Image Factory).
+[vLLM](https://docs.vllm.ai/) serving [Qwen3-27B](https://huggingface.co/Qwen/Qwen3-27B) on karnataka's integrated AMD GPU (`amdgpu` driver baked into the Talos image via [Image Factory](https://www.talos.dev/latest/talos-guides/install/boot-assets/)).
 
 Manifest: `talos-k8s/qwen3-27b.yaml`
 

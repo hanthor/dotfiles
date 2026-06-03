@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** bihar only
 
-Deploys n8n workflow automation platform using Podman Quadlets.
+Deploys [n8n](https://n8n.io/) workflow automation platform using Podman Quadlets.
 
 ## What It Does
 

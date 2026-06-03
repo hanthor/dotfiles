@@ -10,7 +10,7 @@ Laptop workstation in the hanthor fleet.
 
 ## OS
 
-Bluefin (Fedora Atomic)
+[Bluefin](https://projectbluefin.io/) (Fedora Atomic)
 
 ## Services
 
@@ -19,4 +19,4 @@ Bluefin (Fedora Atomic)
 ## Notes
 
 - `dotfiles_update_delay_seconds: 90` — applies dotfiles 90s after login
-- PaperWM tiling, Papershell blur, Copyous clipboard — synced from fleet
+- [PaperWM](https://github.com/paperwm/PaperWM) tiling, Papershell blur, Copyous clipboard — synced from fleet

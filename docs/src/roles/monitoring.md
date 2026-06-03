@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** bihar (monitoring hub), other hosts push metrics to bihar
 
-Deploys the Grafana + Prometheus monitoring stack on bihar, and metric exporters on other machines.
+Deploys the [Grafana](https://grafana.com/) + [Prometheus](https://prometheus.io/) monitoring stack on bihar, and metric exporters on other machines.
 
 ## What It Does
 

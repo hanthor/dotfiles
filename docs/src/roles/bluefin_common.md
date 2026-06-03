@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** Desktop group only (skipped on Bluefin hosts unless `force_bluefin: true`)
 
-Syncs Bluefin branding, fonts, wallpapers, and GNOME extensions from the Project Bluefin OCI image.
+Syncs [Bluefin](https://projectbluefin.io/) branding, fonts, wallpapers, and GNOME extensions from the Project Bluefin OCI image.
 
 ## What It Does
 
@@ -20,8 +20,8 @@ Syncs Bluefin branding, fonts, wallpapers, and GNOME extensions from the Project
 
 ## Fonts
 
-- **Inter** — UI font (from GitHub releases)
-- **JetBrains Mono** — monospace font for terminals and editors
+- **[Inter](https://rsms.me/inter/)** — UI font (from [GitHub releases](https://github.com/rsms/inter))
+- **[JetBrains Mono](https://www.jetbrains.com/lp/mono/)** — monospace font for terminals and editors
 
 ## Wallpaper Rotation
 

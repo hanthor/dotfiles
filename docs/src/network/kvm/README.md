@@ -4,9 +4,9 @@ IP KVM for the fleet.
 
 ## Hardware
 
-- Vendor: Shenzhen Sipeed Technology
+- Vendor: [Shenzhen Sipeed Technology](https://wiki.sipeed.com/hardware/en/kvm/NanoKVM/introduction.html)
 - MAC: `48:DA:35:6F:A9:20`
-- OS: OpenWrt 21.02 (Linux 5.4)
+- OS: [OpenWrt](https://openwrt.org/) 21.02 (Linux 5.4)
 
 ## Services
 

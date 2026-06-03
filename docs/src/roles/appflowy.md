@@ -4,15 +4,15 @@
 **Secrets needed:** No  
 **Runs on:** bihar only
 
-Deploys the AppFlowy collaboration platform using Podman Quadlets.
+Deploys the [AppFlowy](https://appflowy.io/) collaboration platform using Podman Quadlets.
 
 ## What It Does
 
 1. Creates Quadlet config directory
 2. Deploys AppFlowy services as Quadlet containers:
-   - **PostgreSQL** — database (`appflowy-db`)
-   - **Redis** — cache and message broker
-   - **MinIO** — S3-compatible object storage
+   - **[PostgreSQL](https://www.postgresql.org/)** — database (`appflowy-db`)
+   - **[Redis](https://redis.io/)** — cache and message broker
+   - **[MinIO](https://min.io/)** — S3-compatible object storage
    - **GoTrue** — authentication service
    - **AppFlowy Cloud** — main application server
 3. Creates a shared network (`appflowy.network`)

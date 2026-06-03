@@ -17,7 +17,7 @@ Keeps the dotfiles repo up to date automatically.
 
 ### atuin-daemon
 
-Keeps Atuin shell history synced in the background.
+Keeps [Atuin](https://atuin.sh/) shell history synced in the background.
 
 ### Podman socket (conditional)
 

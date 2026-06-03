@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** All except VPS
 
-Deploys per-host dashboards using [Homepage](https://gethomepage.dev/) showing service links, fleet status, and monitoring.
+Deploys [Homepage](https://gethomepage.dev/) dashboards showing service links, fleet status, and monitoring.
 
 ## What It Does
 

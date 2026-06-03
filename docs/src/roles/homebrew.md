@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** All glibc machines (skipped on musl/Alpine)
 
-Installs and manages Homebrew packages on Linux.
+Installs and manages [Homebrew](https://brew.sh/) packages on Linux.
 
 ## What It Does
 

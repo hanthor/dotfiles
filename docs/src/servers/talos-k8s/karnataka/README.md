@@ -1,33 +1,33 @@
 # Karnataka
 
-Kubernetes worker node with AMD GPU. Talos Linux node.
+Kubernetes worker node with AMD GPU. [Talos Linux](https://www.talos.dev/) node.
 
 ## Hardware
 
 - Arch: x86_64
-- System: Framework Computer (MAC `9C:BF:0D:00:E5:0F`)
-- CPU: AMD Strix Halo APU
-- GPU: AMD integrated (exposed via KubeVirt Image Factory schematic with `siderolabs/amdgpu`)
+- System: [Framework Computer](https://frame.work/) (MAC `9C:BF:0D:00:E5:0F`)
+- CPU: [AMD Strix Halo APU](https://www.amd.com/en/products/processors/laptop/ryzen-ai-max-plus.html)
+- GPU: AMD integrated (exposed via [KubeVirt Image Factory](https://www.talos.dev/latest/talos-guides/install/boot-assets/) schematic with [`siderolabs/amdgpu`](https://github.com/siderolabs/extensions/tree/main/amdgpu))
 - Role: Worker (Talos K8s)
 - Tailscale IP: via MagicDNS
 
 ## OS
 
-Talos Linux v1.13.2 (K8s v1.36.1)
+[Talos Linux](https://www.talos.dev/) v1.13.2 ([Kubernetes](https://kubernetes.io/) v1.36.1)
 
 ## Services
 
 | Service | URL |
 |---------|-----|
-| Cockpit | `karnataka.manatee-basking.ts.net/cockpit` |
+| [Cockpit](https://cockpit-project.org/) | `karnataka.manatee-basking.ts.net/cockpit` |
 | RamaLama (LLM) | `karnataka.manatee-basking.ts.net:8174` |
 | BuildStream Dashboard | `karnataka.manatee-basking.ts.net/bst/` |
 
 ## K8s Workloads
 
-- **Qwen3-27B** — vLLM serving on iGPU
-- **KubeVirt v1.8.2** — VM workloads
-- **Tailscale Operator** — Ingress to `*.manatee-basking.ts.net`
+- **[Qwen3-27B](https://huggingface.co/Qwen/Qwen3-27B)** — [vLLM](https://docs.vllm.ai/) serving on iGPU
+- **[KubeVirt](https://kubevirt.io/) v1.8.2** — VM workloads
+- **[Tailscale Operator](https://tailscale.com/kb/1236/kubernetes-operator)** — Ingress to `*.manatee-basking.ts.net`
 
 ## Extra Brews
 

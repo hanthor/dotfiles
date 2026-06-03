@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** Desktop group only
 
-Installs and configures Easy Effects (PipeWire audio processor) via Flatpak with noise-reduced mic input and speaker improvement presets.
+Installs and configures [Easy Effects](https://github.com/wwmm/easyeffects) ([PipeWire](https://pipewire.org/) audio processor) via [Flatpak](https://flathub.org/apps/com.github.wwmm.easyeffects) with noise-reduced mic input and speaker improvement presets.
 
 ## What It Does
 
@@ -18,7 +18,7 @@ Installs and configures Easy Effects (PipeWire audio processor) via Flatpak with
 
 | Plugin | Purpose |
 |--------|---------|
-| RNNoise | Real-time neural network noise suppression with voice activity detection |
+| [RNNoise](https://jmvalin.ca/demo/rnnoise/) | Real-time neural network noise suppression with voice activity detection |
 | Compressor | Downward compression, -24dB threshold, 2:1 ratio, 5ms attack |
 
 ## Output Preset: `output-speaker-improvement`

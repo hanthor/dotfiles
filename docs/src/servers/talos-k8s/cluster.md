@@ -1,7 +1,7 @@
 # Cluster Handbook — Talos Linux on Bihar + Karnataka
 
-> **Two-node Talos Linux Kubernetes cluster.**
-> AMD Strix Halo GPU acceleration · vLLM · KubeVirt · Tailscale ingress.
+> **Two-node [Talos Linux](https://www.talos.dev/) [Kubernetes](https://kubernetes.io/) cluster.**
+> AMD Strix Halo GPU acceleration · [vLLM](https://docs.vllm.ai/) · [KubeVirt](https://kubevirt.io/) · [Tailscale](https://tailscale.com/) ingress.
 > Everything you need to bring this cluster back from zero.
 
 ## Table of contents
@@ -62,7 +62,7 @@ The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on
 | RAM             | 62 GB unified memory (CPU + GPU share via UMA) |
 | GPU             | AMD Radeon 8060S — RDNA 3.5 (`gfx1151`), integrated |
 | NIC             | Realtek RTL8126 5GbE (`enp191s0`) — MAC `9C:BF:0D:00:E5:0F` |
-| WiFi            | MediaTek MT7925 Wi-Fi 7 |
+| WiFi            | [MediaTek MT7925](https://www.mediatek.com/products/broadband-wifi/mediatek-filogic-380) Wi-Fi 7 |
 | Boot disk       | Crucial P3 1TB (`/dev/nvme0n1`, serial `24394B495110`) |
 | Secondary       | WD Black SN850X 1TB (`/dev/nvme1n1`, serial `251623804191`) — **FAILING** (I/O errors). Do not use. Replace with new drive. |
 
@@ -73,7 +73,7 @@ The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on
 | CPU             | Intel x86_64 |
 | NIC             | MAC `A8:A1:59:E1:6D:84` |
 | Boot disk       | `/dev/nvme0n1` |
-| Role on LAN     | DHCP, DNS (dnsmasq), home services (Proxmox host, Authentik, AppFlowy, n8n, …) |
+| Role on LAN     | DHCP, DNS (dnsmasq), home services (Proxmox host, [Authentik](https://goauthentik.io/), [AppFlowy](https://appflowy.io/), [n8n](https://n8n.io/), …) |
 
 ---
 

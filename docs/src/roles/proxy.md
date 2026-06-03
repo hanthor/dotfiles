@@ -4,14 +4,14 @@
 **Secrets needed:** Yes (TLS certificates)  
 **Runs on:** All except VPS (`skip_proxy: false`)
 
-Deploys Caddy as a reverse proxy with automatic TLS certificates.
+Deploys [Caddy](https://caddyserver.com/) as a reverse proxy with automatic TLS certificates.
 
 ## What It Does
 
 1. Creates Caddy config directory
 2. Deploys `Caddyfile` from template with per-host service routes
 3. Proxies internal services to `*.manatee-basking.ts.net` subdomains
-4. Uses Tailscale certificates for TLS
+4. Uses [Tailscale](https://tailscale.com/) certificates for TLS
 
 ## Proxied Services
 

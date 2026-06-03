@@ -11,7 +11,7 @@ VPS node in the hanthor fleet.
 
 ## Specs
 
-- OS: Ubuntu 24.04.4 LTS
+- OS: [Ubuntu 24.04.4 LTS](https://releases.ubuntu.com/noble/)
 - RAM: 7.6 GiB
 - Disk: 75 GB (40% used — 29G/75G)
 - Uptime: 16+ weeks (very stable)
@@ -26,10 +26,10 @@ VPS node in the hanthor fleet.
 
 ## Security
 
-- ✅ unattended-upgrades: active
-- ❌ fail2ban: **not installed**
-- ❌ UFW: **inactive** — ports exposed to public internet
-- ❌ Tailscale: **logged out** — SSH and k8s API exposed on public IP
+- ✅ `unattended-upgrades`: active
+- ❌ [fail2ban](https://github.com/fail2ban/fail2ban): **not installed**
+- ❌ [UFW](https://help.ubuntu.com/community/UFW): **inactive** — ports exposed to public internet
+- ❌ [Tailscale](https://tailscale.com/): **logged out** — SSH and k8s API exposed on public IP
 - Fleet keys deployed: bihar, dilli, goa, himachal, kanpur, karnataka, termux, bluefin
 - Cron: daily playbook at 3am (no secrets/homebrew)
 
@@ -38,7 +38,7 @@ VPS node in the hanthor fleet.
 - 🚨 **4.6 GB logs** — set `SystemMaxUse=500M` in `/etc/systemd/journald.conf`
 - 🚨 **Reboot needed** — kernel update pending from unattended-upgrades
 - 🔧 **Enable swap** — 7.6G RAM with no swap is risky for K8s
-- 🔧 **Kernel livepatch** — `sudo pro attach` (Ubuntu Pro, free for personal)
+- 🔧 **Kernel livepatch** — `sudo pro attach` ([Ubuntu Pro](https://ubuntu.com/pro), free for personal)
 - 🔧 **SSH rate limiting** — add `MaxStartups 3:50:10` to sshd_config
 - 🔧 **UFW logging** — enable with `sudo ufw logging on` for audit trail
 

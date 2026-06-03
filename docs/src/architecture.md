@@ -21,7 +21,7 @@ dotfiles/
 
 ## How It Works
 
-Each machine manages **itself** via `ansible-playbook --connection=local`. There's no central control node.
+Each machine manages **itself** via `ansible-playbook --connection=local`. There's no central control node. This is an [Ansible](https://www.ansible.com/) pull model — the playbook lives on every machine and each host applies it locally.
 
 ### Local Apply
 

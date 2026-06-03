@@ -4,7 +4,7 @@
 **Secrets needed:** Yes  
 **Runs on:** Desktop group only (`skip_kube: false`)
 
-Deploys Kubernetes and Talos cluster configuration from Bitwarden.
+Deploys [Kubernetes](https://kubernetes.io/) and [Talos](https://www.talos.dev/) cluster configuration from Bitwarden.
 
 ## What It Does
 

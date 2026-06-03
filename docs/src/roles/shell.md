@@ -29,7 +29,7 @@ Deploys all shell configuration files and terminal setup.
 ### Terminal Setup
 
 - Deploys `~/.tmux.conf` with vi copy mode and clipboard integration
-- Sets zsh (from Homebrew) as the login shell
+- Sets zsh (from [Homebrew](https://brew.sh/)) as the login shell
 - Configures Ptyxis terminal to use `fish` from Homebrew on desktop machines
 - Installs JetBrains Mono Nerd Font
 
@@ -41,7 +41,7 @@ Deploys `~/.ssh/config` with short host aliases for all machines, including `Sen
 
 - `~/.config/shell/` — aliases and shared config
 - `~/.config/fish/` — fish shell config and completions
-- `~/.config/starship.toml` — Starship prompt config
-- `~/.config/atuin/` — Atuin shell history config
+- `~/.config/starship.toml` — [Starship](https://starship.rs/) prompt config
+- `~/.config/atuin/` — [Atuin](https://atuin.sh/) shell history config
 - `~/.ssh/config` — SSH host aliases
 - `~/.tmux.conf` — tmux config

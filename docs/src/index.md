@@ -35,7 +35,7 @@ just lint
 | dilli | desktop | Desktop | Secondary workstation |
 | bihar | server | Server | Home server (Proxmox, K8s control plane) |
 | vm | server | VM | Local dev VM |
-| goa | server | Server | ARM server |
+| goa | server | Server | [Raspberry Pi 5](https://www.raspberrypi.com/products/raspberry-pi-5/) ARM server |
 | matrix | vps | VPS | Public services |
 | lkofoss | vps | VPS | Public services |
 
@@ -49,7 +49,7 @@ The playbook runs in tagged phases:
 | 2 — Packages | `packages` | Homebrew, Flatpak |
 | 3 — Dotfiles | `dotfiles` | Shell, PI, git, neovim |
 | 4 — Secrets | `secrets` | Bitwarden, SSH keys, GitHub, Tailscale, kubeconfig |
-| 5 — Desktop | `desktop` | GNOME, browser, fonts, wallpaper, Easy Effects |
+| 5 — Desktop | `desktop` | GNOME, browser, fonts, wallpaper, [Easy Effects](https://github.com/wwmm/easyeffects) |
 | 6 — Services | `services` | Systemd timers, Caddy proxy, homepage, monitoring |
 
 Phases 4+ require Bitwarden session credentials.

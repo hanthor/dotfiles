@@ -4,7 +4,7 @@
 **Secrets needed:** No  
 **Runs on:** Desktop group only (`skip_flatpak: false`)
 
-Installs and manages Flatpak applications from Flathub.
+Installs and manages [Flatpak](https://flatpak.org/) applications from [Flathub](https://flathub.org/).
 
 ## What It Does
 
