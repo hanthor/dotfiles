@@ -222,20 +222,20 @@ data:
       supervisor:
         enabled: true
         backend: pi
-        model: deepseek-v4-flash
+        model: deepseek-v4-pro
         beads_dir: /data/beads/supervisor
         clear_on_kick: true
       scanner:
         enabled: true
         backend: pi
-        model: deepseek-v4-flash
+        model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
         clear_on_kick: true
       ci-maintainer:
         enabled: true
         backend: pi
-        model: deepseek-v4-flash
+        model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
         clear_on_kick: true
