@@ -1,29 +1,45 @@
-# Bitwarden Vault Setup
+# Secrets with Bitwarden
 
-## Required Items
+The dotfiles repo is **fully public** — all secrets live in Bitwarden and are resolved at runtime.
 
-| Item Name | Type | Contents |
-|-----------|------|----------|
-| `james@<machine>` | SSH Key | Per-machine ed25519 key pair (auto-created if missing) |
-| `atuin.sh` | Login | Atuin sync account + encryption key |
-| `tailscale-authkey` | Login | Reusable Tailscale auth key (password field) |
-| `github-token` | Login | GitHub PAT with `admin:public_key`, `admin:ssh_signing_key` scopes |
+## How It Works
 
-SSH key items are created automatically on first `just apply` — you only need to manually create the rest.
+1. The `bitwarden` role runs first in the secrets phase
+2. It checks for a session token in order: `BW_SESSION` env var → `/tmp/bw_session` → interactive `bw unlock`
+3. The session token is cached to `/tmp/bw_session` for reuse
+4. All `secrets`-tagged roles read from Bitwarden using this token
 
-## Setting up `atuin.sh`
+## Remote Apply
 
-1. Register at <https://app.atuin.sh> and note your username and password.
-2. On your first machine, run `atuin login` interactively — this generates `~/.local/share/atuin/key`.
-3. Get your encryption key mnemonic: `atuin key`
-4. In Bitwarden, create a **Login** item named **`atuin.sh`**:
-   - **Username**: your atuin username
-   - **Password**: your atuin password
-   - **Custom field** (text) named `key`: the mnemonic from `atuin key`
+When running `just apply-remote <host>`:
 
-After that, `just apply` on any machine will fetch these credentials and log in automatically.
-If the item doesn't exist, the playbook skips atuin login with a warning — nothing breaks.
+1. Your local Bitwarden session is forwarded over SSH via `SendEnv BW_SESSION`
+2. The `sshd` role configures SSH to accept this environment variable
+3. The remote machine uses your session without needing its own Bitwarden unlock
 
-## BW_SESSION Forwarding
+```bash
+# The session forwarding is automatic:
+just apply-remote himachal
+```
 
-Unlock BW once on your laptop; the session token forwards automatically to any machine you SSH into via `SendEnv`/`AcceptEnv`. You never need to unlock BW on remote machines interactively.
+## Vault Items
+
+| Bitwarden Item | Type | Used By |
+|---------------|------|---------|
+| `james@<machine>` | SSH Key | `ssh_keys` role — per-machine ed25519 keys |
+| `tailscale-authkey` | Secure Note | `tailscale` role — reusable auth key |
+| `kubeconfig` | Secure Note | `kube` role — cluster kubeconfig |
+| `talosconfig` | Secure Note | `kube` role — Talos cluster config |
+| `accounts.firefox.com` | Login | `browser_fxa` role — Firefox Account credentials + TOTP |
+| `gh_pat`, `pi_api`, etc. | Secure Note | `shell` role — API keys for CLI tools |
+
+## No Session?
+
+If Bitwarden can't unlock (first run, no BW CLI, etc.), secrets tasks are skipped with a warning. Non-secret roles (system, packages, dotfiles, desktop, most services) run normally.
+
+## Seeding New Secrets
+
+```bash
+# Push kubeconfig + talosconfig to Bitwarden from a machine that has them:
+just seed-kube
+```

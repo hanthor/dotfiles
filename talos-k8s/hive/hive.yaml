@@ -215,7 +215,7 @@ data:
       ai_author: hanthor
       primary_repo: tuna-os/tunaos
 
-    acmm_level: 3
+    acmm_level: 4
 
     agents:
       supervisor:
