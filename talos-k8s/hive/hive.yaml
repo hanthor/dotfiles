@@ -245,6 +245,13 @@ data:
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/quality
         clear_on_kick: true
+      sec-check:
+        enabled: true
+        backend: pi
+        model: deepseek-v4-pro
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/sec-check
+        clear_on_kick: true
       guide:
         enabled: true
         backend: pi
