@@ -7,10 +7,8 @@ description = "Ansible-driven dotfiles and infrastructure for a personal fleet o
 [build]
 build-dir = "book"
 
-[output]
-no-section-label = true
-
 [output.html]
+no-section-label = true
 git-repository-url = "https://github.com/hanthor/dotfiles"
 git-repository-icon = "fa-github"
 edit-url-template = "https://github.com/hanthor/dotfiles/edit/master/{path}"
@@ -18,5 +16,3 @@ edit-url-template = "https://github.com/hanthor/dotfiles/edit/master/{path}"
 [output.html.fold]
 enable = true
 level = 1
-
-[preprocessor]
