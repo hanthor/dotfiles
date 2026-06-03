@@ -23,11 +23,7 @@ jobs:
           curl -sSL "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz -C /usr/local/bin
 
       - name: Build book
-        run: |
-          # mdBook expects SUMMARY.md in src/ by default
-          ln -s . docs/src
-          mdbook build docs/
-          rm docs/src
+        run: mdbook build docs/
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
