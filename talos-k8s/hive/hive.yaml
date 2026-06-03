@@ -240,9 +240,18 @@ data:
         beads_dir: /data/beads/ci-maintainer
         clear_on_kick: true
       quality:
-        enabled: false
+        enabled: true
+        backend: pi
+        model: deepseek-v4-pro
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/quality
+        clear_on_kick: true
       guide:
-        enabled: false
+        enabled: true
+        backend: pi
+        model: deepseek-v4-pro
+        beads_dir: /data/beads/guide
+        clear_on_kick: true
       brainstorm:
         enabled: false
 
