@@ -6,7 +6,6 @@ description = "Ansible-driven dotfiles and infrastructure for a personal fleet o
 
 [build]
 build-dir = "book"
-src-dir = "."
 
 [output]
 no-section-label = true
