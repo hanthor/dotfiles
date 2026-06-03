@@ -42,6 +42,8 @@ jobs:
           sed -i '/"Gemini",/a\	"pi",' v2/pkg/agent/manager.go
           # Add pi to allowed backend list in config validation
           sed -i 's/"claude": true, "copilot": true, "gemini": true, "goose": true/"claude": true, "copilot": true, "gemini": true, "goose": true, "pi": true/' v2/pkg/config/config.go
+          # Add pi to backendBinary() lookup map
+          sed -i '/"goose":   "goose",/a\		"pi":      "pi",' v2/pkg/agent/manager.go
 
       - name: Build Go binaries
         working-directory: hive-src
