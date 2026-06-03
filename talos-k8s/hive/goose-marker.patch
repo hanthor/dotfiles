@@ -1,9 +1,6 @@
 --- a/v2/pkg/agent/manager.go
 +++ b/v2/pkg/agent/manager.go
-@@ -275,9 +275,10 @@ var cliPaneMarkers = []string{
- 	"esc cancel",
- 	"/ commands",
- 	"? help",
+@@ -282,6 +282,7 @@ var cliPaneMarkers = []string{
  	"Claude",
  	"Copilot",
  	"Gemini",
