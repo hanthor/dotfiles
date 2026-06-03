@@ -1,5 +1,7 @@
 # Roles Reference
 
+> 📖 **Full documentation:** Browse the mdBook at `docs/` — run `mdbook serve docs/` for a live-reload web view with all 32 roles, fleet reference, and cluster docs.
+
 `site.yml` runs in phases controlled by tags:
 
 | Tag | Roles | Needs BW? |
