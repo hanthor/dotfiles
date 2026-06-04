@@ -87,6 +87,13 @@ data:
     SESSION_DIR="/data/pi-sessions/${HIVE_AGENT:-agent}"
     mkdir -p "$SESSION_DIR"
 
+    # ── TLS: Go tools (gh, git) and curl need the proxy CA cert ─────
+    if [ -f /data/proxy-ca.pem ]; then
+        export SSL_CERT_FILE=/data/proxy-ca.pem
+        export NODE_EXTRA_CA_CERTS=/data/proxy-ca.pem
+        export GIT_SSL_CAINFO=/data/proxy-ca.pem
+    fi
+
     # ── Main loop ────────────────────────────────────────────────────
     while true; do
         echo "DeepSeek chat ready ❯"

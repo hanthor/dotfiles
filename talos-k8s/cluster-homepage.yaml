@@ -15,27 +15,30 @@ data:
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #c9d1d9; min-height: 100vh; }
         .container { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
-        h1 { font-size: 1.5rem; color: #58a6ff; margin-bottom: 0.5rem; }
-        .subtitle { color: #8b949e; margin-bottom: 2rem; font-size: 0.9rem; }
+        h1 { font-size: 1.5rem; color: #58a6ff; margin-bottom: 0.25rem; }
+        .subtitle { color: #8b949e; margin-bottom: 2rem; font-size: 0.85rem; }
         .section { margin-bottom: 2rem; }
-        .section h2 { font-size: 1rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid #21262d; }
+        .section h2 { font-size: 0.95rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid #21262d; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
         .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; text-decoration: none; color: #c9d1d9; transition: border-color 0.15s, background 0.15s; display: flex; align-items: center; gap: 0.75rem; }
         .card:hover { border-color: #58a6ff; background: #1c2129; }
-        .card-icon { font-size: 1.5rem; width: 2rem; text-align: center; flex-shrink: 0; }
+        .card-down { opacity: 0.55; }
+        .card-down:hover { opacity: 0.8; }
+        .card-icon { font-size: 1.4rem; width: 2rem; text-align: center; flex-shrink: 0; }
         .card-text { min-width: 0; }
         .card-title { font-size: 0.95rem; font-weight: 600; color: #e6edf3; }
-        .card-desc { font-size: 0.8rem; color: #8b949e; margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.3rem; }
-        .status-up { background: #3fb950; }
-        .status-local { background: #d29922; }
+        .card-desc { font-size: 0.8rem; color: #8b949e; margin-top: 0.15rem; }
+        .badge { display: inline-block; font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-left: 4px; }
+        .badge-up { background: #1a3a27; color: #3fb950; }
+        .badge-down { background: #3a1a1a; color: #f85149; }
+        .badge-local { background: #3a2e0a; color: #d29922; }
         footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #21262d; color: #484f58; font-size: 0.75rem; }
       </style>
     </head>
     <body>
       <div class="container">
         <h1>&#127968; Cluster Home</h1>
-        <p class="subtitle">hanthor fleet &mdash; talos-k8s &middot; amd strix halo &middot; lemonade ai</p>
+        <p class="subtitle">talos-k8s &middot; amd strix halo &middot; tailnet manatee-basking.ts.net</p>
 
         <div class="section">
           <h2>AI &amp; Compute</h2>
@@ -43,14 +46,14 @@ data:
             <a class="card" href="https://lemonade.manatee-basking.ts.net">
               <span class="card-icon">&#127819;</span>
               <div class="card-text">
-                <div class="card-title">Lemonade</div>
-                <div class="card-desc">Omni-modal AI runtime &middot; AMD Strix Halo</div>
+                <div class="card-title">Lemonade <span class="badge badge-up">up</span></div>
+                <div class="card-desc">Omni-modal AI runtime &middot; chat, vision, image gen, speech</div>
               </div>
             </a>
             <a class="card" href="https://hive.manatee-basking.ts.net">
               <span class="card-icon">&#128013;</span>
               <div class="card-text">
-                <div class="card-title">Hive</div>
+                <div class="card-title">Hive <span class="badge badge-up">up</span></div>
                 <div class="card-desc">AI coding agent swarm</div>
               </div>
             </a>
@@ -60,37 +63,44 @@ data:
         <div class="section">
           <h2>Development</h2>
           <div class="grid">
-            <a class="card" href="https://forgejo.manatee-basking.ts.net">
-              <span class="card-icon">&#128296;</span>
-              <div class="card-text">
-                <div class="card-title">Forgejo</div>
-                <div class="card-desc">Git hosting &amp; CI/CD</div>
-              </div>
-            </a>
             <a class="card" href="https://argocd.manatee-basking.ts.net">
               <span class="card-icon">&#128640;</span>
               <div class="card-text">
-                <div class="card-title">ArgoCD</div>
+                <div class="card-title">ArgoCD <span class="badge badge-up">up</span></div>
                 <div class="card-desc">GitOps deployment</div>
+              </div>
+            </a>
+            <a class="card card-down" href="https://forgejo.manatee-basking.ts.net">
+              <span class="card-icon">&#128296;</span>
+              <div class="card-text">
+                <div class="card-title">Forgejo <span class="badge badge-down">down</span></div>
+                <div class="card-desc">Image pull waiting on slow internet</div>
               </div>
             </a>
           </div>
         </div>
 
         <div class="section">
-          <h2>Virtualization</h2>
+          <h2>Infrastructure</h2>
           <div class="grid">
+            <a class="card" href="https://grafana.manatee-basking.ts.net">
+              <span class="card-icon">&#128200;</span>
+              <div class="card-text">
+                <div class="card-title">Grafana <span class="badge badge-up">up</span></div>
+                <div class="card-desc">Cluster metrics &amp; dashboards</div>
+              </div>
+            </a>
             <a class="card" href="https://kubevirt-manager.manatee-basking.ts.net">
               <span class="card-icon">&#128187;</span>
               <div class="card-text">
-                <div class="card-title">KubeVirt Manager</div>
+                <div class="card-title">KubeVirt Manager <span class="badge badge-up">up</span></div>
                 <div class="card-desc">VM management dashboard</div>
               </div>
             </a>
             <a class="card" href="http://192.168.0.99">
               <span class="card-icon">&#128421;</span>
               <div class="card-text">
-                <div class="card-title"><span class="status status-local"></span>NanoKVM</div>
+                <div class="card-title">NanoKVM <span class="badge badge-local">lan</span></div>
                 <div class="card-desc">IP KVM &middot; karnataka console</div>
               </div>
             </a>
@@ -98,61 +108,34 @@ data:
         </div>
 
         <div class="section">
-          <h2>Platform Services</h2>
+          <h2>Coming Soon</h2>
           <div class="grid">
-            <a class="card" href="https://bihar.manatee-basking.ts.net/auth">
+            <div class="card card-down">
               <span class="card-icon">&#128274;</span>
               <div class="card-text">
-                <div class="card-title">Authentik</div>
-                <div class="card-desc">Single sign-on</div>
+                <div class="card-title">Authentik <span class="badge badge-down">off</span></div>
+                <div class="card-desc">SSO &middot; not yet migrated from Proxmox</div>
               </div>
-            </a>
-            <a class="card" href="https://bihar.manatee-basking.ts.net/n8n">
+            </div>
+            <div class="card card-down">
               <span class="card-icon">&#9889;</span>
               <div class="card-text">
-                <div class="card-title">n8n</div>
-                <div class="card-desc">Workflow automation</div>
+                <div class="card-title">n8n <span class="badge badge-down">off</span></div>
+                <div class="card-desc">Workflow automation &middot; not yet migrated</div>
               </div>
-            </a>
-            <a class="card" href="https://bihar.manatee-basking.ts.net/appflowy">
+            </div>
+            <div class="card card-down">
               <span class="card-icon">&#128221;</span>
               <div class="card-text">
-                <div class="card-title">AppFlowy</div>
-                <div class="card-desc">Collaboration platform</div>
+                <div class="card-title">AppFlowy <span class="badge badge-down">off</span></div>
+                <div class="card-desc">Collaboration &middot; not yet migrated</div>
               </div>
-            </a>
-          </div>
-        </div>
-
-        <div class="section">
-          <h2>Monitoring &amp; Management</h2>
-          <div class="grid">
-            <a class="card" href="https://bihar.manatee-basking.ts.net/grafana">
-              <span class="card-icon">&#128200;</span>
-              <div class="card-text">
-                <div class="card-title">Grafana</div>
-                <div class="card-desc">Metrics &amp; dashboards</div>
-              </div>
-            </a>
-            <a class="card" href="https://bihar.manatee-basking.ts.net/cockpit">
-              <span class="card-icon">&#128295;</span>
-              <div class="card-text">
-                <div class="card-title">Cockpit &mdash; bihar</div>
-                <div class="card-desc">System management</div>
-              </div>
-            </a>
-            <a class="card" href="https://karnataka.manatee-basking.ts.net/cockpit">
-              <span class="card-icon">&#128295;</span>
-              <div class="card-text">
-                <div class="card-title">Cockpit &mdash; karnataka</div>
-                <div class="card-desc">System management</div>
-              </div>
-            </a>
+            </div>
           </div>
         </div>
 
         <footer>
-          talos v1.13.2 &middot; kubernetes v1.36.1 &middot; flannel &middot; tailnet manatee-basking.ts.net
+          talos v1.13.2 &middot; kubernetes v1.36.1 &middot; flannel &middot; bihar + karnataka &middot; last updated 2026-06-04
         </footer>
       </div>
     </body>
