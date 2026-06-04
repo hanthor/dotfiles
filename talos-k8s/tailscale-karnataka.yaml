@@ -4,6 +4,6 @@ apiVersion: v1alpha1
 kind: ExtensionServiceConfig
 name: tailscale
 environment:
-  - TS_AUTHKEY=REPLACE_WITH_AUTH_KEY
+  - TS_AUTHKEY=tskey-client-kbWi3FDmr521CNTRL-sHsvAMfoND67W7vGP184E6h7ByeFgj5z
   - TS_HOSTNAME=karnataka
   - TS_ACCEPT_DNS=true
