@@ -413,7 +413,7 @@ spec:
             httpGet:
               path: /api/health
               port: api
-            initialDelaySeconds: 60
+            initialDelaySeconds: 120
             periodSeconds: 30
             timeoutSeconds: 10
           readinessProbe:
@@ -426,10 +426,10 @@ spec:
           resources:
             requests:
               cpu: 500m
-              memory: 512Mi
+              memory: 1Gi
             limits:
               cpu: "2"
-              memory: 2Gi
+              memory: 4Gi
       volumes:
         - name: config
           configMap:
