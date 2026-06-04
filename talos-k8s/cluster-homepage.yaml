@@ -63,11 +63,11 @@ data:
         <div class="section">
           <h2>Development</h2>
           <div class="grid">
-            <a class="card" href="https://argocd.manatee-basking.ts.net">
+            <a class="card card-down" href="https://argocd.manatee-basking.ts.net">
               <span class="card-icon">&#128640;</span>
               <div class="card-text">
-                <div class="card-title">ArgoCD <span class="badge badge-up">up</span></div>
-                <div class="card-desc">GitOps deployment</div>
+                <div class="card-title">ArgoCD <span class="badge badge-down">wip</span></div>
+                <div class="card-desc">GitOps deployment &middot; TLS routing issue</div>
               </div>
             </a>
             <a class="card card-down" href="https://forgejo.manatee-basking.ts.net">
@@ -83,11 +83,11 @@ data:
         <div class="section">
           <h2>Infrastructure</h2>
           <div class="grid">
-            <a class="card" href="https://grafana.manatee-basking.ts.net">
+            <a class="card card-down" href="https://grafana.manatee-basking.ts.net">
               <span class="card-icon">&#128200;</span>
               <div class="card-text">
-                <div class="card-title">Grafana <span class="badge badge-up">up</span></div>
-                <div class="card-desc">Cluster metrics &amp; dashboards</div>
+                <div class="card-title">Grafana <span class="badge badge-down">wip</span></div>
+                <div class="card-desc">Cluster metrics &middot; TLS routing issue</div>
               </div>
             </a>
             <a class="card" href="https://kubevirt-manager.manatee-basking.ts.net">
