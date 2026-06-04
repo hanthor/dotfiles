@@ -14,6 +14,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && ln -s /usr/bin/fdfind /usr/local/bin/fd \
  && rm -rf /var/lib/apt/lists/*
 
+# ── gh CLI (for agent PR creation) ────────────────────────────────────
+# Downloaded separately to get latest version.
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+ && apt-get update && apt-get install -y --no-install-recommends gh \
+ && mv /usr/bin/gh /usr/local/bin/gh-real \
+ && rm -rf /var/lib/apt/lists/*
+
 # ── su-exec for UID switching ─────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates gcc libc6-dev \
  && update-ca-certificates \
@@ -36,16 +44,6 @@ RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && \
     mv /usr/local/bin/pi /usr/local/bin/pi-real && \
     chmod +x /usr/local/bin/pi-real && \
     npm cache clean --force
-
-# ── gh CLI (for agent PR creation) ────────────────────────────────────
-# Download gh via curl — CI has fast internet.
-# BUST CACHE: 2026-06-04-v2
-ARG GH_VERSION=2.74.0
-RUN curl -fsSL --retry 3 "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" -o /tmp/gh.tar.gz \
- && tar xzf /tmp/gh.tar.gz --strip-components=2 -C /usr/local/bin "gh_${GH_VERSION}_linux_amd64/bin/gh" \
- && mv /usr/local/bin/gh /usr/local/bin/gh-real \
- && chmod +x /usr/local/bin/gh-real \
- && rm /tmp/gh.tar.gz
 
 # Wrapper: handles hive tmux interface (restart loop, ready markers)
 COPY pi-wrapper.sh /usr/local/bin/pi
