@@ -94,6 +94,17 @@ data:
         export GIT_SSL_CAINFO=/data/proxy-ca.pem
     fi
 
+    # ── Fix proxy URL: git needs user:@host not user@host ────────────
+    # Hive sets HTTPS_PROXY=http://agentname@127.0.0.1:18443 (no colon).
+    # git interprets user@host as requiring auth and prompts for password.
+    # Add empty password and export GIT_ASKPASS to suppress prompts.
+    if [ -n "${HTTPS_PROXY:-}" ]; then
+        export HTTPS_PROXY=$(echo "$HTTPS_PROXY" | sed 's|://\([^:@]*\)@|://\1:@|')
+        export HTTP_PROXY=$(echo "$HTTP_PROXY" | sed 's|://\([^:@]*\)@|://\1:@|')
+    fi
+    export GIT_ASKPASS=/bin/true
+    export GIT_TERMINAL_PROMPT=0
+
     # ── Main loop ────────────────────────────────────────────────────
     while true; do
         echo "DeepSeek chat ready ❯"
