@@ -83,11 +83,8 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/hive:latest
             ghcr.io/${{ github.repository_owner }}/hive:${{ github.sha }}
-          # Build without cache to ensure gh CLI gets installed
-          no-cache: true
-          # Disable GitHub Actions cache for this build
-          cache-from: 
-          cache-to: 
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Verify gh CLI in image
         run: |
