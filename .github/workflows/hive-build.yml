@@ -83,6 +83,12 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/hive:latest
             ghcr.io/${{ github.repository_owner }}/hive:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Build without cache to ensure gh CLI gets installed
           no-cache: true
+          # Disable GitHub Actions cache for this build
+          cache-from: 
+          cache-to: 
+
+      - name: Verify gh CLI in image
+        run: |
+          docker run --rm ghcr.io/${{ github.repository_owner }}/hive:latest ls -la /usr/local/bin/gh-real || echo "FAIL: gh-real not found"
