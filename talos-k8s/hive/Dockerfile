@@ -38,7 +38,8 @@ RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && \
     npm cache clean --force
 
 # ── gh CLI (for agent PR creation) ────────────────────────────────────
-# Download gh via curl — CI has fast internet, and apt gh is often stale.
+# Download gh via curl — CI has fast internet.
+# BUST CACHE: 2026-06-04-v2
 ARG GH_VERSION=2.74.0
 RUN curl -fsSL --retry 3 "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" -o /tmp/gh.tar.gz \
  && tar xzf /tmp/gh.tar.gz --strip-components=2 -C /usr/local/bin "gh_${GH_VERSION}_linux_amd64/bin/gh" \
