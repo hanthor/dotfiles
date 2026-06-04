@@ -37,12 +37,14 @@ RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && \
     chmod +x /usr/local/bin/pi-real && \
     npm cache clean --force
 
-# ── gh CLI (GitHub App token auth for agents) ────────────────────────
+# ── gh CLI (for agent PR creation) ────────────────────────────────────
+# Download gh via curl — CI has fast internet, and apt gh is often stale.
 ARG GH_VERSION=2.74.0
-RUN curl -sL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" | \
-    tar xz --strip-components=2 -C /usr/local/bin "gh_${GH_VERSION}_linux_amd64/bin/gh" && \
-    mv /usr/local/bin/gh /usr/local/bin/gh-real && \
-    chmod +x /usr/local/bin/gh-real
+RUN curl -fsSL --retry 3 "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" -o /tmp/gh.tar.gz \
+ && tar xzf /tmp/gh.tar.gz --strip-components=2 -C /usr/local/bin "gh_${GH_VERSION}_linux_amd64/bin/gh" \
+ && mv /usr/local/bin/gh /usr/local/bin/gh-real \
+ && chmod +x /usr/local/bin/gh-real \
+ && rm /tmp/gh.tar.gz
 
 # Wrapper: handles hive tmux interface (restart loop, ready markers)
 COPY pi-wrapper.sh /usr/local/bin/pi
