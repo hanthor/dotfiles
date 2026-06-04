@@ -90,3 +90,4 @@
 # Cluster
 
 - [Talos Kubernetes](talos-k8s.md)
+- [Hive Agent Supervisor](cluster/hive.md)
