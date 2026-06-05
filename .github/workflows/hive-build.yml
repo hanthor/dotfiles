@@ -47,6 +47,11 @@ jobs:
           # Fix input prompt detection: pi uses alternate screen so ❯ never appears.
           # Check for "deepseek-v4-pro" (always in pi's footer) as ready marker.
           sed -i 's/strings.Contains(output, "❯")/(strings.Contains(output, "❯") || strings.Contains(output, "deepseek-v4-pro"))/' v2/pkg/agent/manager.go
+          # Verify patches applied
+          echo "=== Verification ==="
+          grep -c '"pi"' v2/pkg/agent/manager.go && echo "pi in cliPaneMarkers"
+          grep -c 'deepseek-v4-pro' v2/pkg/agent/manager.go && echo "deepseek-v4-pro in prompt check"
+          grep -c '"pi": true' v2/pkg/config/config.go && echo "pi in validBackends"
 
       - name: Build Go binaries
         working-directory: hive-src
