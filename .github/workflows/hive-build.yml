@@ -2,13 +2,15 @@
 name: Build Hive Image
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'talos-k8s/hive/**'
-      - '.github/workflows/hive-build.yml'
   workflow_dispatch:
+
+# Temporarily disabled while debugging CI failures
+#  push:
+#    branches:
+#      - master
+#    paths:
+#      - 'talos-k8s/hive/**'
+#      - '.github/workflows/hive-build.yml'
 
 permissions:
   contents: read
