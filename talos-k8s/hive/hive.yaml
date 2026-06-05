@@ -106,7 +106,8 @@ data:
     export GIT_TERMINAL_PROMPT=0
 
     # ── Main loop ────────────────────────────────────────────────────
-    # Hive detects readiness via "❯" or "deepseek-v4-pro" in pane.
+    # Hive detects readiness via "❯" in pane. pi uses alternate screen
+    # so the wrapper's ❯ is invisible. Append ❯ to system prompt.
     while true; do
         echo "DeepSeek chat ready ❯"
         echo "Environment loaded"
@@ -114,7 +115,8 @@ data:
             --provider deepseek \
             --model "$MODEL" \
             --no-context-files \
-            --session-dir "$SESSION_DIR" || true
+            --session-dir "$SESSION_DIR" \
+            --append-system-prompt "❯" || true
     done
   backends.conf: |
     # backends.conf — Single source of truth for CLI backends and model names.
