@@ -37,7 +37,18 @@ RUN echo 'dev:x:1001:1000::/home/dev:/bin/bash' >> /etc/passwd && \
     echo 'dev:!:20000:0:99999:7:::' >> /etc/shadow && \
     mkdir -p /home/dev && chown 1001:1000 /home/dev && chmod 755 /home/dev
 
-# ── pi Coding Agent (DeepSeek backend) ────────────────────────────────
+# ── goose CLI v1.37 (claims native DeepSeek V4 support) ───────────────
+# Downloaded in CI where internet is fast.
+ARG GOOSE_VERSION=1.37.0
+RUN curl -fsSL --retry 5 --retry-delay 10 \
+    "https://github.com/block/goose/releases/download/v${GOOSE_VERSION}/goose-x86_64-unknown-linux-gnu.tar.gz" \
+    -o /tmp/goose.tar.gz \
+ && tar xzf /tmp/goose.tar.gz -C /usr/local/bin \
+ && chmod +x /usr/local/bin/goose \
+ && mv /usr/local/bin/goose /usr/local/bin/goose-real \
+ && rm /tmp/goose.tar.gz
+
+# ── pi Coding Agent (fallback) ────────────────────────────────────────
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && \
     mv /usr/local/bin/pi /usr/local/bin/pi-real && \
     chmod +x /usr/local/bin/pi-real && \

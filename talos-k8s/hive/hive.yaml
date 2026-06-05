@@ -46,58 +46,37 @@ metadata:
   labels:
     app.kubernetes.io/name: hive
 data:
-  pi-wrapper.sh: |
+  goose-wrapper.sh: |
     #!/bin/sh
-    # pi-wrapper — runs pi (coding agent) in a restart loop so clear_on_kick works.
+    # goose-wrapper v2 — runs goose v1.37 in a restart loop.
+    # Goose v1.37 claims native DeepSeek V4 support — no proxy needed.
     #
-    # Pi natively supports DeepSeek — no proxy, no litellm, no reasoning_content
-    # workaround needed. Boot/kick prompts arrive via tmux send-keys.
-    #
-    # Why the loop: clear_on_kick sends ^C to kill the running session. trap '' INT
-    # makes the wrapper ignore SIGINT so only pi-real is killed. The loop then
-    # re-emits the ready markers the Go binary watches for before sending the next
-    # prompt via send-keys.
+    # Why the loop: clear_on_kick sends ^C to kill the running session.
+    # trap '' INT makes the wrapper ignore SIGINT so only goose is killed.
     trap '' INT
 
-    # ── Parse CLI args (Hive passes --no-confirm, --model, --prompt) ──
+    # ── Parse CLI args ────────────────────────────────────────────────
     MODEL="deepseek-v4-pro"
     while [ $# -gt 0 ]; do
         case "$1" in
-            --no-confirm) shift ;;  # pi has no permission popups
+            --no-confirm) shift ;;  # goose v1.37 may not need this
             --model) MODEL="$2"; shift 2 ;;
-            --prompt) shift 2 ;;   # boot prompt comes via send-keys
+            --prompt) shift 2 ;;
             *) shift ;;
         esac
     done
 
-    # ── pi config ────────────────────────────────────────────────────
-    PI_CONFIG_DIR="${PI_CODING_AGENT_DIR:-/home/dev/.pi/agent}"
-    mkdir -p "$PI_CONFIG_DIR"
-    cat > "$PI_CONFIG_DIR/settings.json" << 'JSON'
-    {
-      "defaultProvider": "deepseek",
-      "defaultModel": "deepseek-v4-pro",
-      "quietStartup": true,
-      "hideThinkingBlock": true,
-      "enableInstallTelemetry": false
-    }
-    JSON
-
-    # ── Session directory (persistent across restarts) ───────────────
-    SESSION_DIR="/data/pi-sessions/${HIVE_AGENT:-agent}"
+    # ── Session directory ─────────────────────────────────────────────
+    SESSION_DIR="/data/goose-sessions/${HIVE_AGENT:-agent}"
     mkdir -p "$SESSION_DIR"
 
-    # ── TLS: Go tools (gh, git) and curl need the proxy CA cert ─────
+    # ── TLS cert for MITM proxy ───────────────────────────────────────
     if [ -f /data/proxy-ca.pem ]; then
         export SSL_CERT_FILE=/data/proxy-ca.pem
         export NODE_EXTRA_CA_CERTS=/data/proxy-ca.pem
-        export GIT_SSL_CAINFO=/data/proxy-ca.pem
     fi
 
-    # ── Fix proxy URL: git needs user:@host not user@host ────────────
-    # Hive sets HTTPS_PROXY=http://agentname@127.0.0.1:18443 (no colon).
-    # git interprets user@host as requiring auth and prompts for password.
-    # Add empty password and export GIT_ASKPASS to suppress prompts.
+    # ── Proxy URL fix (git needs user:@host) ──────────────────────────
     if [ -n "${HTTPS_PROXY:-}" ]; then
         export HTTPS_PROXY=$(echo "$HTTPS_PROXY" | sed 's|://\([^:@]*\)@|://\1:@|')
         export HTTP_PROXY=$(echo "$HTTP_PROXY" | sed 's|://\([^:@]*\)@|://\1:@|')
@@ -106,18 +85,15 @@ data:
     export GIT_TERMINAL_PROMPT=0
 
     # ── Main loop ────────────────────────────────────────────────────
-    # Hive detects readiness via "❯" in pane. pi uses alternate screen
-    # so the wrapper's ❯ is invisible. Append ❯ to system prompt.
     while true; do
-        echo "DeepSeek chat ready ❯"
+        echo "goose ready ❯"
         echo "Environment loaded"
-        /usr/local/bin/pi-real \
+        /usr/local/bin/goose-real session \
             --provider deepseek \
             --model "$MODEL" \
-            --no-context-files \
-            --session-dir "$SESSION_DIR" \
-            --append-system-prompt "❯" || true
+            --max-turns 100 || true
     done
+
   backends.conf: |
     # backends.conf — Single source of truth for CLI backends and model names.
     # Overrides the built-in config with pi support.
@@ -241,55 +217,55 @@ data:
     agents:
       supervisor:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         beads_dir: /data/beads/supervisor
         clear_on_kick: true
       scanner:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
         clear_on_kick: true
       ci-maintainer:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
         clear_on_kick: true
       quality:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/quality
         clear_on_kick: true
       sec-check:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/sec-check
         clear_on_kick: true
       architect:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/architect
         clear_on_kick: true
       strategist:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/strategist
         clear_on_kick: true
       guide:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         beads_dir: /data/beads/guide
         clear_on_kick: true
@@ -376,8 +352,8 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              cp /etc/hive/pi-wrapper.sh /usr/local/bin/pi
-              chmod +x /usr/local/bin/pi
+              cp /etc/hive/goose-wrapper.sh /usr/local/bin/goose
+              chmod +x /usr/local/bin/goose
               cp /etc/hive/backends.conf /usr/local/etc/hive/backends.conf
               sh /etc/hive/patch-dashboard.sh
               exec /usr/local/bin/entrypoint.sh --config /etc/hive/hive.yaml
