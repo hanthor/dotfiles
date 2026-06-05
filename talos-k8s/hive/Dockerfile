@@ -38,14 +38,17 @@ RUN echo 'dev:x:1001:1000::/home/dev:/bin/bash' >> /etc/passwd && \
     mkdir -p /home/dev && chown 1001:1000 /home/dev && chmod 755 /home/dev
 
 # ── goose CLI v1.37 (native DeepSeek V4 support) ─────────────────────
+# Use gh CLI to download — authenticated requests avoid rate limits.
 ARG GOOSE_VERSION=1.37.0
-RUN curl -fsSL --retry 5 --retry-delay 15 --connect-timeout 30 \
-    "https://github.com/block/goose/releases/download/v${GOOSE_VERSION}/goose-x86_64-unknown-linux-gnu.tar.gz" \
-    -o /tmp/goose.tar.gz && ls -la /tmp/goose.tar.gz \
- && tar xzf /tmp/goose.tar.gz -C /usr/local/bin \
+RUN apt-get update && apt-get install -y --no-install-recommends gh \
+ && gh release download v${GOOSE_VERSION} --repo block/goose \
+    --pattern "goose-x86_64-unknown-linux-gnu.tar.gz" --dir /tmp \
+ && tar xzf /tmp/goose-x86_64-unknown-linux-gnu.tar.gz -C /usr/local/bin \
  && chmod +x /usr/local/bin/goose \
  && mv /usr/local/bin/goose /usr/local/bin/goose-real \
- && rm /tmp/goose.tar.gz
+ && rm /tmp/goose-x86_64-unknown-linux-gnu.tar.gz \
+ && apt-get purge -y gh && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/*
 
 # ── pi Coding Agent (fallback) ────────────────────────────────────────
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && \
