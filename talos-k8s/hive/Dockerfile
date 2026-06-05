@@ -4,6 +4,8 @@
 # DeepSeek — no proxy, no litellm workaround. Goose can be added later:
 #   curl -fsSL "https://github.com/aaif-goose/goose/releases/download/v1.37.0/goose-x86_64-unknown-linux-gnu.tar.gz" | tar xz -C /usr/local/bin
 #   mv /usr/local/bin/goose /usr/local/bin/goose-real
+#
+# BUST: 2026-06-05-v3 (clean pi-only build)
 
 FROM node:24-slim
 
