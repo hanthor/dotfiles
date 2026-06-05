@@ -1,0 +1,83 @@
+# Tailscale DaemonSet — joins both cluster nodes to the Tailnet
+# Uses tskey-client OAuth key stored in Bitwarden (tailscale-apikey)
+#
+# Apply: kubectl apply -f talos-k8s/tailscale-nodes.yaml
+#
+# The auth key is stored in a Secret that must be created separately:
+#   kubectl -n tailscale-node create secret generic tailscale-auth \
+#     --from-literal=TS_AUTHKEY=<key-from-bw>
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tailscale-node
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: tailscale
+  namespace: tailscale-node
+  labels:
+    app: tailscale-node
+spec:
+  selector:
+    matchLabels:
+      app: tailscale-node
+  template:
+    metadata:
+      labels:
+        app: tailscale-node
+    spec:
+      hostNetwork: true
+      tolerations:
+        - operator: Exists
+      initContainers:
+        - name: tailscale-up
+          image: docker.io/tailscale/tailscale:v1.98.3
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              tailscaled --tun=userspace-networking --state=/var/lib/tailscale/tailscaled.state &
+              sleep 3
+              tailscale up --authkey=$TS_AUTHKEY --hostname=$TS_HOSTNAME --advertise-tags=tag:cluster --accept-routes 2>&1
+              echo "Exit: $?"
+              tailscale ip -4 2>/dev/null
+              tailscale status 2>/dev/null | head -5
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth
+                  key: TS_AUTHKEY
+            - name: TS_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/tailscale
+      containers:
+        - name: tailscaled
+          image: docker.io/tailscale/tailscale:v1.98.3
+          imagePullPolicy: IfNotPresent
+          command:
+            - tailscaled
+          args:
+            - --tun=userspace-networking
+            - --state=/var/lib/tailscale/tailscaled.state
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/tailscale
+      volumes:
+        - name: state
+          hostPath:
+            path: /var/lib/tailscale
+            type: DirectoryOrCreate
