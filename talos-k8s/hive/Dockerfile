@@ -3,6 +3,8 @@
 # Only installs pi coding agent (DeepSeek backend). Skips Claude Code, Copilot CLI,
 # goose, ttyd, and Nous framework to keep the image small for faster pulls.
 # Pi natively supports DeepSeek — no proxy, no litellm workaround needed.
+#
+# CACHE-BUST: 2026-06-05-v1 (input prompt detection fix)
 
 FROM node:24-slim
 

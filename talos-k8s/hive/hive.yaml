@@ -106,6 +106,7 @@ data:
     export GIT_TERMINAL_PROMPT=0
 
     # ── Main loop ────────────────────────────────────────────────────
+    # Hive detects readiness via "❯" or "deepseek-v4-pro" in pane.
     while true; do
         echo "DeepSeek chat ready ❯"
         echo "Environment loaded"
