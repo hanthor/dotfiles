@@ -1,10 +1,9 @@
 # Hive v2 + pi (DeepSeek) — MINIMAL Dockerfile
 #
-# Only installs pi coding agent (DeepSeek backend). Skips Claude Code, Copilot CLI,
-# goose, ttyd, and Nous framework to keep the image small for faster pulls.
-# Pi natively supports DeepSeek — no proxy, no litellm workaround needed.
-#
-# CACHE-BUST: 2026-06-05-v2
+# Installs pi coding agent as the primary AI backend. Pi natively supports
+# DeepSeek — no proxy, no litellm workaround. Goose can be added later:
+#   curl -fsSL "https://github.com/aaif-goose/goose/releases/download/v1.37.0/goose-x86_64-unknown-linux-gnu.tar.gz" | tar xz -C /usr/local/bin
+#   mv /usr/local/bin/goose /usr/local/bin/goose-real
 
 FROM node:24-slim
 
@@ -32,24 +31,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
  && rm /tmp/su-exec.c \
  && apt-get purge -y gcc libc6-dev && apt-get autoremove -y
 
-# ── Non-root dev user (manual) ────────────────────────────────────────
+# ── Non-root dev user ─────────────────────────────────────────────────
 RUN echo 'dev:x:1001:1000::/home/dev:/bin/bash' >> /etc/passwd && \
     echo 'dev:!:20000:0:99999:7:::' >> /etc/shadow && \
     mkdir -p /home/dev && chown 1001:1000 /home/dev && chmod 755 /home/dev
 
-# ── goose CLI v1.37 (native DeepSeek V4 support) ─────────────────────
-# Direct download from release assets (avoids redirect).
-ARG GOOSE_VERSION=1.37.0
-RUN curl -fsSL --retry 5 --retry-delay 15 --connect-timeout 30 \
-    "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_VERSION}/goose-x86_64-unknown-linux-gnu.tar.gz" \
-    -o /tmp/goose.tar.gz \
- && ls -la /tmp/goose.tar.gz \
- && tar xzf /tmp/goose.tar.gz -C /usr/local/bin \
- && chmod +x /usr/local/bin/goose \
- && mv /usr/local/bin/goose /usr/local/bin/goose-real \
- && rm /tmp/goose.tar.gz
-
-# ── pi Coding Agent (fallback) ────────────────────────────────────────
+# ── pi Coding Agent (DeepSeek backend) ────────────────────────────────
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && \
     mv /usr/local/bin/pi /usr/local/bin/pi-real && \
     chmod +x /usr/local/bin/pi-real && \
@@ -89,10 +76,6 @@ COPY examples/agents/ /opt/hive/examples/agents/
 COPY v2/deploy/data/ /opt/hive/seed-data/
 COPY v2/deploy/ttyd-tmux.sh /usr/local/bin/ttyd-tmux.sh
 RUN chmod +x /usr/local/bin/ttyd-tmux.sh
-
-# ── pi defaults ───────────────────────────────────────────────────────
-# Provider/model configured via ~/.pi/agent/settings.json at runtime.
-# DeepSeek API key passed via DEEPSEEK_API_KEY env var from K8s secret.
 
 EXPOSE 3001 3002 7681
 VOLUME ["/data", "/secrets"]

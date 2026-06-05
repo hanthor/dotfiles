@@ -46,37 +46,51 @@ metadata:
   labels:
     app.kubernetes.io/name: hive
 data:
-  goose-wrapper.sh: |
+  pi-wrapper.sh: |
     #!/bin/sh
-    # goose-wrapper v2 — runs goose v1.37 in a restart loop.
-    # Goose v1.37 claims native DeepSeek V4 support — no proxy needed.
+    # pi-wrapper — runs pi (coding agent) in a restart loop.
+    # Pi natively supports DeepSeek — no proxy, no litellm workaround.
     #
     # Why the loop: clear_on_kick sends ^C to kill the running session.
-    # trap '' INT makes the wrapper ignore SIGINT so only goose is killed.
+    # trap '' INT makes the wrapper ignore SIGINT so only pi-real is killed.
     trap '' INT
 
     # ── Parse CLI args ────────────────────────────────────────────────
     MODEL="deepseek-v4-pro"
     while [ $# -gt 0 ]; do
         case "$1" in
-            --no-confirm) shift ;;  # goose v1.37 may not need this
+            --no-confirm) shift ;;  # pi has no permission popups
             --model) MODEL="$2"; shift 2 ;;
             --prompt) shift 2 ;;
             *) shift ;;
         esac
     done
 
+    # ── pi config ────────────────────────────────────────────────────
+    PI_CONFIG_DIR="${PI_CODING_AGENT_DIR:-/home/dev/.pi/agent}"
+    mkdir -p "$PI_CONFIG_DIR"
+    cat > "$PI_CONFIG_DIR/settings.json" << 'JSON'
+    {
+      "defaultProvider": "deepseek",
+      "defaultModel": "deepseek-v4-pro",
+      "quietStartup": true,
+      "hideThinkingBlock": true,
+      "enableInstallTelemetry": false
+    }
+    JSON
+
     # ── Session directory ─────────────────────────────────────────────
-    SESSION_DIR="/data/goose-sessions/${HIVE_AGENT:-agent}"
+    SESSION_DIR="/data/pi-sessions/${HIVE_AGENT:-agent}"
     mkdir -p "$SESSION_DIR"
 
-    # ── TLS cert for MITM proxy ───────────────────────────────────────
+    # ── TLS certs ────────────────────────────────────────────────────
     if [ -f /data/proxy-ca.pem ]; then
         export SSL_CERT_FILE=/data/proxy-ca.pem
         export NODE_EXTRA_CA_CERTS=/data/proxy-ca.pem
+        export GIT_SSL_CAINFO=/data/proxy-ca.pem
     fi
 
-    # ── Proxy URL fix (git needs user:@host) ──────────────────────────
+    # ── Proxy URL fix ────────────────────────────────────────────────
     if [ -n "${HTTPS_PROXY:-}" ]; then
         export HTTPS_PROXY=$(echo "$HTTPS_PROXY" | sed 's|://\([^:@]*\)@|://\1:@|')
         export HTTP_PROXY=$(echo "$HTTP_PROXY" | sed 's|://\([^:@]*\)@|://\1:@|')
@@ -85,13 +99,16 @@ data:
     export GIT_TERMINAL_PROMPT=0
 
     # ── Main loop ────────────────────────────────────────────────────
+    # Append ❯ to system prompt so Hive detects pi is ready.
     while true; do
-        echo "goose ready ❯"
+        echo "DeepSeek chat ready ❯"
         echo "Environment loaded"
-        /usr/local/bin/goose-real session \
+        /usr/local/bin/pi-real \
             --provider deepseek \
             --model "$MODEL" \
-            --max-turns 100 || true
+            --no-context-files \
+            --session-dir "$SESSION_DIR" \
+            --append-system-prompt "❯" || true
     done
 
   backends.conf: |
@@ -217,55 +234,55 @@ data:
     agents:
       supervisor:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         beads_dir: /data/beads/supervisor
         clear_on_kick: true
       scanner:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
         clear_on_kick: true
       ci-maintainer:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
         clear_on_kick: true
       quality:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/quality
         clear_on_kick: true
       sec-check:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/sec-check
         clear_on_kick: true
       architect:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/architect
         clear_on_kick: true
       strategist:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/strategist
         clear_on_kick: true
       guide:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         beads_dir: /data/beads/guide
         clear_on_kick: true
@@ -352,8 +369,8 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              cp /etc/hive/goose-wrapper.sh /usr/local/bin/goose
-              chmod +x /usr/local/bin/goose
+              cp /etc/hive/pi-wrapper.sh /usr/local/bin/pi
+              chmod +x /usr/local/bin/pi
               cp /etc/hive/backends.conf /usr/local/etc/hive/backends.conf
               sh /etc/hive/patch-dashboard.sh
               exec /usr/local/bin/entrypoint.sh --config /etc/hive/hive.yaml
