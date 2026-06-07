@@ -57,13 +57,13 @@ Resolves a Bitwarden session token in order:
 1. `BW_SESSION` environment variable (forwarded via SSH or set by `just apply`)
 2. Cached session at `/tmp/bw_session`
 
-If no session is found, secrets tasks are skipped with a warning. Session is cached to `/tmp/bw_session` for reuse within the same run.
+Then runs `bw sync` with a 15 s hard timeout, calls `bw status`, and sets a `bw_unlocked` host fact. Every BW-using role downstream gates on `when: bw_unlocked | default(false)`, so a locked vault produces a single warning and clean skips rather than scattered silent failures. The end-of-play `post_tasks` summary tells the operator whether the vault was unlocked, locked, or whether `--skip-tags secrets` was used.
 
 ### `ssh_keys` *(secrets)*
-Manages `~/.ssh/id_ed25519` on each machine:
-1. **Key exists in BW** (`james@<machine>`) → writes it to disk
-2. **Key on disk but not BW** → stores it in BW as an SSH Key object
-3. **Neither** → generates a new ed25519 key pair → stores in BW
+Manages `~/.ssh/id_ed25519` on each machine. Source of truth is local disk; BW is the durable mirror. On every unlocked run:
+1. **No key on disk** → fetch from BW (`james@<machine>`); if missing there too, generate a fresh ed25519 pair.
+2. **Local pub key matches BW** → no-op.
+3. **Local pub key differs from BW** → `bw edit item` updates the BW entry so the rest of the fleet sees the current key on their next apply. (This is the bug the previous "create-if-missing" logic missed.)
 
 Also:
 - Fetches all other machines' public keys from BW → adds to `~/.ssh/authorized_keys`

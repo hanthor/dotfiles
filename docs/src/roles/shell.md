@@ -24,7 +24,7 @@ Deploys all shell configuration files and terminal setup.
 - `vim` → `nvim`
 - `k` → `kubectl`
 - `dots` → git pull + `just apply-nosecrets`
-- `dots-secrets` → git pull + `just apply` (with BW)
+- `dots-apply` → git pull + `just apply` (with BW)
 
 ### Terminal Setup
 

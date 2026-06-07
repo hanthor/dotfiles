@@ -30,7 +30,7 @@ just add-machine NAME   # Onboard + bootstrap an already-reachable machine via S
 
 `site.yml` runs roles in tagged phases. Notable wiring:
 
-- `bitwarden` resolves `BW_SESSION` (env, `/tmp/bw_session`, or interactive unlock). All `secrets`-tagged roles consume it.
+- `bitwarden` resolves `BW_SESSION` (env, `/tmp/bw_session`, or interactive unlock), runs `bw sync` with a 15s timeout, and sets a `bw_unlocked` host fact. All BW-using roles gate on `when: bw_unlocked | default(false)`. The end-of-play `post_tasks` summary tells the operator whether the vault was unlocked, locked, or whether `--skip-tags secrets` was used.
 - `kube` (new) fetches `~/.kube/config` + `~/.talos/config` from Bitwarden — desktops only.
 - `ssh_keys` round-trips per-machine ed25519 keys through Bitwarden, building cross-machine `authorized_keys`.
 - `homepage` builds per-host dashboards from `web_services` + `global_services` in vars.
@@ -123,8 +123,8 @@ Most machines have a `dotfiles-update.timer` systemd unit that runs `just apply-
 
 ```bash
 dots               # shell alias: git pull + apply-nosecrets
-dots-secrets       # git pull + apply with BW unlock
-just update        # same as dots-secrets
+dots-apply         # git pull + apply with BW unlock
+just update        # same as dots-apply
 ```
 
 ## Don'ts

@@ -41,7 +41,7 @@ Shell aliases available everywhere after first apply:
 
 ```bash
 dots                   # git pull + apply-nosecrets
-dots-secrets           # git pull + full apply with BW unlock
+dots-apply             # git pull + full apply with BW unlock
 ```
 
 ---
