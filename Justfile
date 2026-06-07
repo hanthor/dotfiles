@@ -64,6 +64,10 @@ apply *args:
 apply-tags tags:
     cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }}
 
+# Apply without unlocking Bitwarden — fast path for the daily timer and `dots`
+apply-nosecrets *args:
+    cd {{ dotfiles_dir }} && git pull --ff-only && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags secrets {{ args }}
+
 # Apply to a remote machine with specific tags (e.g. just apply-remote-tags bihar homepage,proxy)
 apply-remote-tags name tags:
     #!/usr/bin/env bash

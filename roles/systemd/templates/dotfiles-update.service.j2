@@ -13,8 +13,10 @@ Wants=network-online.target
 Type=oneshot
 # Wait for network to settle and desktop to stabilise before pulling
 ExecStartPre=/bin/sleep {{ dotfiles_update_delay_seconds | default(60) }}
-# Pull latest repo changes, then run ansible locally (no ansible-pull clone overhead)
-ExecStart={{ brew_prefix }}/bin/just -f {{ ansible_facts['env']['HOME'] }}/.local/share/dotfiles/Justfile apply
+# Pull latest repo changes, then run ansible locally (no ansible-pull clone overhead).
+# Timer cannot unlock Bitwarden non-interactively, so we explicitly skip secrets.
+# SSH key sync happens on manual `dots-apply` instead.
+ExecStart={{ brew_prefix }}/bin/just -f {{ ansible_facts['env']['HOME'] }}/.local/share/dotfiles/Justfile apply-nosecrets
 # Also update podman containers while we're at it
 ExecStartPost=-/usr/bin/podman auto-update --user
 ExecStartPost=-/usr/bin/sudo /usr/bin/podman auto-update
