@@ -5,19 +5,19 @@
     state: directory
     mode: "0755"
   loop:
-    - ~/.var/app/com.github.wwmm.easyeffects/config/easyeffects/input
-    - ~/.var/app/com.github.wwmm.easyeffects/config/easyeffects/output
+    - ~/.var/app/com.github.wwmm.easyeffects/data/easyeffects/input
+    - ~/.var/app/com.github.wwmm.easyeffects/data/easyeffects/output
 
 - name: Deploy input preset (mic noise reduction)
   ansible.builtin.copy:
     src: input-mic-noise-reduction.json
-    dest: ~/.var/app/com.github.wwmm.easyeffects/config/easyeffects/input/input-mic-noise-reduction.json
+    dest: ~/.var/app/com.github.wwmm.easyeffects/data/easyeffects/input/input-mic-noise-reduction.json
     mode: "0644"
 
 - name: Deploy output preset (speaker improvement)
   ansible.builtin.copy:
     src: output-speaker-improvement.json
-    dest: ~/.var/app/com.github.wwmm.easyeffects/config/easyeffects/output/output-speaker-improvement.json
+    dest: ~/.var/app/com.github.wwmm.easyeffects/data/easyeffects/output/output-speaker-improvement.json
     mode: "0644"
 
 - name: Pre-configure default presets in Easy Effects GSettings
