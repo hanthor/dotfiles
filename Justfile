@@ -32,30 +32,22 @@ apply *args:
     cd {{ dotfiles_dir }}
     git pull --ff-only
     ansible-galaxy collection install -r requirements.yml
-    
+
     BECOME_ARGS=""
     if ! sudo -n true 2>/dev/null; then
       echo "Sudo requires a password. Adding --ask-become-pass..."
       BECOME_ARGS="--ask-become-pass"
     fi
 
+    # Tries env → /tmp cache → interactive unlock. Exits 3 if BW isn't logged
+    # in on this machine and 4 if the user declined to unlock; both should
+    # silently fall through to a no-secrets apply.
     if [ -z "${BW_SESSION:-}" ]; then
-      if [ -f /tmp/bw_session ]; then
-        export BW_SESSION=$(cat /tmp/bw_session)
+      if BW_SESSION_OUT=$(scripts/bw-unlock.sh 2>/dev/null); then
+        export BW_SESSION="$BW_SESSION_OUT"
       else
-        BW_STATUS=$(bw status 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "unknown")
-        if [ "$BW_STATUS" = "unauthenticated" ]; then
-          echo "WARNING: Bitwarden not logged in on this machine."
-          echo "  Run 'just apply-remote {{ machine }}' from karnataka, or run 'bw login' manually first."
-          echo "Continuing without secrets..."
-          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
-        fi
-        echo "Unlocking Bitwarden..."
-        if ! export BW_SESSION=$(bw unlock --raw 2>/dev/null); then
-          echo "WARNING: Bitwarden unlock failed. Continuing without secrets..."
-          exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
-        fi
-        (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
+        echo "Continuing without secrets (run scripts/bw-unlock.sh manually for details)..."
+        exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
       fi
     fi
     ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }}
@@ -73,7 +65,7 @@ apply-remote-tags name tags:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ -z "${BW_SESSION:-}" ]; then
-      [ -f /tmp/bw_session ] && export BW_SESSION=$(cat /tmp/bw_session) || export BW_SESSION=$(bw unlock --raw)
+      export BW_SESSION=$({{ dotfiles_dir }}/scripts/bw-unlock.sh)
     fi
     ssh -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
@@ -94,13 +86,7 @@ apply-remote name *args:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ -z "${BW_SESSION:-}" ]; then
-      if [ -f /tmp/bw_session ]; then
-        export BW_SESSION=$(cat /tmp/bw_session)
-      else
-        echo "Unlocking Bitwarden..."
-        export BW_SESSION=$(bw unlock --raw)
-        (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
-      fi
+      export BW_SESSION=$({{ dotfiles_dir }}/scripts/bw-unlock.sh)
     fi
     # Ensure bw is logged in on the remote — BW_SESSION is only an unlock token,
     # it requires a prior 'bw login' on that machine. If unauthenticated, try
