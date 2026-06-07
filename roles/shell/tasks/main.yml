@@ -363,8 +363,11 @@
 - name: Warn if deepseek-api-key not found in Bitwarden
   ansible.builtin.debug:
     msg: >-
-      Bitwarden item 'deepseek-api-key' not found or vault locked — skipping pi auth config.
+      Bitwarden item 'deepseek-api-key' not found — skipping pi auth config.
       Run: bw create item ... or seed it manually.
-  when: deepseek_key.rc != 0 or deepseek_key.stdout | trim | length == 0
+  when:
+    - bw_unlocked | default(false)
+    - (deepseek_key | default({})).rc | default(1) != 0
+      or (deepseek_key | default({})).stdout | default('') | trim | length == 0
 
 

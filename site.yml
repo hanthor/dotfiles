@@ -106,3 +106,20 @@
     - role: server_hardening
       tags: [system, hardening, security]
       when: inventory_hostname in groups.get('server', []) or inventory_hostname in groups.get('vps', [])
+
+  post_tasks:
+    - name: Summarise secrets phase
+      ansible.builtin.debug:
+        msg: >-
+          {% if 'secrets' in (ansible_skip_tags | default([])) %}
+          [secrets phase] SKIPPED (--skip-tags secrets). Run `dots-apply` to include
+          ssh_keys, github, kube, tailscale, monitoring, browser_fxa, and shell secrets.
+          {% elif not (bw_unlocked | default(false)) %}
+          [secrets phase] Bitwarden vault was LOCKED — BW-touching tasks in
+          ssh_keys, github, kube, tailscale, monitoring, browser_fxa, and shell
+          were skipped. To enable: `bw unlock`, write the session to
+          /tmp/bw_session, then re-run.
+          {% else %}
+          [secrets phase] vault unlocked — all secret roles executed normally.
+          {% endif %}
+      tags: always
