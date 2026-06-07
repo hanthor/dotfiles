@@ -33,6 +33,12 @@
       value: "'input-mic-noise-reduction'"
     - option: use-default-output
       value: "'output-speaker-improvement'"
+    # Required for --gapplication-service to actually process audio for
+    # every output sink, otherwise EE waits for a manually-attached app.
+    - option: process-all-outputs
+      value: "true"
+    - option: process-all-inputs
+      value: "true"
 
 - name: Ensure autostart directory exists
   ansible.builtin.file:
@@ -41,13 +47,15 @@
     mode: "0755"
 
 - name: Deploy Easy Effects autostart desktop entry
+  # --gapplication-service starts EE as a background D-Bus service so audio
+  # processing is active without opening the GUI window on login.
   ansible.builtin.copy:
     content: |
       [Desktop Entry]
       Type=Application
-      Name=Easy Effects
-      Comment=Audio effects for PipeWire
-      Exec=flatpak run com.github.wwmm.easyeffects
+      Name=Easy Effects (service)
+      Comment=Audio effects for PipeWire (background service, no window)
+      Exec=flatpak run com.github.wwmm.easyeffects --gapplication-service
       Icon=com.github.wwmm.easyeffects
       X-GNOME-Autostart-enabled=true
       NoDisplay=true
