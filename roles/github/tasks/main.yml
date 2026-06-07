@@ -24,7 +24,9 @@
       failed_when: false
 
     - name: Authenticate with GitHub via Bitwarden token
-      when: gh_auth_status.rc != 0
+      when:
+        - gh_auth_status.rc != 0
+        - bw_unlocked | default(false)
       block:
         - name: Fetch GitHub token from Bitwarden
           ansible.builtin.command: bw get password github-token
@@ -36,7 +38,7 @@
         - name: Warn if GitHub token not found in Bitwarden
           ansible.builtin.debug:
             msg: >-
-              No 'github-token' item found in Bitwarden (or vault locked) — skipping GitHub auth.
+              No 'github-token' item found in Bitwarden — skipping GitHub auth.
               Add a login item named 'github-token' with your PAT as the password,
               then re-run 'just apply'.
           when: gh_token.rc != 0 or (gh_token.stdout | default('')) | length == 0

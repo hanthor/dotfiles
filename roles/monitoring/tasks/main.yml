@@ -206,14 +206,17 @@
     mode: "0755"
   when: monitoring_hub | default(false) | bool
 
-# Hub secrets from Bitwarden
+# Hub secrets from Bitwarden — gated on bw_unlocked (set by bitwarden role).
+# When the vault is locked, templates that depend on these facts skip cleanly.
 - name: Fetch pve-exporter credentials from Bitwarden
   ansible.builtin.command: bw get item pve-exporter --session {{ bw_session }}
   register: pve_bw_item
   changed_when: false
   no_log: true
   failed_when: false
-  when: monitoring_hub | default(false) | bool
+  when:
+    - monitoring_hub | default(false) | bool
+    - bw_unlocked | default(false)
 
 - name: Parse pve-exporter credentials
   ansible.builtin.set_fact:
@@ -240,7 +243,9 @@
   changed_when: false
   no_log: true
   failed_when: false
-  when: monitoring_hub | default(false) | bool
+  when:
+    - monitoring_hub | default(false) | bool
+    - bw_unlocked | default(false)
 
 - name: Parse matrix-alertbot credentials
   ansible.builtin.set_fact:

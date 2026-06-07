@@ -2,21 +2,12 @@
 # Fetches kubeconfig + talosconfig from Bitwarden and writes them locally.
 # Seed Bitwarden with `scripts/bw-seed-kube.sh` from a machine that already
 # has working configs.
-
-- name: Resolve Bitwarden session
-  ansible.builtin.set_fact:
-    _kube_bw_session: "{{ bw_session | default(lookup('env', 'BW_SESSION')) | default('', true) }}"
-  no_log: true
-
-- name: Skip if Bitwarden session unavailable
-  ansible.builtin.debug:
-    msg: "BW_SESSION not set — skipping kubeconfig/talosconfig deploy"
-  when: _kube_bw_session | length == 0
+# Gated on `bw_unlocked` (set by the bitwarden role).
 
 - name: Deploy kube + talos configs
-  when: _kube_bw_session | length > 0
+  when: bw_unlocked | default(false)
   environment:
-    BW_SESSION: "{{ _kube_bw_session }}"
+    BW_SESSION: "{{ bw_session }}"
     PATH: "{{ ansible_env_path }}"
   block:
     - name: Ensure ~/.kube and ~/.talos exist

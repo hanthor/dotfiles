@@ -39,16 +39,10 @@
     mode: "0700"
 
 # ── Bitwarden credential fetch ────────────────────────────────────────────────
-
-- name: Sync Bitwarden vault before credential lookup
-  ansible.builtin.command: bw sync
-  changed_when: false
-  failed_when: false
-  environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
-    BW_SESSION: "{{ bw_session | default('') }}"
+# Gated on `bw_unlocked` (set by the bitwarden role, which also runs `bw sync`).
 
 - name: Fetch Firefox Account item from Bitwarden
+  when: bw_unlocked | default(false)
   ansible.builtin.shell: |
     bw list items --search "{{ fxa_bw_item }}" 2>/dev/null | python3 -c "
     import json, sys
@@ -115,7 +109,9 @@
   no_log: true
   failed_when: false
   changed_when: false
-  when: _fxa_item_id is defined
+  when:
+    - bw_unlocked | default(false)
+    - _fxa_item_id is defined
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
     BW_SESSION: "{{ bw_session | default('') }}"

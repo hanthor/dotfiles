@@ -189,24 +189,23 @@
   tags: [secrets]
 
 - name: Fetch atuin credentials from Bitwarden
-  ansible.builtin.shell: |
-    SESSION="${BW_SESSION:-$(cat /tmp/bw_session 2>/dev/null)}"
-    [ -z "$SESSION" ] && exit 1
-    bw get item "atuin.sh" --session "$SESSION"
+  ansible.builtin.command: bw get item atuin.sh
   register: atuin_bw_item
   no_log: true
   changed_when: false
   failed_when: false
-  when: not atuin_logged_in
+  when:
+    - not atuin_logged_in
+    - bw_unlocked | default(false)
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   tags: [secrets]
 
-- name: Skip atuin login (already logged in)
+- name: Skip atuin login (already logged in or vault locked)
   ansible.builtin.set_fact:
     atuin_bw_item: { rc: 1, stdout: "" }
-  when: atuin_logged_in
+  when: atuin_logged_in or not (bw_unlocked | default(false))
   tags: [secrets]
 
 - name: Warn if atuin.sh not found in Bitwarden
@@ -289,54 +288,52 @@
     dest: ~/.pi/agent/models.json
     mode: "0644"
 
-# ── pi-coding-agent auth from Bitwarden ──────────────────────────
-- name: Fetch DeepSeek API key from Bitwarden
-  ansible.builtin.shell: |
-    SESSION="${BW_SESSION:-$(cat /tmp/bw_session 2>/dev/null)}"
-    [ -z "$SESSION" ] && exit 1
-    bw get password "deepseek-api-key" --session "$SESSION"
-  register: deepseek_key
-  no_log: true
-  changed_when: false
-  failed_when: false
+# ── Per-host secrets from Bitwarden (DeepSeek + Forgejo) ─────────
+# Gated on `bw_unlocked` (set by the bitwarden role) so a locked vault
+# leaves any previously-written secret files untouched instead of writing
+# empty values.
+- name: Fetch and deploy shell secrets from Bitwarden
+  when: bw_unlocked | default(false)
   environment:
-    BW_SESSION: "{{ bw_session | default('') }}"
+    BW_SESSION: "{{ bw_session }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  block:
+    - name: Fetch DeepSeek API key from Bitwarden
+      ansible.builtin.command: bw get password deepseek-api-key
+      register: deepseek_key
+      no_log: true
+      changed_when: false
+      failed_when: false
 
-- name: Write pi-coding-agent auth.json
-  ansible.builtin.copy:
-    content: |
-      {
-        "deepseek": { "type": "api_key", "key": "{{ deepseek_key.stdout | trim }}" }
-      }
-    dest: ~/.pi/agent/auth.json
-    mode: "0600"
-  no_log: true
-  when: deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0
+    - name: Write pi-coding-agent auth.json
+      ansible.builtin.copy:
+        content: |
+          {
+            "deepseek": { "type": "api_key", "key": "{{ deepseek_key.stdout | trim }}" }
+          }
+        dest: ~/.pi/agent/auth.json
+        mode: "0600"
+      no_log: true
+      when: deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0
 
-# ── Forgejo API token for MCP server ─────────────────────────────
-- name: Fetch Forgejo API token from Bitwarden
-  ansible.builtin.shell: |
-    SESSION="${BW_SESSION:-$(cat /tmp/bw_session 2>/dev/null)}"
-    [ -z "$SESSION" ] && exit 1
-    bw get notes forgejo --session "$SESSION" | grep "API Token:" | sed 's/API Token: //'
-  register: forgejo_token
-  no_log: true
-  changed_when: false
-  failed_when: false
-  environment:
-    BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    - name: Fetch Forgejo API token from Bitwarden
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bw get notes forgejo | grep "API Token:" | sed 's/API Token: //'
+      register: forgejo_token
+      no_log: true
+      changed_when: false
+      failed_when: false
 
-- name: Write shell secrets file
-  ansible.builtin.copy:
-    content: |
-      # Managed by dotfiles playbook — DO NOT EDIT
-      export FORGEJO_TOKEN={{ forgejo_token.stdout | trim }}
-    dest: ~/.config/shell/secrets.sh
-    mode: "0600"
-  no_log: true
-  when: forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0
+    - name: Write shell secrets file
+      ansible.builtin.copy:
+        content: |
+          # Managed by dotfiles playbook — DO NOT EDIT
+          export FORGEJO_TOKEN={{ forgejo_token.stdout | trim }}
+        dest: ~/.config/shell/secrets.sh
+        mode: "0600"
+      no_log: true
+      when: forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0
 
 # ── tailvm shell completions ──────────────────────────────────────
 - name: Deploy tailvm bash completion
