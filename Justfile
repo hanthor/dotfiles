@@ -42,23 +42,44 @@ apply *args:
     # Tries env → /tmp cache → interactive unlock. Exits 3 if BW isn't logged
     # in on this machine and 4 if the user declined to unlock; both should
     # silently fall through to a no-secrets apply.
+    SKIP_TAGS=""
     if [ -z "${BW_SESSION:-}" ]; then
       if BW_SESSION_OUT=$(scripts/bw-unlock.sh 2>/dev/null); then
         export BW_SESSION="$BW_SESSION_OUT"
       else
         echo "Continuing without secrets (run scripts/bw-unlock.sh manually for details)..."
-        exec ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags secrets $BECOME_ARGS {{ args }}
+        SKIP_TAGS="secrets"
       fi
     fi
-    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }}
+    rc=0
+    if [ -n "$SKIP_TAGS" ]; then
+      ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags "$SKIP_TAGS" $BECOME_ARGS {{ args }} || rc=$?
+    else
+      ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }} || rc=$?
+    fi
+    scripts/record-apply.py "$rc" apply "$SKIP_TAGS"
+    exit $rc
 
 # Apply only specific tags (e.g. just apply-tags homepage,proxy)
 apply-tags tags:
-    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }}
+    #!/usr/bin/env bash
+    set -uo pipefail
+    cd {{ dotfiles_dir }}
+    rc=0
+    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }} || rc=$?
+    scripts/record-apply.py "$rc" apply-tags "{{ tags }}"
+    exit $rc
 
 # Apply without unlocking Bitwarden — fast path for the daily timer and `dots`
 apply-nosecrets *args:
-    cd {{ dotfiles_dir }} && git pull --ff-only && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags secrets {{ args }}
+    #!/usr/bin/env bash
+    set -uo pipefail
+    cd {{ dotfiles_dir }}
+    git pull --ff-only || true
+    rc=0
+    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags secrets {{ args }} || rc=$?
+    scripts/record-apply.py "$rc" apply-nosecrets secrets
+    exit $rc
 
 # Apply to a remote machine with specific tags (e.g. just apply-remote-tags bihar homepage,proxy)
 apply-remote-tags name tags:
@@ -445,6 +466,14 @@ doctor:
       pass "dotfiles-update unit active"
     else
       warn "dotfiles-update timer/service not active"
+    fi
+    echo "→ Last apply"
+    if [ -s ~/.cache/dotfiles/last-apply.json ]; then
+      if ! python3 {{ dotfiles_dir }}/scripts/last-apply-status.py; then
+        fail=1
+      fi
+    else
+      warn "no apply has been recorded yet — run: just apply"
     fi
     exit $fail
 
