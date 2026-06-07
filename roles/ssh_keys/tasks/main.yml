@@ -66,6 +66,36 @@
     - { path: "{{ priv_key }}", mode: "0600" }
     - { path: "{{ pub_key }}",  mode: "0644" }
 
+# ── Check actual BW unlock state ──────────────────────────────────
+# A forwarded BW_SESSION isn't always valid on a remote machine (different
+# local vault, KDF mismatch, etc.). Check status here so downstream tasks
+# can degrade gracefully instead of failing the play.
+- name: Check Bitwarden vault state
+  ansible.builtin.shell: |
+    bw status 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','unknown'))"
+  args:
+    executable: /bin/bash
+  register: bw_status
+  changed_when: false
+  failed_when: false
+  environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+
+- name: Set BW unlocked fact
+  ansible.builtin.set_fact:
+    bw_unlocked: "{{ bw_status.stdout | default('') | trim == 'unlocked' }}"
+
+- name: Warn if BW session present but vault still locked
+  ansible.builtin.debug:
+    msg: >-
+      BW_SESSION is set but `bw status` reports '{{ bw_status.stdout | default('') | trim }}'.
+      Skipping SSH key sync to Bitwarden. Unlock the vault on this host
+      directly to enable round-tripping.
+  when:
+    - bw_session | default('') != ''
+    - not bw_unlocked
+
 # ── Sync local key with Bitwarden ─────────────────────────────────
 # Local disk is the source of truth. On every run:
 #   - if BW has no item   → create
@@ -73,8 +103,7 @@
 #                          which left stale public keys in BW and broke
 #                          authorized_keys distribution after a key change)
 #   - if BW pubkey == disk → no-op
-# Skipped silently when BW is locked (bw_session empty); next unlocked
-# apply will heal it.
+# Skipped when the vault is locked; next unlocked apply will heal it.
 - name: Sync local SSH key to Bitwarden (create or update on mismatch)
   ansible.builtin.shell: |
     python3 - <<'PY'
@@ -124,10 +153,7 @@
     executable: /bin/bash
   register: bw_sync
   changed_when: bw_sync.stdout is search("UPDATED|CREATED")
-  failed_when:
-    - bw_sync.rc != 0
-    - bw_session | default('') != ''
-  when: bw_session | default('') != ''
+  when: bw_unlocked
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     BW_ITEM_NAME: "{{ user_login }}@{{ inventory_hostname }}"
@@ -231,7 +257,7 @@
   register: all_machine_keys
   changed_when: false
   failed_when: false
-  when: bw_session | default('') != ''
+  when: bw_unlocked
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
