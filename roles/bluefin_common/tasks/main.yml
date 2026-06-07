@@ -41,7 +41,7 @@
         # Use --arch amd64 even on ARM to get the files (they are just text/data)
         podman pull --arch amd64 ghcr.io/projectbluefin/common:latest
         podman create --name temp-bluefin-sync ghcr.io/projectbluefin/common:latest
-        
+
         # Structure for extraction
         mkdir -p {{ bluefin_temp.path }}/dconf
         mkdir -p {{ bluefin_temp.path }}/backgrounds
@@ -51,13 +51,13 @@
         # Extract gsettings/dconf
         podman cp temp-bluefin-sync:system_files/bluefin/usr/share/glib-2.0/schemas/zz0-bluefin-modifications.gschema.override {{ bluefin_temp.path }}/ || true
         podman cp temp-bluefin-sync:system_files/bluefin/etc/dconf/db/distro.d/. {{ bluefin_temp.path }}/dconf/ || true
-        
+
         # Extract backgrounds
         podman cp temp-bluefin-sync:system_files/bluefin/usr/share/backgrounds/bluefin/. {{ bluefin_temp.path }}/backgrounds/ || true
-        
+
         # Extract icons (logos)
         podman cp temp-bluefin-sync:system_files/bluefin/usr/share/icons/hicolor/. {{ bluefin_temp.path }}/icons/ || true
-        
+
         # Extract ublue-os specific assets (logos, fastfetch, etc.)
         podman cp temp-bluefin-sync:system_files/bluefin/usr/share/ublue-os/. {{ bluefin_temp.path }}/ublue-os/ || true
 
@@ -79,7 +79,7 @@
         cp -r {{ bluefin_temp.path }}/backgrounds/* ~/.local/share/backgrounds/bluefin/
         cp -r {{ bluefin_temp.path }}/icons/* ~/.local/share/icons/hicolor/
         cp -r {{ bluefin_temp.path }}/ublue-os/* ~/.local/share/ublue-os/
-        
+
         # Fix XML background paths to point to local home instead of /usr
         find ~/.local/share/backgrounds/bluefin/ -name "*.xml" -type f -exec sed -i "s|/usr/share/backgrounds/bluefin/|$HOME/.local/share/backgrounds/bluefin/|g" {} +
       changed_when: true

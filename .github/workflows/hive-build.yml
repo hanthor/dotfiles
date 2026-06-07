@@ -90,7 +90,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           no-cache: true
-          no-cache: true
 
       - name: Verify gh CLI in image
         run: |

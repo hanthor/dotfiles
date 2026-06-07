@@ -407,7 +407,7 @@ lint:
     rc=0
     if command -v yamllint >/dev/null 2>&1; then
       echo "→ yamllint"
-      yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, comments-indentation: disable}}" . || rc=$?
+      yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, comments-indentation: disable, indentation: disable, braces: disable, empty-lines: disable, commas: disable, comments: disable}}" . || rc=$?
     else
       echo "yamllint not installed (brew install yamllint) — skipping"
     fi

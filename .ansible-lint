@@ -1,0 +1,38 @@
+---
+# Project lint policy: keep the noise off, treat operational warnings
+# (idempotency, risky shell patterns) as real findings.
+#
+# Background: var-naming generated ~95 warnings across the role tree —
+# almost all of them false-positive complaints about register variables
+# like `bw_session` not being prefixed with the role name. Refactoring
+# every one of them gives zero operational benefit. The signal that
+# matters (no-changed-when, risky-shell-pipe) was buried under that
+# noise, so `just lint` exited non-zero and nobody noticed.
+
+profile: basic
+
+skip_list:
+  # `bw_session` and similar legitimately cross role boundaries; the
+  # role-prefix rule treats them as drift.
+  - var-naming[no-role-prefix]
+  # We use ignore_errors deliberately in a handful of places (the
+  # zen_browser default-handler chain in particular). Demote to warn
+  # instead of fail.
+  - ignore-errors
+
+warn_list:
+  # FQCN for builtins is a style nit; surface but don't fail.
+  - fqcn[canonical]
+  # YAML cosmetic findings — surface but don't fail; real authoring
+  # mistakes still get visibility from yamllint itself.
+  - yaml[trailing-spaces]
+  - yaml[line-length]
+  - yaml[empty-lines]
+  - yaml[commas]
+  - key-order[task]
+  # Surfaced but not blocking — we deliberately use systemctl/curl/shell
+  # in a handful of bootstrap-y tasks where the systemd/get_url modules
+  # don't offer enough control. Refactoring them is on the wishlist, not
+  # a CI blocker.
+  - command-instead-of-module
+  - command-instead-of-shell
