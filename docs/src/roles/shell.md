@@ -45,3 +45,29 @@ Deploys `~/.ssh/config` with short host aliases for all machines, including `Sen
 - `~/.config/atuin/` — [Atuin](https://atuin.sh/) shell history config
 - `~/.ssh/config` — SSH host aliases
 - `~/.tmux.conf` — tmux config
+
+## Per-host secrets (Atuin / DeepSeek / Forgejo)
+
+Three BW-gated blocks deploy host-local credential files. All are wrapped in `when: bw_unlocked` and never wipe existing files on a locked vault:
+
+| BW item | Destination | When |
+|---|---|---|
+| `atuin.sh` (login + `key` field) | `atuin login` to sync history (no file written; atuin manages its own state) | Only when `atuin status` says not logged in |
+| `deepseek-api-key` (password) | `~/.pi/agent/auth.json` (mode 0600) | When the item exists; otherwise the previous file is preserved |
+| `forgejo` (note containing `API Token: <pat>`) | `~/.config/shell/secrets.sh` (mode 0600, exports `FORGEJO_TOKEN`) | When the note has a usable token |
+
+## Failure modes
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `dots` shell abbreviation doesn't exist after first apply | Fish/zsh hasn't re-read aliases yet | `exec fish` or open a new terminal |
+| `atuin` not syncing on this host | Vault locked at apply time and no prior key on disk | Unlock BW, run `dots-apply` |
+| Login shell didn't change to zsh | `chsh` required a sudo prompt that the role didn't catch | `chsh -s $(brew --prefix)/bin/zsh` manually |
+
+## How to verify
+
+```bash
+echo $SHELL                       # should be the homebrew zsh path
+which dots                        # should be a function/alias, not "not found"
+atuin status                      # should say "[Sync] active" on hosts that signed in
+```

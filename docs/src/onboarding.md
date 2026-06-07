@@ -47,9 +47,12 @@ The bootstrap script:
 
 ## Post-Onboarding
 
-1. The `ssh_keys` role generates/registers ed25519 keys
-2. The `github` role registers the SSH key with GitHub
-3. The `tailscale` role joins the machine to the [Tailscale](https://tailscale.com/) network
-4. Daily updates run via `dotfiles-update.timer` (desktops) or on-login (laptops)
+1. The `ssh_keys` role generates a fresh ed25519 key on the new host, then pushes the pub key up to Bitwarden as `james@<hostname>`.
+2. The new host now needs to **trust the rest of the fleet, and the rest of the fleet needs to trust it**. The first apply on the new host downloads every other host's pub key into `~/.ssh/authorized_keys`. The other hosts will pick up the new host's pub key on *their* next apply (manually run `dots-apply` on each, or wait for the timer).
+3. The `github` role registers the SSH key with GitHub for both auth and commit signing.
+4. The `tailscale` role joins the machine to the [Tailscale](https://tailscale.com/) network using the auth key in BW.
+5. The daily `dotfiles-update.timer` (servers) or on-login service (laptops) runs `just apply-nosecrets` — secrets stay on the manual `dots-apply` cadence because BW can't be unlocked non-interactively.
 
-See [Architecture](architecture.md) for how the playbook runs on each machine.
+Run `just doctor` on the new host once it's bootstrapped — it'll tell you whether BW is unlocked, whether the timer is wired up, and the timestamp of the last successful apply.
+
+See [Architecture](architecture.md) for how the playbook runs on each machine and [Secrets with Bitwarden](bitwarden.md) for the details of the BW handshake.

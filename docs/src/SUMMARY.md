@@ -8,6 +8,7 @@
 - [Inventory & Groups](inventory.md)
 - [Secrets with Bitwarden](bitwarden.md)
 - [Onboarding a New Machine](onboarding.md)
+- [Operational Runbook](runbook.md)
 
 # Fleet Reference
 
