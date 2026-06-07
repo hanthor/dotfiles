@@ -37,9 +37,11 @@
         - bw_session is not defined
         - bw_session_cached_raw.content is defined
 
-    # 3. Sync vault to ensure latest items are available
+    # 3. Sync vault to ensure latest items are available. Hard timeout so a
+    # slow/unresponsive BW server can't block the entire play indefinitely.
+    # If sync fails, downstream tasks continue against the locally cached vault.
     - name: Sync Bitwarden vault
-      ansible.builtin.command: bw sync
+      ansible.builtin.command: timeout 15 bw sync
       changed_when: false
       failed_when: false
       when: bw_session is defined
@@ -60,3 +62,35 @@
           No BW_SESSION found. Run: export BW_SESSION=$(bw unlock --raw)
           then re-run 'just apply'. Skipping secrets.
       when: bw_session is not defined
+
+    # 5. Verify the session actually unlocks the vault. Forwarded BW_SESSION
+    # tokens (e.g. via 'just apply-remote') can be silently rejected by the
+    # remote host's BW CLI because the encrypted vault state / KDF differs.
+    # Downstream roles gate on `bw_unlocked` so they degrade cleanly instead
+    # of issuing API calls with empty credentials.
+    - name: Check Bitwarden vault state
+      ansible.builtin.shell: |
+        bw status 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','unknown'))"
+      args:
+        executable: /bin/bash
+      register: bw_status
+      changed_when: false
+      failed_when: false
+      environment:
+        BW_SESSION: "{{ bw_session | default('') }}"
+
+- name: Set Bitwarden unlocked fact
+  ansible.builtin.set_fact:
+    bw_unlocked: "{{ bw_check.rc == 0 and bw_session is defined and ((bw_status | default({})).stdout | default('') | trim) == 'unlocked' }}"
+
+- name: Warn if BW session present but vault is locked on this host
+  ansible.builtin.debug:
+    msg: >-
+      BW_SESSION is set but `bw status` reports
+      '{{ (bw_status | default({})).stdout | default('unknown') | trim }}'.
+      Skipping all secrets work on this host. Unlock the vault directly here
+      (`bw unlock`, write the session to /tmp/bw_session) to enable secrets.
+  when:
+    - bw_check.rc == 0
+    - bw_session is defined
+    - not bw_unlocked

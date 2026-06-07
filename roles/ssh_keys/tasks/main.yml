@@ -66,37 +66,8 @@
     - { path: "{{ priv_key }}", mode: "0600" }
     - { path: "{{ pub_key }}",  mode: "0644" }
 
-# ── Check actual BW unlock state ──────────────────────────────────
-# A forwarded BW_SESSION isn't always valid on a remote machine (different
-# local vault, KDF mismatch, etc.). Check status here so downstream tasks
-# can degrade gracefully instead of failing the play.
-- name: Check Bitwarden vault state
-  ansible.builtin.shell: |
-    bw status 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','unknown'))"
-  args:
-    executable: /bin/bash
-  register: bw_status
-  changed_when: false
-  failed_when: false
-  environment:
-    BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
-
-- name: Set BW unlocked fact
-  ansible.builtin.set_fact:
-    bw_unlocked: "{{ bw_status.stdout | default('') | trim == 'unlocked' }}"
-
-- name: Warn if BW session present but vault still locked
-  ansible.builtin.debug:
-    msg: >-
-      BW_SESSION is set but `bw status` reports '{{ bw_status.stdout | default('') | trim }}'.
-      Skipping SSH key sync to Bitwarden. Unlock the vault on this host
-      directly to enable round-tripping.
-  when:
-    - bw_session | default('') != ''
-    - not bw_unlocked
-
 # ── Sync local key with Bitwarden ─────────────────────────────────
+# Gated on `bw_unlocked` (set by the bitwarden role earlier in the play).
 # Local disk is the source of truth. On every run:
 #   - if BW has no item   → create
 #   - if BW pubkey ≠ disk → edit (THIS is the case the old role missed,
@@ -153,7 +124,7 @@
     executable: /bin/bash
   register: bw_sync
   changed_when: bw_sync.stdout is search("UPDATED|CREATED")
-  when: bw_unlocked
+  when: bw_unlocked | default(false)
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     BW_ITEM_NAME: "{{ user_login }}@{{ inventory_hostname }}"
@@ -257,7 +228,7 @@
   register: all_machine_keys
   changed_when: false
   failed_when: false
-  when: bw_unlocked
+  when: bw_unlocked | default(false)
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
