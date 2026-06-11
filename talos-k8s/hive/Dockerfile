@@ -103,6 +103,10 @@ RUN ARCH=$(uname -m) && \
 RUN ln -sf /usr/local/bin/goose-real /usr/local/bin/goose
 
 # Goose DeepSeek config (pre-seeded, overridable at runtime)
+RUN mkdir -p /data/home/.local/state/goose /data/home/.config/goose && \
+    chmod -R 775 /data/home/.local /data/home/.config && \
+    chown -R dev:node /data/home
+
 ENV HOME=/home/dev
 RUN mkdir -p /home/dev/.config/goose /home/dev/.local/state/goose
 COPY goose-config.yaml /home/dev/.config/goose/config.yaml
