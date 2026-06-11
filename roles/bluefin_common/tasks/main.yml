@@ -149,11 +149,19 @@
     dest: "~/.local/bin/tailvm"
     mode: "0755"
 
-- name: Install tailvm-go (pre-built binary)
-  ansible.builtin.copy:
-    src: "tailvm-go-linux-{{ ansible_facts.machine | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}"
-    dest: ~/.local/bin/tailvm-go
+- name: Install corral (rolling release built by hanthor/corral CI)
+  ansible.builtin.get_url:
+    url: "https://github.com/hanthor/corral/releases/download/binaries/corral-linux-{{ ansible_facts.machine | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}"
+    checksum: "sha256:https://github.com/hanthor/corral/releases/download/binaries/SHA256SUMS"
+    dest: ~/.local/bin/corral
     mode: "0755"
+  retries: 2
+  delay: 5
+
+- name: Remove the old tailvm-go binary (renamed to corral)
+  ansible.builtin.file:
+    path: ~/.local/bin/tailvm-go
+    state: absent
 
 - name: Ensure systemd user directory exists
   ansible.builtin.file:

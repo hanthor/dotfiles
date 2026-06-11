@@ -16,7 +16,7 @@ Syncs [Bluefin](https://projectbluefin.io/) branding, fonts, wallpapers, and GNO
 6. Installs Bluefin-standard fonts (Inter, JetBrains Mono)
 7. Installs Bluefin-recommended GNOME extensions
 8. Deploys a wallpaper rotation service and timer
-9. Deploys the `tailvm` and `tailvm-go` utilities
+9. Deploys the `tailvm` (Python) and `corral` (Go) utilities
 
 ## Fonts
 
@@ -27,9 +27,13 @@ Syncs [Bluefin](https://projectbluefin.io/) branding, fonts, wallpapers, and GNO
 
 A systemd timer (`bluefin-wallpaper-rotate.timer`) cycles through Bluefin backgrounds daily. The Python script applies the wallpaper via D-Bus.
 
-## TailVM
+## TailVM / Corral
 
-Deploys both a Python (`tailvm`) and Go (`tailvm-go`) utility for managing VMs reachable over Tailscale.
+Deploys the legacy Python `tailvm` script and **corral**, the Go VM manager
+(CLI + TUI + web). Corral is downloaded from the rolling `binaries` release of
+[hanthor/corral](https://github.com/hanthor/corral) (checksum-verified, so it
+updates whenever CI publishes a new build). It is no longer embedded in this
+repo.
 
 ## Notes
 
