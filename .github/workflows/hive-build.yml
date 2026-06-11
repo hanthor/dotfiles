@@ -39,6 +39,8 @@ jobs:
           cp ../dotfiles/talos-k8s/hive/Dockerfile ./Dockerfile
           # Copy goose DeepSeek provider config
           cp ../dotfiles/talos-k8s/hive/goose-config.yaml ./goose-config.yaml
+          # Copy goose wrapper (old CLI -> 1.37.0 subcommands)
+          cp ../dotfiles/talos-k8s/hive/goose-wrapper.sh ./goose-wrapper.sh
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

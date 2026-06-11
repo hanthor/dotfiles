@@ -145,6 +145,10 @@ spec:
       featureGates:
         - Snapshot
     imagePullPolicy: IfNotPresent
+    # LiveUpdate lets Corral hotplug CPU/memory on running VMs (it live-migrates
+    # the VM to apply the change). VMs are created with cpu.maxSockets +
+    # memory.maxGuest headroom so the hotplug has room to grow.
+    vmRolloutStrategy: LiveUpdate
   customizeComponents: {}
   imagePullPolicy: IfNotPresent
   infra:
@@ -155,7 +159,10 @@ spec:
         - key: node-role.kubernetes.io/control-plane
           operator: Exists
           effect: NoSchedule
-  workloadUpdateStrategy: {}
+  # Required by CPU/memory hotplug: applying a live update migrates the workload.
+  workloadUpdateStrategy:
+    workloadUpdateMethods:
+      - LiveMigrate
 ---
 # ServiceMonitor: tells Prometheus to scrape KubeVirt infra metrics
 # Requires the Prometheus Operator CRDs (installed by kube-prometheus-stack).

@@ -96,7 +96,13 @@ RUN ARCH=$(uname -m) && \
     else GOOSE_ARCH=x86_64; fi && \
     curl -sL "https://github.com/block/goose/releases/download/v${GOOSE_VERSION}/goose-${GOOSE_ARCH}-unknown-linux-gnu.tar.bz2" | \
     tar xj -C /usr/local/bin && \
-    chmod +x /usr/local/bin/goose
+    chmod +x /usr/local/bin/goose && \
+    mv /usr/local/bin/goose /usr/local/bin/goose-real
+
+# Goose wrapper: translates old hive CLI (goose --model X --prompt "...")
+# to goose 1.37.0 subcommand interface.
+COPY goose-wrapper.sh /usr/local/bin/goose
+RUN chmod +x /usr/local/bin/goose
 
 # ── Goose DeepSeek config (pre-seeded, overridable at runtime) ─────
 ENV HOME=/home/dev
