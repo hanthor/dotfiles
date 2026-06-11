@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/hanthor/corral/pkg/catalog"
 	"github.com/hanthor/corral/pkg/doctor"
 	"github.com/hanthor/corral/pkg/kubevirt"
 	"github.com/hanthor/corral/pkg/plugin"
@@ -296,6 +297,11 @@ func handleAddNIC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// GET /api/images — the built-in OS image catalog
+func handleImages(w http.ResponseWriter, r *http.Request) {
+	jsonResp(w, http.StatusOK, catalog.Images)
 }
 
 // GET /api/instancetypes — cluster instancetypes + preferences for the create wizard

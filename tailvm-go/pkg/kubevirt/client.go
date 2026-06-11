@@ -685,6 +685,21 @@ func GenerateDataVolume(name, namespace, isoURL string) map[string]any {
 	}
 }
 
+// GenerateBootDataVolume creates a CDI DataVolume that imports a qcow2/raw disk
+// image from a URL into a bootable PVC (sized, optional StorageClass).
+func GenerateBootDataVolume(name, namespace, url, size, storageClass string) map[string]any {
+	if size == "" {
+		size = "20G"
+	}
+	dv := GenerateDataVolume(name, namespace, url)
+	pvc := dv["spec"].(map[string]any)["pvc"].(map[string]any)
+	pvc["resources"].(map[string]any)["requests"].(map[string]any)["storage"] = size
+	if storageClass != "" {
+		pvc["storageClassName"] = storageClass
+	}
+	return dv
+}
+
 // GenerateProxyService creates the unified proxy Service with Tailscale annotation.
 func GenerateProxyService(name, namespace string, ports []int) map[string]any {
 	svcPorts := []map[string]any{}
@@ -954,6 +969,7 @@ func CreateVM(opts types.CreateOpts) error {
 	name := opts.Name
 	hasISO := opts.ISO != ""
 	hasContainer := opts.ContainerDisk != ""
+	hasImport := opts.ImportURL != ""
 	hasPVC := opts.PVC != ""
 	diskSize := opts.Disk
 	if diskSize == "" {
@@ -970,6 +986,12 @@ func CreateVM(opts types.CreateOpts) error {
 			return fmt.Errorf("creating boot PVC: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "Boot PVC: %s-disk (%s)\n", name, diskSize)
+	} else if hasImport {
+		// CDI imports the qcow2/raw image straight into the boot disk PVC.
+		if err := Apply(GenerateBootDataVolume(name+"-disk", ns, opts.ImportURL, diskSize, sc)); err != nil {
+			return fmt.Errorf("creating import DataVolume: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "Importing %s → %s-disk (%s)\n", opts.ImportURL, name, diskSize)
 	} else if hasContainer && opts.Disk != "" {
 		if err := Apply(GeneratePVCWithClass(name+"-data", ns, opts.Disk, sc)); err != nil {
 			return fmt.Errorf("creating data PVC: %w", err)

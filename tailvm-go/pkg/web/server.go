@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/net/websocket"
 
+	"github.com/hanthor/corral/pkg/catalog"
 	"github.com/hanthor/corral/pkg/config"
 	"github.com/hanthor/corral/pkg/kubevirt"
 	"github.com/hanthor/corral/pkg/registry"
@@ -60,6 +61,7 @@ func newMux() (*http.ServeMux, error) {
 	mux.HandleFunc("POST /api/vms", handleCreateVM)
 	mux.HandleFunc("GET /api/nodes", handleNodes)
 	mux.HandleFunc("GET /api/capabilities", handleCapabilities)
+	mux.HandleFunc("GET /api/images", handleImages)
 	mux.HandleFunc("GET /api/instancetypes", handleInstanceTypes)
 	mux.HandleFunc("GET /api/nads", handleNADs)
 	mux.HandleFunc("GET /api/doctor", handleDoctor)
@@ -190,6 +192,8 @@ type createRequest struct {
 	Mem           string `json:"mem"`
 	Disk          string `json:"disk"`
 	ContainerDisk string `json:"containerDisk"`
+	Image         string `json:"image"`  // catalog name
+	Import        string `json:"import"` // qcow2/raw URL
 	ISO           string `json:"iso"`
 	PVC           string `json:"pvc"`
 	Bootc         string `json:"bootc"`
@@ -298,13 +302,24 @@ func handleCreateVM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	containerDisk := req.ContainerDisk
+	if req.Image != "" {
+		img := catalog.Find(req.Image)
+		if img == nil {
+			errResp(w, http.StatusBadRequest, fmt.Errorf("unknown image %q", req.Image))
+			return
+		}
+		containerDisk = img.ContainerDisk
+	}
+
 	opts := types.CreateOpts{
 		Name:             req.Name,
 		Namespace:        ns,
 		CPU:              req.CPU,
 		Mem:              req.Mem,
 		Disk:             req.Disk,
-		ContainerDisk:    req.ContainerDisk,
+		ContainerDisk:    containerDisk,
+		ImportURL:        req.Import,
 		ISO:              req.ISO,
 		PVC:              req.PVC,
 		Node:             req.Node,

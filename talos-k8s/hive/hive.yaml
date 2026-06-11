@@ -116,20 +116,48 @@ data:
       modes:
         surge:
           threshold: 50
+          supervisor: 5m
           scanner: 15m
           ci-maintainer: pause
+          quality: 1h
+          guide: 1h
+          architect: 2h
+          strategist: 2h
+          sec-check: 1h
+          outreach: 2h
         busy:
           threshold: 10
+          supervisor: 5m
           scanner: 15m
           ci-maintainer: 1h
+          quality: 2h
+          guide: 2h
+          architect: 4h
+          strategist: 4h
+          sec-check: 2h
+          outreach: 4h
         quiet:
           threshold: 2
+          supervisor: 10m
           scanner: 15m
           ci-maintainer: 45m
+          quality: 4h
+          guide: 4h
+          architect: 6h
+          strategist: 6h
+          sec-check: 4h
+          outreach: 6h
         idle:
           threshold: 0
+          supervisor: 15m
           scanner: 15m
           ci-maintainer: 15m
+          quality: 6h
+          guide: 6h
+          architect: 8h
+          strategist: 8h
+          sec-check: 6h
+          outreach: 8h
 
     github:
       app_id: 3942065
