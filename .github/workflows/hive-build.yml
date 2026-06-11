@@ -25,57 +25,12 @@ jobs:
         with:
           path: dotfiles
 
-      - name: Checkout kubestellar/hive v2 (for source)
+      - name: Checkout hanthor/hive goose-1.37 (fork with goose 1.37 patches)
         uses: actions/checkout@v4
         with:
-          repository: kubestellar/hive
-          ref: v2
+          repository: hanthor/hive
+          ref: goose-1.37
           path: hive-src
-
-      - name: Patch source for goose 1.37.0 support
-        working-directory: hive-src
-        run: |
-          python3 << 'PYEOF'
-          import re
-
-          with open('v2/pkg/agent/manager.go', 'r') as f:
-              content = f.read()
-
-          # 1. Add "goose" to cliPaneMarkers (after "Gemini")
-          content = content.replace(
-              '\t"Gemini",\n',
-              '\t"Gemini",\n\t"goose",\n')
-
-          # 2. Update waitForInputPrompt to check goose-specific prompts
-          content = content.replace(
-              'if strings.Contains(output, "❯") {',
-              'if strings.Contains(output, "❯") || strings.Contains(output, "goose is ready") || strings.Contains(output, "> Enter to send") {')
-
-          # 3. Use "goose run -s" subcommand for goose 1.37.0
-          old_launch = '\tcase "goose":\n\t\tif model != "" {\n\t\t\tlaunchCmd = fmt.Sprintf("%s --model %s", binary, model)\n\t\t}'
-          new_launch = '\tcase "goose":\n\t\tlaunchCmd = fmt.Sprintf("%s run -s", binary)\n\t\tif model != "" {\n\t\t\tlaunchCmd = fmt.Sprintf("%s --model %s", launchCmd, model)\n\t\t}'
-          content = content.replace(old_launch, new_launch)
-
-          # 4. Use --text instead of --prompt for goose bootstrap
-          content = content.replace(
-              '\t\t\tcase "goose":\n\t\t\t\tlaunchCmd += fmt.Sprintf(" --prompt \\"$(cat %s)\\"", promptFile)',
-              '\t\t\tcase "goose":\n\t\t\t\tlaunchCmd += fmt.Sprintf(" --text \\"$(cat %s)\\"", promptFile)')
-
-          # 5. Skip ^C + ^U clear for goose (goose 1.37 exits on ^C)
-          old_clear = '// Clear stale input before kick (Ctrl+C then Ctrl+U)\n\tm.tmuxSendKeysForAgent(agent, "C-c")\n\ttime.Sleep(staleCheckDelay)\n\tm.tmuxSendKeysForAgent(agent, "C-u")\n\ttime.Sleep(staleCheckDelay)\n\n\tif agent.Config.ClearOnKick {'
-          new_clear = '// Clear stale input before kick (Ctrl+C then Ctrl+U).\n\t// Goose 1.37 exits on ^C — skip clear for goose backend.\n\tif agent.Config.Backend != "goose" && agent.BackendOverride != "goose" {\n\t\tm.tmuxSendKeysForAgent(agent, "C-c")\n\t\ttime.Sleep(staleCheckDelay)\n\t\tm.tmuxSendKeysForAgent(agent, "C-u")\n\t\ttime.Sleep(staleCheckDelay)\n\t}\n\n\tif agent.Config.ClearOnKick {'
-          content = content.replace(old_clear, new_clear)
-
-          # 6. Increase prompt timeout: 30s -> 120s (goose processes long bootstraps)
-          content = content.replace(
-              'inputPromptTimeout      = 30 * time.Second',
-              'inputPromptTimeout      = 120 * time.Second')
-
-          with open('v2/pkg/agent/manager.go', 'w') as f:
-              f.write(content)
-
-          print("Goose 1.37.0 patches applied successfully")
-          PYEOF
 
       - name: Prep build context
         working-directory: hive-src
