@@ -40,7 +40,7 @@ FROM node:24-slim
 # --- Layer 1: system packages ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates bash curl bzip2 gosu iptables inotify-tools libevent-core-2.1-7 \
-    gcc libc6-dev \
+    gcc libc6-dev passwd \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=tmux-builder /usr/local/bin/tmux /usr/local/bin/tmux
