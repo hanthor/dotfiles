@@ -86,7 +86,7 @@ ARG CLAUDE_CODE_VERSION=latest
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} && npm cache clean --force
 
 # ── Goose CLI (NEW — our primary backend) ──────────────────────────
-ARG GOOSE_VERSION=1.1.7
+ARG GOOSE_VERSION=1.37.0
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then GOOSE_ARCH=x86_64; \
     elif [ "$ARCH" = "aarch64" ]; then GOOSE_ARCH=aarch64; \
