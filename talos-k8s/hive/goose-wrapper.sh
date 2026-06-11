@@ -20,7 +20,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-set -- /usr/local/bin/goose-real run -s --no-session
+set -- /usr/local/bin/goose-real run -s
 [ -n "$MODEL" ] && set -- "$@" --model "$MODEL"
 [ -n "$TEXT" ] && set -- "$@" --text "$TEXT"
 
