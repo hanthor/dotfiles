@@ -99,6 +99,9 @@ RUN ARCH=$(uname -m) && \
     chmod +x /usr/local/bin/goose && \
     mv /usr/local/bin/goose /usr/local/bin/goose-real
 
+# Symlink goose binary (Go binary looks for "goose" in PATH)
+RUN ln -sf /usr/local/bin/goose-real /usr/local/bin/goose
+
 # Goose DeepSeek config (pre-seeded, overridable at runtime)
 ENV HOME=/home/dev
 RUN mkdir -p /home/dev/.config/goose /home/dev/.local/state/goose
