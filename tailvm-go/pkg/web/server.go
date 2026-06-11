@@ -25,8 +25,13 @@ import (
 	"github.com/hanthor/corral/pkg/config"
 	"github.com/hanthor/corral/pkg/kubevirt"
 	"github.com/hanthor/corral/pkg/registry"
+	"github.com/hanthor/corral/pkg/shell"
 	"github.com/hanthor/corral/pkg/types"
 )
+
+// defaultRunner is the command runner used by handlers that shell out
+// (vmiIndex, handleNodes, handleExport). Defaults to shell.Real; set in tests.
+var defaultRunner shell.Runner = shell.Real{}
 
 //go:embed static
 var staticFS embed.FS
@@ -151,7 +156,7 @@ type vmiInfo struct {
 }
 
 func vmiIndex() map[string]vmiInfo {
-	out, err := exec.Command("kubectl", "get", "vmis", "-A", "-o", "json").Output()
+	out, err := defaultRunner.Run("kubectl", "get", "vmis", "-A", "-o", "json")
 	if err != nil {
 		return nil
 	}
@@ -382,7 +387,7 @@ func handleVMAction(w http.ResponseWriter, r *http.Request) {
 // pod-local temp file via virtctl, then streamed and removed.
 func handleExport(w http.ResponseWriter, r *http.Request) {
 	ns, name := r.PathValue("ns"), r.PathValue("name")
-	if exec.Command("kubectl", "get", "vmi", name, "-n", ns).Run() == nil {
+	if _, err := defaultRunner.Run("kubectl", "get", "vmi", name, "-n", ns); err == nil {
 		errResp(w, http.StatusConflict, fmt.Errorf("stop %s before exporting (its disk is in use while running)", name))
 		return
 	}
@@ -447,7 +452,7 @@ type nodeResp struct {
 }
 
 func handleNodes(w http.ResponseWriter, r *http.Request) {
-	out, err := exec.Command("kubectl", "get", "nodes", "-o", "json").Output()
+	out, err := defaultRunner.Run("kubectl", "get", "nodes", "-o", "json")
 	if err != nil {
 		errResp(w, http.StatusBadGateway, fmt.Errorf("listing nodes: %w", err))
 		return
