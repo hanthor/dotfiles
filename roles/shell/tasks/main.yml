@@ -204,7 +204,7 @@
 
 - name: Skip atuin login (already logged in or vault locked)
   ansible.builtin.set_fact:
-    atuin_bw_item: { rc: 1, stdout: "" }
+    atuin_bw_item: {rc: 1, stdout: ""}
   when: atuin_logged_in or not (bw_unlocked | default(false))
   tags: [secrets]
 
@@ -369,5 +369,3 @@
     - bw_unlocked | default(false)
     - (deepseek_key | default({})).rc | default(1) != 0
       or (deepseek_key | default({})).stdout | default('') | trim | length == 0
-
-

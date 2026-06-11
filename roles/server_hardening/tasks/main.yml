@@ -72,9 +72,9 @@
     line: "{{ item.line }}"
   become: true
   loop:
-    - { regexp: '^#?MaxStartups', line: 'MaxStartups 3:50:10' }
-    - { regexp: '^#?MaxSessions', line: 'MaxSessions 10' }
-    - { regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax 3' }
+    - {regexp: '^#?MaxStartups', line: 'MaxStartups 3:50:10'}
+    - {regexp: '^#?MaxSessions', line: 'MaxSessions 10'}
+    - {regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax 3'}
   notify: Reload sshd
 
 # ── UFW logging ───────────────────────────────────────────────────

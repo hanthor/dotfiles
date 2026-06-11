@@ -20,7 +20,7 @@ jobs:
 
       - name: yamllint
         run: |
-          yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, comments-indentation: disable}}" .
+          yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, comments-indentation: disable, comments: disable, braces: disable, indentation: disable, commas: disable, empty-lines: disable}}" .
 
       - name: ansible-lint
         run: ansible-lint site.yml

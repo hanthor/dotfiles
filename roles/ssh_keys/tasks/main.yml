@@ -63,8 +63,8 @@
     path: "{{ item.path }}"
     mode: "{{ item.mode }}"
   loop:
-    - { path: "{{ priv_key }}", mode: "0600" }
-    - { path: "{{ pub_key }}",  mode: "0644" }
+    - {path: "{{ priv_key }}", mode: "0600"}
+    - {path: "{{ pub_key }}", mode: "0644"}
 
 # ── Sync local key with Bitwarden ─────────────────────────────────
 # Gated on `bw_unlocked` (set by the bitwarden role earlier in the play).
