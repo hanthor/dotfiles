@@ -1,23 +1,20 @@
-# Hive — 24/7 AI agent supervisor for GitHub repos
+# Hive v2 Configuration — TunaOS project, goose + DeepSeek backend
+# Deploy: kubectl apply -f hive.yaml && kubectl rollout restart deploy/hive -n hive
 #
-# Deploy:
-#   1. Create secrets first:
-#      kubectl create secret generic hive-secrets -n hive \
-#        --from-literal=DEEPSEEK_API_KEY=sk-... \
-#        --from-literal=HIVE_GITHUB_TOKEN=ghp_... \
-#        --from-literal=NTFY_TOPIC=your-ntfy-topic \
-#        --dry-run=client -o yaml | kubectl apply -f -
+# Secrets (create before deploy):
+#   kubectl create secret generic hive-secrets -n hive \
+#     --from-literal=DEEPSEEK_API_KEY=sk-... \
+#     --from-literal=HIVE_GITHUB_TOKEN=... \
+#     --from-literal=NTFY_TOPIC=your-topic \
+#     --dry-run=client -o yaml | kubectl apply -f -
 #
-#      # For GitHub App (post-setup):
-#      kubectl create secret generic hive-secrets -n hive \
-#        --from-literal=GH_APP_ID=... \
-#        --from-literal=GH_APP_INSTALLATION_ID=... \
-#        --from-file=gh-app-key.pem=/path/to/key.pem \
-#        --dry-run=client -o yaml | kubectl apply -f -
-#
-#   2. kubectl apply -f talos-k8s/hive.yaml
-#
-# Access: https://hive.manatee-basking.ts.net
+# For GitHub App auth (preferred):
+#   kubectl create secret generic hive-secrets -n hive \
+#     --from-literal=GH_APP_ID=3942065 \
+#     --from-literal=GH_APP_INSTALLATION_ID=137498420 \
+#     --from-file=gh-app-key.pem=/path/to/key.pem \
+#     --from-literal=NTFY_TOPIC=your-topic \
+#     --dry-run=client -o yaml | kubectl apply -f -
 ---
 apiVersion: v1
 kind: Namespace
@@ -27,17 +24,6 @@ metadata:
     app.kubernetes.io/name: hive
     app.kubernetes.io/part-of: hive
 ---
-# Secrets — create manually with kubectl, not in this file.
-# See deploy instructions above.
-# Secret name: hive-secrets
-# Required keys:
-#   DEEPSEEK_API_KEY  — DeepSeek API key (sk-...)
-#   HIVE_GITHUB_TOKEN — GitHub PAT or App token
-#   NTFY_TOPIC        — ntfy.sh topic string
-# Optional:
-#   HIVE_DASHBOARD_TOKEN — mutation endpoint auth (omit for no auth)
-#   GH_APP_ID, GH_APP_INSTALLATION_ID, gh-app-key.pem — GitHub App
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -46,246 +32,80 @@ metadata:
   labels:
     app.kubernetes.io/name: hive
 data:
-  pi-wrapper.sh: |
-    #!/bin/sh
-    # pi-wrapper — runs pi (coding agent) in a restart loop.
-    # Pi natively supports DeepSeek — no proxy, no litellm workaround.
-    #
-    # Why the loop: clear_on_kick sends ^C to kill the running session.
-    # trap '' INT makes the wrapper ignore SIGINT so only pi-real is killed.
-    trap '' INT
-
-    # ── Parse CLI args ────────────────────────────────────────────────
-    MODEL="deepseek-v4-pro"
-    while [ $# -gt 0 ]; do
-        case "$1" in
-            --no-confirm) shift ;;  # pi has no permission popups
-            --model) MODEL="$2"; shift 2 ;;
-            --prompt) shift 2 ;;
-            *) shift ;;
-        esac
-    done
-
-    # ── pi config ────────────────────────────────────────────────────
-    PI_CONFIG_DIR="${PI_CODING_AGENT_DIR:-/home/dev/.pi/agent}"
-    mkdir -p "$PI_CONFIG_DIR"
-    cat > "$PI_CONFIG_DIR/settings.json" << 'JSON'
-    {
-      "defaultProvider": "deepseek",
-      "defaultModel": "deepseek-v4-pro",
-      "quietStartup": true,
-      "hideThinkingBlock": true,
-      "enableInstallTelemetry": false
-    }
-    JSON
-
-    # ── Session directory ─────────────────────────────────────────────
-    SESSION_DIR="/data/pi-sessions/${HIVE_AGENT:-agent}"
-    mkdir -p "$SESSION_DIR"
-
-    # ── TLS certs ────────────────────────────────────────────────────
-    if [ -f /data/proxy-ca.pem ]; then
-        export SSL_CERT_FILE=/data/proxy-ca.pem
-        export NODE_EXTRA_CA_CERTS=/data/proxy-ca.pem
-        export GIT_SSL_CAINFO=/data/proxy-ca.pem
-    fi
-
-    # ── Proxy URL fix ────────────────────────────────────────────────
-    if [ -n "${HTTPS_PROXY:-}" ]; then
-        export HTTPS_PROXY=$(echo "$HTTPS_PROXY" | sed 's|://\([^:@]*\)@|://\1:@|')
-        export HTTP_PROXY=$(echo "$HTTP_PROXY" | sed 's|://\([^:@]*\)@|://\1:@|')
-    fi
-    export GIT_ASKPASS=/bin/true
-    export GIT_TERMINAL_PROMPT=0
-
-    # ── Main loop ────────────────────────────────────────────────────
-    # Append ❯ to system prompt so Hive detects pi is ready.
-    while true; do
-        echo "DeepSeek chat ready ❯"
-        echo "Environment loaded"
-        /usr/local/bin/pi-real \
-            --provider deepseek \
-            --model "$MODEL" \
-            --no-context-files \
-            --session-dir "$SESSION_DIR" \
-            --append-system-prompt "❯" || true
-    done
-
-  backends.conf: |
-    # backends.conf — Single source of truth for CLI backends and model names.
-    # Overrides the built-in config with pi support.
-    #
-    # Usage:
-    #   source /usr/local/etc/hive/backends.conf
-    #
-    #   model=$(normalize_model_for_backend "pi" "deepseek-v4-pro")
-
-    # ── Supported backends ────────────────────────────────────────────
-    KNOWN_BACKENDS="claude copilot bob gemini codex amazonq goose aider pi"
-
-    # ── Backend → binary mapping ──────────────────────────────────────
-    backend_binary() {
-      case "$1" in
-        claude)  echo "claude" ;;
-        copilot) echo "copilot" ;;
-        gemini)  echo "gemini" ;;
-        codex)   echo "codex" ;;
-        amazonq) echo "q" ;;
-        bob)     echo "bob" ;;
-        goose)   echo "goose" ;;
-        aider)   echo "aider" ;;
-        pi)      echo "pi" ;;
-        *)       echo "$1" ;;
-      esac
-    }
-
-    # ── Backend → permission flag ─────────────────────────────────────
-    backend_perm_flag() {
-      case "$1" in
-        claude)  echo "--dangerously-skip-permissions" ;;
-        copilot) echo "--allow-all" ;;
-        bob)     echo "--accept-license" ;;
-        gemini)  echo "--yolo" ;;
-        codex)   echo "--full-auto" ;;
-        amazonq) echo "--trust-all-tools" ;;
-        goose)   echo "--no-confirm" ;;
-        aider)   echo "--yes" ;;
-        pi)      echo "" ;;  # pi has no permission popups
-        *)       echo "" ;;
-      esac
-    }
-
-    # ── Model version format normalization ────────────────────────────
-    normalize_model_for_backend() {
-      local backend="$1" model="$2"
-      case "$backend" in
-        copilot)
-          echo "$model" | sed -E 's/([0-9]+)-([0-9]+)$/\1.\2/'
-          ;;
-        claude)
-          echo "$model" | sed -E 's/([0-9]+)\.([0-9]+)$/\1-\2/'
-          ;;
-        *)
-          echo "$model"
-          ;;
-      esac
-    }
-
-    detect_backend_from_model() {
-      local model="$1"
-      case "$model" in
-        gpt-*)     echo "copilot" ;;
-        gemini-*)  echo "gemini" ;;
-        claude-*)  echo "claude" ;;
-        deepseek-*) echo "pi" ;;
-        *)         echo "unknown" ;;
-      esac
-    }
-
-    models_equal() {
-      local a="$1" b="$2"
-      local na nb
-      na=$(echo "$a" | sed -E 's/([0-9]+)\.([0-9]+)$/\1-\2/')
-      nb=$(echo "$b" | sed -E 's/([0-9]+)\.([0-9]+)$/\1-\2/')
-      [ "$na" = "$nb" ]
-    }
-
-    model_tier() {
-      case "$1" in
-        claude-haiku-4-5*|claude-haiku-4.5*)   echo "haiku" ;;
-        claude-sonnet-4-6*|claude-sonnet-4.6*) echo "sonnet" ;;
-        claude-opus-4-6*|claude-opus-4.6*)     echo "opus" ;;
-        claude-opus-4-7*|claude-opus-4.7*)     echo "opus" ;;
-        gpt-*)                                  echo "gpt" ;;
-        gemini-*)                               echo "gemini" ;;
-        deepseek-*)                             echo "deepseek" ;;
-        *)                                      echo "unknown" ;;
-      esac
-    }
-  patch-dashboard.sh: |
-    #!/bin/sh
-    # Patch dashboard KNOWN_MODELS to include DeepSeek models.
-    # Uses Python for reliable in-place string replacement (avoids sed quoting hell).
-    python3 << 'PYEOF'
-    import sys
-    path = '/opt/hive/proxy/public/index.html'
-    marker = "{ value: 'gpt-5.2', label: 'GPT-5.2' },"
-    inject = "\n      { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },\n      { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },"
-    with open(path) as f:
-        c = f.read()
-    if marker in c and 'deepseek-v4-flash' not in c:
-        with open(path, 'w') as f:
-            f.write(c.replace(marker, marker + inject, 1))
-        print('patch-dashboard: injected deepseek models')
-    else:
-        print('patch-dashboard: already patched or marker not found')
-    PYEOF
   hive.yaml: |
     project:
       org: hanthor
-      name: "TunaOS"
+      name: TunaOS
       repos:
         - tuna-os/tunaos
       ai_author: hanthor
       primary_repo: tuna-os/tunaos
 
-    acmm_level: 5
+    acmm_level: 6
 
     agents:
       supervisor:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         beads_dir: /data/beads/supervisor
         clear_on_kick: true
+        bead_role: supervisor
       scanner:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
         clear_on_kick: true
       ci-maintainer:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
         clear_on_kick: true
       quality:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/quality
         clear_on_kick: true
+      guide:
+        enabled: true
+        backend: goose
+        model: deepseek-v4-pro
+        beads_dir: /data/beads/guide
+        clear_on_kick: true
       sec-check:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/sec-check
         clear_on_kick: true
       architect:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/architect
-        clear_on_kick: true
+        clear_on_kick: false
       strategist:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/strategist
         clear_on_kick: true
-      guide:
+      outreach:
         enabled: true
-        backend: pi
+        backend: goose
         model: deepseek-v4-pro
-        beads_dir: /data/beads/guide
-        clear_on_kick: true
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/outreach
+        clear_on_kick: false
       brainstorm:
         enabled: false
 
@@ -312,7 +132,7 @@ data:
     github:
       app_id: 3942065
       installation_id: 137498420
-      key_file: /secrets/gh-app-key.pem
+      key_file: /var/run/hive-metrics/gh-app-key.pem
 
     dashboard:
       port: 3002
@@ -366,14 +186,9 @@ spec:
         - name: hive
           image: ghcr.io/hanthor/hive:latest
           imagePullPolicy: IfNotPresent
-          command: ["/bin/sh", "-c"]
           args:
-            - |
-              cp /etc/hive/pi-wrapper.sh /usr/local/bin/pi
-              chmod +x /usr/local/bin/pi
-              cp /etc/hive/backends.conf /usr/local/etc/hive/backends.conf
-              sh /etc/hive/patch-dashboard.sh
-              exec /usr/local/bin/entrypoint.sh --config /etc/hive/hive.yaml
+            - "--config"
+            - "/etc/hive/hive.yaml"
           stdin: true
           tty: true
           ports:
@@ -387,12 +202,17 @@ spec:
               containerPort: 7681
               protocol: TCP
           env:
-            # DeepSeek API (pi natively supports DeepSeek)
+            # DeepSeek API key for goose
             - name: DEEPSEEK_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: hive-secrets
                   key: DEEPSEEK_API_KEY
+            # Goose provider (pre-seeded in image, re-export for safety)
+            - name: GOOSE_PROVIDER
+              value: custom_deepseek
+            - name: GOOSE_MODEL
+              value: deepseek-v4-pro
             # GitHub App auth
             - name: GH_APP_ID
               value: "3942065"
@@ -447,6 +267,7 @@ spec:
         - name: secrets
           secret:
             secretName: hive-secrets
+            optional: true
 ---
 apiVersion: v1
 kind: Service

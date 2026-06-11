@@ -1,16 +1,16 @@
-# Build and push custom hive image (v2 + pi + DeepSeek) to GHCR
+# Build and push custom hive image (upstream v2 + goose + DeepSeek) to GHCR
 name: Build Hive Image
 
 on:
   workflow_dispatch:
-
-# Temporarily disabled while debugging CI failures
-#  push:
-#    branches:
-#      - master
-#    paths:
-#      - 'talos-k8s/hive/**'
-#      - '.github/workflows/hive-build.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'talos-k8s/hive/Dockerfile'
+      - 'talos-k8s/hive/goose-config.yaml'
+      - 'talos-k8s/hive/hive.yaml'
+      - '.github/workflows/hive-build.yml'
 
 permissions:
   contents: read
@@ -20,7 +20,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout this repo (for custom Dockerfile)
+      - name: Checkout this repo (for custom Dockerfile + goose config)
         uses: actions/checkout@v4
         with:
           path: dotfiles
@@ -32,40 +32,13 @@ jobs:
           ref: v2
           path: hive-src
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-
-      - name: Patch source for pi backend
-        working-directory: hive-src
-        run: |
-          # Add pi to hive's CLI marker list so it recognizes pi sessions
-          sed -i '/"Gemini",/a\	"pi",' v2/pkg/agent/manager.go
-          # Add pi to allowed backend list in config validation
-          sed -i 's/"claude": true, "copilot": true, "gemini": true, "goose": true/"claude": true, "copilot": true, "gemini": true, "goose": true, "pi": true/' v2/pkg/config/config.go
-          # Add pi to backendBinary() lookup map
-          sed -i '/"goose":   "goose",/a\		"pi":      "pi",' v2/pkg/agent/manager.go
-          # Fix input prompt detection for pi (uses alternate screen)
-          sed -i 's/strings.Contains(output, "\u276f")/(strings.Contains(output, "\u276f") || strings.Contains(output, "deepseek-v4-pro"))/' v2/pkg/agent/manager.go
-
-      - name: Build Go binaries
-        working-directory: hive-src
-        run: |
-          GIT_HASH=$(git rev-parse HEAD)
-          GIT_SHORT=$(git rev-parse --short HEAD)
-          cd v2
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-            -ldflags "-X main.gitHash=${GIT_HASH} -X main.gitShort=${GIT_SHORT}" \
-            -o ../hive-binary ./cmd/hive
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../bd-binary ./cmd/bd
-
       - name: Prep build context
         working-directory: hive-src
         run: |
-          # Use our custom Dockerfile and pi wrapper
+          # Copy our custom Dockerfile (adds goose + DeepSeek)
           cp ../dotfiles/talos-k8s/hive/Dockerfile ./Dockerfile
-          cp ../dotfiles/talos-k8s/hive/pi-wrapper.sh ./pi-wrapper.sh
+          # Copy goose DeepSeek provider config
+          cp ../dotfiles/talos-k8s/hive/goose-config.yaml ./goose-config.yaml
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -90,7 +63,3 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           no-cache: true
-
-      - name: Verify gh CLI in image
-        run: |
-          docker run --rm ghcr.io/${{ github.repository_owner }}/hive:latest ls -la /usr/local/bin/gh-real || echo "FAIL: gh-real not found"

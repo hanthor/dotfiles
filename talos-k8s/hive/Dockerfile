@@ -1,92 +1,175 @@
-# Hive v2 + pi (DeepSeek) — MINIMAL Dockerfile
-#
-# Installs pi coding agent as the primary AI backend. Pi natively supports
-# DeepSeek — no proxy, no litellm workaround. Goose can be added later:
-#   curl -fsSL "https://github.com/aaif-goose/goose/releases/download/v1.37.0/goose-x86_64-unknown-linux-gnu.tar.gz" | tar xz -C /usr/local/bin
-#   mv /usr/local/bin/goose /usr/local/bin/goose-real
-#
-# BUST: 2026-06-05-v3 (clean pi-only build)
+# Hive v2 Dockerfile — upstream kubestellar/hive + goose CLI + DeepSeek
+# Based on upstream v2/Dockerfile with goose binary and DeepSeek config added.
+# Build context: root of kubestellar/hive repo (or our fork).
 
+# ── Stage 1: Go builder (unchanged from upstream) ──────────────────
+FROM golang:1.25-alpine AS builder
+RUN apk add --no-cache git
+WORKDIR /src
+
+COPY v2/go.mod v2/go.sum ./
+RUN go mod download
+
+COPY .git /repo/.git
+COPY v2/ .
+
+ARG GIT_HASH=unknown
+RUN GIT_HASH=$(git -C /repo rev-parse HEAD 2>/dev/null || echo "unknown") && \
+    GIT_SHORT=$(git -C /repo rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
+    GIT_BRANCH=$(git -C /repo rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown") && \
+    GOCACHE=/tmp/gobuild CGO_ENABLED=0 go build -ldflags "-X main.gitHash=${GIT_HASH} -X main.gitShort=${GIT_SHORT} -X main.gitBranch=${GIT_BRANCH}" -o /hive ./cmd/hive && \
+    GOCACHE=/tmp/gobuild CGO_ENABLED=0 go build -o /bd ./cmd/bd
+
+RUN git clone --depth 1 https://github.com/kubestellar/pluk.git /tmp/pluk && \
+    cd /tmp/pluk && GOCACHE=/tmp/gobuild CGO_ENABLED=0 go build -o /pluk ./cmd/pluk/ && \
+    mkdir -p /pluk-patterns && cp -r /tmp/pluk/config/patterns.d /pluk-patterns/ && \
+    rm -rf /tmp/pluk
+
+# ── Stage 2: tmux from source (unchanged from upstream) ────────────
+FROM node:24-slim AS tmux-builder
+ARG TMUX_VERSION=3.5a
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl gcc make pkg-config libevent-dev libncurses-dev bison ca-certificates \
+ && curl -sL "https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/tmux-${TMUX_VERSION}.tar.gz" | tar xz -C /tmp \
+ && cd /tmp/tmux-${TMUX_VERSION} && ./configure --prefix=/usr/local && make -j$(nproc) && make install \
+ && rm -rf /tmp/tmux-${TMUX_VERSION}
+
+# ── Stage 3: Final runtime image ───────────────────────────────────
 FROM node:24-slim
 
-# ── Minimal runtime dependencies ──────────────────────────────────────
+# --- Layer 1: system packages ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash curl git gosu iptables inotify-tools jq \
-    procps python3 sudo tmux util-linux \
-    fd-find ripgrep \
- && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+    git ca-certificates bash curl bzip2 gosu iptables inotify-tools libevent-core-2.1-7 \
+    gcc libc6-dev \
  && rm -rf /var/lib/apt/lists/*
 
-# ── gh CLI (for agent PR creation) ────────────────────────────────────
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
- && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
- && apt-get update && apt-get install -y --no-install-recommends gh \
- && mv /usr/bin/gh /usr/local/bin/gh-real \
- && rm -rf /var/lib/apt/lists/*
+COPY --from=tmux-builder /usr/local/bin/tmux /usr/local/bin/tmux
 
-# ── su-exec for UID switching ─────────────────────────────────────────
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates gcc libc6-dev \
- && update-ca-certificates \
- && curl -sL -o /tmp/su-exec.c https://raw.githubusercontent.com/ncopa/su-exec/master/su-exec.c \
+# su-exec for UID switching
+RUN curl -sL -o /tmp/su-exec.c https://raw.githubusercontent.com/ncopa/su-exec/master/su-exec.c \
  && gcc -Wall -o /usr/local/bin/su-exec /tmp/su-exec.c \
  && chmod u+s /usr/local/bin/su-exec \
  && rm /tmp/su-exec.c \
  && apt-get purge -y gcc libc6-dev && apt-get autoremove -y
 
-# ── Non-root dev user ─────────────────────────────────────────────────
-RUN echo 'dev:x:1001:1000::/home/dev:/bin/bash' >> /etc/passwd && \
-    echo 'dev:!:20000:0:99999:7:::' >> /etc/shadow && \
-    mkdir -p /home/dev && chown 1001:1000 /home/dev && chmod 755 /home/dev
+RUN useradd -m -u 1001 -g node -s /bin/bash dev
 
-# ── pi Coding Agent (DeepSeek backend) ────────────────────────────────
-RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && \
-    mv /usr/local/bin/pi /usr/local/bin/pi-real && \
-    chmod +x /usr/local/bin/pi-real && \
-    npm cache clean --force
+# --- Layer 2: ttyd ---
+ARG TTYD_VERSION=1.7.7
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then TTYD_ARCH=x86_64; \
+    elif [ "$ARCH" = "aarch64" ]; then TTYD_ARCH=aarch64; \
+    else TTYD_ARCH=x86_64; fi && \
+    curl -sL -o /usr/local/bin/ttyd \
+      "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.${TTYD_ARCH}" && \
+    chmod +x /usr/local/bin/ttyd
 
-# Wrapper: handles hive tmux interface (restart loop, ready markers)
-COPY pi-wrapper.sh /usr/local/bin/pi
-RUN chmod +x /usr/local/bin/pi
+# --- Layer 2b: GitHub CLI ---
+ARG GH_VERSION=2.74.0
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then GH_ARCH=amd64; \
+    elif [ "$ARCH" = "aarch64" ]; then GH_ARCH=arm64; \
+    else GH_ARCH=amd64; fi && \
+    mkdir -p /opt/hive/bin && \
+    curl -sL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${GH_ARCH}.tar.gz" | \
+    tar xz --strip-components=2 -C /opt/hive/bin "gh_${GH_VERSION}_linux_${GH_ARCH}/bin/gh" && \
+    mv /opt/hive/bin/gh /opt/hive/bin/gh-real && \
+    chmod +x /opt/hive/bin/gh-real
 
-# pi config directory (wrapper also creates this at runtime)
-RUN mkdir -p /home/dev/.pi/agent && chown -R 1001:1000 /home/dev/.pi
+# --- Layer 3: GitHub Copilot CLI (keep for contributor onboarding) ---
+ARG COPILOT_VERSION=1.0.59
+RUN npm install -g @github/copilot@${COPILOT_VERSION} && npm cache clean --force || \
+    echo "WARN: GitHub Copilot CLI install failed — skipping"
 
-# ── Application ───────────────────────────────────────────────────────
+# --- Layer 4: Claude Code (keep for contributor onboarding) ---
+ARG CLAUDE_CODE_VERSION=latest
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} && npm cache clean --force
+
+# ── Goose CLI (NEW — our primary backend) ──────────────────────────
+ARG GOOSE_VERSION=1.1.7
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then GOOSE_ARCH=x86_64; \
+    elif [ "$ARCH" = "aarch64" ]; then GOOSE_ARCH=aarch64; \
+    else GOOSE_ARCH=x86_64; fi && \
+    curl -sL "https://github.com/block/goose/releases/download/v${GOOSE_VERSION}/goose-${GOOSE_ARCH}-unknown-linux-gnu.tar.bz2" | \
+    tar xj -C /usr/local/bin && \
+    chmod +x /usr/local/bin/goose
+
+# ── Goose DeepSeek config (pre-seeded, overridable at runtime) ─────
 ENV HOME=/home/dev
+RUN mkdir -p /home/dev/.config/goose /home/dev/.local/state/goose
+COPY goose-config.yaml /home/dev/.config/goose/config.yaml
+RUN echo '{"telemetry_enabled":false,"onboarding_completed":true}' \
+    > /home/dev/.local/state/goose/state.json
 
-# Pre-compiled Go binaries
-COPY hive-binary /usr/local/bin/hive
-COPY bd-binary /usr/local/bin/bd
+# Shared goose config for agent UIDs (agents run as /data/home)
+RUN mkdir -p /data/config/goose
+COPY goose-config.yaml /data/config/goose/config.yaml
 
-# Node.js proxy + dashboard static
+# ── Application layers (unchanged from upstream) ───────────────────
+COPY v2/proxy/package.json v2/proxy/package-lock.json* /opt/hive/proxy/
+RUN cd /opt/hive/proxy && npm install --omit=dev 2>/dev/null || true
+
+ARG GIT_HASH=unknown
+
+COPY --from=builder /hive /usr/local/bin/hive
+COPY --from=builder /bd /usr/local/bin/bd
+
 COPY v2/proxy/ /opt/hive/proxy/
-RUN cd /opt/hive/proxy && npm install --omit=dev
-
 COPY v2/pkg/dashboard/static/index.html /opt/hive/proxy/public/
 
-# Shell scripts
-COPY bin/gh-app-token.sh bin/hive-config.sh bin/agent-launch.sh bin/git-credential-hive.sh /usr/local/bin/
-COPY bin/gh-wrapper.sh /usr/local/bin/gh
-COPY config/backends.conf /usr/local/etc/hive/backends.conf
-RUN chmod +x /usr/local/bin/gh-app-token.sh /usr/local/bin/hive-config.sh \
-    /usr/local/bin/agent-launch.sh /usr/local/bin/gh /usr/local/bin/git-credential-hive.sh
+COPY dashboard/ /opt/hive/dashboard/
+RUN chmod +x /opt/hive/dashboard/publish-snapshot*.sh
 
-# Seed data + example configs
 COPY examples/kubestellar/hive-project.yaml /etc/hive/hive-project.yaml
 COPY examples/acmm/ /opt/hive/examples/acmm/
 COPY examples/agents/ /opt/hive/examples/agents/
 COPY v2/deploy/data/ /opt/hive/seed-data/
 COPY v2/deploy/ttyd-tmux.sh /usr/local/bin/ttyd-tmux.sh
-RUN chmod +x /usr/local/bin/ttyd-tmux.sh
+COPY bin/gh-app-token.sh bin/hive-config.sh bin/agent-launch.sh bin/git-credential-hive.sh /usr/local/bin/
+COPY bin/gh-wrapper.sh /usr/local/bin/gh
+COPY config/backends.conf /usr/local/etc/hive/backends.conf
+RUN chmod +x /usr/local/bin/ttyd-tmux.sh /usr/local/bin/gh-app-token.sh \
+    /usr/local/bin/hive-config.sh /usr/local/bin/agent-launch.sh /usr/local/bin/gh \
+    /usr/local/bin/git-credential-hive.sh
+
+# ── Nous framework ─────────────────────────────────────────────────
+RUN (apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv python3-pip jq && rm -rf /var/lib/apt/lists/*) || \
+    echo "WARN: apt-get failed — Nous framework will not be available"
+COPY bin/nous-runner.sh bin/nous-sync.py bin/nous-hive-gate.py bin/nous-install.sh /tmp/hive/bin/
+RUN chmod +x /tmp/hive/bin/*.sh
+COPY examples/kubestellar/nous-campaign.yaml examples/kubestellar/nous-governor-campaign.yaml examples/kubestellar/nous-repo-campaign.yaml /etc/hive/
+RUN mkdir -p /var/run/nous/governor /var/run/nous/repo /data/nous/snapshots /opt/nous
+RUN pip3 install --no-cache-dir --break-system-packages pyyaml 2>/dev/null || \
+    pip3 install --no-cache-dir pyyaml 2>/dev/null || \
+    echo "WARN: system pyyaml install failed"
+RUN pip3 install --no-cache-dir --break-system-packages specify-cli 2>/dev/null || \
+    pip3 install --no-cache-dir specify-cli 2>/dev/null || \
+    echo "WARN: spec-kit install failed"
+COPY --from=builder /pluk /usr/local/bin/pluk
+RUN ln -sf pluk /usr/local/bin/pluk-publish && \
+    ln -sf pluk /usr/local/bin/pluk-subscribe && \
+    ln -sf pluk /usr/local/bin/pluk-send && \
+    mkdir -p /var/run/pluk/logs /var/run/pluk/commands && \
+    chmod 1777 /var/run/pluk/logs /var/run/pluk/commands
+RUN mkdir -p /usr/local/etc/pluk/patterns.d
+COPY --from=builder /pluk-patterns/patterns.d/ /usr/local/etc/pluk/patterns.d/
+RUN (which git && git clone -b feat/cli-agent-mode https://github.com/clubanderson/agentic-strategy-evolution /opt/nous && \
+    python3 -m venv /opt/nous/venv && \
+    /opt/nous/venv/bin/pip install --no-cache-dir -e /opt/nous 2>&1) || \
+    echo "WARN: Nous install failed"
 
 EXPOSE 3001 3002 7681
 VOLUME ["/data", "/secrets"]
 
-# Entrypoint
 COPY v2/deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-RUN chown -R 1001:1000 /data /home/dev 2>/dev/null || true
+RUN chown -R dev:node /data /home/dev 2>/dev/null || true
+
+ENV GOOSE_PROVIDER=custom_deepseek
+ENV GOOSE_MODEL=deepseek-v4-pro
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["--config", "/etc/hive/hive.yaml"]

@@ -1,5 +1,17 @@
 # Hive — 24/7 AI Agent Supervisor on Talos K8s
 
+Based on upstream [kubestellar/hive](https://github.com/kubestellar/hive) v2 with goose CLI + DeepSeek backend.
+
+## Changes from upstream
+
+| Item | Upstream | Ours |
+|------|----------|------|
+| Agent backend | Claude / Copilot | **Goose** (open-source, DeepSeek-native) |
+| Dockerfile | Installs Claude + Copilot | **+ Goose binary + DeepSeek config** |
+| Config file | `goose-config.yaml` | Pre-seeded DeepSeek provider |
+
+Everything else (Go binary, entrypoint, proxy, ttyd, agent manager, governor) is straight upstream.
+
 ## Architecture
 
 ```
@@ -7,18 +19,24 @@
 │ pod: hive (bihar)                                    │
 │                                                      │
 │  ┌─────────┐  ┌──────────┐  ┌────────────────────┐  │
-│  │ hive    │  │ proxy    │  │ 3x pi agents       │  │
+│  │ hive    │  │ proxy    │  │ 9x goose agents    │  │
 │  │ Go bin  │  │ node.js  │  │ (tmux sessions)    │  │
 │  │ :3002   │  │ :3001    │  │                    │  │
 │  │ (API)   │  │ (web UI) │  │ supervisor ADVISORY│  │
 │  └────┬────┘  └────┬─────┘  │ scanner  ISSUES_PRS│  │
 │       │            │        │ ci-maint ISSUES_PRS│  │
-│       └────────────┘        └────────┬───────────┘  │
-│                                      │              │
-│  ┌───────────────────────────────────┘              │
-│  │  pi → DeepSeek API (native, no proxy)           │
-│  │  GitHub App (tuna-os) → gh CLI for issues/PRs   │
-│  └─────────────────────────────────────────────────┘│
+│       └────────────┘        │ quality  ISSUES_PRS│  │
+│                              │ guide    ADVISORY  │  │
+│                              │ sec-check ISSUES_PRS│ │
+│                              │ architect ISSUES_PRS│ │
+│                              │ strategist ISSUES_PRS││
+│                              │ outreach ISSUES_PRS│  │
+│                              └────────┬───────────┘  │
+│                                       │              │
+│  ┌────────────────────────────────────┘              │
+│  │  goose → DeepSeek API (custom_deepseek provider)  │
+│  │  GitHub App (tuna-os) → gh CLI for issues/PRs     │
+│  └───────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────┘
          │
     ┌────▼────┐     ┌──────────────────┐
@@ -30,59 +48,43 @@
 
 ## Components
 
-| Component | Purpose | Details |
-|-----------|---------|---------|
-| **hive** (Go binary) | Agent manager, governor, scheduler | From kubestellar/hive v2, patched with pi marker |
-| **proxy** (Node.js) | Dashboard web UI + SSE | Serves on :3001, proxies to Go API :3002 |
-| **pi** (coding agent) | AI agent CLI | Runs in tmux sessions, natively supports DeepSeek |
-| **pi-wrapper.sh** | Tmux interface adapter | Restart loop, ready markers, flag translation |
+| Component | Purpose | Source |
+|-----------|---------|--------|
+| **hive** (Go binary) | Agent manager, governor, scheduler | kubestellar/hive v2 (unmodified) |
+| **proxy** (Node.js) | Dashboard web UI + SSE | kubestellar/hive v2 (unmodified) |
+| **goose** (Rust CLI) | AI agent backend | block/goose v1.x |
+| **DeepSeek** | Model provider | deepseek-v4-pro via custom provider |
 
 ## Agents
 
 | Agent | Mode | Role |
 |-------|------|------|
 | supervisor | ADVISORY | Orchestrates agents, sweeps, enforces cadence |
-| scanner | ISSUES_AND_PRS | Triages issues, opens PRs, files advisory reports |
-| ci-maintainer | ISSUES_AND_PRS | Code quality, coverage, post-merge health |
+| scanner | ISSUES_AND_PRS | Triages issues, fixes bugs, auto-merges |
+| ci-maintainer | ISSUES_AND_PRS | CI health, coverage, post-merge gates |
+| quality | ISSUES_AND_PRS | Test coverage analysis, testing gaps |
+| guide | ADVISORY | Documentation audit, contributor guides |
+| sec-check | ISSUES_AND_PRS | Supply chain, secrets, dependency audit |
+| architect | ISSUES_AND_PRS | Structural analysis, design recommendations |
+| strategist | ISSUES_AND_PRS | Roadmap, milestone tracking, competitive analysis |
+| outreach | ISSUES_AND_PRS | Ecosystem engagement, community PRs |
 
 ## Configuration
 
-All in `talos-k8s/hive/hive.yaml`:
-- **Repos**: tuna-os/tunaos, tuna-os/tacklebox
-- **ACMM Level**: 3 (CI/CD — issues + PRs, no auto-merge)
+- **Repos**: tuna-os/tunaos
+- **ACMM Level**: 6 (Full autonomy — issues + PRs + auto-merge)
 - **Governor**: SURGE(50) → BUSY(10) → QUIET(2) → IDLE(0)
-
-## Key Fixes Applied
-
-### Pi replaces goose for DeepSeek
-Goose v1.x required a Python proxy (`deepseek-proxy.py`) to strip `reasoning_content`
-and inject `thinking:{type:disabled}` because it doesn't natively handle DeepSeek's
-reasoning tokens. Pi natively supports DeepSeek — no proxy, no litellm, no workaround.
-Tools auto-execute without confirmation (pi has no permission popups).
-
-### IPv6 → ghcr.io pull failure
-Bihar couldn't pull images from ghcr.io over IPv6. Fixed by adding `/etc/hosts` entry on Talos:
-```bash
-talosctl -n 192.168.0.5 patch mc --patch '{
-  "machine": {"network": {"extraHostEntries": [
-    {"ip": "20.207.73.86", "aliases": ["ghcr.io"]}
-  ]}}
-}'
-```
-
-### Pi CLI compatibility
-- `pi-wrapper.sh`: handles hive tmux interface, configures pi for DeepSeek
-- `pi-marker.patch`: adds "pi" to hive's `cliPaneMarkers` so agents aren't detected as crashed
-- Provider: `deepseek` (native, no proxy or litellm needed)
+- **Goose config**: `goose-config.yaml` (DeepSeek custom provider)
+- **K8s manifest**: `hive.yaml`
 
 ## Build & Deploy
 
 ```bash
 # CI builds on push to dotfiles master
 # .github/workflows/hive-build.yml:
-#   1. Cross-compiles Go binary (amd64)
-#   2. Patches hive source for pi marker
-#   3. Builds Docker image with pi + pi-wrapper.sh
+#   1. Checks out kubestellar/hive v2 source
+#   2. Copies our Dockerfile + goose-config.yaml
+#   3. Builds image with upstream + goose + DeepSeek
 #   4. Pushes to ghcr.io/hanthor/hive:latest
 
 # Deploy:
@@ -95,9 +97,16 @@ kubectl rollout restart deploy/hive -n hive
 ```bash
 kubectl create secret generic hive-secrets -n hive \
   --from-literal=DEEPSEEK_API_KEY=sk-... \
+  --from-literal=HIVE_GITHUB_TOKEN=ghp_... \
+  --from-literal=NTFY_TOPIC=your-ntfy-topic \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# GitHub App (post-setup):
+kubectl create secret generic hive-secrets -n hive \
   --from-literal=GH_APP_ID=3942065 \
   --from-literal=GH_APP_INSTALLATION_ID=137498420 \
-  --from-file=gh-app-key.pem=/path/to/key.pem
+  --from-file=gh-app-key.pem=/path/to/key.pem \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ## Monitoring
@@ -113,8 +122,8 @@ kubectl logs -n hive -l app.kubernetes.io/name=hive -f
 open https://hive.manatee-basking.ts.net
 
 # Tmux sessions (debug)
-kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-1001/default ls
-kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-1001/default capture-pane -t hive-scanner -p
+kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-0/default ls
+kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-0/default capture-pane -t hive-scanner -p
 ```
 
 ## Troubleshooting
@@ -122,7 +131,9 @@ kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-1001/default capture-pane 
 | Symptom | Check |
 |---------|-------|
 | ImagePullBackOff | `/etc/hosts` on bihar has `ghcr.io` entry |
-| Agent CLI crashed | pi wrapper working? Check `ps aux \| grep pi-real` |
-| No kicks sent | Governor eval cycle: 5min, agent cadence: 15-45min |
-| Issues not created | GitHub App installed on tuna-os? Token in `/var/run/hive-metrics/` |
+| Agents not kicking | `kubectl logs -n hive deploy/hive \| grep "failed to send kick"` |
+| DeepSeek API errors | `kubectl exec -n hive deploy/hive -- env \| grep DEEPSEEK` |
+| Goose not starting | `kubectl exec -n hive deploy/hive -- goose --version` |
 | Dashboard 404 | Tailscale ingress `ts-hive-*` pod running? |
+
+See [SKILL.md](SKILL.md) for detailed debugging procedures.

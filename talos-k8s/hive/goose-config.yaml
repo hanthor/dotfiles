@@ -1,0 +1,13 @@
+# Goose DeepSeek provider configuration
+# Written at image build time; overridable by mounting a different config.
+providers:
+  - id: custom_deepseek
+    name: DeepSeek
+    api_base: https://api.deepseek.com/v1
+    api_key_env: DEEPSEEK_API_KEY
+    models:
+      - deepseek-v4-pro
+      - deepseek-v4-flash
+default_provider: custom_deepseek
+extensions: {}
+GOOSE_TELEMETRY_ENABLED: false

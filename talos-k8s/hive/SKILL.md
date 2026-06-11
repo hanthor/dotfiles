@@ -4,12 +4,12 @@ Deploy, configure, and debug hive — the 24/7 AI agent supervisor running on th
 
 ## When to use
 
-- Deploying or updating the hive pod on the cluster
+- Checking if hive is dormant or working (health check)
 - Debugging agent crashes, kick failures, or governor issues
 - Adding/removing repos from hive's watch list
 - Adjusting ACMM levels, agent modes, or governor thresholds
-- Fixing goose compatibility or DeepSeek API issues
-- Investigating why agents aren't creating issues
+- Investigating stuck agents (git hangs, proxy issues, prompt delivery)
+- Deploying or updating the hive pod on the cluster
 
 ## Quick reference
 
@@ -40,79 +40,186 @@ talos-k8s/hive/
 └── README.md              — Architecture & troubleshooting
 ```
 
-### CI workflow
-`.github/workflows/hive-build.yml`:
-1. Checks out kubestellar/hive v2 source
-2. Cross-compiles Go binary for amd64
-3. Applies pi-marker.patch to add "pi" to cliPaneMarkers
-4. Builds Docker image with pi + pi-wrapper.sh
-5. Pushes to `ghcr.io/hanthor/hive:latest`
+### Architecture decisions
 
-## Architecture decisions
+- **goose + DeepSeek**: Goose with custom_deepseek provider; no proxy or litellm needed
+- **GitHub App**: App ID 3942065 on tuna-os org (15K req/hr vs PAT 5K)
+- **IPv4 /etc/hosts**: Talos forces IPv4 for ghcr.io to fix pull timeouts
+- **ACMM L6**: Full autonomy (issues + PRs + auto-merge on scanner)
+- **9 goose agents** — all using DeepSeek v4-pro
 
-### Why pi (not goose)
-Goose v1.x doesn't natively support DeepSeek, requiring a Python proxy that strips `reasoning_content` and injects `thinking:{type:disabled}`. Pi natively supports DeepSeek and has no permission popups — tools auto-execute without confirmation, making it ideal for unattended hive agents.
+## Health check — is hive working?
 
-### Why GitHub App (not PAT)
-GitHub App gives hive its own rate limit pool (15,000 req/hr) vs PAT (5,000 req/hr shared). App ID 3942065 installed on tuna-os org.
+### The 30-second check
+```bash
+# 1. Is the pod running?
+kubectl get pods -n hive -o wide
 
-### Why IPv4 /etc/hosts fix
-Talos/containerd prefers IPv6 for ghcr.io, which times out. Adding `20.207.73.86 ghcr.io` to /etc/hosts forces IPv4.
+# 2. Are kicks flowing? (look for "agent kicked" vs "failed to send kick")
+kubectl logs -n hive deploy/hive --tail=50 | grep -E "(agent kicked|failed to send kick)"
 
-### ACMM Level 3
-L3 = CI/CD: agents can create issues and PRs, but merging requires human approval. Mode override on scanner/ci-maintainer to `ISSUES_AND_PRS` because L3 defaults them to ADVISORY.
+# 3. Are agents processing? (look for "agent output signal")
+kubectl logs -n hive deploy/hive --tail=100 | grep "agent output signal" | wc -l
+
+# 4. Advisory digest timestamp
+kubectl exec -n hive deploy/hive -- curl -s localhost:3001/api/status 2>&1 | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('advisoryDigest',{}).get('generated_at','?'))"
+```
+
+### Signs hive is dormant
+- `"failed to send kick"` with `"CLI did not reach input prompt"` — agents can't receive kicks
+- Advisory digest timestamp is > 30 min old
+- All `ps aux | grep pi-real` show 0.0% CPU and 0:00 TIME
+- `"agent output signal"` count is zero or only echoes kick templates
+
+### Signs hive is working
+- `"audit: agent kicked"` for all agents — kicks flowing
+- `"agent output signal"` with diverse events (git_commit, git_push, advisory, test_activity)
+- Advisory digest generated within last 5-10 min
+- Pi processes show non-zero CPU TIME (not %)
 
 ## Debugging
 
-### Agent bare shell / not running pi
+### Tmux sessions
 ```bash
-# Check pi processes
-kubectl exec -n hive deploy/hive -- ps aux | grep pi-real
-# Should see 3+ processes (one per agent)
+# List all agent sessions
+kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-0/default ls
 
-# Check tmux sessions
-kubectl exec -n hive deploy/hive -- sh -c '
-  for s in hive-supervisor hive-scanner hive-ci-maintainer; do
-    tmux -S /tmp/tmux-1001/default capture-pane -t "$s" -p | tail -3
-  done
-'
-# Should show pi editor/prompt, not "$" bash prompt
+# View an agent's pane (last 40 lines, with escape codes for pi status bar)
+kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-0/default capture-pane -t hive-quality -p -S -40
+
+# Check full pane history for restart markers
+kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-0/default capture-pane -t hive-quality -p -S -500 | \
+  grep -E "(DeepSeek chat ready|Environment loaded|^C\[agent)"
 ```
 
-### Kicks not flowing
-Governor evals every 5min. Agent cadences: scanner=15min, ci-maintainer=45min (QUIET mode). Check:
+### Pi processes
 ```bash
-kubectl logs -n hive deploy/hive | grep "governor eval"
+# Count running pi agents
+kubectl exec -n hive deploy/hive -- ps aux | grep goose | grep -v grep | wc -l
+# Should be 9 (all goose-backed agents)
+
+# Check CPU time per agent (non-zero means work has been done)
+kubectl exec -n hive deploy/hive -- ps aux | grep goose | awk '{print $2, $10}'
 ```
 
-### DeepSeek API issues
+### Governor state
 ```bash
-# Test pi directly
-kubectl exec -n hive deploy/hive -- sh -c '
-  pi-real -p --provider deepseek --model deepseek-v4-flash --no-session "Say hello"
-'
+# Governor cadence and mode
+kubectl logs -n hive deploy/hive --tail=200 | grep "governor eval complete"
+# Shows mode (BUSY/QUIET/IDLE/SURGE), issue count, agents_due
+
+# Kick audit trail
+kubectl logs -n hive deploy/hive --tail=200 | grep "audit: governor kicking"
+# Shows each agent being kicked in sequence
 ```
 
-### Image pull failures
-Verify Talos /etc/hosts fix is still in place:
+### Advisory digest
 ```bash
-talosctl -n 192.168.0.5 get etcfilestatus | grep hosts
-# Should show version 3+ (indicating the hosts patch was applied)
+kubectl exec -n hive deploy/hive -- curl -s localhost:3001/api/status 2>&1 | \
+  python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+ad=d.get('advisoryDigest',{})
+print('Generated:', ad.get('generated_at'))
+print('Mode:', ad.get('mode'))
+print('Total:', ad.get('total_count'))
+# Latest advisory per agent
+for agent, items in ad.get('by_agent',{}).items():
+    if items:
+        t=max(items, key=lambda x: x.get('timestamp','')).get('timestamp','?')
+        print(f'  {agent}: {t[:19]}')
+"
 ```
+
+## Known failure modes
+
+### 1. Git push hangs via HTTP_PROXY (most common)
+
+**Symptom**: Agents stuck on `git push`, pane shows `Elapsed 36000s+`, CPU at 0%, `"CLI did not reach input prompt"` on kicks.
+
+**Root cause**: The pi-wrapper sets `HTTP_PROXY`/`HTTPS_PROXY`. Git inherits these but pushes hang through the proxy. Pi blocks on the subprocess, never reaches the `❯` ready marker, wrapper loop never restarts.
+
+**Fix**: The pi-wrapper now sets `GIT_CONFIG_COUNT` env vars to clear `http.proxy` and `https.proxy` for all git operations:
+```bash
+export GIT_CONFIG_COUNT=2
+export GIT_CONFIG_KEY_0=http.proxy
+export GIT_CONFIG_VALUE_0=
+export GIT_CONFIG_KEY_1=https.proxy
+export GIT_CONFIG_VALUE_1=
+```
+
+**Also**: The wrapper wraps pi-real with `timeout -s KILL 14400` (4h) so hung git processes can't permanently block an agent:
+```bash
+timeout -s KILL 14400 /usr/local/bin/pi-real ...
+```
+
+### 2. Goose DeepSeek API errors
+
+**Symptom**: Goose agents start but show API errors like "provider not found" or "invalid API key".
+
+**Check**:
+```bash
+# Verify goose config exists
+kubectl exec -n hive deploy/hive -- cat /home/dev/.config/goose/config.yaml
+
+# Verify API key is set
+kubectl exec -n hive deploy/hive -- env | grep DEEPSEEK_API_KEY
+
+# Test goose directly
+kubectl exec -n hive deploy/hive -- sh -c 'GOOSE_PROVIDER=custom_deepseek GOOSE_MODEL=deepseek-v4-flash goose --version'
+```
+
+**Fix**: Ensure `DEEPSEEK_API_KEY` is in the hive-secrets secret and `goose-config.yaml` is in the image with the correct provider config.
+
+### 3. Config persistence error (cosmetic)
+
+```
+ERROR: failed to persist config to yaml: open /etc/hive/hive.yaml: read-only file system
+```
+
+ConfigMap mounts are read-only. Hive tries to write back config changes. This doesn't prevent operation — config is cached in memory and state is persisted to `/data/hive-state.json`. Can be ignored.
+
+### 4. Agents idle after kicks
+
+**Symptom**: `"audit: agent kicked"` in logs, pane shows kick template text, but no pi output or activity.
+
+**Check**: Verify pi processes are running (`ps aux | grep pi-real`). If CPU TIME is 0:00 for all agents, they're not processing. Check the pane for `"DeepSeek chat ready ❯"` — if missing, the wrapper loop may not have started. Restart deployment.
+
+### 5. nfty notification errors
+
+```
+WARN: ntfy returned error: status=404
+```
+
+The NTFY_TOPIC secret may be missing or incorrect. Notifications still appear in the advisory digest on GitHub. Non-blocking.
 
 ## Common operations
+
+### Restart hive
+```bash
+kubectl apply -f talos-k8s/hive/hive.yaml
+kubectl rollout restart deploy/hive -n hive
+kubectl rollout status deploy/hive -n hive --timeout=180s
+```
 
 ### Change repos
 Edit `talos-k8s/hive/hive.yaml` → `project.repos` → apply + restart
 
 ### Change ACMM level
-Edit `project.acmm_level` in hive.yaml. L3 = issues+PRs, L4 = broader write access, L5 = guarded auto-merge, L6 = full autonomy.
+Edit `acmm_level` in hive.yaml (top-level, not nested under `project`).
 
-### Add a new agent
-Add to `agents:` section in hive.yaml with `backend: pi`, `mode: ISSUES_AND_PRS`. Governor modes must include cadence for the new agent.
+| Level | Name | Capabilities |
+|-------|------|-------------|
+| 1 | Dashboard | Read-only advisory |
+| 2 | Advisory | Issues (advisory only, no code) |
+| 3 | CI/CD | Issues + PRs, no auto-merge |
+| 4 | Guarded | Issues + PRs + guarded merge |
+| 5 | Autopilot | Auto-merge with review |
+| 6 | Full | Full autonomy (current) |
 
-### Force a kick
-The dashboard UI has a kick button. Or restart the pod — agents get boot prompts on startup.
+### Add/remove an agent
+Edit `agents:` section in hive.yaml. Required fields: `enabled`, `backend`, `model`, `mode`, `beads_dir`, `clear_on_kick`. Governor modes must include cadence for new agents.
 
-### Update pi version
-Rebuild Docker image with updated npm package. CI rebuilds on push.
+### Update pi wrapper
+The pi-wrapper.sh is embedded inline in the ConfigMap section of `hive.yaml`. Edit it there, apply, and restart.
