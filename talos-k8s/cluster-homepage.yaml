@@ -90,6 +90,13 @@ data:
                 <div class="card-desc">Cluster metrics &middot; TLS routing issue</div>
               </div>
             </a>
+            <a class="card" href="https://corral.manatee-basking.ts.net">
+              <span class="card-icon">&#129312;</span>
+              <div class="card-text">
+                <div class="card-title">Corral <span class="badge badge-up">up</span></div>
+                <div class="card-desc">Proxmox-style VM dashboard &middot; consoles, snapshots, scale, backup</div>
+              </div>
+            </a>
             <a class="card" href="https://kubevirt-manager.manatee-basking.ts.net">
               <span class="card-icon">&#128187;</span>
               <div class="card-text">
