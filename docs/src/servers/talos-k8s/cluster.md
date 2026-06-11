@@ -121,20 +121,22 @@ Cluster ingress goes through the [Tailscale Operator](https://tailscale.com/kb/1
 
 ## 4. Talos installer image (with AMD GPU)
 
-Talos ships with an immutable root filesystem, so kernel modules cannot be added at runtime. The AMD GPU driver is **baked into the boot image** via the [Talos Image Factory](https://factory.talos.dev).
+Talos ships with an immutable root filesystem, so kernel modules cannot be added at runtime. The AMD GPU driver and the Longhorn iSCSI tooling are **baked into the boot image** via the [Talos Image Factory](https://factory.talos.dev).
 
-**Schematic ID:** `b6ab12edc37d4a92a0705f4f2f12952d5a1a3f38b51783422b56810b60e230fd`
+**Schematic ID (current, 2026-06-11):** `3a33ec6dfc8cfd61d2a3db3caf97894f31e913952d71ce3c3fbbe565a3f08339`
 
 **Extensions baked in:**
 - `siderolabs/amdgpu` — AMD GPU kernel driver
-- `siderolabs/amd-ucode` — AMD microcode firmware
+- `siderolabs/iscsi-tools` — iscsid, for Longhorn block storage
+- `siderolabs/util-linux-tools` — fstrim/nsenter, for Longhorn
 
-Referenced from [`talos-k8s/worker.yaml`](../talos-k8s/worker.yaml):
+Both nodes run this schematic. Earlier schematics were `e5912b95…` (amdgpu
+only) and, in older docs, `b6ab12e…`. Storage details: [`talos-k8s/longhorn/`](../../../talos-k8s/longhorn/README.md).
 
 ```yaml
 machine:
   install:
-    image: factory.talos.dev/installer/b6ab12edc37d4a92a0705f4f2f12952d5a1a3f38b51783422b56810b60e230fd:v1.13.2
+    image: factory.talos.dev/installer/3a33ec6dfc8cfd61d2a3db3caf97894f31e913952d71ce3c3fbbe565a3f08339:v1.13.2
     disk: /dev/nvme0n1
 ```
 

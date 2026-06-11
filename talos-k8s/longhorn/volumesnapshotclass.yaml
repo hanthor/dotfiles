@@ -1,0 +1,12 @@
+# Longhorn VolumeSnapshotClass — backs KubeVirt VirtualMachineSnapshot for
+# persistent-disk VMs. Requires the external-snapshotter CRDs + controller.
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: longhorn-snapshot
+  annotations:
+    snapshot.storage.kubernetes.io/is-default-class: "true"
+driver: driver.longhorn.io
+deletionPolicy: Delete
+parameters:
+  type: snap
