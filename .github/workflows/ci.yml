@@ -51,6 +51,7 @@ jobs:
       - name: Check JSON validity
         run: |
           for f in $(find . -name "*.json" -not -path "./.git/*"); do
+            [ -f "$f" ] || { echo "$f: SKIP (not a regular file)"; continue; }
             python3 -m json.tool "$f" > /dev/null && echo "$f: OK" || { echo "$f: INVALID"; exit 1; }
           done
 
