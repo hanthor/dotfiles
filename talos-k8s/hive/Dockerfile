@@ -99,12 +99,7 @@ RUN ARCH=$(uname -m) && \
     chmod +x /usr/local/bin/goose && \
     mv /usr/local/bin/goose /usr/local/bin/goose-real
 
-# Goose wrapper: translates old hive CLI (goose --model X --prompt "...")
-# to goose 1.37.0 subcommand interface.
-COPY goose-wrapper.sh /usr/local/bin/goose
-RUN chmod +x /usr/local/bin/goose
-
-# ── Goose DeepSeek config (pre-seeded, overridable at runtime) ─────
+# Goose DeepSeek config (pre-seeded, overridable at runtime)
 ENV HOME=/home/dev
 RUN mkdir -p /home/dev/.config/goose /home/dev/.local/state/goose
 COPY goose-config.yaml /home/dev/.config/goose/config.yaml
