@@ -168,6 +168,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 RUN chown -R dev:node /data /home/dev 2>/dev/null || true
 
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV GOOSE_PROVIDER=custom_deepseek
 ENV GOOSE_MODEL=deepseek-v4-pro
 
