@@ -62,6 +62,8 @@ func newMux() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /api/capabilities", handleCapabilities)
 	mux.HandleFunc("GET /api/instancetypes", handleInstanceTypes)
 	mux.HandleFunc("GET /api/nads", handleNADs)
+	mux.HandleFunc("GET /api/doctor", handleDoctor)
+	mux.HandleFunc("POST /api/doctor/fix", handleDoctorFix)
 	mux.HandleFunc("GET /api/plugins", handlePlugins)
 	mux.HandleFunc("POST /api/plugins/{name}/install", handleInstallPlugin)
 	mux.HandleFunc("DELETE /api/plugins/{name}", handleRemovePlugin)

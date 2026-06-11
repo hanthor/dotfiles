@@ -5,10 +5,28 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/hanthor/corral/pkg/doctor"
 	"github.com/hanthor/corral/pkg/kubevirt"
 	"github.com/hanthor/corral/pkg/plugin"
 	"github.com/hanthor/corral/pkg/types"
 )
+
+// ── Doctor (cluster diagnostics) ──────────────────────────────────
+
+// GET /api/doctor — run the diagnostics.
+func handleDoctor(w http.ResponseWriter, r *http.Request) {
+	jsonResp(w, http.StatusOK, doctor.Run())
+}
+
+// POST /api/doctor/fix — reconcile the fixable issues.
+func handleDoctorFix(w http.ResponseWriter, r *http.Request) {
+	fixed, err := doctor.Fix()
+	if err != nil {
+		errResp(w, http.StatusInternalServerError, err)
+		return
+	}
+	jsonResp(w, http.StatusOK, map[string]any{"fixed": fixed})
+}
 
 // ── Extensions (plugins) store ────────────────────────────────────
 
