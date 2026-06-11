@@ -52,6 +52,9 @@ RUN curl -sL -o /tmp/su-exec.c https://raw.githubusercontent.com/ncopa/su-exec/m
  && rm /tmp/su-exec.c \
  && apt-get purge -y gcc libc6-dev && apt-get autoremove -y
 
+# /usr/sbin not in PATH on slim images — symlink useradd so entrypoint finds it
+RUN ln -sf /usr/sbin/useradd /usr/local/bin/useradd
+
 RUN useradd -m -u 1001 -g node -s /bin/bash dev
 
 # --- Layer 2: ttyd ---
@@ -168,7 +171,6 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 RUN chown -R dev:node /data /home/dev 2>/dev/null || true
 
-ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV GOOSE_PROVIDER=custom_deepseek
 ENV GOOSE_MODEL=deepseek-v4-pro
 
