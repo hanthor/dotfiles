@@ -145,6 +145,7 @@ spec:
       featureGates:
         - Snapshot       # VirtualMachineSnapshot / Restore
         - HotplugVolumes # virtctl addvolume/removevolume (Corral "Add disk")
+        - VMExport       # virtctl vmexport — Corral "Export/Backup" (deploys virt-exportproxy)
     imagePullPolicy: IfNotPresent
     # LiveUpdate lets Corral hotplug CPU/memory on running VMs (it live-migrates
     # the VM to apply the change). VMs are created with cpu.maxSockets +
