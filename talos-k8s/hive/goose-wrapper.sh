@@ -5,9 +5,6 @@
 #
 # Upstream Go binary calls: goose --model X --prompt "$(cat /tmp/prompt.txt)"
 # We rewrite to:          goose-real run -s --model X --text "..."
-#
-# The shell expands $(cat file) before calling this wrapper, so --prompt's
-# argument is the full multiline content as a single shell word.
 
 # Trap SIGINT so that hive's ^C/clear kills only goose-real, not this wrapper.
 trap '' INT
@@ -25,21 +22,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Build args array
-ARGS="run -s"
-[ -n "$MODEL" ] && ARGS="$ARGS --model $MODEL"
-
+# First launch: include the bootstrap prompt if provided
 if $HAD_PROMPT && [ -n "$TEXT" ]; then
-  # First launch with bootstrap prompt
-  set -- /usr/local/bin/goose-real run -s --text "$TEXT"
-  [ -n "$MODEL" ] && set -- "$@" --model "$MODEL"
-  exec "$@"
+  /usr/local/bin/goose-real run -s --text "$TEXT" ${MODEL:+--model "$MODEL"} || true
 fi
 
 # Restart loop: after ^C kills goose-real, restart fresh without prompt
-# (hive sends the next kick via tmux send-keys)
+# (hive sends the next kick via tmux send-keys to the pane)
 while true; do
-  set -- /usr/local/bin/goose-real run -s
-  [ -n "$MODEL" ] && set -- "$@" --model "$MODEL"
-  "$@" || true
+  /usr/local/bin/goose-real run -s ${MODEL:+--model "$MODEL"} || true
 done
