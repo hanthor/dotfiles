@@ -38,6 +38,8 @@ jobs:
           # Goose 1.37.0 uses "goose is ready" instead of ❯ prompt.
           # Patch both waitForInputPrompt functions to also check for this.
           sed -i 's/strings.Contains(output, "❯")/(strings.Contains(output, "❯") || strings.Contains(output, "goose is ready"))/g' v2/pkg/agent/manager.go
+          # Add "goose" to cliPaneMarkers so the binary detects goose is alive
+          sed -i '/"Gemini",/a\	"goose",' v2/pkg/agent/manager.go
 
       - name: Prep build context
         working-directory: hive-src
