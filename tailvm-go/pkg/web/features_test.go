@@ -1112,3 +1112,31 @@ func TestHandleVMAction_MissingPathParams(t *testing.T) {
 	// Empty name should produce 4xx or 5xx, not panic
 	t.Logf("empty name action returned %d", resp.StatusCode)
 }
+
+func TestHandleDoctorFix_Error(t *testing.T) {
+	fx := NewTestFixture()
+	defer fx.Close()
+
+	// Doctor check succeeds but patch fails
+	fx.Runner.AddResponseKV("kubectl", []string{
+		"get", "kubevirt.kubevirt.io", "-A", "-o", "name",
+	}, "kubevirt.kubevirt.io/kubevirt", nil)
+	fx.Runner.AddResponseKV("kubectl", []string{
+		"get", "cdi", "-A", "-o", "name",
+	}, "cdi.cdi.kubevirt.io/cdi", nil)
+	fx.Runner.AddResponseKV("kubectl", []string{
+		"patch", "kubevirt", "kubevirt", "-n", "kubevirt", "--type", "merge", "-p",
+		`{"spec":{"configuration":{"vmRolloutStrategy":"LiveUpdate","developerConfiguration":{"featureGates":["Snapshot","HotplugVolumes","VMExport"]}},"workloadUpdateStrategy":{"workloadUpdateMethods":["LiveMigrate"]}}}`,
+	}, "", errSimulated)
+
+	resp, err := http.Post(fx.Server.URL+"/api/doctor/fix", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// doctor.Fix() handles partial failures gracefully — expect 200
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}

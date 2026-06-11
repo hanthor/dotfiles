@@ -92,7 +92,7 @@ func (c *Client) VMExists(name string) bool {
 
 // DataVolumeStatus returns the import progress for a VM's ISO DataVolume.
 func DataVolumeStatus(name, ns string) string {
-	out, err := exec.Command("kubectl", "get", "datavolume", name+"-iso", "-n", ns, "-o", "json").Output()
+	out, err := runPkg("kubectl", "get", "datavolume", name+"-iso", "-n", ns, "-o", "json")
 	if err != nil {
 		return ""
 	}
@@ -259,7 +259,7 @@ type vmiStatus struct {
 
 // vmiStatusIndex returns live per-VMI facts keyed by "namespace/name".
 func vmiStatusIndex() map[string]vmiStatus {
-	out, err := exec.Command("kubectl", "get", "vmis", "-A", "-o", "json").Output()
+	out, err := runPkg("kubectl", "get", "vmis", "-A", "-o", "json")
 	if err != nil {
 		return nil
 	}
@@ -875,7 +875,7 @@ func GenerateProxyDeployment(name, namespace string, ports []int) map[string]any
 
 // ExposedPorts returns the currently exposed proxy ports for a VM.
 func ExposedPorts(name, ns string) []int {
-	out, err := exec.Command("kubectl", "get", "svc", name+"-proxy", "-n", ns, "-o", "json").Output()
+	out, err := runPkg("kubectl", "get", "svc", name+"-proxy", "-n", ns, "-o", "json")
 	if err != nil {
 		return nil
 	}

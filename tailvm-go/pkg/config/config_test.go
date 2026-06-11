@@ -115,3 +115,65 @@ func TestDefaultPath(t *testing.T) {
 		t.Errorf("DefaultPath() = %q, expected %q", path, expected)
 	}
 }
+
+func TestLoad_DirectoryNotFile(t *testing.T) {
+	// A directory path passed to Load should return an error (not IsNotExist)
+	tmp := t.TempDir()
+	_, err := Load(tmp) // tmp is a directory, not a file
+	if err == nil {
+		t.Error("expected error when loading a directory as config file")
+	}
+}
+
+func TestAuthKey_LoadError(t *testing.T) {
+	// AuthKey calls Load("") when TS_AUTHKEY is empty.
+	// When Load returns an error (not IsNotExist), AuthKey returns "".
+	t.Setenv("TS_AUTHKEY", "")
+
+	// Point HOME to a path where DefaultPath can't be read
+	tmp := t.TempDir()
+	confDir := filepath.Join(tmp, ".config", "tailvm")
+	os.MkdirAll(confDir, 0755)
+	// Create the config path as a directory so ReadFile fails
+	configPath := filepath.Join(confDir, "config.yaml")
+	os.Mkdir(configPath, 0755)
+	t.Setenv("HOME", tmp)
+
+	key := AuthKey()
+	if key != "" {
+		t.Errorf("AuthKey() = %q, expected empty on Load error", key)
+	}
+}
+
+func TestAuthKey_FileWithoutKey(t *testing.T) {
+	// AuthKey loads file successfully but the file has no tailscale.auth_key
+	t.Setenv("TS_AUTHKEY", "")
+
+	tmp := t.TempDir()
+	confDir := filepath.Join(tmp, ".config", "tailvm")
+	os.MkdirAll(confDir, 0755)
+	configPath := filepath.Join(confDir, "config.yaml")
+	// Write a valid YAML config without tailscale section
+	os.WriteFile(configPath, []byte("other: value\n"), 0644)
+	t.Setenv("HOME", tmp)
+
+	key := AuthKey()
+	if key != "" {
+		t.Errorf("AuthKey() = %q, expected empty when config has no tailscale key", key)
+	}
+}
+
+func TestAuthKey_FromDefaultPath(t *testing.T) {
+	t.Setenv("TS_AUTHKEY", "")
+	tmp := t.TempDir()
+	confDir := filepath.Join(tmp, ".config", "tailvm")
+	os.MkdirAll(confDir, 0755)
+	cfgData, _ := yaml.Marshal(Config{Tailscale: TailscaleConfig{AuthKey: "tskey-default-123"}})
+	os.WriteFile(filepath.Join(confDir, "config.yaml"), cfgData, 0644)
+	t.Setenv("HOME", tmp)
+
+	key := AuthKey()
+	if key != "tskey-default-123" {
+		t.Errorf("AuthKey() = %q, expected 'tskey-default-123'", key)
+	}
+}

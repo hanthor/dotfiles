@@ -1,19 +1,23 @@
-# Corral Testing Progress
+# Progress
 
-## Pure logic tests
-- [x] pkg/catalog/catalog_test.go — 6 tests, all pass
-- [x] pkg/config/config_test.go — 7 tests, all pass
-- [ ] pkg/doctor/doctor_test.go
+## Status
+Done — test suite complete and CI-ready
 
-## Web handler tests
-- [ ] pkg/web/server_test.go — VM lifecycle handlers
-- [ ] pkg/web/features_test.go — images, datavolumes, capabilities, scale, snapshots, doctor
+## Tasks
+- [x] Hermetic unit tests for every package (no cluster/kubectl/virtctl needed)
+- [x] doctor: refactored onto shell.Runner seam; tests no longer touch the live cluster
+- [x] qemu: fixed journalctl-follow test hang; fake binaries via temp PATH (not /home/linuxbrew)
+- [x] kubevirt: features_test.go (migrate, scale live/offline, volumes, snapshots, clone, DV library, capabilities, CreateVM paths) — 47.7% → 75.3%
+- [x] CI: race detector, bootc tag set, coverage report + artifact
 
-## E2E tests
-- [ ] test/e2e/ — Playwright against live cluster
+## Files Changed
+- pkg/doctor/doctor.go, doctor_test.go (runner seam + hermetic tests, 100% cover)
+- pkg/qemu/qemu.go (findQEMU checks PATH first), qemu_test.go
+- pkg/kubevirt/client.go (ExposedPorts → runPkg), features_test.go (new)
+- .github/workflows/ci.yml (race, bootc tag, coverage summary)
+- HANDOFF.md (test-suite section)
 
-## Foundation
-- [x] pkg/shell/fake.go — Runner interface + RealRunner + FakeRunner
-- [x] pkg/kubevirt/client.go — Client.Runner field + key methods use runner
-- [x] pkg/web/server.go — defaultRunner for vmiIndex/handleNodes/handleExport
-- [x] pkg/web/testutil_test.go — TestFixture helper for handler tests
+## Notes
+- Suite verified green against an empty PATH (CI-equivalent: no kubectl/virtctl).
+- `-race` cannot run on this Pi (TSan VMA 47-bit limitation) — runs in CI on amd64.
+- Live e2e remains behind `-tags integration` + scripts/smoke-web.sh.

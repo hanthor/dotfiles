@@ -7,8 +7,9 @@ package doctor
 import (
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
+
+	"github.com/hanthor/corral/pkg/shell"
 )
 
 // Check is one diagnostic result.
@@ -20,11 +21,19 @@ type Check struct {
 	fix     func() error
 }
 
+var runner shell.Runner = shell.Real{}
+
+// SetRunner overrides the command runner (for unit tests).
+func SetRunner(r shell.Runner) { runner = r }
+
 func run(name string, args ...string) ([]byte, error) {
-	return exec.Command(name, args...).Output()
+	return runner.Run(name, args...)
 }
 
-func ok(name string, args ...string) bool { return exec.Command(name, args...).Run() == nil }
+func ok(name string, args ...string) bool {
+	_, err := runner.Run(name, args...)
+	return err == nil
+}
 
 // Run executes all checks.
 func Run() []Check {
@@ -185,8 +194,8 @@ func reconcileKubeVirt() error {
 		},
 	}
 	body, _ := json.Marshal(patch)
-	out, err := exec.Command("kubectl", "patch", "kubevirt", "kubevirt", "-n", "kubevirt",
-		"--type", "merge", "-p", string(body)).CombinedOutput()
+	out, err := run("kubectl", "patch", "kubevirt", "kubevirt", "-n", "kubevirt",
+		"--type", "merge", "-p", string(body))
 	if err != nil {
 		return fmt.Errorf("patching KubeVirt: %s", strings.TrimSpace(string(out)))
 	}

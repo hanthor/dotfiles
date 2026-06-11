@@ -118,5 +118,17 @@ kubectl -n tailvm rollout restart deploy/corral-web
 - **The `/api/images` endpoint on the deployed pod returns 404.** The
   running image may be stale — needs a rebuild and rollout. `/api/vms` and
   `/api/capabilities` work correctly.
-- **No tests for the web handlers or app.js.** Only `kubevirt/client_test.go`
-  and `qemu/qemu_test.go` exist.
+- **No tests for app.js** (the vanilla-JS SPA has no JS test harness).
+
+## Test suite (2026-06-11)
+
+Hermetic unit tests across every package — no kubectl, virtctl, cluster, or
+network needed (verified against an empty PATH). External commands go through
+the `shell.Runner` seam (`pkg/shell`, with a scriptable `shell.Fake`);
+package-level seams: `kubevirt.SetDefaultRunner/SetPackageRunner/
+SetApplyRunner`, `doctor.SetRunner`. Coverage: catalog/config/doctor 100%,
+registry 97%, shell 90%, plugin 88%, web 79%, kubevirt 75%, qemu 61%,
+cmd 21%. Live-cluster e2e tests live behind `-tags integration`
+(`pkg/kubevirt/integration_test.go`) and `scripts/smoke-web.sh`; CI runs
+gofmt + vet + build + `go test -race` for both the default and `bootc` tag
+sets, plus a coverage report (`.github/workflows/ci.yml`).

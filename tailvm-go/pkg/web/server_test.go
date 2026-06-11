@@ -525,6 +525,45 @@ func vmListJSON(name, ns, status string, ready bool) string {
 }`, name, ns, ready, status)
 }
 
+func vmiListJSON(name, ns, ip, nodeName string) string {
+	return fmt.Sprintf(`{
+  "items": [
+    {
+      "metadata": {"name": %q, "namespace": %q},
+      "status": {
+        "nodeName": %q,
+        "interfaces": [{"ipAddress": %q}]
+      }
+    }
+  ]
+}`, name, ns, nodeName, ip)
+}
+
+func nodeWithRolesJSON(name string, ready bool, labels map[string]string, kubelet, arch string) string {
+	labelPairs := ""
+	for k, v := range labels {
+		if labelPairs != "" {
+			labelPairs += ","
+		}
+		labelPairs += fmt.Sprintf("%q:%q", k, v)
+	}
+	readyStatus := "False"
+	if ready {
+		readyStatus = "True"
+	}
+	return fmt.Sprintf(`{
+  "items": [
+    {
+      "metadata": {"name": %q, "labels": {%s}},
+      "status": {
+        "conditions": [{"type": "Ready", "status": %q}],
+        "nodeInfo": {"kubeletVersion": %q, "architecture": %q}
+      }
+    }
+  ]
+}`, name, labelPairs, readyStatus, kubelet, arch)
+}
+
 func nodeListJSON(name string, ready bool, roles, kubelet, arch string) string {
 	readyStatus := "False"
 	if ready {
@@ -544,6 +583,98 @@ func nodeListJSON(name string, ready bool, roles, kubelet, arch string) string {
     }
   ]
 }`, name, roles, readyStatus, kubelet, arch)
+}
+
+// ── handleListVMs VMI merge ──────────────────────────────────────
+
+func TestHandleListVMs_WithRunningVMI(t *testing.T) {
+	fx := NewTestFixture()
+	defer fx.Close()
+
+	// VM list: one VM in tailvm namespace
+	fx.Runner.AddResponseKV("kubectl", []string{"get", "vms", "-A", "-o", "json"},
+		vmListJSON("myvm", "tailvm", "Running", true), nil)
+	// VMI list: matching VMI with IP and nodeName
+	fx.Runner.AddResponseKV("kubectl", []string{"get", "vmis", "-A", "-o", "json"},
+		vmiListJSON("myvm", "tailvm", "10.42.0.15", "bihar"), nil)
+
+	resp := mustGet(t, fx.Server.URL+"/api/vms")
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("got %d, want 200", resp.StatusCode)
+	}
+
+	var vms []map[string]any
+	json.NewDecoder(resp.Body).Decode(&vms)
+	if len(vms) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(vms))
+	}
+	vm := vms[0]
+	// IP and Node should be populated from the VMI merge
+	if ip, _ := vm["ip"].(string); ip != "10.42.0.15" {
+		t.Errorf("ip = %q, want '10.42.0.15'", ip)
+	}
+	if node, _ := vm["node"].(string); node != "bihar" {
+		t.Errorf("node = %q, want 'bihar'", node)
+	}
+}
+
+// ── handleNodes roles ────────────────────────────────────────────
+
+func TestHandleNodes_WithRoles(t *testing.T) {
+	fx := NewTestFixture()
+	defer fx.Close()
+
+	fx.Runner.AddResponseKV("kubectl", []string{"get", "nodes", "-o", "json"},
+		nodeWithRolesJSON("bihar", true, map[string]string{
+			"node-role.kubernetes.io/control-plane": "",
+			"node-role.kubernetes.io/master":        "",
+		}, "v1.36.1", "amd64"), nil)
+
+	resp := mustGet(t, fx.Server.URL+"/api/nodes")
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("got %d, want 200", resp.StatusCode)
+	}
+
+	var nodes []map[string]any
+	json.NewDecoder(resp.Body).Decode(&nodes)
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+	roles, _ := nodes[0]["roles"].(string)
+	// Roles should contain both control-plane and master
+	if !strings.Contains(roles, "control-plane") || !strings.Contains(roles, "master") {
+		t.Errorf("roles = %q, expected to contain 'control-plane' and 'master'", roles)
+	}
+}
+
+// ── handleTaskStatus existing task ───────────────────────────────
+
+func TestHandleTaskStatus_Existing(t *testing.T) {
+	fx := NewTestFixture()
+	defer fx.Close()
+
+	// Insert a completed build task directly into the package-level tasks map
+	task := &buildTask{}
+	task.finish(nil) // status = "done"
+	tasks.Store("test-task-1", task)
+	defer tasks.Delete("test-task-1")
+
+	resp := mustGet(t, fx.Server.URL+"/api/tasks/test-task-1")
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("got %d, want 200", resp.StatusCode)
+	}
+
+	var body map[string]string
+	json.NewDecoder(resp.Body).Decode(&body)
+	if body["status"] != "done" {
+		t.Errorf("status = %q, want 'done'", body["status"])
+	}
 }
 
 // ── Edge cases ───────────────────────────────────────────────────
@@ -678,4 +809,123 @@ func TestHandleCreateDelete_RegistryRoundtrip(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Errorf("idempotent delete: expected 200, got %d", resp.StatusCode)
 	}
+}
+
+func TestHandleCreateVM_ISOSource(t *testing.T) {
+	fx := NewTestFixture()
+	defer fx.Close()
+
+	tmpHome := t.TempDir()
+	sshDir := filepath.Join(tmpHome, ".ssh")
+	os.MkdirAll(sshDir, 0700)
+	os.WriteFile(filepath.Join(sshDir, "id_ed25519.pub"), []byte("ssh-ed25519 AAAAtest"), 0600)
+	t.Setenv("HOME", tmpHome)
+
+	// ISO path: EnsureNamespace + PreferredStorageClass + DataVolume apply + PVC apply + VM apply
+	fx.Runner.AddResponseKV("kubectl", []string{"apply", "-f", "-"}, "", nil)
+	fx.Runner.AddResponseKV("kubectl", []string{"get", "sc", "-o", "json"},
+		`{"items":[{"metadata":{"name":"longhorn"}}]}`, nil)
+	fx.Runner.AddResponseKV("kubectl", []string{"get", "vm", "isovm", "-n", "tailvm", "-o", "name"},
+		"", errSimulated) // VM doesn't exist yet
+
+	resp := mustPost(t, fx.Server.URL+"/api/vms",
+		`{"name":"isovm","iso":"https://example.com/debian.iso","cpu":2,"mem":"4G","disk":"20G"}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("got %d, want 201 — body: %s", resp.StatusCode, string(body))
+	}
+
+	var body map[string]string
+	json.NewDecoder(resp.Body).Decode(&body)
+	if body["name"] != "isovm" {
+		t.Errorf("name = %v, want isovm", body["name"])
+	}
+}
+
+func TestHandleCreateVM_PVCSource(t *testing.T) {
+	fx := NewTestFixture()
+	defer fx.Close()
+
+	tmpHome := t.TempDir()
+	sshDir := filepath.Join(tmpHome, ".ssh")
+	os.MkdirAll(sshDir, 0700)
+	os.WriteFile(filepath.Join(sshDir, "id_ed25519.pub"), []byte("ssh-ed25519 AAAAtest"), 0600)
+	t.Setenv("HOME", tmpHome)
+
+	// PVC source skips PVC creation, just creates the VM manifest
+	fx.Runner.AddResponseKV("kubectl", []string{"apply", "-f", "-"}, "", nil)
+	fx.Runner.AddResponseKV("kubectl", []string{"get", "sc", "-o", "json"},
+		`{"items":[{"metadata":{"name":"longhorn"}}]}`, nil)
+	fx.Runner.AddResponseKV("kubectl", []string{"get", "vm", "pvcvm", "-n", "tailvm", "-o", "name"},
+		"", errSimulated)
+
+	resp := mustPost(t, fx.Server.URL+"/api/vms",
+		`{"name":"pvcvm","pvc":"existing-data-disk","cpu":2,"mem":"4G"}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("got %d, want 201 — body: %s", resp.StatusCode, string(body))
+	}
+}
+
+func TestHandleDeleteVM_RemovesLabeledPVCs(t *testing.T) {
+	fx := NewTestFixture()
+	defer fx.Close()
+
+	// All DeleteVM commands
+	fx.Runner.AddResponseKV("/fake/bin/virtctl", []string{"stop", "labeled", "-n", "tailvm"}, "", nil)
+	fx.Runner.AddResponseKV("kubectl", []string{"delete", "vm", "labeled", "-n", "tailvm", "--ignore-not-found"}, "", nil)
+	for _, suffix := range []string{"disk", "data", "iso", "bootc-disk"} {
+		pvc := "labeled-" + suffix
+		fx.Runner.AddResponseKV("kubectl", []string{"delete", "pvc", pvc, "-n", "tailvm", "--ignore-not-found"}, "", nil)
+		fx.Runner.AddResponseKV("kubectl", []string{"delete", "datavolume", pvc, "-n", "tailvm", "--ignore-not-found"}, "", nil)
+	}
+	fx.Runner.AddResponseKV("kubectl", []string{"delete", "pvc", "-n", "tailvm", "-l", "corral.dev/vm=labeled", "--ignore-not-found"}, "", nil)
+	fx.Runner.AddResponseKV("kubectl", []string{"delete", "vmsnapshot", "-n", "tailvm", "-l", "corral.dev/vm=labeled", "--ignore-not-found"}, "", nil)
+
+	resp := mustDelete(t, fx.Server.URL+"/api/vms/tailvm/labeled")
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("got %d, want 200", resp.StatusCode)
+	}
+
+	// Verify the labeled PVC delete command was called
+	found := false
+	for _, call := range fx.Runner.Calls() {
+		if call.Name == "kubectl" && len(call.Args) >= 6 &&
+			call.Args[0] == "delete" && call.Args[1] == "pvc" &&
+			call.Args[4] == "-l" && call.Args[5] == "corral.dev/vm=labeled" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected kubectl delete pvc -l corral.dev/vm=labeled call, but it was not found in recorded calls")
+	}
+}
+
+func TestHandleExport_StoppedVM(t *testing.T) {
+	fx := NewTestFixture()
+	defer fx.Close()
+
+	// VM is stopped — kubectl get vmi returns error
+	fx.Runner.AddResponseKV("kubectl", []string{"get", "vmi", "stoppedvm", "-n", "tailvm"},
+		"", errSimulated)
+
+	resp, err := http.Get(fx.Server.URL + "/api/vms/tailvm/stoppedvm/export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// Should NOT return 409 (that's only when VM is running)
+	if resp.StatusCode == 409 {
+		t.Errorf("got 409, expected non-409 (VM is stopped, export should proceed)")
+	}
+	// Export will fail later (virtctl not available) but the handler shouldn't return 409
+	t.Logf("export stopped VM returned %d", resp.StatusCode)
 }
