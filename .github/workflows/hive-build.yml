@@ -32,6 +32,13 @@ jobs:
           ref: v2
           path: hive-src
 
+      - name: Patch source for goose 1.37.0 compatibility
+        working-directory: hive-src
+        run: |
+          # Goose 1.37.0 uses "goose is ready" instead of ❯ prompt.
+          # Patch waitForInputPrompt to also check for "goose is ready".
+          sed -i 's/strings.Contains(output, "\\u276f")/(strings.Contains(output, "\\u276f") || strings.Contains(output, "goose is ready"))/' v2/pkg/agent/manager.go
+
       - name: Prep build context
         working-directory: hive-src
         run: |
