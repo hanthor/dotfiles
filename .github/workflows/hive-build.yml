@@ -9,6 +9,7 @@ on:
     paths:
       - 'talos-k8s/hive/Dockerfile'
       - 'talos-k8s/hive/goose-config.yaml'
+      - 'talos-k8s/hive/goose-wrapper.sh'
       - 'talos-k8s/hive/hive.yaml'
       - '.github/workflows/hive-build.yml'
 
@@ -37,9 +38,12 @@ jobs:
         run: |
           # Goose 1.37.0 shows "goose is ready" first, then "> Enter to send" prompt.
           # Patch waitForInputPrompt to check for both.
-          sed -i 's/strings.Contains(output, "❯")/(strings.Contains(output, "❯") || strings.Contains(output, "goose is ready") || strings.Contains(output, "> Enter to send"))/g' v2/pkg/agent/manager.go
+          sed -i 's/strings.Contains(output, "❯")/(strings.Contains(output, "❯") || strings.Contains(output, "goose is ready") || strings.Contains(output, "> Enter"))/g' v2/pkg/agent/manager.go
           # Add "goose" to cliPaneMarkers so the binary detects goose is alive
           sed -i '/"Gemini",/a\	"goose",' v2/pkg/agent/manager.go
+          # Increase input prompt timeout from 30s to 120s (goose processes
+          # long bootstrap prompts before showing the prompt)
+          sed -i 's/inputPromptTimeout.*= 30 .* time.Second/inputPromptTimeout      = 120 * time.Second/' v2/pkg/agent/manager.go
 
       - name: Prep build context
         working-directory: hive-src
