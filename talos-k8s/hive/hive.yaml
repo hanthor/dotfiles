@@ -117,7 +117,7 @@ data:
       eval_interval_s: 300
       modes:
         surge:
-          threshold: 50
+          threshold: 70
           supervisor: 5m
           scanner: 15m
           ci-maintainer: pause
