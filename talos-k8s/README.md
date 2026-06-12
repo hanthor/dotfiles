@@ -78,16 +78,16 @@ First, apply the upstream operator manifest to create the namespace, RBAC, and C
 kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
 ```
 
-Then apply our local manifest ([`kubevirt.yaml`](kubevirt.yaml)), which:
+Then apply our local manifest ([`kubevirt.yaml`](infrastructure/kubevirt.yaml)), which:
 - Patches the virt-operator Deployment to **remove the hard control-plane node affinity** (otherwise cordoning the control-plane prevents the operator from scheduling).
 - Creates the KubeVirt CR with `spec.infra.nodePlacement` so virt-api and virt-controller also tolerate running on any linux node.
 - Creates a ServiceMonitor so Prometheus scrapes KubeVirt infra metrics.
 
 ```bash
-kubectl apply -f kubevirt.yaml
+kubectl apply -f infrastructure/kubevirt.yaml
 ```
 
-If you already have KubeVirt installed, `kubectl apply -f kubevirt.yaml` will update the deployment and CR in-place.
+If you already have KubeVirt installed, `kubectl apply -f infrastructure/kubevirt.yaml` will update the deployment and CR in-place.
 
 ### Node Placement Fix
 
@@ -120,7 +120,7 @@ Once forwarded, open your browser and navigate to:
 
 The worker node `Karnataka` houses the AMD Strix Halo APU with high-bandwidth unified VRAM. We use **[Lemonade](https://lemonade-sdk.github.io/)** — an AMD-optimized, open-source local AI runtime that auto-detects hardware and provides omni-modal endpoints (chat, vision, image gen, speech, transcription) via standard OpenAI-compatible APIs.
 
-### Lemonade Deployment Manifest ([lemonade.yaml](lemonade.yaml))
+### Lemonade Deployment Manifest ([lemonade.yaml](ai/lemonade.yaml))
 Key features:
 * **Node Scheduling:** Strict `nodeSelector` targeted at `karnataka` to leverage its APU.
 * **Namespace Security Bypass:** We labeled the `default` namespace as `privileged` so the container can request `hostPath` mounts, shared memory allocations, and `SYS_PTRACE` capabilities.
@@ -145,10 +145,10 @@ Key features:
 
 ### metrics-server
 
-Enables `kubectl top` and HPA. Manifest at [`metrics-server.yaml`](metrics-server.yaml).
+Enables `kubectl top` and HPA. Manifest at [`metrics-server.yaml`](monitoring/metrics-server.yaml).
 
 ```bash
-kubectl apply -f metrics-server.yaml
+kubectl apply -f monitoring/metrics-server.yaml
 ```
 
 Includes `--kubelet-insecure-tls` (required for Talos self-signed kubelet certs).
@@ -167,7 +167,7 @@ kubectl label ns monitoring pod-security.kubernetes.io/enforce=privileged
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
-  --values kube-prometheus-stack-values.yaml
+  --values monitoring/kube-prometheus-stack-values.yaml
 ```
 
 - **Grafana**: port-forward port 3000, default login `admin`/`admin`
@@ -180,7 +180,7 @@ uses hostNetwork, hostPID, and hostPath volumes.
 
 ### ServiceMonitors
 
-- KubeVirt metrics are scraped via [`kubevirt.yaml`](kubevirt.yaml)'s ServiceMonitor.
+- KubeVirt metrics are scraped via [`kubevirt.yaml`](infrastructure/kubevirt.yaml)'s ServiceMonitor.
 - Built-in ServiceMonitors cover: apiserver, coredns, kubelet, kube-proxy, node-exporter,
   kube-state-metrics, and Prometheus itself.
 - `kube-controller-manager`, `kube-scheduler`, and `kube-proxy` targets show as `down` on

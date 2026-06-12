@@ -37,12 +37,6 @@
     state: directory
     mode: "0755"
 
-- name: Deploy forgejo-mcp extension
-  ansible.builtin.copy:
-    src: forgejo-mcp.ts
-    dest: ~/.pi/agent/extensions/forgejo-mcp.ts
-    mode: "0644"
-
 - name: Deploy claude-import extension (patched with selector menu)
   ansible.builtin.copy:
     src: claude-import.ts

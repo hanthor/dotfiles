@@ -1,0 +1,218 @@
+# AppFlowy Cloud — collaborative workspace
+# Chart: AppFlowy-SelfHost-Commercial/helm/appflowy-cloud
+#
+# Deploy:
+#   kubectl create ns appflowy
+#   kubectl label ns appflowy pod-security.kubernetes.io/enforce=privileged --overwrite
+#   helm dependency update
+#   helm upgrade --install appflowy . --namespace appflowy --values values-tailnet.yaml
+
+global:
+  domain: appflowy.manatee-basking.ts.net
+  scheme: https
+  wsScheme: wss
+
+  postgresql:
+    host: appflowy-postgresql
+    database: postgres
+    username: postgres
+    password: ""  # Set via --set on install/upgrade
+
+  redis:
+    host: appflowy-redis-master
+    port: 6379
+    password: ""  # No auth needed (internal-only on cluster)
+
+  s3:
+    useMinio: true
+    endpoint: appflowy-minio
+    port: 9000
+    bucket: appflowy
+    region: us-east-1
+    createBucket: true
+
+  jwt:
+    secret: ""  # Set via --set on install
+
+# ── Infrastructure ─────────────────────────────────────────────
+
+postgresql:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: pgvector/pgvector
+    tag: pg16
+  auth:
+    # Password set via --set global.postgresql.password
+    postgresPassword: ""
+    database: postgres
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: longhorn
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+    containerSecurityContext:
+      readOnlyRootFilesystem: false
+    initdb:
+      scripts:
+        init-extensions.sql: |
+          CREATE EXTENSION IF NOT EXISTS vector;
+          CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 4Gi
+      storageClass: longhorn
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 50m
+      limits:
+        memory: 128Mi
+        cpu: 200m
+
+minio:
+  enabled: true
+  image:
+    repository: minio/minio
+    tag: "RELEASE.2024-02-17T01-15-57Z"
+  auth:
+    rootUser: minioadmin
+    rootPassword: ""  # Set via --set global.s3.secretKey
+  defaultBuckets: appflowy
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: longhorn
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+
+kube-prometheus-stack:
+  enabled: false  # We have our own
+
+# ── Application Services ─────────────────────────────────────
+
+gotrue:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+  config:
+    disableSignup: false
+    mailerAutoconfirm: true
+
+appflowy-cloud:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+  config:
+    rustLog: info
+    collaborateMultiThread: false
+  metrics:
+    enabled: false
+
+appflowy-worker:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+  metrics:
+    enabled: false
+
+appflowy-web:
+  enabled: true
+  replicaCount: 1
+  livenessProbe: false
+  readinessProbe: false
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 50m
+    limits:
+      memory: 128Mi
+      cpu: 100m
+
+admin-frontend:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 50m
+    limits:
+      memory: 128Mi
+      cpu: 100m
+  config:
+    pathPrefix: /console
+
+appflowy-ai:
+  enabled: false  # No AI API keys configured
+
+# ── Ingress ───────────────────────────────────────────────────
+
+ingress:
+  enabled: true
+  className: tailscale
+  certManager:
+    enabled: false
+  annotations: {}
+  tls:
+    enabled: true
+    secretName: ""  # Tailscale handles TLS
+
+# ── Network ───────────────────────────────────────────────────
+
+networkPolicy:
+  enabled: false  # Tailscale handles networking
+
+serviceAccount:
+  create: true
+  name: appflowy
+
+# Pod security — some containers need root for runtime config injection (sed on server.js)
+podSecurityContext:
+  runAsNonRoot: false
+  runAsUser: 0
+  runAsGroup: 0
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
