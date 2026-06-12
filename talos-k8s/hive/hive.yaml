@@ -43,9 +43,7 @@ data:
       ai_author: hanthor
       primary_repo: tuna-os/tunaos
 
-    # ACMM level removed — we set agent backends and modes directly.
-    # The upstream ACMM packs override agent configs with copilot backends
-    # which we don't want.
+    acmm_level: 6
 
     agents:
       supervisor:
