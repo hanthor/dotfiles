@@ -35,12 +35,17 @@
 │   │                        │   │ /dev/nvme0n1           │    │
 │   │  kube-apiserver        │   │ amdgpu-device-plugin   │    │
 │   │  etcd / scheduler /    │   │ amdgpu-labeller        │    │
-│   │  controller-manager    │   │                        │    │
-│   │  KubeVirt control      │   │ Lemonade               │    │
-│   │  KubeVirt Manager      │   │ KubeVirt virt-handler  │    │
+│   │  controller-manager    │   │ Lemonade               │    │
+│   │  KubeVirt control      │   │ Forgejo + runner       │    │
+│   │  Forgejo + runner      │   │ Hive agent swarm       │    │
+│   │  ArgoCD + Argo WF      │   │ KubeVirt virt-handler  │    │
+│   │  Grafana / Prometheus  │   │ Longhorn CSI           │    │
+│   │  Authentik + n8n       │   │ AppFlowy Cloud         │    │
+│   │  Longhorn CSI / UI     │   │ Corral VMs             │    │
+│   │  KubeVirt Manager      │   │                        │    │
 │   └────────────────────────┘   └────────────────────────┘    │
 │                                                               │
-│   CNI: flannel · kube-proxy: on · Storage: local-storage      │
+│   CNI: flannel · kube-proxy: on · Storage: longhorn + local-path      │
 │   Tailscale Operator → ts.net ingress for cluster services    │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -73,7 +78,7 @@ The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on
 | CPU             | Intel x86_64 |
 | NIC             | MAC `A8:A1:59:E1:6D:84` |
 | Boot disk       | `/dev/nvme0n1` |
-| Role on LAN     | DHCP, DNS (dnsmasq), home services (Proxmox host, [Authentik](https://goauthentik.io/), [AppFlowy](https://appflowy.io/), [n8n](https://n8n.io/), …) |
+| Role on LAN     | DHCP, DNS (dnsmasq) |
 
 ---
 
@@ -107,8 +112,17 @@ Cluster ingress goes through the [Tailscale Operator](https://tailscale.com/kb/1
 
 | Service             | URL |
 |---------------------|-----|
+| Cluster homepage    | `https://home.manatee-basking.ts.net` |
+| Lemonade (AI)       | `https://lemonade.manatee-basking.ts.net/v1` |
+| Hive (agent swarm)  | `https://hive.manatee-basking.ts.net` |
+| Forgejo (git + CI)  | `https://forgejo.manatee-basking.ts.net` |
+| ArgoCD (GitOps)     | `https://argocd.manatee-basking.ts.net` |
+| Grafana (metrics)   | `https://grafana.manatee-basking.ts.net` |
+| Corral (VM dashboard)| `https://corral.manatee-basking.ts.net` |
 | KubeVirt Manager    | `https://kubevirt-manager.manatee-basking.ts.net` |
-| Lemonade (OpenAI-compatible) | `https://lemonade.manatee-basking.ts.net/v1` |
+| Authentik (SSO)     | `https://auth.manatee-basking.ts.net` |
+| n8n (workflows)     | `https://n8n.manatee-basking.ts.net` |
+| AppFlowy (collab)   | `https://appflowy.manatee-basking.ts.net` |
 
 ### Kubernetes internal
 
@@ -155,7 +169,7 @@ user volume on the Crucial P3's EPHEMERAL partition:
 talosctl -n 192.168.0.6 patch mc --patch @storage-volume.yaml
 ```
 
-The patch is stored at [`talos-k8s/storage-volume.yaml`](../talos-k8s/storage-volume.yaml).
+The patch is stored at [`talos-k8s/longhorn/storage-volume.yaml`](../talos-k8s/longhorn/storage-volume.yaml).
 It creates `/var/mnt/storage` as a directory on the EPHEMERAL partition.
 The mount is automatically propagated into the kubelet namespace.
 
@@ -236,9 +250,28 @@ resources:
 
 ## 7. Production workloads
 
+All manifests live in [`talos-k8s/`](../../../talos-k8s/), organized by purpose:
+
+```
+talos-k8s/
+├── ai/              Lemonade (LLM runtime)
+├── appflowy/        AppFlowy Cloud (collaboration)
+├── authentik/       Authentik (SSO)
+├── forgejo/         Forgejo + runner + registry-mirror
+├── hive/            Hive (AI agent swarm)
+├── homepage/        Cluster landing page
+├── infrastructure/  KubeVirt + Corral
+├── longhorn/        Storage (CSI, snapshots)
+├── monitoring/      Prometheus + Grafana + metrics-server
+├── n8n/             n8n (workflow automation)
+├── networking/      Tailscale node configs
+└── testing-lab/     CI/CD test infrastructure
+```
+
 ### Lemonade — AMD-optimized local AI runtime
 
-Single-replica [Lemonade](https://lemonade-sdk.github.io/) omni-modal server on the Strix Halo APU. Manifest: [`talos-k8s/lemonade.yaml`](../talos-k8s/lemonade.yaml).
+Single-replica [Lemonade](https://lemonade-sdk.github.io/) omni-modal server on the Strix Halo APU.
+Manifest: [`talos-k8s/ai/lemonade.yaml`](../../../talos-k8s/ai/lemonade.yaml).
 
 Lemonade is an AMD-optimized, open-source local AI runtime that auto-detects hardware and provides standard OpenAI-compatible endpoints for chat, vision, image generation, image editing, speech generation, and transcription. Built on llama.cpp, ONNX Runtime, whisper.cpp, and stable-diffusion.cpp.
 
@@ -272,6 +305,8 @@ The `default` namespace is labelled `pod-security.kubernetes.io/enforce=privileg
 
 ### KubeVirt Manager (web UI)
 
+Manifest: deployed from upstream bundle. Also see [`talos-k8s/infrastructure/`](../../../talos-k8s/infrastructure/) for KubeVirt CR and Corral VM dashboard.
+
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
 ```
@@ -284,6 +319,26 @@ Port-forward as fallback:
 kubectl port-forward svc/kubevirt-manager 8080:8080 -n kubevirt-manager
 # http://localhost:8080
 ```
+
+---
+
+### Additional services
+
+All other production services have their own directory in [`talos-k8s/`](../../../talos-k8s/):
+
+| Service | Directory | Description |
+|---------|-----------|-------------|
+| Forgejo | `forgejo/` | Git hosting + Actions CI/CD |
+| Hive | `hive/` | AI coding agent swarm backed by Lemonade |
+| Authentik | `authentik/` | SSO (passkeys, OAuth2/OIDC) — Helm |
+| n8n | `n8n/` | Workflow automation — plain K8s manifest |
+| AppFlowy Cloud | `appflowy/` | Collaborative workspace — commercial Helm chart |
+| Grafana + Prometheus | `monitoring/` | kube-prometheus-stack + metrics-server |
+| ArgoCD | (Helm) | GitOps deployment |
+| Longhorn | `longhorn/` | Distributed block storage (CSI, snapshots) |
+| Testing lab | `testing-lab/` | Argo Workflows CI/CD test infra |
+
+Each directory has a `README.md` with deploy and operational instructions.
 
 ---
 
@@ -367,7 +422,7 @@ If a node is wiped or replaced:
    ```
 5. **Create user volume** (karnataka/worker only):
    ```bash
-   talosctl -n 192.168.0.6 patch mc --patch @talos-k8s/storage-volume.yaml
+   talosctl -n 192.168.0.6 patch mc --patch @talos-k8s/longhorn/storage-volume.yaml
    ```
 6. **Create host directories** for local PVs (if re-creating from scratch):
    ```bash
@@ -382,7 +437,7 @@ If a node is wiped or replaced:
    kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
    kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-cr.yaml
    kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
-   kubectl apply -f talos-k8s/lemonade.yaml
+   kubectl apply -f talos-k8s/ai/lemonade.yaml
    ```
 
 If only the worker was reset, the existing kubeconfig still works — only steps 1, 2, 5, and 6 are needed for that node, plus re-applying any DaemonSet pods.
