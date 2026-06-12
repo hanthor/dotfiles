@@ -1,0 +1,100 @@
+# KubeStellar Hive Contributor — K8s deployment with Lemonade Qwen3.6-35B
+#
+# Before deploying:
+# 1. Register with the hub to get your token:
+#      export HIVE_HUB=wss://hosted-projectbluefin-knuckle-gjvq.hive.kubestellar.io/contribute
+#      just contribute-register
+#    This writes ~/.config/hive/contributor.env with HIVE_REGISTRATION_TOKEN.
+#
+# 2. Create the gh-token secret:
+#      kubectl create secret generic kubestellar-hive-secrets \
+#        --from-literal=gh-token="$(gh auth token)" \
+#        --from-literal=registration-token="$(grep HIVE_REGISTRATION_TOKEN ~/.config/hive/contributor.env | cut -d= -f2)"
+#
+# 3. Build and push the image:
+#      cd talos-k8s/kubestellar-hive
+#      docker build -t forgejo.manatee-basking.ts.net/james/kubestellar-hive:latest .
+#      docker push forgejo.manatee-basking.ts.net/james/kubestellar-hive:latest
+#
+# 4. Deploy:
+#      kubectl apply -f manifest.yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubestellar-hive-config
+data:
+  contributor.env: |
+    HIVE_HUB=wss://hosted-projectbluefin-knuckle-gjvq.hive.kubestellar.io/contribute
+    CONTRIBUTOR_USERNAME=hanthor
+    AGENT_BACKEND=goose
+    AGENT_MODEL=Qwen3.6-35B-GGUF
+    GOOSE_PROVIDER=openai
+    GOOSE_MODEL=Qwen3.6-35B-GGUF
+    OPENAI_BASE_URL=https://lemonade.manatee-basking.ts.net/v1
+    OPENAI_API_KEY=dummy
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubestellar-hive
+  labels:
+    app: kubestellar-hive
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubestellar-hive
+  template:
+    metadata:
+      labels:
+        app: kubestellar-hive
+    spec:
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+      - name: contributor
+        image: ghcr.io/kubestellar/hive-contributor:latest
+        imagePullPolicy: Always
+        env:
+        - name: HIVE_HUB
+          value: wss://hosted-projectbluefin-knuckle-gjvq.hive.kubestellar.io/contribute
+        - name: AGENT_BACKEND
+          value: goose
+        - name: AGENT_MODEL
+          value: Qwen3.6-35B-GGUF
+        - name: GOOSE_PROVIDER
+          value: openai
+        - name: GOOSE_MODEL
+          value: Qwen3.6-35B-GGUF
+        - name: OPENAI_BASE_URL
+          value: https://lemonade.manatee-basking.ts.net/v1
+        - name: OPENAI_API_KEY
+          value: dummy
+        - name: GH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: kubestellar-hive-secrets
+              key: gh-token
+        - name: HIVE_REGISTRATION_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: kubestellar-hive-secrets
+              key: registration-token
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 2
+            memory: 2Gi
+        volumeMounts:
+        - name: config
+          mountPath: /home/dev/.config/hive
+      volumes:
+      - name: config
+        configMap:
+          name: kubestellar-hive-config
+          items:
+          - key: contributor.env
+            path: contributor.env
