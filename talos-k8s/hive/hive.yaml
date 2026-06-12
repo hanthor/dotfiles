@@ -53,7 +53,7 @@ data:
         backend: goose
         model: deepseek-v4-pro
         beads_dir: /data/beads/supervisor
-        clear_on_kick: false
+        clear_on_kick: true
         bead_role: supervisor
       scanner:
         enabled: true
@@ -61,55 +61,55 @@ data:
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
-        clear_on_kick: false
+        clear_on_kick: true
       ci-maintainer:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
-        clear_on_kick: false
+        clear_on_kick: true
       quality:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/quality
-        clear_on_kick: false
+        clear_on_kick: true
       guide:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
         beads_dir: /data/beads/guide
-        clear_on_kick: false
+        clear_on_kick: true
       sec-check:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/sec-check
-        clear_on_kick: false
+        clear_on_kick: true
       architect:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/architect
-        clear_on_kick: false
+        clear_on_kick: true
       strategist:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/strategist
-        clear_on_kick: false
+        clear_on_kick: true
       outreach:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/outreach
-        clear_on_kick: false
+        clear_on_kick: true
       brainstorm:
         enabled: false
 
@@ -219,8 +219,15 @@ spec:
           image: ghcr.io/hanthor/hive:latest
           imagePullPolicy: Always
           args:
-            - "--config"
-            - "/etc/hive/hive.yaml"
+            - "-c"
+            - |
+              # Fix goose state directory permissions for agent UIDs.
+              # The PVC mount overrides image permissions, so fix at runtime.
+              mkdir -p /data/home/.local/state/goose /data/home/.config/goose
+              chmod -R 777 /data/home/.local /data/home/.config 2>/dev/null || true
+              exec /usr/local/bin/entrypoint.sh --config /etc/hive/hive.yaml
+          command:
+            - /bin/sh
           stdin: true
           tty: true
           ports:
