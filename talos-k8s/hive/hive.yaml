@@ -53,7 +53,7 @@ data:
         backend: goose
         model: deepseek-v4-pro
         beads_dir: /data/beads/supervisor
-        clear_on_kick: true
+        clear_on_kick: false
         bead_role: supervisor
       scanner:
         enabled: true
@@ -61,55 +61,55 @@ data:
         model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
-        clear_on_kick: true
+        clear_on_kick: false
       ci-maintainer:
         enabled: true
         backend: goose
         model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
-        clear_on_kick: true
+        clear_on_kick: false
       quality:
         enabled: true
         backend: goose
         model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/quality
-        clear_on_kick: true
+        clear_on_kick: false
       guide:
         enabled: true
         backend: goose
         model: deepseek-v4-flash
         beads_dir: /data/beads/guide
-        clear_on_kick: true
+        clear_on_kick: false
       sec-check:
         enabled: true
         backend: goose
         model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/sec-check
-        clear_on_kick: true
+        clear_on_kick: false
       architect:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/architect
-        clear_on_kick: true
+        clear_on_kick: false
       strategist:
         enabled: true
         backend: goose
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/strategist
-        clear_on_kick: true
+        clear_on_kick: false
       outreach:
         enabled: true
         backend: goose
         model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/outreach
-        clear_on_kick: true
+        clear_on_kick: false
       brainstorm:
         enabled: false
 
