@@ -82,15 +82,6 @@
       when: inventory_hostname not in groups.get('vps', []) and not skip_homepage | default(false)
     - role: bst_dashboard
       tags: [services, bst_dashboard]
-    - role: authentik
-      tags: [services, identity, sso]
-      when: inventory_hostname == 'bihar'
-    - role: n8n
-      tags: [services, automation]
-      when: inventory_hostname == 'bihar'
-    - role: appflowy
-      tags: [services, appflowy]
-      when: inventory_hostname == 'bihar'
     - role: proxy
       tags: [services, proxy, caddy]
       when: inventory_hostname not in groups.get('vps', []) and not skip_proxy | default(false)

@@ -9,12 +9,18 @@ user_login: james
 brew_prefix: /home/linuxbrew/.linuxbrew
 # Global services shown on ALL machine homepages
 global_services:
+  - name: Authentik
+    href: https://auth.manatee-basking.ts.net
+    icon: authentik.png
+    description: SSO / identity provider
+    group: Core
+    siteMonitor: https://auth.manatee-basking.ts.net
   - name: AppFlowy
-    href: https://bihar.manatee-basking.ts.net/appflowy
+    href: https://appflowy.manatee-basking.ts.net
     icon: appflowy.png
     description: Collaboration platform
     group: Core
-    siteMonitor: https://bihar.manatee-basking.ts.net/appflowy
+    siteMonitor: https://appflowy.manatee-basking.ts.net
   - name: Proxmox
     href: https://bihar.manatee-basking.ts.net/proxmox
     icon: proxmox.png
@@ -22,11 +28,11 @@ global_services:
     group: Core
     siteMonitor: https://bihar.manatee-basking.ts.net:8006
   - name: n8n
-    href: https://bihar.manatee-basking.ts.net/n8n
+    href: https://n8n.manatee-basking.ts.net
     icon: n8n.png
     description: Workflow automation
     group: Core
-    siteMonitor: https://bihar.manatee-basking.ts.net/n8n
+    siteMonitor: https://n8n.manatee-basking.ts.net
 
 # Fleet homepages — machines with a homepage instance.
 # Used to render the "Fleet" section on each machine's homepage.

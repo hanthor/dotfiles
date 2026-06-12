@@ -1,23 +1,9 @@
 # n8n
 
-**Tags:** `services`, `automation`  
-**Secrets needed:** No  
-**Runs on:** bihar only
+**Migrated to Kubernetes (2026-06-12).**
 
-Deploys [n8n](https://n8n.io/) workflow automation platform using Podman Quadlets.
+This Ansible role (Podman Quadlet on bihar) has been removed. n8n now runs in the Talos K8s cluster.
 
-## What It Does
+See [`talos-k8s/n8n/`](../../../talos-k8s/n8n/) for the plain-K8s deployment manifest and operational instructions.
 
-1. Creates Quadlet config directory
-2. Deploys n8n as a Quadlet container
-3. Starts the service via systemd
-
-## Access
-
-Proxied through Caddy at `https://bihar.manatee-basking.ts.net/n8n`.
-
-## Notes
-
-- n8n provides visual workflow automation (similar to Zapier/IFTTT, but self-hosted)
-- Runs rootless as the user
-- Workflows and credentials persist across container restarts
+Access: `https://n8n.manatee-basking.ts.net`

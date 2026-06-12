@@ -41,21 +41,3 @@ web_services:
     description: Alert routing
     group: Monitoring
     siteMonitor: http://bihar.manatee-basking.ts.net:9093
-
-# Identity & Auth configuration (Authentik)
-authentik_pg_password: "167pundFNxh+ipnAKc+q8L3mcnRzBUtj"
-authentik_redis_password: "xHoLkBr8bV/79Pp4Fy9NLxGRkmGshtcc"
-authentik_secret_key: "3m34Awgr3yORGCTc59kqUWiiKJ2PokeZpyRujNXEYAP/RTxLWT70caTVh721NxMF"
-authentik_api_token: "james_api_token_key"
-authentik_external_url: "https://bihar.manatee-basking.ts.net/auth"
-
-# n8n configuration
-n8n_db_password: "pc5FPGa+UO5YjPq3o0uObIbFHnmKNtUE"
-n8n_encryption_key: "xyjyl/xDgC8dKZQDWmD3wLygs8jcbtgz"
-n8n_external_url: "https://bihar.manatee-basking.ts.net/n8n"
-
-# AppFlowy persistent secrets
-appflowy_db_password: "q8xM3McnlELmc5g4rqYgrR+3uPWEzjnz"
-appflowy_redis_password: "d4VXleZ61rkqfXWpr8jSnY389LUqLyMx"
-appflowy_gotrue_jwt_secret: "nHvfx/seFs4wVYfAeKdFYsHRGBgEifyIJJr6ex+o3pM="
-appflowy_minio_secret_key: "pc5FPGa+UO5YjPq3o0uObIbFHnmKNtUE"
