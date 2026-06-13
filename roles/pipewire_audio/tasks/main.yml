@@ -1,0 +1,54 @@
+---
+- name: Ensure PipeWire filter-chain config directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - ~/.config/pipewire/pipewire.conf.d
+    - ~/.config/wireplumber/main.lua.d
+
+- name: Deploy speaker DSP filter-chain config (output)
+  ansible.builtin.copy:
+    src: speaker-dsp.conf
+    dest: ~/.config/pipewire/pipewire.conf.d/50-speaker-dsp.conf
+    mode: "0644"
+  notify: restart pipewire
+
+- name: Deploy mic DSP filter-chain config (input)
+  ansible.builtin.copy:
+    src: mic-dsp.conf
+    dest: ~/.config/pipewire/pipewire.conf.d/60-mic-dsp.conf
+    mode: "0644"
+  notify: restart pipewire
+
+- name: Deploy WirePlumber default-sink rule for speaker DSP
+  ansible.builtin.copy:
+    src: 51-speaker-dsp-default.lua
+    dest: ~/.config/wireplumber/main.lua.d/51-speaker-dsp-default.lua
+    mode: "0644"
+  notify: restart wireplumber
+
+# ── Easy Effects cleanup ──────────────────────────────────────────────
+
+- name: Remove Easy Effects autostart entry
+  ansible.builtin.file:
+    path: ~/.config/autostart/com.github.wwmm.easyeffects.desktop
+    state: absent
+
+- name: Remove Easy Effects Flatpak app data (presets, gsettings)
+  ansible.builtin.file:
+    path: ~/.var/app/com.github.wwmm.easyeffects
+    state: absent
+
+- name: Kill any running Easy Effects processes
+  ansible.builtin.command: flatpak kill com.github.wwmm.easyeffects
+  failed_when: false
+  changed_when: false
+
+- name: Uninstall Easy Effects Flatpak (system)
+  ansible.builtin.command: flatpak uninstall --system -y com.github.wwmm.easyeffects
+  become: true
+  register: ee_uninstall
+  changed_when: "'removed' in ee_uninstall.stdout or 'uninstalled' in ee_uninstall.stdout"
+  failed_when: false

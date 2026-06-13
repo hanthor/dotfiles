@@ -68,7 +68,7 @@
 - [zen_browser](roles/zen_browser.md)
 - [browser_fxa](roles/browser_fxa.md)
 - [bluefin_common](roles/bluefin_common.md)
-- [easyeffects](roles/easyeffects.md)
+- [pipewire_audio](roles/pipewire_audio.md)
 
 ## Services
 

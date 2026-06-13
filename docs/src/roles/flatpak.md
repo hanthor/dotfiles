@@ -24,7 +24,6 @@ Defined in `group_vars/all.yml` as `system_flatpaks`. Key apps:
 | Zen Browser | `app.zen_browser.zen` |
 | VS Code | `com.visualstudio.code` |
 | Ungoogled Chromium | `com.github.Eloston.UngoogledChromium` |
-| Easy Effects | `com.github.wwmm.easyeffects` |
 | Flatseal | `com.github.tchx84.Flatseal` |
 | GNOME apps | Calculator, Calendar, Clocks, Contacts, Loupe, etc. |
 | Vesktop | `dev.vencord.Vesktop` |

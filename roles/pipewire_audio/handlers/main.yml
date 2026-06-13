@@ -1,0 +1,17 @@
+---
+- name: Restart pipewire services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: restarted
+    scope: user
+  loop:
+    - pipewire
+    - pipewire-pulse
+  failed_when: false
+
+- name: Restart wireplumber service
+  ansible.builtin.systemd_service:
+    name: wireplumber
+    state: restarted
+    scope: user
+  failed_when: false

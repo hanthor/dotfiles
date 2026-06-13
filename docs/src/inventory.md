@@ -17,7 +17,7 @@ desktop:
     dilli:      # Secondary desktop
 ```
 
-Desktop roles: `flatpak`, `gnome`, `zen_browser`, `bluefin_common`, `easyeffects`
+Desktop roles: `flatpak`, `gnome`, `zen_browser`, `bluefin_common`, `pipewire_audio`
 
 ### `server`
 Home servers running persistent services.

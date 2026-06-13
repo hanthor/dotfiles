@@ -34,7 +34,7 @@ metadata:
 data:
   hive.yaml: |
     project:
-      org: hanthor
+      org: tuna-os
       name: TunaOS
       repos:
         - tuna-os/tunaos

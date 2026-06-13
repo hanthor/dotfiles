@@ -49,7 +49,7 @@ The playbook runs in tagged phases:
 | 2 — Packages | `packages` | Homebrew, Flatpak |
 | 3 — Dotfiles | `dotfiles` | Shell, PI, git, neovim |
 | 4 — Secrets | `secrets` | Bitwarden, SSH keys, GitHub, Tailscale, kubeconfig |
-| 5 — Desktop | `desktop` | GNOME, browser, fonts, wallpaper, [Easy Effects](https://github.com/wwmm/easyeffects) |
+| 5 — Desktop | `desktop` | GNOME, browser, fonts, wallpaper, PipeWire native DSP |
 | 6 — Services | `services` | Systemd timers, Caddy proxy, homepage, monitoring |
 
 Phases 4+ require Bitwarden session credentials.
