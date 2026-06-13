@@ -47,7 +47,7 @@ data:
       ai_author: hanthor
       primary_repo: tuna-os/tunaos
 
-    acmm_level: 6
+    # ACMM level set explicitly in agent config; packs override backends to copilot
 
     agents:
       supervisor:
