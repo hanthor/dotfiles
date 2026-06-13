@@ -40,6 +40,8 @@ data:
         - tuna-os/tunaos
         - tuna-os/tromso
         - tuna-os/tacklebox
+        - tuna-os/docs
+        - tuna-os/xfce-linux
       ai_author: hanthor
       primary_repo: tuna-os/tunaos
 
