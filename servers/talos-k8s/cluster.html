@@ -1,0 +1,609 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Talos K8s Cluster - Dotfiles Fleet Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Ansible-driven dotfiles and infrastructure for a personal fleet of desktops, servers, and VPS">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../../highlight.css">
+        <link rel="stylesheet" href="../../tomorrow-night.css">
+        <link rel="stylesheet" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Dotfiles Fleet Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/servers/talos-k8s/cluster.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="cluster-handbook--talos-linux-on-bihar--karnataka"><a class="header" href="#cluster-handbook--talos-linux-on-bihar--karnataka">Cluster Handbook — Talos Linux on Bihar + Karnataka</a></h1>
+<blockquote>
+<p><strong>Two-node <a href="https://www.talos.dev/">Talos Linux</a> <a href="https://kubernetes.io/">Kubernetes</a> cluster.</strong>
+AMD Strix Halo GPU acceleration · <a href="https://lemonade-sdk.github.io/">Lemonade</a> · <a href="https://kubevirt.io/">KubeVirt</a> · <a href="https://tailscale.com/">Tailscale</a> ingress.
+Everything you need to bring this cluster back from zero.</p>
+</blockquote>
+<h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of contents</a></h2>
+<ol>
+<li><a href="#1-overview">Overview</a></li>
+<li><a href="#2-hardware">Hardware</a></li>
+<li><a href="#3-network">Network</a></li>
+<li><a href="#4-talos-installer-image-with-amd-gpu">Talos installer image (with AMD GPU)</a></li>
+<li><a href="#5-cluster-bootstrap">Cluster bootstrap</a></li>
+<li><a href="#6-amd-gpu-exposed-to-kubernetes">AMD GPU exposed to Kubernetes</a></li>
+<li><a href="#7-production-workloads">Production workloads</a></li>
+<li><a href="#8-tailscale-operator-ingress">Tailscale operator (ingress)</a></li>
+<li><a href="#9-day-to-day-operations">Day-to-day operations</a></li>
+<li><a href="#10-reinstall-procedure">Reinstall procedure</a></li>
+<li><a href="#11-troubleshooting">Troubleshooting</a></li>
+</ol>
+<hr />
+<h2 id="1-overview"><a class="header" href="#1-overview">1. Overview</a></h2>
+<pre><code>┌──────────────────────────────────────────────────────────────┐
+│                       Kubernetes v1.36.1                      │
+│                        (Talos v1.13.2)                        │
+│                                                               │
+│   ┌────────────────────────┐   ┌────────────────────────┐    │
+│   │  bihar  (control plane)│   │ karnataka  (worker)    │    │
+│   │  192.168.0.5           │   │ 192.168.0.6            │    │
+│   │  Intel CPU             │   │ AMD Ryzen AI MAX+ 395  │    │
+│   │  /dev/nvme0n1          │   │ AMD Radeon 8060S iGPU  │    │
+│   │                        │   │ /dev/nvme0n1           │    │
+│   │  kube-apiserver        │   │ amdgpu-device-plugin   │    │
+│   │  etcd / scheduler /    │   │ amdgpu-labeller        │    │
+│   │  controller-manager    │   │ Lemonade               │    │
+│   │  KubeVirt control      │   │ Forgejo + runner       │    │
+│   │  Forgejo + runner      │   │ Hive agent swarm       │    │
+│   │  ArgoCD + Argo WF      │   │ KubeVirt virt-handler  │    │
+│   │  Grafana / Prometheus  │   │ Longhorn CSI           │    │
+│   │  Authentik + n8n       │   │ AppFlowy Cloud         │    │
+│   │  Longhorn CSI / UI     │   │ Corral VMs             │    │
+│   │  KubeVirt Manager      │   │                        │    │
+│   └────────────────────────┘   └────────────────────────┘    │
+│                                                               │
+│   CNI: flannel · kube-proxy: on · Storage: longhorn + local-path      │
+│   Tailscale Operator → ts.net ingress for cluster services    │
+└──────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>The cluster is <strong>not diskless</strong> — Talos installs itself onto <code>/dev/nvme0n1</code> on each node and persists. Reboots survive.</p>
+<p><strong>Source of truth for manifests:</strong> <a href="../talos-k8s/"><code>talos-k8s/</code></a> in this repo.
+<strong>Source of truth for secrets</strong> (<code>talosconfig</code>, <code>controlplane.yaml</code>, <code>worker.yaml</code>, <code>kubeconfig</code>): Bitwarden, fetched onto your workstation by the <code>kube</code> role.</p>
+<hr />
+<h2 id="2-hardware"><a class="header" href="#2-hardware">2. Hardware</a></h2>
+<h3 id="karnataka-worker"><a class="header" href="#karnataka-worker">Karnataka (worker)</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Detail</th></tr></thead><tbody>
+<tr><td>CPU</td><td>AMD Ryzen AI MAX+ 395 (Strix Halo) — 16 cores / 32 threads, 5.18 GHz boost</td></tr>
+<tr><td>RAM</td><td>62 GB unified memory (CPU + GPU share via UMA)</td></tr>
+<tr><td>GPU</td><td>AMD Radeon 8060S — RDNA 3.5 (<code>gfx1151</code>), integrated</td></tr>
+<tr><td>NIC</td><td>Realtek RTL8126 5GbE (<code>enp191s0</code>) — MAC <code>9C:BF:0D:00:E5:0F</code></td></tr>
+<tr><td>WiFi</td><td><a href="https://www.mediatek.com/products/broadband-wifi/mediatek-filogic-380">MediaTek MT7925</a> Wi-Fi 7</td></tr>
+<tr><td>Boot disk</td><td>Crucial P3 1TB (<code>/dev/nvme0n1</code>, serial <code>24394B495110</code>)</td></tr>
+<tr><td>Secondary</td><td>WD Black SN850X 1TB (<code>/dev/nvme1n1</code>, serial <code>251623804191</code>) — <strong>FAILING</strong> (I/O errors). Do not use. Replace with new drive.</td></tr>
+</tbody></table>
+</div>
+<h3 id="bihar-control-plane"><a class="header" href="#bihar-control-plane">Bihar (control plane)</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Detail</th></tr></thead><tbody>
+<tr><td>CPU</td><td>Intel x86_64</td></tr>
+<tr><td>NIC</td><td>MAC <code>A8:A1:59:E1:6D:84</code></td></tr>
+<tr><td>Boot disk</td><td><code>/dev/nvme0n1</code></td></tr>
+<tr><td>Role on LAN</td><td>DHCP, DNS (dnsmasq)</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="3-network"><a class="header" href="#3-network">3. Network</a></h2>
+<h3 id="lan--1921680024"><a class="header" href="#lan--1921680024">LAN — <code>192.168.0.0/24</code></a></h3>
+<p>DHCP/DNS served by <strong>dnsmasq</strong> on bihar. All assignments static via MAC.</p>
+<div class="table-wrapper"><table><thead><tr><th>Host</th><th>IP</th><th>MAC</th><th>Role</th></tr></thead><tbody>
+<tr><td>bihar</td><td><code>192.168.0.5</code></td><td><code>A8:A1:59:E1:6D:84</code></td><td>K8s control plane, home services</td></tr>
+<tr><td>karnataka</td><td><code>192.168.0.6</code></td><td><code>9C:BF:0D:00:E5:0F</code></td><td>K8s worker, LLM host</td></tr>
+<tr><td>raspberrypi</td><td><code>192.168.0.10</code></td><td><code>D8:3A:DD:E9:C7:1D</code></td><td>Pi</td></tr>
+<tr><td>kvm</td><td><code>192.168.0.99</code></td><td><code>48:DA:35:6F:A9:20</code></td><td>NanoKVM (plugged into karnataka)</td></tr>
+</tbody></table>
+</div>
+<p>Run <code>just inventory</code> to rescan with nmap.</p>
+<h3 id="internet--airtel-india--capped"><a class="header" href="#internet--airtel-india--capped">Internet — Airtel India / capped</a></h3>
+<p>Airtel India home internet with a <strong>3,333 GB/month</strong> data cap. Exceeding the cap throttles
+to <strong>1.5 Mbps</strong> until the next billing cycle.</p>
+<blockquote>
+<p><strong>May 31, 2026:</strong> Cap hit at ~3,333 GB. Throttled to 1.5 Mbps until <strong>June 8, 2026</strong>.
+No large model downloads, image pulls, or bulk data transfers until then.
+Local LAN (192.168.0.0/24) is unaffected.</p>
+</blockquote>
+<h3 id="tailscale--manatee-baskingtsnet"><a class="header" href="#tailscale--manatee-baskingtsnet">Tailscale — <code>manatee-basking.ts.net</code></a></h3>
+<p>Cluster ingress goes through the <a href="https://tailscale.com/kb/1236/kubernetes-operator">Tailscale Operator</a>. Services with an <code>Ingress</code> resource targeting <code>tailscale</code> ingressClassName get a <code>&lt;name&gt;.manatee-basking.ts.net</code> URL automatically.</p>
+<div class="table-wrapper"><table><thead><tr><th>Service</th><th>URL</th></tr></thead><tbody>
+<tr><td>Cluster homepage</td><td><code>https://home.manatee-basking.ts.net</code></td></tr>
+<tr><td>Lemonade (AI)</td><td><code>https://lemonade.manatee-basking.ts.net/v1</code></td></tr>
+<tr><td>Hive (agent swarm)</td><td><code>https://hive.manatee-basking.ts.net</code></td></tr>
+<tr><td>Forgejo (git + CI)</td><td><code>https://forgejo.manatee-basking.ts.net</code></td></tr>
+<tr><td>ArgoCD (GitOps)</td><td><code>https://argocd.manatee-basking.ts.net</code></td></tr>
+<tr><td>Grafana (metrics)</td><td><code>https://grafana.manatee-basking.ts.net</code></td></tr>
+<tr><td>Corral (VM dashboard)</td><td><code>https://corral.manatee-basking.ts.net</code></td></tr>
+<tr><td>KubeVirt Manager</td><td><code>https://kubevirt-manager.manatee-basking.ts.net</code></td></tr>
+<tr><td>Authentik (SSO)</td><td><code>https://auth.manatee-basking.ts.net</code></td></tr>
+<tr><td>n8n (workflows)</td><td><code>https://n8n.manatee-basking.ts.net</code></td></tr>
+<tr><td>AppFlowy (collab)</td><td><code>https://appflowy.manatee-basking.ts.net</code></td></tr>
+</tbody></table>
+</div>
+<h3 id="kubernetes-internal"><a class="header" href="#kubernetes-internal">Kubernetes internal</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Network</th><th>CIDR</th></tr></thead><tbody>
+<tr><td>Pod</td><td><code>10.244.0.0/16</code> (flannel)</td></tr>
+<tr><td>Service</td><td><code>10.96.0.0/12</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="4-talos-installer-image-with-amd-gpu"><a class="header" href="#4-talos-installer-image-with-amd-gpu">4. Talos installer image (with AMD GPU)</a></h2>
+<p>Talos ships with an immutable root filesystem, so kernel modules cannot be added at runtime. The AMD GPU driver and the Longhorn iSCSI tooling are <strong>baked into the boot image</strong> via the <a href="https://factory.talos.dev">Talos Image Factory</a>.</p>
+<p><strong>Schematic ID (current, 2026-06-11):</strong> <code>3a33ec6dfc8cfd61d2a3db3caf97894f31e913952d71ce3c3fbbe565a3f08339</code></p>
+<p><strong>Extensions baked in:</strong></p>
+<ul>
+<li><code>siderolabs/amdgpu</code> — AMD GPU kernel driver</li>
+<li><code>siderolabs/iscsi-tools</code> — iscsid, for Longhorn block storage</li>
+<li><code>siderolabs/util-linux-tools</code> — fstrim/nsenter, for Longhorn</li>
+</ul>
+<p>Both nodes run this schematic. Earlier schematics were <code>e5912b95…</code> (amdgpu
+only) and, in older docs, <code>b6ab12e…</code>. Storage details: <a href="../../../talos-k8s/longhorn/README.html"><code>talos-k8s/longhorn/</code></a>.</p>
+<pre><code class="language-yaml">machine:
+  install:
+    image: factory.talos.dev/installer/3a33ec6dfc8cfd61d2a3db3caf97894f31e913952d71ce3c3fbbe565a3f08339:v1.13.2
+    disk: /dev/nvme0n1
+</code></pre>
+<p>After install, the node exposes <code>/dev/dri/card0</code>, <code>/dev/dri/renderD128</code>, and <code>/dev/kfd</code> on the host.</p>
+<blockquote>
+<p><strong>Talos version note:</strong> Pinned to <code>v1.13.2</code>. <code>v1.13.3</code> had multi-arch registry pull errors on AMD64 at the time of writing.</p>
+</blockquote>
+<h3 id="user-volume-for-varmntstorage"><a class="header" href="#user-volume-for-varmntstorage">User volume for /var/mnt/storage</a></h3>
+<p>nvme0n1 is the <strong>Crucial P3</strong> (healthy, boot disk). The WD Black failed with I/O errors
+and was replaced as the boot disk. Forgejo / local-path PVCs use a <code>directory</code>-type
+user volume on the Crucial P3's EPHEMERAL partition:</p>
+<pre><code class="language-bash"># Apply the user volume config (idempotent):
+talosctl -n 192.168.0.6 patch mc --patch @storage-volume.yaml
+</code></pre>
+<p>The patch is stored at <a href="../talos-k8s/longhorn/storage-volume.yaml"><code>talos-k8s/longhorn/storage-volume.yaml</code></a>.
+It creates <code>/var/mnt/storage</code> as a directory on the EPHEMERAL partition.
+The mount is automatically propagated into the kubelet namespace.</p>
+<blockquote>
+<p><strong>WD Black failure (2026-05-30):</strong> The WD Black SN850X (<code>/dev/nvme1n1</code>, serial <code>251623804191</code>)
+developed I/O errors on its META partition during the 35B model download stress test.
+Error: <code>error writing config to file: input/output error</code>. The drive should be
+physically replaced. In the meantime, do not configure it as a Talos install disk
+or user volume.</p>
+</blockquote>
+<hr />
+<h2 id="5-cluster-bootstrap"><a class="header" href="#5-cluster-bootstrap">5. Cluster bootstrap</a></h2>
+<p>Configs are generated once with <code>talosctl gen config</code>, edited, and applied to each node. The generated files contain <strong>cluster PKI secrets</strong> (machine token, bootstrap token, shared secret) and are <strong>not committed</strong> — they live in Bitwarden.</p>
+<h3 id="one-time-generation"><a class="header" href="#one-time-generation">One-time generation</a></h3>
+<pre><code class="language-bash">cd talos-k8s
+talosctl gen config talos-k8s https://192.168.0.5:6443
+# Produces: controlplane.yaml, worker.yaml, talosconfig
+</code></pre>
+<p>Then patch <code>machine.install.image</code> and <code>machine.install.disk</code> on each (see <code>talos-k8s/README.md</code> for the schematic ID).</p>
+<h3 id="apply-configs"><a class="header" href="#apply-configs">Apply configs</a></h3>
+<pre><code class="language-bash">talosctl apply-config --insecure --nodes 192.168.0.5 --file controlplane.yaml
+talosctl apply-config --insecure --nodes 192.168.0.6 --file worker.yaml
+
+talosctl config endpoint 192.168.0.5
+talosctl config node 192.168.0.5
+
+talosctl bootstrap --nodes 192.168.0.5
+talosctl kubeconfig                  # writes ~/.kube/config
+</code></pre>
+<h3 id="seed-bitwarden-with-secrets"><a class="header" href="#seed-bitwarden-with-secrets">Seed Bitwarden with secrets</a></h3>
+<p>Once the cluster is up and you have working <code>~/.kube/config</code> and <code>~/.talos/config</code>:</p>
+<pre><code class="language-bash">just seed-kube     # uploads kubeconfig + talosconfig to Bitwarden as secure notes
+</code></pre>
+<p>Other workstations then pull them automatically:</p>
+<pre><code class="language-bash">just apply-tags kube
+</code></pre>
+<hr />
+<h2 id="6-amd-gpu-exposed-to-kubernetes"><a class="header" href="#6-amd-gpu-exposed-to-kubernetes">6. AMD GPU exposed to Kubernetes</a></h2>
+<p>The driver is loaded on the host (from the Talos image). Kubernetes needs two more pieces from ROCm to actually schedule on the GPU:</p>
+<pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml
+kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-labeller.yaml
+</code></pre>
+<p>Once the DaemonSets are running, <code>karnataka</code> exposes:</p>
+<ul>
+<li><code>amd.com/gpu: 1</code> as an allocatable resource</li>
+<li>Labels such as <code>amd.com/gpu.product-name=AMD_Radeon_8060S_Graphics</code>, <code>amd.com/gpu.vram=64G</code></li>
+</ul>
+<p>Workloads request the GPU with:</p>
+<pre><code class="language-yaml">resources:
+  limits:
+    amd.com/gpu: "1"
+</code></pre>
+<hr />
+<h2 id="7-production-workloads"><a class="header" href="#7-production-workloads">7. Production workloads</a></h2>
+<p>All manifests live in <a href="../../../talos-k8s/"><code>talos-k8s/</code></a>, organized by purpose:</p>
+<pre><code>talos-k8s/
+├── ai/              Lemonade (LLM runtime)
+├── appflowy/        AppFlowy Cloud (collaboration)
+├── authentik/       Authentik (SSO)
+├── forgejo/         Forgejo + runner + registry-mirror
+├── hive/            Hive (AI agent swarm)
+├── homepage/        Cluster landing page
+├── infrastructure/  KubeVirt + Corral
+├── longhorn/        Storage (CSI, snapshots)
+├── monitoring/      Prometheus + Grafana + metrics-server
+├── n8n/             n8n (workflow automation)
+├── networking/      Tailscale node configs
+└── testing-lab/     CI/CD test infrastructure
+</code></pre>
+<h3 id="lemonade--amd-optimized-local-ai-runtime"><a class="header" href="#lemonade--amd-optimized-local-ai-runtime">Lemonade — AMD-optimized local AI runtime</a></h3>
+<p>Single-replica <a href="https://lemonade-sdk.github.io/">Lemonade</a> omni-modal server on the Strix Halo APU.
+Manifest: <a href="../../../talos-k8s/ai/lemonade.yaml"><code>talos-k8s/ai/lemonade.yaml</code></a>.</p>
+<p>Lemonade is an AMD-optimized, open-source local AI runtime that auto-detects hardware and provides standard OpenAI-compatible endpoints for chat, vision, image generation, image editing, speech generation, and transcription. Built on llama.cpp, ONNX Runtime, whisper.cpp, and stable-diffusion.cpp.</p>
+<p>Key env overrides (RDNA 3.5 needs special handling):</p>
+<div class="table-wrapper"><table><thead><tr><th>Env var</th><th>Value</th><th>Why</th></tr></thead><tbody>
+<tr><td><code>HSA_OVERRIDE_GFX_VERSION</code></td><td><code>11.5.1</code></td><td>Forces ROCm to treat gfx1151 as supported</td></tr>
+<tr><td><code>PYTORCH_ROCM_ARCH</code></td><td><code>gfx1151</code></td><td>Compile shaders for exact arch</td></tr>
+<tr><td><code>HSA_XNACK</code></td><td><code>1</code></td><td>Enables unified memory</td></tr>
+<tr><td><code>HSA_FORCE_FINE_GRAIN_PCIE</code></td><td><code>1</code></td><td>Fine-grained VM access</td></tr>
+</tbody></table>
+</div>
+<p><strong>Access:</strong></p>
+<ul>
+<li>LAN: <code>http://192.168.0.6:31305/v1</code> (NodePort)</li>
+<li>Tailscale: <code>https://lemonade.manatee-basking.ts.net/v1</code></li>
+</ul>
+<p>Model weights cached on <code>karnataka:/var/tmp/lemonade-cache</code> (HuggingFace) and <code>/var/tmp/lemonade-models</code> (llama models) via local-storage PersistentVolumes.</p>
+<p><strong>Web UI:</strong> Point a browser at <code>http://192.168.0.6:31305</code> for the built-in control panel to download models, configure endpoints, and test chat/vision/image generation.</p>
+<h3 id="kubevirt-v182"><a class="header" href="#kubevirt-v182">KubeVirt v1.8.2</a></h3>
+<p>Installed from upstream operator manifests:</p>
+<pre><code class="language-bash">kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-cr.yaml
+</code></pre>
+<p>The <code>default</code> namespace is labelled <code>pod-security.kubernetes.io/enforce=privileged</code> so privileged virtualization pods can run.</p>
+<h3 id="kubevirt-manager-web-ui"><a class="header" href="#kubevirt-manager-web-ui">KubeVirt Manager (web UI)</a></h3>
+<p>Manifest: deployed from upstream bundle. Also see <a href="../../../talos-k8s/infrastructure/"><code>talos-k8s/infrastructure/</code></a> for KubeVirt CR and Corral VM dashboard.</p>
+<pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
+</code></pre>
+<p>Reachable at <code>https://kubevirt-manager.manatee-basking.ts.net</code> via the Tailscale ingress (manifest in cluster — not in this repo since it's a stock bundle).</p>
+<p>Port-forward as fallback:</p>
+<pre><code class="language-bash">kubectl port-forward svc/kubevirt-manager 8080:8080 -n kubevirt-manager
+# http://localhost:8080
+</code></pre>
+<hr />
+<h3 id="additional-services"><a class="header" href="#additional-services">Additional services</a></h3>
+<p>All other production services have their own directory in <a href="../../../talos-k8s/"><code>talos-k8s/</code></a>:</p>
+<div class="table-wrapper"><table><thead><tr><th>Service</th><th>Directory</th><th>Description</th></tr></thead><tbody>
+<tr><td>Forgejo</td><td><code>forgejo/</code></td><td>Git hosting + Actions CI/CD</td></tr>
+<tr><td>Hive</td><td><code>hive/</code></td><td>AI coding agent swarm backed by Lemonade</td></tr>
+<tr><td>Authentik</td><td><code>authentik/</code></td><td>SSO (passkeys, OAuth2/OIDC) — Helm</td></tr>
+<tr><td>n8n</td><td><code>n8n/</code></td><td>Workflow automation — plain K8s manifest</td></tr>
+<tr><td>AppFlowy Cloud</td><td><code>appflowy/</code></td><td>Collaborative workspace — commercial Helm chart</td></tr>
+<tr><td>Grafana + Prometheus</td><td><code>monitoring/</code></td><td>kube-prometheus-stack + metrics-server</td></tr>
+<tr><td>ArgoCD</td><td>(Helm)</td><td>GitOps deployment</td></tr>
+<tr><td>Longhorn</td><td><code>longhorn/</code></td><td>Distributed block storage (CSI, snapshots)</td></tr>
+<tr><td>Testing lab</td><td><code>testing-lab/</code></td><td>Argo Workflows CI/CD test infra</td></tr>
+</tbody></table>
+</div>
+<p>Each directory has a <code>README.md</code> with deploy and operational instructions.</p>
+<hr />
+<h2 id="8-tailscale-operator-ingress"><a class="header" href="#8-tailscale-operator-ingress">8. Tailscale operator (ingress)</a></h2>
+<p>The <a href="https://tailscale.com/kb/1236/kubernetes-operator">Tailscale Operator</a> creates a Tailscale-side proxy pod for any <code>Ingress</code> resource with <code>ingressClassName: tailscale</code>. The proxy joins the tailnet with a name derived from the Ingress, and routes incoming traffic to the backing Service.</p>
+<p>Example:</p>
+<pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lemonade
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: lemonade
+      port:
+        number: 13305
+  tls:
+    - hosts:
+        - lemonade
+</code></pre>
+<p>The operator namespace is <code>tailscale</code>. Auth keys are configured during operator install — see Tailscale docs for renewal.</p>
+<hr />
+<h2 id="9-day-to-day-operations"><a class="header" href="#9-day-to-day-operations">9. Day-to-day operations</a></h2>
+<h3 id="from-your-workstation"><a class="header" href="#from-your-workstation">From your workstation</a></h3>
+<p>The <code>kube</code> role syncs <code>~/.kube/config</code> and <code>~/.talos/config</code> from Bitwarden, so on any desktop:</p>
+<pre><code class="language-bash">kubectl get pods -A
+talosctl -n 192.168.0.5 health
+talosctl -n 192.168.0.6 dmesg | grep -i amdgpu
+</code></pre>
+<h3 id="common-kubectl"><a class="header" href="#common-kubectl">Common kubectl</a></h3>
+<pre><code class="language-bash">kubectl get nodes -o wide
+kubectl top nodes                        # requires metrics-server (not currently installed)
+kubectl logs -f deployment/lemonade
+kubectl describe pod -l app=lemonade    # check GPU scheduling / events
+</code></pre>
+<h3 id="common-talosctl"><a class="header" href="#common-talosctl">Common talosctl</a></h3>
+<pre><code class="language-bash">talosctl -n 192.168.0.6 list /dev/dri/   # confirm GPU devices visible to host
+talosctl -n 192.168.0.6 services         # systemd-equivalent services
+talosctl -n 192.168.0.5 etcd status      # control-plane etcd health
+talosctl -n 192.168.0.5 logs kubelet
+talosctl -n 192.168.0.5 reboot           # graceful reboot
+</code></pre>
+<hr />
+<h2 id="10-reinstall-procedure"><a class="header" href="#10-reinstall-procedure">10. Reinstall procedure</a></h2>
+<p>If a node is wiped or replaced:</p>
+<ol>
+<li><strong>Boot Talos ISO</strong> on the node (or PXE if you set that up separately). Default Talos boots into maintenance mode and accepts an apply-config.</li>
+<li><strong>Apply config</strong>:
+<pre><code class="language-bash">talosctl apply-config --insecure --nodes &lt;node-ip&gt; --file &lt;controlplane|worker&gt;.yaml
+</code></pre>
+</li>
+<li><strong>Bootstrap etcd</strong> (control plane only, first time):
+<pre><code class="language-bash">talosctl bootstrap --nodes 192.168.0.5
+</code></pre>
+</li>
+<li><strong>Verify</strong>:
+<pre><code class="language-bash">talosctl -n 192.168.0.5 health
+kubectl get nodes
+</code></pre>
+</li>
+<li><strong>Create user volume</strong> (karnataka/worker only):
+<pre><code class="language-bash">talosctl -n 192.168.0.6 patch mc --patch @talos-k8s/longhorn/storage-volume.yaml
+</code></pre>
+</li>
+<li><strong>Create host directories</strong> for local PVs (if re-creating from scratch):
+<pre><code class="language-bash">kubectl exec -n kube-system $(kubectl get pods -n kube-system --field-selector spec.nodeName=karnataka -l app=kube-flannel -o name) -- \
+  mkdir -p /proc/1/root/var/tmp/lemonade-cache
+  mkdir -p /proc/1/root/var/tmp/lemonade-models
+</code></pre>
+</li>
+<li><strong>Re-apply workloads</strong> (idempotent):
+<pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml
+kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-labeller.yaml
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-cr.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
+kubectl apply -f talos-k8s/ai/lemonade.yaml
+</code></pre>
+</li>
+</ol>
+<p>If only the worker was reset, the existing kubeconfig still works — only steps 1, 2, 5, and 6 are needed for that node, plus re-applying any DaemonSet pods.</p>
+<blockquote>
+<p><strong>WD Black failure:</strong> Do not use the WD Black (<code>/dev/nvme1n1</code>) for installs or user volumes.
+Install only to the Crucial P3 (<code>/dev/nvme0n1</code>). Storage uses a directory-type volume
+on the Crucial P3's EPHEMERAL partition.</p>
+</blockquote>
+<hr />
+<h2 id="11-troubleshooting"><a class="header" href="#11-troubleshooting">11. Troubleshooting</a></h2>
+<h3 id="amdcomgpu-shows-0-on-karnataka"><a class="header" href="#amdcomgpu-shows-0-on-karnataka"><code>amd.com/gpu</code> shows <code>0</code> on karnataka</a></h3>
+<p>Check the device plugin actually scheduled and started:</p>
+<pre><code class="language-bash">kubectl -n kube-system get pods -l name=amdgpu-device-plugin-ds
+kubectl -n kube-system logs -l name=amdgpu-device-plugin-ds --tail=50
+talosctl -n 192.168.0.6 dmesg | grep -i amdgpu   # confirm driver loaded
+talosctl -n 192.168.0.6 list /dev/dri/           # confirm devices exist
+</code></pre>
+<h3 id="lemonade-pod-stuck-in-containercreating"><a class="header" href="#lemonade-pod-stuck-in-containercreating">Lemonade pod stuck in <code>ContainerCreating</code></a></h3>
+<p>Most often: pulling models from HuggingFace. Check:</p>
+<pre><code class="language-bash">kubectl describe pod -l app=lemonade
+kubectl get pv,pvc                       # confirm PVCs bound
+</code></pre>
+<h3 id="tailscale-ingress-not-reachable"><a class="header" href="#tailscale-ingress-not-reachable">Tailscale Ingress not reachable</a></h3>
+<pre><code class="language-bash">kubectl -n tailscale get pods            # operator + per-Ingress ts-* proxies
+kubectl -n tailscale logs deploy/operator
+tailscale status | grep -i &lt;ingress-name&gt;
+</code></pre>
+<h3 id="talos-node-unresponsive"><a class="header" href="#talos-node-unresponsive">Talos node unresponsive</a></h3>
+<pre><code class="language-bash">talosctl -n &lt;ip&gt; health --wait
+talosctl -n &lt;ip&gt; dmesg --tail
+talosctl -n &lt;ip&gt; reset                   # nuclear: wipes node, requires re-apply
+</code></pre>
+<h3 id="container-runtime-crash-karnataka"><a class="header" href="#container-runtime-crash-karnataka">Container runtime crash (karnataka)</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li><code>kubectl get nodes</code> shows karnataka <code>NotReady</code></li>
+<li><code>kubectl describe node karnataka</code> shows <code>Ready: False</code> with <code>container runtime is down</code></li>
+<li>All pods on karnataka stuck in <code>Terminating</code>/<code>Pending</code></li>
+<li>Ping to <code>192.168.0.6</code> still works (node is up, just CRI is dead)</li>
+</ul>
+<p><strong>Root cause:</strong> Memory pressure from simultaneous large container builds exhausts
+karnataka's 62GB unified memory. The node runs Lemonade (48-56Gi), Argo Workflow image
+builds, Forgejo Actions (podman-in-Docker), KubeVirt, and monitoring — when
+multiple 4GB image builds run concurrently, containerd OOMs and crashes.</p>
+<p><strong>Recovery:</strong></p>
+<pre><code class="language-bash"># Option 1: Graceful reboot via Talos
+talosctl -n 192.168.0.6 reboot
+
+# Option 2: Hard reboot via NanoKVM at 192.168.0.99
+</code></pre>
+<p>After reboot (~2 min), all pods recover automatically. PVC-backed services
+(Forgejo, local-path PVs) survive.</p>
+<p><strong>Prevention:</strong></p>
+<ul>
+<li>Don't run more than one large container build concurrently on karnataka</li>
+<li>Set <code>SKIP_CHUNKAH=1</code> for Forgejo builds (avoids extra 2GB memory spike)</li>
+<li>Consider moving non-GPU workloads to bihar or a third node</li>
+<li>The Forgejo runner has <code>timeout-minutes: 45</code> — builds that exceed this will be killed</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../servers/goa/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../servers/talos-k8s/bihar/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../servers/goa/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../servers/talos-k8s/bihar/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

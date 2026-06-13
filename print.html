@@ -1,0 +1,2777 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Dotfiles Fleet Handbook</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Ansible-driven dotfiles and infrastructure for a personal fleet of desktops, servers, and VPS">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Dotfiles Fleet Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="dotfiles-fleet-handbook"><a class="header" href="#dotfiles-fleet-handbook">Dotfiles Fleet Handbook</a></h1>
+<p>Ansible-driven dotfiles and infrastructure for a personal fleet. Two distinct concerns live here:</p>
+<ol>
+<li><strong>Workstation config</strong> — shells, packages, browser, SSH, Tailscale, kubeconfig, GNOME, and more</li>
+<li><strong>Talos K8s cluster</strong> — manifests for the Bihar + Karnataka cluster</li>
+</ol>
+<h2 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h2>
+<pre><code class="language-bash"># Apply to local machine (most common)
+just apply
+
+# Apply specific tags only
+just apply-tags kube,shell
+
+# Apply to a remote machine
+just apply-remote himachal
+
+# Dry-run to see what would change
+just check
+
+# Lint all YAML and Ansible
+just lint
+</code></pre>
+<h2 id="machine-fleet"><a class="header" href="#machine-fleet">Machine Fleet</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Machine</th><th>Group</th><th>Type</th><th>Role</th></tr></thead><tbody>
+<tr><td>karnataka</td><td>desktop, llm</td><td>Workstation</td><td>GPU dev, K8s worker</td></tr>
+<tr><td>himachal</td><td>desktop</td><td>Laptop</td><td>Portable workstation</td></tr>
+<tr><td>kanpur</td><td>desktop</td><td>Laptop</td><td>Portable workstation</td></tr>
+<tr><td>kerala</td><td>desktop</td><td>Mobile</td><td>PostMarketOS ARM device</td></tr>
+<tr><td>dilli</td><td>desktop</td><td>Desktop</td><td>Secondary workstation</td></tr>
+<tr><td>bihar</td><td>server</td><td>Server</td><td>Home server (Proxmox, K8s control plane)</td></tr>
+<tr><td>vm</td><td>server</td><td>VM</td><td>Local dev VM</td></tr>
+<tr><td>goa</td><td>server</td><td>Server</td><td><a href="https://www.raspberrypi.com/products/raspberry-pi-5/">Raspberry Pi 5</a> ARM server</td></tr>
+<tr><td>matrix</td><td>vps</td><td>VPS</td><td>Public services</td></tr>
+<tr><td>lkofoss</td><td>vps</td><td>VPS</td><td>Public services</td></tr>
+</tbody></table>
+</div>
+<h2 id="playbook-phases"><a class="header" href="#playbook-phases">Playbook Phases</a></h2>
+<p>The playbook runs in tagged phases:</p>
+<div class="table-wrapper"><table><thead><tr><th>Phase</th><th>Tags</th><th>What</th></tr></thead><tbody>
+<tr><td>1 — System</td><td><code>system</code></td><td>SSH, sudo, APK packages</td></tr>
+<tr><td>2 — Packages</td><td><code>packages</code></td><td>Homebrew, Flatpak</td></tr>
+<tr><td>3 — Dotfiles</td><td><code>dotfiles</code></td><td>Shell, PI, git, neovim</td></tr>
+<tr><td>4 — Secrets</td><td><code>secrets</code></td><td>Bitwarden, SSH keys, GitHub, Tailscale, kubeconfig</td></tr>
+<tr><td>5 — Desktop</td><td><code>desktop</code></td><td>GNOME, browser, fonts, wallpaper, PipeWire native DSP</td></tr>
+<tr><td>6 — Services</td><td><code>services</code></td><td>Systemd timers, Caddy proxy, homepage, monitoring</td></tr>
+</tbody></table>
+</div>
+<p>Phases 4+ require Bitwarden session credentials.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="architecture"><a class="header" href="#architecture">Architecture</a></h1>
+<h2 id="repository-layout"><a class="header" href="#repository-layout">Repository Layout</a></h2>
+<pre><code>dotfiles/
+├── site.yml              # Main playbook — entrypoint for all machines
+├── inventory.yml         # Host inventory + group definitions
+├── Justfile              # Task runner (just apply, just lint, etc.)
+├── group_vars/
+│   ├── all.yml           # Shared vars: packages, flatpaks, fleet config
+│   └── vps.yml           # VPS-specific overrides
+├── host_vars/
+│   └── &lt;machine&gt;.yml     # Per-machine settings (is_laptop, skip_*, etc.)
+├── roles/
+│   └── &lt;role&gt;/           # Each role: tasks/, files/, templates/, vars/
+├── docs/                 # This handbook
+├── scripts/              # Utility scripts (inventory scan, BW seed)
+└── talos-k8s/            # Talos Linux + Kubernetes cluster manifests
+</code></pre>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
+<p>Each machine manages <strong>itself</strong> via <code>ansible-playbook --connection=local</code>. There's no central control node. This is an <a href="https://www.ansible.com/">Ansible</a> pull model — the playbook lives on every machine and each host applies it locally.</p>
+<h3 id="local-apply"><a class="header" href="#local-apply">Local Apply</a></h3>
+<pre><code class="language-bash">just apply
+</code></pre>
+<p>Runs the playbook locally with <code>--connection=local</code>. The playbook auto-detects which host it's running on by matching <code>/etc/dotfiles-machine</code> or falling back to <code>localhost</code>.</p>
+<h3 id="remote-apply"><a class="header" href="#remote-apply">Remote Apply</a></h3>
+<pre><code class="language-bash">just apply-remote himachal
+</code></pre>
+<p>SSHes to the target, forwards the Bitwarden session token, pulls the latest dotfiles, then runs <code>just apply</code> locally on the remote machine.</p>
+<h3 id="tagged-apply"><a class="header" href="#tagged-apply">Tagged Apply</a></h3>
+<pre><code class="language-bash">just apply-tags kube,shell
+</code></pre>
+<p>Runs only roles tagged with the given tags. Useful for deploying specific configs without running the full playbook.</p>
+<h2 id="role-structure"><a class="header" href="#role-structure">Role Structure</a></h2>
+<p>Each role follows the standard Ansible layout:</p>
+<pre><code>roles/&lt;name&gt;/
+├── tasks/
+│   └── main.yml         # Role entrypoint
+├── files/               # Static files to deploy
+├── templates/           # Jinja2 templates (with .j2 extension)
+├── vars/                # Role-specific variables
+│   └── main.yml
+└── handlers/            # Role handlers (notify targets)
+    └── main.yml
+</code></pre>
+<h2 id="conditional-execution"><a class="header" href="#conditional-execution">Conditional Execution</a></h2>
+<p>Roles are gated by:</p>
+<ul>
+<li><strong>Inventory groups</strong> — <code>when: is_desktop | bool</code> runs only on desktop group members</li>
+<li><strong>Host vars</strong> — <code>skip_*: true</code> flags in <code>host_vars/&lt;machine&gt;.yml</code> skip specific roles</li>
+<li><strong>Tags</strong> — <code>--tags kube,shell</code> limits which roles execute</li>
+</ul>
+<h2 id="secrets-flow"><a class="header" href="#secrets-flow">Secrets Flow</a></h2>
+<ol>
+<li>Ansible requests a Bitwarden session (env var, cached file, or interactive unlock)</li>
+<li>The <code>bitwarden</code> role resolves <code>BW_SESSION</code> and caches it</li>
+<li>Secrets-tagged roles consume the session token for API calls</li>
+<li>For remote applies, the session token is forwarded over SSH via <code>SendEnv</code></li>
+</ol>
+<p>No secrets are stored in git — the repo is fully public.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="inventory--groups"><a class="header" href="#inventory--groups">Inventory &amp; Groups</a></h1>
+<h2 id="host-groups"><a class="header" href="#host-groups">Host Groups</a></h2>
+<p>The inventory defines four functional groups:</p>
+<h3 id="desktop"><a class="header" href="#desktop"><code>desktop</code></a></h3>
+<p>Workstations and laptops with a full desktop environment (GNOME, browsers, etc.).</p>
+<pre><code class="language-yaml">desktop:
+  hosts:
+    kerala:     # PostMarketOS ARM mobile
+    karnataka:  # Main workstation (AMD Strix Halo)
+    kanpur:     # Laptop
+    himachal:   # Laptop
+    dilli:      # Secondary desktop
+</code></pre>
+<p>Desktop roles: <code>flatpak</code>, <code>gnome</code>, <code>zen_browser</code>, <code>bluefin_common</code>, <code>pipewire_audio</code></p>
+<h3 id="server"><a class="header" href="#server"><code>server</code></a></h3>
+<p>Home servers running persistent services.</p>
+<pre><code class="language-yaml">server:
+  hosts:
+    vm:       # Local dev VM
+    bihar:    # Home server (Proxmox host)
+    goa:      # ARM server
+</code></pre>
+<p>Server roles: <code>server_hardening</code>, plus all service roles.</p>
+<h3 id="vps"><a class="header" href="#vps"><code>vps</code></a></h3>
+<p>Public-facing virtual private servers.</p>
+<pre><code class="language-yaml">vps:
+  hosts:
+    matrix:    # Matrix homeserver
+    lkofoss:   # Community site
+</code></pre>
+<p>VPS-specific overrides in <code>group_vars/vps.yml</code>.</p>
+<h3 id="llm"><a class="header" href="#llm"><code>llm</code></a></h3>
+<p>Machines with GPU for LLM workloads.</p>
+<pre><code class="language-yaml">llm:
+  hosts:
+    karnataka:  # AMD Strix Halo APU
+</code></pre>
+<h2 id="per-machine-configuration"><a class="header" href="#per-machine-configuration">Per-Machine Configuration</a></h2>
+<p>Each machine has a <code>host_vars/&lt;name&gt;.yml</code> file with common knobs:</p>
+<pre><code class="language-yaml">is_arm: false          # ARM architecture
+is_laptop: true        # Laptop (runs on login, not timer)
+has_homepage: true     # Deploy dashboard
+skip_flatpak: true     # Skip Flatpak installs
+skip_gnome: true       # Skip GNOME config
+skip_kube: true        # Skip kubeconfig deploy
+skip_proxy: true       # Skip Caddy proxy
+skip_lima: true        # Skip Lima VM manager
+web_services: []       # Extra homepage service links
+</code></pre>
+<h2 id="group-variables"><a class="header" href="#group-variables">Group Variables</a></h2>
+<ul>
+<li><strong><code>group_vars/all.yml</code></strong> — Packages (Homebrew, Flatpak), fleet homepage links, Firefox Accounts config, GNOME extensions, authorized SSH keys</li>
+<li><strong><code>group_vars/vps.yml</code></strong> — VPS-specific monitoring and proxy settings</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="secrets-with-bitwarden"><a class="header" href="#secrets-with-bitwarden">Secrets with Bitwarden</a></h1>
+<p>All secrets live in <a href="https://bitwarden.com/">Bitwarden</a> and are resolved at runtime.</p>
+<h2 id="how-it-works-1"><a class="header" href="#how-it-works-1">How It Works</a></h2>
+<ol>
+<li>The <code>bitwarden</code> role runs first in the secrets phase.</li>
+<li>It resolves a session token in order: <code>BW_SESSION</code> env var → <code>/tmp/bw_session</code> → interactive <code>bw unlock</code>.</li>
+<li>It runs <code>bw sync</code> (with a 15 s hard timeout, so a flaky vault server can't hang the play) to refresh the local cached vault.</li>
+<li>It calls <code>bw status</code> and sets a <code>bw_unlocked</code> host fact: <code>true</code> only if the CLI is installed, a session was resolved, <em>and</em> the vault actually unlocks.</li>
+<li>Every BW-using role gates on <code>when: bw_unlocked | default(false)</code>. The end-of-play <code>post_tasks</code> summary prints one of:
+<ul>
+<li><code>vault unlocked — all secret roles executed normally</code></li>
+<li><code>Bitwarden vault was LOCKED — … skipped. To enable: bw unlock …</code></li>
+<li><code>SKIPPED (--skip-tags secrets). Run dots-apply to include …</code></li>
+</ul>
+</li>
+</ol>
+<h2 id="remote-apply-1"><a class="header" href="#remote-apply-1">Remote Apply</a></h2>
+<p>When running <code>just apply-remote &lt;host&gt;</code> or <code>just apply-remote-tags &lt;host&gt; &lt;tags&gt;</code>:</p>
+<ol>
+<li>Your local Bitwarden session is forwarded over SSH (via <code>SendEnv BW_SESSION</code>).</li>
+<li>The remote machine writes it to <code>/tmp/bw_session</code>.</li>
+<li>The <code>bitwarden</code> role runs <code>bw status</code> on the remote: if it reports <code>unlocked</code>, <code>bw_unlocked</code> flips to true and secrets work proceeds.</li>
+</ol>
+<p><strong>Caveat — session portability is not guaranteed.</strong> A <code>BW_SESSION</code> token derived on one machine may be rejected on another because the encrypted vault state, KDF parameters, or vault sync state differ. When that happens, the remote <code>bw status</code> returns <code>locked</code>, the role prints a one-line warning, and every BW-touching task is skipped cleanly — nothing fails, no files get clobbered with empty values. Unlock the vault directly on that host (<code>bw unlock</code>, then write the session to <code>/tmp/bw_session</code>) to enable secrets there.</p>
+<h2 id="vault-items"><a class="header" href="#vault-items">Vault Items</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Bitwarden Item</th><th>Type</th><th>Used By</th></tr></thead><tbody>
+<tr><td><code>james@&lt;machine&gt;</code></td><td>SSH Key</td><td><code>ssh_keys</code> role — per-machine ed25519 keys</td></tr>
+<tr><td><code>tailscale-authkey</code></td><td>Secure Note</td><td><code>tailscale</code> role — reusable <a href="https://tailscale.com/">Tailscale</a> auth key</td></tr>
+<tr><td><code>kubeconfig</code></td><td>Secure Note</td><td><code>kube</code> role — cluster kubeconfig</td></tr>
+<tr><td><code>talosconfig</code></td><td>Secure Note</td><td><code>kube</code> role — Talos cluster config</td></tr>
+<tr><td><code>accounts.firefox.com</code></td><td>Login</td><td><code>browser_fxa</code> role — Firefox Account credentials + TOTP</td></tr>
+<tr><td><code>gh_pat</code>, <code>pi_api</code>, etc.</td><td>Secure Note</td><td><code>shell</code> role — API keys for CLI tools</td></tr>
+</tbody></table>
+</div>
+<h2 id="running-without-secrets"><a class="header" href="#running-without-secrets">Running Without Secrets</a></h2>
+<p>For fast iteration that doesn't need the vault — packages, dotfiles, desktop config — use the explicit no-secrets path:</p>
+<pre><code class="language-bash">just apply-nosecrets   # git pull + apply with --skip-tags secrets
+dots                   # the same, as a shell alias
+</code></pre>
+<p>The daily systemd timer (<code>dotfiles-update.service</code>) calls <code>apply-nosecrets</code> for the same reason: it can't unlock the vault non-interactively, so it doesn't try.</p>
+<h2 id="no-session"><a class="header" href="#no-session">No Session?</a></h2>
+<p>If Bitwarden can't unlock (first run, no BW CLI installed, vault genuinely locked on this host), every secret-touching task is skipped automatically. Non-secret roles (system, packages, dotfiles, desktop, most services) run normally and the play exits successfully — the end-of-play summary tells you exactly which roles didn't get to do their BW work.</p>
+<h2 id="seeding-new-secrets"><a class="header" href="#seeding-new-secrets">Seeding New Secrets</a></h2>
+<pre><code class="language-bash"># Push kubeconfig + talosconfig to Bitwarden from a machine that has them:
+just seed-kube
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="onboarding-a-new-machine"><a class="header" href="#onboarding-a-new-machine">Onboarding a New Machine</a></h1>
+<p>Two paths depending on whether the machine is already reachable.</p>
+<h2 id="path-a-machine-already-online-tailscale--ssh"><a class="header" href="#path-a-machine-already-online-tailscale--ssh">Path A: Machine Already Online (Tailscale + SSH)</a></h2>
+<pre><code class="language-bash"># From any machine with the dotfiles repo:
+just add-machine &lt;name&gt; &lt;type&gt;
+</code></pre>
+<p>This:</p>
+<ol>
+<li>Adds the machine to <code>inventory.yml</code> under the right group</li>
+<li>Creates <code>host_vars/&lt;name&gt;.yml</code> with sensible defaults</li>
+<li>Commits and pushes</li>
+<li>Prints the next step — run <code>just apply-remote &lt;name&gt;</code></li>
+</ol>
+<h2 id="path-b-fresh-install"><a class="header" href="#path-b-fresh-install">Path B: Fresh Install</a></h2>
+<pre><code class="language-bash"># From any machine with the dotfiles repo:
+just onboard &lt;name&gt; &lt;type&gt;
+</code></pre>
+<p>This prints a bootstrap command to run <strong>on the new machine</strong>:</p>
+<pre><code class="language-bash"># On the new machine:
+curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh \
+  | bash -s -- --name &lt;name&gt; --type &lt;type&gt;
+</code></pre>
+<p>The bootstrap script:</p>
+<ol>
+<li>Installs git and clones the dotfiles repo from <a href="https://github.com/hanthor/dotfiles">GitHub</a></li>
+<li>Installs <a href="https://brew.sh/">Homebrew</a> (Linux) and core packages</li>
+<li>Writes <code>/etc/dotfiles-machine</code> so the playbook can self-identify</li>
+<li>Runs <code>just apply</code> for the first time</li>
+</ol>
+<h2 id="machine-types"><a class="header" href="#machine-types">Machine Types</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Type</th><th>Group</th><th>Has Desktop?</th><th>Example Host Vars</th></tr></thead><tbody>
+<tr><td><code>desktop</code></td><td>desktop</td><td>Yes</td><td><code>is_laptop: false</code>, web services</td></tr>
+<tr><td><code>laptop</code></td><td>desktop</td><td>Yes</td><td><code>is_laptop: true</code></td></tr>
+<tr><td><code>server</code></td><td>server</td><td>No</td><td><code>skip_flatpak: true</code>, <code>skip_gnome: true</code></td></tr>
+<tr><td><code>vps</code></td><td>vps</td><td>No</td><td><code>skip_*: true</code>, uses <code>group_vars/vps.yml</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="post-onboarding"><a class="header" href="#post-onboarding">Post-Onboarding</a></h2>
+<ol>
+<li>The <code>ssh_keys</code> role generates a fresh ed25519 key on the new host, then pushes the pub key up to Bitwarden as <code>james@&lt;hostname&gt;</code>.</li>
+<li>The new host now needs to <strong>trust the rest of the fleet, and the rest of the fleet needs to trust it</strong>. The first apply on the new host downloads every other host's pub key into <code>~/.ssh/authorized_keys</code>. The other hosts will pick up the new host's pub key on <em>their</em> next apply (manually run <code>dots-apply</code> on each, or wait for the timer).</li>
+<li>The <code>github</code> role registers the SSH key with GitHub for both auth and commit signing.</li>
+<li>The <code>tailscale</code> role joins the machine to the <a href="https://tailscale.com/">Tailscale</a> network using the auth key in BW.</li>
+<li>The daily <code>dotfiles-update.timer</code> (servers) or on-login service (laptops) runs <code>just apply-nosecrets</code> — secrets stay on the manual <code>dots-apply</code> cadence because BW can't be unlocked non-interactively.</li>
+</ol>
+<p>Run <code>just doctor</code> on the new host once it's bootstrapped — it'll tell you whether BW is unlocked, whether the timer is wired up, and the timestamp of the last successful apply.</p>
+<p>See <a href="architecture.html">Architecture</a> for how the playbook runs on each machine and <a href="bitwarden.html">Secrets with Bitwarden</a> for the details of the BW handshake.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="operational-runbook"><a class="header" href="#operational-runbook">Operational runbook</a></h1>
+<p>Recipes for the questions that recur. If you find yourself answering one of
+these from memory or commit logs more than twice, add it here.</p>
+<hr />
+<h2 id="i-rotated-my-ssh-key-on-host-x--how-do-i-propagate-it"><a class="header" href="#i-rotated-my-ssh-key-on-host-x--how-do-i-propagate-it">I rotated my SSH key on host X — how do I propagate it?</a></h2>
+<p>The <code>ssh_keys</code> role now syncs <strong>on mismatch</strong> (not just on missing), so:</p>
+<pre><code class="language-bash"># On host X (with BW unlocked locally, just unlocked with bw unlock --raw):
+dots-apply
+</code></pre>
+<p>That detects the local pub key differs from the BW entry, calls
+<code>bw edit item</code> to replace it, and rewrites this host's <code>authorized_keys</code> while
+it's at it. Then on every <em>other</em> host:</p>
+<pre><code class="language-bash">dots-apply           # picks up the fresh pubkey from BW into authorized_keys
+</code></pre>
+<p>If you can't reach an "other" host because of the stale key situation, you
+can also push the new key directly first:</p>
+<pre><code class="language-bash"># From a host that can still reach the broken one
+ssh-copy-id &lt;broken-host&gt;     # adds the rotating host's pub key by hand
+# then `dots-apply` on broken-host as above
+</code></pre>
+<hr />
+<h2 id="bw-is-locked-on-a-remote--how-do-i-unlock-it-there"><a class="header" href="#bw-is-locked-on-a-remote--how-do-i-unlock-it-there">BW is locked on a remote — how do I unlock it there?</a></h2>
+<p><code>just apply-remote-tags &lt;host&gt; ...</code> forwards your local <code>BW_SESSION</code>, but the
+remote host's vault can still report <code>locked</code> because the token isn't always
+portable across vaults. To unlock directly on that host:</p>
+<pre><code class="language-bash">ssh &lt;host&gt;
+bw unlock --raw | tee /tmp/bw_session &gt; /dev/null
+chmod 600 /tmp/bw_session
+exit
+
+# Then from your laptop:
+just apply-remote-tags &lt;host&gt; bitwarden,ssh_keys
+</code></pre>
+<p>The <code>bitwarden</code> role on <code>&lt;host&gt;</code> will read <code>/tmp/bw_session</code>, confirm the
+vault is unlocked, and downstream secrets roles will run.</p>
+<hr />
+<h2 id="the-timer-apply-failed-last-night--what-do-i-do"><a class="header" href="#the-timer-apply-failed-last-night--what-do-i-do">The timer apply failed last night — what do I do?</a></h2>
+<p>The user-level <code>dotfiles-update.service</code> runs <code>just apply-nosecrets</code> daily,
+which now writes <code>~/.cache/dotfiles/last-apply.json</code>. Quickest signal:</p>
+<pre><code class="language-bash">just doctor                 # `→ Last apply` line shows status + age
+</code></pre>
+<p>If <code>rc != 0</code>, see what blew up:</p>
+<pre><code class="language-bash">journalctl --user -u dotfiles-update.service -e --no-pager | tail -80
+</code></pre>
+<p>The most common causes:</p>
+<ul>
+<li><strong>git pull failure</strong> (DNS / network blip): the recipe tolerates it with
+<code>git pull --ff-only || true</code>; the ansible run continues with whatever's
+on disk. If the working tree drifted from main, fix manually.</li>
+<li><strong>a role started failing after a config change</strong>: re-run interactively
+with <code>just apply-nosecrets</code> and read the failure.</li>
+<li><strong><code>mkswap: /swapfile is mounted</code></strong>: pre-existing bug in
+<code>roles/server_hardening</code>; the swapfile is already active and the
+idempotency check is wrong. Set <code>skip_server_hardening: true</code> in that
+host's <code>host_vars/</code> as a workaround.</li>
+</ul>
+<hr />
+<h2 id="bw-master-password-just-returned-decryption-failed--vault-corrupt"><a class="header" href="#bw-master-password-just-returned-decryption-failed--vault-corrupt">BW master password just returned "decryption failed" — vault corrupt?</a></h2>
+<p>Two BW CLI processes can corrupt the local encrypted vault if they sync at the
+same time. Symptom: <code>bw unlock --raw</code> returns
+<code>Cryptography error, The decryption operation failed</code>.</p>
+<p>Fix is to re-login (downloads a clean vault):</p>
+<pre><code class="language-bash">bw logout
+bw login              # email + master password + 2FA
+export BW_SESSION=$(bw unlock --raw)
+printf '%s' "$BW_SESSION" &gt; /tmp/bw_session
+chmod 600 /tmp/bw_session
+</code></pre>
+<p>The <code>bitwarden</code> role now has a 15 s timeout on <code>bw sync</code>, which prevents the
+race in most cases going forward.</p>
+<hr />
+<h2 id="i-want-to-onboard-a-new-machine--full-sequence"><a class="header" href="#i-want-to-onboard-a-new-machine--full-sequence">I want to onboard a new machine — full sequence</a></h2>
+<pre><code class="language-bash"># 1. From an existing fleet machine (with BW unlocked):
+just onboard &lt;newhost&gt; desktop      # or server / vps / llm
+
+# 2. Copy the printed bootstrap command, then on the new machine:
+curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh \
+  | bash -s -- --name &lt;newhost&gt; --type desktop
+
+# 3. After bootstrap finishes, on the new machine, get BW into a usable state:
+bw login                            # if not logged in
+bw unlock --raw | tee /tmp/bw_session &gt; /dev/null
+
+# 4. Run the full apply (this pushes the new machine's pubkey to BW):
+dots-apply
+
+# 5. Back on each existing host (one at a time, or wait for the timer):
+dots-apply                          # picks up the new host's pubkey
+</code></pre>
+<p>Verify with <code>just doctor</code> on the new host — should be all green and report
+"last apply <minutes> ago".</p>
+<hr />
+<h2 id="i-added-a-flatpak--brew-package--how-do-i-roll-it-out"><a class="header" href="#i-added-a-flatpak--brew-package--how-do-i-roll-it-out">I added a flatpak / brew package — how do I roll it out?</a></h2>
+<p>Edit the relevant role's package list (<code>roles/flatpak/files/...</code> or the
+homebrew Brewfile), commit, push. Every host picks it up on the next
+<code>dots-apply</code> or the next timer fire.</p>
+<p>To force-apply immediately on the local machine:</p>
+<pre><code class="language-bash">just apply-tags packages
+</code></pre>
+<hr />
+<h2 id="i-want-to-disable-a-role-on-one-host"><a class="header" href="#i-want-to-disable-a-role-on-one-host">I want to disable a role on one host</a></h2>
+<p>In that host's <code>host_vars/&lt;name&gt;.yml</code>, add a <code>skip_&lt;role&gt;: true</code> line. The
+roles that respect this convention:</p>
+<p><code>skip_kube</code>, <code>skip_flatpak</code>, <code>skip_bluefin</code>, <code>skip_gnome</code>, <code>skip_proxy</code>,
+<code>skip_homepage</code>, <code>skip_lima</code>, <code>skip_zen_browser</code>, <code>skip_monitoring</code>,
+<code>skip_syncthing</code>, <code>skip_tailscale_cert</code>, <code>skip_cockpit</code>,
+<code>skip_server_hardening</code> (not all may be wired yet — grep <code>site.yml</code> to
+confirm).</p>
+<hr />
+<h2 id="how-do-i-verify-a-change-made-it-to-every-host"><a class="header" href="#how-do-i-verify-a-change-made-it-to-every-host">How do I verify a change made it to every host?</a></h2>
+<pre><code class="language-bash">just doctor-fleet
+</code></pre>
+<p>Runs <code>just doctor</code> on every online host in parallel. The <code>→ Last apply</code>
+line tells you which hosts have an old or failed convergence — those are
+the ones that need attention.</p>
+<p>To roll a single change out manually instead of waiting for the timer:</p>
+<pre><code class="language-bash">for h in $(scripts/nmap-inventory.sh | awk '/ON / {print $3}'); do
+  just apply-remote-tags "$h" &lt;tag-or-tags&gt; &amp;
+done
+wait
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="network"><a class="header" href="#network">Network</a></h1>
+<p>Local network: <code>192.168.0.0/24</code> — gateway <code>192.168.0.1</code></p>
+<h2 id="devices"><a class="header" href="#devices">Devices</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>IP</th><th>Name</th><th>MAC</th><th>Vendor</th><th>Role</th></tr></thead><tbody>
+<tr><td><code>.1</code></td><td><code>_gateway</code></td><td><code>7C:F1:7E:A8:FF:74</code></td><td>TP-Link Systems</td><td>Router (DNS, HTTP, HTTPS, UPnP)</td></tr>
+<tr><td><code>.5</code></td><td>bihar</td><td><code>A8:A1:59:E1:6D:84</code></td><td>ASRock</td><td>Talos K8s control plane</td></tr>
+<tr><td><code>.6</code></td><td>karnataka</td><td><code>9C:BF:0D:00:E5:0F</code></td><td>Framework Computer</td><td>Talos K8s worker (AMD GPU)</td></tr>
+<tr><td><code>.10</code></td><td>goa</td><td><code>D8:3A:DD:E9:C7:1D</code></td><td>Raspberry Pi</td><td>Fleet control, Debian ARM</td></tr>
+<tr><td><code>.11</code></td><td>phone</td><td><code>86:E9:2C-CB:D2-E5</code></td><td>Nothing</td><td>CMF Phone 1 (reserved)</td></tr>
+<tr><td><code>.39</code></td><td>printer</td><td><code>04-68-74-86-3D-60</code></td><td>Brother</td><td>BRW046874863D60 (DHCP)</td></tr>
+<tr><td><code>.84</code></td><td>macbook</td><td><code>8C-7A-AA-F0-B1-2F</code></td><td>Apple</td><td>James's Air, MacBook (DHCP)</td></tr>
+<tr><td><code>.99</code></td><td>kvm</td><td><code>48:DA:35-6F:A9-20</code></td><td>Sipeed</td><td>NanoKVM, OpenWrt (reserved)</td></tr>
+<tr><td><code>.112</code></td><td>esp32</td><td><code>10:B4:1D:94:49:48</code></td><td>Espressif</td><td>Unknown IoT, static IP</td></tr>
+<tr><td><code>.216</code></td><td>dilli</td><td>—</td><td>—</td><td>Laptop (WiFi, when online)</td></tr>
+</tbody></table>
+</div>
+<h2 id="fleet-nodes-tailscale-magicdns"><a class="header" href="#fleet-nodes-tailscale-magicdns">Fleet nodes (Tailscale MagicDNS)</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Hostname</th><th>Tailscale IP</th><th>LAN IP</th><th>Group</th></tr></thead><tbody>
+<tr><td>goa</td><td><code>100.69.238.116</code></td><td><code>.10</code></td><td>server</td></tr>
+<tr><td>bihar</td><td><code>100.85.9.86</code></td><td><code>.5</code></td><td>server</td></tr>
+<tr><td>karnataka</td><td><em>MagicDNS</em></td><td><code>.6</code></td><td>llm</td></tr>
+<tr><td>himachal</td><td><code>100.73.3.51</code></td><td>DHCP</td><td>desktop</td></tr>
+<tr><td>dilli</td><td><code>100.76.126.90</code></td><td><code>.216</code></td><td>desktop</td></tr>
+<tr><td>kanpur</td><td><em>MagicDNS</em></td><td>DHCP</td><td>desktop</td></tr>
+<tr><td>kerala</td><td><code>100.67.142.116</code></td><td>cellular</td><td>desktop</td></tr>
+<tr><td>matrix</td><td><code>100.73.19.81</code></td><td>remote</td><td>vps</td></tr>
+<tr><td>lkofoss</td><td><code>77.42.94.83</code></td><td>remote</td><td>vps</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="gateway-19216801"><a class="header" href="#gateway-19216801">Gateway (192.168.0.1)</a></h1>
+<h2 id="hardware"><a class="header" href="#hardware">Hardware</a></h2>
+<ul>
+<li>Model: <a href="https://www.tp-link.com/us/home-networking/wifi-router/archer-ax10/">TP-Link Archer AX10 v2.0</a></li>
+<li>MAC: <code>7C:F1:7E:A8:FF:74</code></li>
+<li>Type: WiFi 6 router (AX1500)</li>
+</ul>
+<h2 id="firmware"><a class="header" href="#firmware">Firmware</a></h2>
+<ul>
+<li>Version: <code>1.3.12 Build 20250828 Rel. 26873(5553)</code></li>
+</ul>
+<h2 id="network-1"><a class="header" href="#network-1">Network</a></h2>
+<ul>
+<li>Subnet: <code>192.168.0.0/24</code></li>
+<li>DHCP pool: <code>.2</code> – <code>.253</code></li>
+<li>Lease time: 120 minutes</li>
+<li><strong>WAN</strong>: Direct public IP <code>122.163.159.113</code> (Airtel Fiber, dynamic)</li>
+<li><strong>ISP</strong>: Bharti Airtel Broadband</li>
+<li><strong>Connection</strong>: Fiber → ONT (bridge mode) → Ethernet → AX10 WAN port</li>
+<li><strong>CGNAT</strong>: ❌ No — public IP directly on router, services can be port-forwarded</li>
+</ul>
+<h2 id="services"><a class="header" href="#services">Services</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Port</th><th>Service</th></tr></thead><tbody>
+<tr><td>53</td><td>DNS</td></tr>
+<tr><td>80</td><td>HTTP</td></tr>
+<tr><td>443</td><td>HTTPS</td></tr>
+<tr><td>1900</td><td>UPnP</td></tr>
+</tbody></table>
+</div>
+<h2 id="third-party-firmware-options"><a class="header" href="#third-party-firmware-options">Third-party firmware options</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Firmware</th><th>Status</th><th>Notes</th></tr></thead><tbody>
+<tr><td><strong><a href="https://openwrt.org/">OpenWrt</a></strong></td><td>⚠️ Snapshot only</td><td><a href="https://www.mediatek.com/products/broadband-wifi/mediatek-filogic-820">MediaTek MT7981B</a> (Filogic 820) — initial support in mainline, not in stable release yet</td></tr>
+<tr><td><strong><a href="https://dd-wrt.com/">DD-WRT</a></strong></td><td>❓ Forum discussion</td><td><a href="https://forum.dd-wrt.com/phpBB2/viewtopic.php?t=335982">DD-WRT forum thread</a> — community work-in-progress</td></tr>
+<tr><td><strong>FreshTomato</strong></td><td>❌ No</td><td>No AX/WiFi 6 support</td></tr>
+</tbody></table>
+</div>
+<p>Chipset: <a href="https://www.mediatek.com/products/broadband-wifi/mediatek-filogic-820">MediaTek MT7981B</a> (Filogic 820) — dual-core ARM Cortex-A53 @ 1.3GHz. Capable chipset, but AX10 v2 support is still maturing in third-party firmware.</p>
+<h2 id="ipv6"><a class="header" href="#ipv6">IPv6</a></h2>
+<ul>
+<li><strong>Prefix</strong>: <code>2401:4900:1c83:8ac0::/64</code> (ISP-provided, static)</li>
+<li><strong>Address lifetime</strong>: 300s (privacy extensions active — host part rotates every 5 min)</li>
+<li><strong>Default route</strong>: <code>fe80::7ef1:7eff:fea8:ff74</code> (router link-local, derived from MAC <code>7C:F1:7E:A8:FF:74</code>)</li>
+<li><strong>Connectivity</strong>: ✅ Working (20ms to Google)</li>
+</ul>
+<h3 id="making-ipv6-useful"><a class="header" href="#making-ipv6-useful">Making IPv6 useful</a></h3>
+<p>Current issue: privacy extensions rotate addresses every 5 minutes — impractical for hosting services or stable SSH. Options:</p>
+<ol>
+<li><strong>Stable SLAAC address</strong> — add a static token on each machine:
+<pre><code># /etc/systemd/network/eth0.network
+[IPv6AcceptRA]
+Token=::1  # becomes 2401:4900:1c83:8ac0::1
+</code></pre>
+</li>
+<li><strong>Disable privacy extensions</strong> (EUI-64, based on MAC):
+<pre><code>net.ipv6.conf.eth0.use_tempaddr = 0
+</code></pre>
+</li>
+<li><strong>DHCPv6</strong> — assign static addresses from router (if supported)</li>
+</ol>
+<p>For fleet use: stable SLAAC tokens per machine give globally routable, static IPv6 addresses without needing Tailscale for basic SSH.</p>
+<h3 id="router-limitations"><a class="header" href="#router-limitations">Router limitations</a></h3>
+<ul>
+<li>No IPv6 address on LAN interface (only link-local)</li>
+<li>No DHCPv6 server (router doesn't assign v6 addresses)</li>
+<li>No IPv6 firewall configurability in stock UI</li>
+<li>IPv6 prefix delegation: ISP delegates <code>/64</code> via SLAAC only</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="phone-192168011"><a class="header" href="#phone-192168011">Phone (192.168.0.11)</a></h1>
+<p>James's personal phone.</p>
+<h2 id="hardware-1"><a class="header" href="#hardware-1">Hardware</a></h2>
+<ul>
+<li>MAC: <code>86:E9:2C:CB:D2:E5</code></li>
+<li>Model: <a href="https://cmf.tech/pages/phone-1">CMF by Nothing Phone 1</a></li>
+</ul>
+<h2 id="connectivity"><a class="header" href="#connectivity">Connectivity</a></h2>
+<ul>
+<li>WiFi: <code>192.168.0.11</code></li>
+<li><a href="https://tailscale.com/">Tailscale</a>: via MagicDNS</li>
+<li><a href="https://kdeconnect.kde.org/">KDE Connect</a>: paired with dilli via <a href="https://github.com/GSConnect/gnome-shell-extension-gsconnect">GSConnect</a></li>
+</ul>
+<h2 id="notes"><a class="header" href="#notes">Notes</a></h2>
+<ul>
+<li>All ports filtered/closed when scanned</li>
+<li>GSConnect device ID: <code>3e5ae6fb058c463cb21d2f4a60a6697f</code></li>
+<li>MAC randomization may change the address periodically</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="brother-printer-192168039"><a class="header" href="#brother-printer-192168039">Brother Printer (192.168.0.39)</a></h1>
+<h2 id="hardware-2"><a class="header" href="#hardware-2">Hardware</a></h2>
+<ul>
+<li>Vendor: <a href="https://www.brother.com/">Brother Industries</a></li>
+<li>MAC: <code>04-68-74-86-3D-60</code></li>
+<li>Hostname: <code>BRW046874863D60</code></li>
+</ul>
+<h2 id="notes-1"><a class="header" href="#notes-1">Notes</a></h2>
+<ul>
+<li>DHCP-assigned IP (lease time ~51 min)</li>
+<li>Model not yet identified — check with <a href="https://linux.die.net/man/1/snmpwalk"><code>snmpwalk</code></a> or web UI</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="esp32-1921680112"><a class="header" href="#esp32-1921680112">ESP32 (192.168.0.112)</a></h1>
+<p>Unknown <a href="https://www.espressif.com/en/products/socs/esp32">ESP32</a> device on the LAN.</p>
+<h2 id="hardware-3"><a class="header" href="#hardware-3">Hardware</a></h2>
+<ul>
+<li>Vendor: <a href="https://www.espressif.com/">Espressif</a></li>
+<li>MAC: <code>10:B4:1D:94:49:48</code></li>
+<li>Type: ESP32 microcontroller</li>
+</ul>
+<h2 id="services-1"><a class="header" href="#services-1">Services</a></h2>
+<p>All ports filtered or closed — no listening services detected.</p>
+<h2 id="investigation"><a class="header" href="#investigation">Investigation</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Full TCP port scan — all ports closed, no web UI</li>
+<li><input disabled="" type="checkbox" checked=""/>
+mDNS probe — no response</li>
+<li><input disabled="" type="checkbox" checked=""/>
+HTTP probe — no response</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Common IoT ports (<a href="https://esphome.io/">ESPHome</a>, <a href="https://mqtt.org/">MQTT</a>, CoAP) — all closed</li>
+<li><input disabled="" type="checkbox" checked=""/>
+UDP scan — only mDNS (5353) open|filtered</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Check router DHCP lease table for hostname</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Check router web UI for connected clients list
+<ul>
+<li><strong>NOT in DHCP client list</strong> — device likely has a static IP</li>
+<li>Not in address reservation list either</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"/>
+Check for Panasonic Comfort Cloud / AC WiFi adapter MAC prefix</li>
+<li><input disabled="" type="checkbox"/>
+Check Urban Company / native water purifier MAC ranges</li>
+<li><input disabled="" type="checkbox"/>
+Try power-cycling the device and re-scan during boot</li>
+<li><input disabled="" type="checkbox"/>
+Monitor network traffic to/from the device over time</li>
+</ul>
+<h2 id="theories"><a class="header" href="#theories">Theories</a></h2>
+<ul>
+<li><strong>Panasonic AC WiFi adapter</strong> — ESP32-based bridge between AC IR and WiFi</li>
+<li><strong>Urban Company water purifier</strong> — ESP32-based IoT controller</li>
+<li><strong>Other IoT sensor</strong> — no listening services, outbound-only communication</li>
+</ul>
+<h2 id="dhcp-status"><a class="header" href="#dhcp-status">DHCP Status</a></h2>
+<p>Not in DHCP client list or address reservation table — static IP likely configured on-device. Not getting its IP from the router.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="jamess-air-192168084"><a class="header" href="#jamess-air-192168084">James's Air (192.168.0.84)</a></h1>
+<h2 id="hardware-4"><a class="header" href="#hardware-4">Hardware</a></h2>
+<ul>
+<li>Vendor: <a href="https://www.apple.com/macbook-air/">Apple</a></li>
+<li>MAC: <code>8C-7A-AA-F0-B1-2F</code></li>
+<li>Hostname: <code>Jamess-Air</code></li>
+</ul>
+<h2 id="notes-2"><a class="header" href="#notes-2">Notes</a></h2>
+<ul>
+<li>MacBook Air</li>
+<li>DHCP-assigned IP</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="nanokvm-192168099"><a class="header" href="#nanokvm-192168099">NanoKVM (192.168.0.99)</a></h1>
+<p>IP KVM for the fleet.</p>
+<h2 id="hardware-5"><a class="header" href="#hardware-5">Hardware</a></h2>
+<ul>
+<li>Vendor: <a href="https://wiki.sipeed.com/hardware/en/kvm/NanoKVM/introduction.html">Shenzhen Sipeed Technology</a></li>
+<li>MAC: <code>48:DA:35:6F:A9:20</code></li>
+<li>OS: <a href="https://openwrt.org/">OpenWrt</a> 21.02 (Linux 5.4)</li>
+</ul>
+<h2 id="services-2"><a class="header" href="#services-2">Services</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Port</th><th>Service</th></tr></thead><tbody>
+<tr><td>22</td><td>SSH</td></tr>
+<tr><td>80</td><td>HTTP (web UI)</td></tr>
+<tr><td>443</td><td>HTTPS</td></tr>
+<tr><td>8000</td><td>HTTP-alt (filtered)</td></tr>
+</tbody></table>
+</div>
+<h2 id="notes-3"><a class="header" href="#notes-3">Notes</a></h2>
+<ul>
+<li>Plugged into Karnataka</li>
+<li>Access at <code>http://192.168.0.99</code></li>
+<li>Provides remote keyboard/video/mouse for Karnataka</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="dilli"><a class="header" href="#dilli">Dilli</a></h1>
+<p>Secondary workstation in the hanthor fleet.</p>
+<h2 id="hardware-6"><a class="header" href="#hardware-6">Hardware</a></h2>
+<ul>
+<li>Arch: x86_64</li>
+<li>LAN IP: <code>192.168.0.216</code> (WiFi)</li>
+<li>Tailscale IP: <code>100.76.126.90</code></li>
+</ul>
+<h2 id="os"><a class="header" href="#os">OS</a></h2>
+<p><a href="https://projectbluefin.io/">Bluefin</a> (Fedora Atomic)</p>
+<h2 id="services-3"><a class="header" href="#services-3">Services</a></h2>
+<ul>
+<li><a href="https://cockpit-project.org/">Cockpit</a> — system management</li>
+<li>BuildStream Dashboard — build monitor</li>
+<li>Homepage dashboard</li>
+</ul>
+<h2 id="notes-4"><a class="header" href="#notes-4">Notes</a></h2>
+<ul>
+<li><a href="https://github.com/paperwm/PaperWM">PaperWM</a>, Papershell, Copyous extensions synced from fleet</li>
+<li>Brew packages managed via dotfiles playbook</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="himachal"><a class="header" href="#himachal">Himachal</a></h1>
+<p>Laptop workstation in the hanthor fleet.</p>
+<h2 id="hardware-7"><a class="header" href="#hardware-7">Hardware</a></h2>
+<ul>
+<li>Arch: x86_64</li>
+<li>Laptop (runs on login, not periodic timer)</li>
+<li>Tailscale IP: <code>100.73.3.51</code></li>
+</ul>
+<h2 id="os-1"><a class="header" href="#os-1">OS</a></h2>
+<p><a href="https://projectbluefin.io/">Bluefin</a> (Fedora Atomic)</p>
+<h2 id="services-4"><a class="header" href="#services-4">Services</a></h2>
+<ul>
+<li>Homepage dashboard</li>
+</ul>
+<h2 id="notes-5"><a class="header" href="#notes-5">Notes</a></h2>
+<ul>
+<li><code>dotfiles_update_delay_seconds: 90</code> — applies dotfiles 90s after login</li>
+<li><a href="https://github.com/paperwm/PaperWM">PaperWM</a> tiling, Papershell blur, Copyous clipboard — synced from fleet</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="kanpur"><a class="header" href="#kanpur">Kanpur</a></h1>
+<p>Laptop workstation in the hanthor fleet.</p>
+<h2 id="hardware-8"><a class="header" href="#hardware-8">Hardware</a></h2>
+<ul>
+<li>Arch: x86_64</li>
+<li>Laptop (runs on login, not periodic timer)</li>
+<li>Tailscale IP: via MagicDNS</li>
+</ul>
+<h2 id="os-2"><a class="header" href="#os-2">OS</a></h2>
+<p><a href="https://projectbluefin.io/">Bluefin</a> (Fedora Atomic)</p>
+<h2 id="services-5"><a class="header" href="#services-5">Services</a></h2>
+<ul>
+<li><a href="https://cockpit-project.org/">Cockpit</a> — system management</li>
+<li>Homepage dashboard</li>
+</ul>
+<h2 id="notes-6"><a class="header" href="#notes-6">Notes</a></h2>
+<ul>
+<li><code>dotfiles_update_delay_seconds: 90</code> — applies dotfiles 90s after login</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="kerala"><a class="header" href="#kerala">Kerala</a></h1>
+<p><a href="https://postmarketos.org/">PostMarketOS</a> mobile device in the hanthor fleet.</p>
+<h2 id="hardware-9"><a class="header" href="#hardware-9">Hardware</a></h2>
+<ul>
+<li>Arch: aarch64 (ARM)</li>
+<li>Mobile device (laptop power profile)</li>
+<li>Tailscale IP: <code>100.67.142.116</code></li>
+</ul>
+<h2 id="os-3"><a class="header" href="#os-3">OS</a></h2>
+<p>PostMarketOS (Alpine/musl-based)</p>
+<h2 id="notes-7"><a class="header" href="#notes-7">Notes</a></h2>
+<ul>
+<li>Uses <code>apk</code> for package management (no <a href="https://brew.sh/">Homebrew</a>)</li>
+<li>Packages installed via <code>apk_packages</code> role</li>
+<li>Musl libc — Homebrew incompatible</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="goa"><a class="header" href="#goa">Goa</a></h1>
+<p>Home server / Ansible control node for the hanthor fleet.</p>
+<h2 id="hardware-10"><a class="header" href="#hardware-10">Hardware</a></h2>
+<ul>
+<li>Arch: aarch64 (ARM Cortex-A76)</li>
+<li>Board: <a href="https://www.raspberrypi.com/products/raspberry-pi-5/">Raspberry Pi 5</a></li>
+<li>MAC: <code>D8:3A:DD:E9:C7:1D</code></li>
+<li>Tailscale IP: <code>100.69.238.116</code></li>
+</ul>
+<h2 id="os-4"><a class="header" href="#os-4">OS</a></h2>
+<p>Debian GNU/Linux 13 (trixie), kernel 6.18.29</p>
+<h2 id="role"><a class="header" href="#role">Role</a></h2>
+<ul>
+<li><strong>Fleet control plane</strong> — runs <a href="https://www.ansible.com/">Ansible</a> to manage all nodes</li>
+<li>Primary pi-coding-agent development host</li>
+<li>Inventory + health check hub (<code>just inventory</code>, <code>just doctor</code>)</li>
+</ul>
+<h2 id="notes-8"><a class="header" href="#notes-8">Notes</a></h2>
+<ul>
+<li><a href="https://brew.sh/">Homebrew</a> at <code>/home/linuxbrew/.linuxbrew</code> (ARM — some bottles unavailable)</li>
+<li>System packages via <code>apt</code>, userland tools via <code>brew</code></li>
+<li>Hosts the dotfiles git repo at <code>~/.local/share/dotfiles</code></li>
+<li>Pi agent config at <code>~/.pi/agent/</code></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="cluster-handbook--talos-linux-on-bihar--karnataka"><a class="header" href="#cluster-handbook--talos-linux-on-bihar--karnataka">Cluster Handbook — Talos Linux on Bihar + Karnataka</a></h1>
+<blockquote>
+<p><strong>Two-node <a href="https://www.talos.dev/">Talos Linux</a> <a href="https://kubernetes.io/">Kubernetes</a> cluster.</strong>
+AMD Strix Halo GPU acceleration · <a href="https://lemonade-sdk.github.io/">Lemonade</a> · <a href="https://kubevirt.io/">KubeVirt</a> · <a href="https://tailscale.com/">Tailscale</a> ingress.
+Everything you need to bring this cluster back from zero.</p>
+</blockquote>
+<h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of contents</a></h2>
+<ol>
+<li><a href="servers/talos-k8s/cluster.html#1-overview">Overview</a></li>
+<li><a href="servers/talos-k8s/cluster.html#2-hardware">Hardware</a></li>
+<li><a href="servers/talos-k8s/cluster.html#3-network">Network</a></li>
+<li><a href="servers/talos-k8s/cluster.html#4-talos-installer-image-with-amd-gpu">Talos installer image (with AMD GPU)</a></li>
+<li><a href="servers/talos-k8s/cluster.html#5-cluster-bootstrap">Cluster bootstrap</a></li>
+<li><a href="servers/talos-k8s/cluster.html#6-amd-gpu-exposed-to-kubernetes">AMD GPU exposed to Kubernetes</a></li>
+<li><a href="servers/talos-k8s/cluster.html#7-production-workloads">Production workloads</a></li>
+<li><a href="servers/talos-k8s/cluster.html#8-tailscale-operator-ingress">Tailscale operator (ingress)</a></li>
+<li><a href="servers/talos-k8s/cluster.html#9-day-to-day-operations">Day-to-day operations</a></li>
+<li><a href="servers/talos-k8s/cluster.html#10-reinstall-procedure">Reinstall procedure</a></li>
+<li><a href="servers/talos-k8s/cluster.html#11-troubleshooting">Troubleshooting</a></li>
+</ol>
+<hr />
+<h2 id="1-overview"><a class="header" href="#1-overview">1. Overview</a></h2>
+<pre><code>┌──────────────────────────────────────────────────────────────┐
+│                       Kubernetes v1.36.1                      │
+│                        (Talos v1.13.2)                        │
+│                                                               │
+│   ┌────────────────────────┐   ┌────────────────────────┐    │
+│   │  bihar  (control plane)│   │ karnataka  (worker)    │    │
+│   │  192.168.0.5           │   │ 192.168.0.6            │    │
+│   │  Intel CPU             │   │ AMD Ryzen AI MAX+ 395  │    │
+│   │  /dev/nvme0n1          │   │ AMD Radeon 8060S iGPU  │    │
+│   │                        │   │ /dev/nvme0n1           │    │
+│   │  kube-apiserver        │   │ amdgpu-device-plugin   │    │
+│   │  etcd / scheduler /    │   │ amdgpu-labeller        │    │
+│   │  controller-manager    │   │ Lemonade               │    │
+│   │  KubeVirt control      │   │ Forgejo + runner       │    │
+│   │  Forgejo + runner      │   │ Hive agent swarm       │    │
+│   │  ArgoCD + Argo WF      │   │ KubeVirt virt-handler  │    │
+│   │  Grafana / Prometheus  │   │ Longhorn CSI           │    │
+│   │  Authentik + n8n       │   │ AppFlowy Cloud         │    │
+│   │  Longhorn CSI / UI     │   │ Corral VMs             │    │
+│   │  KubeVirt Manager      │   │                        │    │
+│   └────────────────────────┘   └────────────────────────┘    │
+│                                                               │
+│   CNI: flannel · kube-proxy: on · Storage: longhorn + local-path      │
+│   Tailscale Operator → ts.net ingress for cluster services    │
+└──────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>The cluster is <strong>not diskless</strong> — Talos installs itself onto <code>/dev/nvme0n1</code> on each node and persists. Reboots survive.</p>
+<p><strong>Source of truth for manifests:</strong> <a href="servers/talos-k8s/../talos-k8s/"><code>talos-k8s/</code></a> in this repo.
+<strong>Source of truth for secrets</strong> (<code>talosconfig</code>, <code>controlplane.yaml</code>, <code>worker.yaml</code>, <code>kubeconfig</code>): Bitwarden, fetched onto your workstation by the <code>kube</code> role.</p>
+<hr />
+<h2 id="2-hardware"><a class="header" href="#2-hardware">2. Hardware</a></h2>
+<h3 id="karnataka-worker"><a class="header" href="#karnataka-worker">Karnataka (worker)</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Detail</th></tr></thead><tbody>
+<tr><td>CPU</td><td>AMD Ryzen AI MAX+ 395 (Strix Halo) — 16 cores / 32 threads, 5.18 GHz boost</td></tr>
+<tr><td>RAM</td><td>62 GB unified memory (CPU + GPU share via UMA)</td></tr>
+<tr><td>GPU</td><td>AMD Radeon 8060S — RDNA 3.5 (<code>gfx1151</code>), integrated</td></tr>
+<tr><td>NIC</td><td>Realtek RTL8126 5GbE (<code>enp191s0</code>) — MAC <code>9C:BF:0D:00:E5:0F</code></td></tr>
+<tr><td>WiFi</td><td><a href="https://www.mediatek.com/products/broadband-wifi/mediatek-filogic-380">MediaTek MT7925</a> Wi-Fi 7</td></tr>
+<tr><td>Boot disk</td><td>Crucial P3 1TB (<code>/dev/nvme0n1</code>, serial <code>24394B495110</code>)</td></tr>
+<tr><td>Secondary</td><td>WD Black SN850X 1TB (<code>/dev/nvme1n1</code>, serial <code>251623804191</code>) — <strong>FAILING</strong> (I/O errors). Do not use. Replace with new drive.</td></tr>
+</tbody></table>
+</div>
+<h3 id="bihar-control-plane"><a class="header" href="#bihar-control-plane">Bihar (control plane)</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Detail</th></tr></thead><tbody>
+<tr><td>CPU</td><td>Intel x86_64</td></tr>
+<tr><td>NIC</td><td>MAC <code>A8:A1:59:E1:6D:84</code></td></tr>
+<tr><td>Boot disk</td><td><code>/dev/nvme0n1</code></td></tr>
+<tr><td>Role on LAN</td><td>DHCP, DNS (dnsmasq)</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="3-network"><a class="header" href="#3-network">3. Network</a></h2>
+<h3 id="lan--1921680024"><a class="header" href="#lan--1921680024">LAN — <code>192.168.0.0/24</code></a></h3>
+<p>DHCP/DNS served by <strong>dnsmasq</strong> on bihar. All assignments static via MAC.</p>
+<div class="table-wrapper"><table><thead><tr><th>Host</th><th>IP</th><th>MAC</th><th>Role</th></tr></thead><tbody>
+<tr><td>bihar</td><td><code>192.168.0.5</code></td><td><code>A8:A1:59:E1:6D:84</code></td><td>K8s control plane, home services</td></tr>
+<tr><td>karnataka</td><td><code>192.168.0.6</code></td><td><code>9C:BF:0D:00:E5:0F</code></td><td>K8s worker, LLM host</td></tr>
+<tr><td>raspberrypi</td><td><code>192.168.0.10</code></td><td><code>D8:3A:DD:E9:C7:1D</code></td><td>Pi</td></tr>
+<tr><td>kvm</td><td><code>192.168.0.99</code></td><td><code>48:DA:35:6F:A9:20</code></td><td>NanoKVM (plugged into karnataka)</td></tr>
+</tbody></table>
+</div>
+<p>Run <code>just inventory</code> to rescan with nmap.</p>
+<h3 id="internet--airtel-india--capped"><a class="header" href="#internet--airtel-india--capped">Internet — Airtel India / capped</a></h3>
+<p>Airtel India home internet with a <strong>3,333 GB/month</strong> data cap. Exceeding the cap throttles
+to <strong>1.5 Mbps</strong> until the next billing cycle.</p>
+<blockquote>
+<p><strong>May 31, 2026:</strong> Cap hit at ~3,333 GB. Throttled to 1.5 Mbps until <strong>June 8, 2026</strong>.
+No large model downloads, image pulls, or bulk data transfers until then.
+Local LAN (192.168.0.0/24) is unaffected.</p>
+</blockquote>
+<h3 id="tailscale--manatee-baskingtsnet"><a class="header" href="#tailscale--manatee-baskingtsnet">Tailscale — <code>manatee-basking.ts.net</code></a></h3>
+<p>Cluster ingress goes through the <a href="https://tailscale.com/kb/1236/kubernetes-operator">Tailscale Operator</a>. Services with an <code>Ingress</code> resource targeting <code>tailscale</code> ingressClassName get a <code>&lt;name&gt;.manatee-basking.ts.net</code> URL automatically.</p>
+<div class="table-wrapper"><table><thead><tr><th>Service</th><th>URL</th></tr></thead><tbody>
+<tr><td>Cluster homepage</td><td><code>https://home.manatee-basking.ts.net</code></td></tr>
+<tr><td>Lemonade (AI)</td><td><code>https://lemonade.manatee-basking.ts.net/v1</code></td></tr>
+<tr><td>Hive (agent swarm)</td><td><code>https://hive.manatee-basking.ts.net</code></td></tr>
+<tr><td>Forgejo (git + CI)</td><td><code>https://forgejo.manatee-basking.ts.net</code></td></tr>
+<tr><td>ArgoCD (GitOps)</td><td><code>https://argocd.manatee-basking.ts.net</code></td></tr>
+<tr><td>Grafana (metrics)</td><td><code>https://grafana.manatee-basking.ts.net</code></td></tr>
+<tr><td>Corral (VM dashboard)</td><td><code>https://corral.manatee-basking.ts.net</code></td></tr>
+<tr><td>KubeVirt Manager</td><td><code>https://kubevirt-manager.manatee-basking.ts.net</code></td></tr>
+<tr><td>Authentik (SSO)</td><td><code>https://auth.manatee-basking.ts.net</code></td></tr>
+<tr><td>n8n (workflows)</td><td><code>https://n8n.manatee-basking.ts.net</code></td></tr>
+<tr><td>AppFlowy (collab)</td><td><code>https://appflowy.manatee-basking.ts.net</code></td></tr>
+</tbody></table>
+</div>
+<h3 id="kubernetes-internal"><a class="header" href="#kubernetes-internal">Kubernetes internal</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Network</th><th>CIDR</th></tr></thead><tbody>
+<tr><td>Pod</td><td><code>10.244.0.0/16</code> (flannel)</td></tr>
+<tr><td>Service</td><td><code>10.96.0.0/12</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="4-talos-installer-image-with-amd-gpu"><a class="header" href="#4-talos-installer-image-with-amd-gpu">4. Talos installer image (with AMD GPU)</a></h2>
+<p>Talos ships with an immutable root filesystem, so kernel modules cannot be added at runtime. The AMD GPU driver and the Longhorn iSCSI tooling are <strong>baked into the boot image</strong> via the <a href="https://factory.talos.dev">Talos Image Factory</a>.</p>
+<p><strong>Schematic ID (current, 2026-06-11):</strong> <code>3a33ec6dfc8cfd61d2a3db3caf97894f31e913952d71ce3c3fbbe565a3f08339</code></p>
+<p><strong>Extensions baked in:</strong></p>
+<ul>
+<li><code>siderolabs/amdgpu</code> — AMD GPU kernel driver</li>
+<li><code>siderolabs/iscsi-tools</code> — iscsid, for Longhorn block storage</li>
+<li><code>siderolabs/util-linux-tools</code> — fstrim/nsenter, for Longhorn</li>
+</ul>
+<p>Both nodes run this schematic. Earlier schematics were <code>e5912b95…</code> (amdgpu
+only) and, in older docs, <code>b6ab12e…</code>. Storage details: <a href="servers/talos-k8s/../../../talos-k8s/longhorn/README.html"><code>talos-k8s/longhorn/</code></a>.</p>
+<pre><code class="language-yaml">machine:
+  install:
+    image: factory.talos.dev/installer/3a33ec6dfc8cfd61d2a3db3caf97894f31e913952d71ce3c3fbbe565a3f08339:v1.13.2
+    disk: /dev/nvme0n1
+</code></pre>
+<p>After install, the node exposes <code>/dev/dri/card0</code>, <code>/dev/dri/renderD128</code>, and <code>/dev/kfd</code> on the host.</p>
+<blockquote>
+<p><strong>Talos version note:</strong> Pinned to <code>v1.13.2</code>. <code>v1.13.3</code> had multi-arch registry pull errors on AMD64 at the time of writing.</p>
+</blockquote>
+<h3 id="user-volume-for-varmntstorage"><a class="header" href="#user-volume-for-varmntstorage">User volume for /var/mnt/storage</a></h3>
+<p>nvme0n1 is the <strong>Crucial P3</strong> (healthy, boot disk). The WD Black failed with I/O errors
+and was replaced as the boot disk. Forgejo / local-path PVCs use a <code>directory</code>-type
+user volume on the Crucial P3's EPHEMERAL partition:</p>
+<pre><code class="language-bash"># Apply the user volume config (idempotent):
+talosctl -n 192.168.0.6 patch mc --patch @storage-volume.yaml
+</code></pre>
+<p>The patch is stored at <a href="servers/talos-k8s/../talos-k8s/longhorn/storage-volume.yaml"><code>talos-k8s/longhorn/storage-volume.yaml</code></a>.
+It creates <code>/var/mnt/storage</code> as a directory on the EPHEMERAL partition.
+The mount is automatically propagated into the kubelet namespace.</p>
+<blockquote>
+<p><strong>WD Black failure (2026-05-30):</strong> The WD Black SN850X (<code>/dev/nvme1n1</code>, serial <code>251623804191</code>)
+developed I/O errors on its META partition during the 35B model download stress test.
+Error: <code>error writing config to file: input/output error</code>. The drive should be
+physically replaced. In the meantime, do not configure it as a Talos install disk
+or user volume.</p>
+</blockquote>
+<hr />
+<h2 id="5-cluster-bootstrap"><a class="header" href="#5-cluster-bootstrap">5. Cluster bootstrap</a></h2>
+<p>Configs are generated once with <code>talosctl gen config</code>, edited, and applied to each node. The generated files contain <strong>cluster PKI secrets</strong> (machine token, bootstrap token, shared secret) and are <strong>not committed</strong> — they live in Bitwarden.</p>
+<h3 id="one-time-generation"><a class="header" href="#one-time-generation">One-time generation</a></h3>
+<pre><code class="language-bash">cd talos-k8s
+talosctl gen config talos-k8s https://192.168.0.5:6443
+# Produces: controlplane.yaml, worker.yaml, talosconfig
+</code></pre>
+<p>Then patch <code>machine.install.image</code> and <code>machine.install.disk</code> on each (see <code>talos-k8s/README.md</code> for the schematic ID).</p>
+<h3 id="apply-configs"><a class="header" href="#apply-configs">Apply configs</a></h3>
+<pre><code class="language-bash">talosctl apply-config --insecure --nodes 192.168.0.5 --file controlplane.yaml
+talosctl apply-config --insecure --nodes 192.168.0.6 --file worker.yaml
+
+talosctl config endpoint 192.168.0.5
+talosctl config node 192.168.0.5
+
+talosctl bootstrap --nodes 192.168.0.5
+talosctl kubeconfig                  # writes ~/.kube/config
+</code></pre>
+<h3 id="seed-bitwarden-with-secrets"><a class="header" href="#seed-bitwarden-with-secrets">Seed Bitwarden with secrets</a></h3>
+<p>Once the cluster is up and you have working <code>~/.kube/config</code> and <code>~/.talos/config</code>:</p>
+<pre><code class="language-bash">just seed-kube     # uploads kubeconfig + talosconfig to Bitwarden as secure notes
+</code></pre>
+<p>Other workstations then pull them automatically:</p>
+<pre><code class="language-bash">just apply-tags kube
+</code></pre>
+<hr />
+<h2 id="6-amd-gpu-exposed-to-kubernetes"><a class="header" href="#6-amd-gpu-exposed-to-kubernetes">6. AMD GPU exposed to Kubernetes</a></h2>
+<p>The driver is loaded on the host (from the Talos image). Kubernetes needs two more pieces from ROCm to actually schedule on the GPU:</p>
+<pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml
+kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-labeller.yaml
+</code></pre>
+<p>Once the DaemonSets are running, <code>karnataka</code> exposes:</p>
+<ul>
+<li><code>amd.com/gpu: 1</code> as an allocatable resource</li>
+<li>Labels such as <code>amd.com/gpu.product-name=AMD_Radeon_8060S_Graphics</code>, <code>amd.com/gpu.vram=64G</code></li>
+</ul>
+<p>Workloads request the GPU with:</p>
+<pre><code class="language-yaml">resources:
+  limits:
+    amd.com/gpu: "1"
+</code></pre>
+<hr />
+<h2 id="7-production-workloads"><a class="header" href="#7-production-workloads">7. Production workloads</a></h2>
+<p>All manifests live in <a href="servers/talos-k8s/../../../talos-k8s/"><code>talos-k8s/</code></a>, organized by purpose:</p>
+<pre><code>talos-k8s/
+├── ai/              Lemonade (LLM runtime)
+├── appflowy/        AppFlowy Cloud (collaboration)
+├── authentik/       Authentik (SSO)
+├── forgejo/         Forgejo + runner + registry-mirror
+├── hive/            Hive (AI agent swarm)
+├── homepage/        Cluster landing page
+├── infrastructure/  KubeVirt + Corral
+├── longhorn/        Storage (CSI, snapshots)
+├── monitoring/      Prometheus + Grafana + metrics-server
+├── n8n/             n8n (workflow automation)
+├── networking/      Tailscale node configs
+└── testing-lab/     CI/CD test infrastructure
+</code></pre>
+<h3 id="lemonade--amd-optimized-local-ai-runtime"><a class="header" href="#lemonade--amd-optimized-local-ai-runtime">Lemonade — AMD-optimized local AI runtime</a></h3>
+<p>Single-replica <a href="https://lemonade-sdk.github.io/">Lemonade</a> omni-modal server on the Strix Halo APU.
+Manifest: <a href="servers/talos-k8s/../../../talos-k8s/ai/lemonade.yaml"><code>talos-k8s/ai/lemonade.yaml</code></a>.</p>
+<p>Lemonade is an AMD-optimized, open-source local AI runtime that auto-detects hardware and provides standard OpenAI-compatible endpoints for chat, vision, image generation, image editing, speech generation, and transcription. Built on llama.cpp, ONNX Runtime, whisper.cpp, and stable-diffusion.cpp.</p>
+<p>Key env overrides (RDNA 3.5 needs special handling):</p>
+<div class="table-wrapper"><table><thead><tr><th>Env var</th><th>Value</th><th>Why</th></tr></thead><tbody>
+<tr><td><code>HSA_OVERRIDE_GFX_VERSION</code></td><td><code>11.5.1</code></td><td>Forces ROCm to treat gfx1151 as supported</td></tr>
+<tr><td><code>PYTORCH_ROCM_ARCH</code></td><td><code>gfx1151</code></td><td>Compile shaders for exact arch</td></tr>
+<tr><td><code>HSA_XNACK</code></td><td><code>1</code></td><td>Enables unified memory</td></tr>
+<tr><td><code>HSA_FORCE_FINE_GRAIN_PCIE</code></td><td><code>1</code></td><td>Fine-grained VM access</td></tr>
+</tbody></table>
+</div>
+<p><strong>Access:</strong></p>
+<ul>
+<li>LAN: <code>http://192.168.0.6:31305/v1</code> (NodePort)</li>
+<li>Tailscale: <code>https://lemonade.manatee-basking.ts.net/v1</code></li>
+</ul>
+<p>Model weights cached on <code>karnataka:/var/tmp/lemonade-cache</code> (HuggingFace) and <code>/var/tmp/lemonade-models</code> (llama models) via local-storage PersistentVolumes.</p>
+<p><strong>Web UI:</strong> Point a browser at <code>http://192.168.0.6:31305</code> for the built-in control panel to download models, configure endpoints, and test chat/vision/image generation.</p>
+<h3 id="kubevirt-v182"><a class="header" href="#kubevirt-v182">KubeVirt v1.8.2</a></h3>
+<p>Installed from upstream operator manifests:</p>
+<pre><code class="language-bash">kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-cr.yaml
+</code></pre>
+<p>The <code>default</code> namespace is labelled <code>pod-security.kubernetes.io/enforce=privileged</code> so privileged virtualization pods can run.</p>
+<h3 id="kubevirt-manager-web-ui"><a class="header" href="#kubevirt-manager-web-ui">KubeVirt Manager (web UI)</a></h3>
+<p>Manifest: deployed from upstream bundle. Also see <a href="servers/talos-k8s/../../../talos-k8s/infrastructure/"><code>talos-k8s/infrastructure/</code></a> for KubeVirt CR and Corral VM dashboard.</p>
+<pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
+</code></pre>
+<p>Reachable at <code>https://kubevirt-manager.manatee-basking.ts.net</code> via the Tailscale ingress (manifest in cluster — not in this repo since it's a stock bundle).</p>
+<p>Port-forward as fallback:</p>
+<pre><code class="language-bash">kubectl port-forward svc/kubevirt-manager 8080:8080 -n kubevirt-manager
+# http://localhost:8080
+</code></pre>
+<hr />
+<h3 id="additional-services"><a class="header" href="#additional-services">Additional services</a></h3>
+<p>All other production services have their own directory in <a href="servers/talos-k8s/../../../talos-k8s/"><code>talos-k8s/</code></a>:</p>
+<div class="table-wrapper"><table><thead><tr><th>Service</th><th>Directory</th><th>Description</th></tr></thead><tbody>
+<tr><td>Forgejo</td><td><code>forgejo/</code></td><td>Git hosting + Actions CI/CD</td></tr>
+<tr><td>Hive</td><td><code>hive/</code></td><td>AI coding agent swarm backed by Lemonade</td></tr>
+<tr><td>Authentik</td><td><code>authentik/</code></td><td>SSO (passkeys, OAuth2/OIDC) — Helm</td></tr>
+<tr><td>n8n</td><td><code>n8n/</code></td><td>Workflow automation — plain K8s manifest</td></tr>
+<tr><td>AppFlowy Cloud</td><td><code>appflowy/</code></td><td>Collaborative workspace — commercial Helm chart</td></tr>
+<tr><td>Grafana + Prometheus</td><td><code>monitoring/</code></td><td>kube-prometheus-stack + metrics-server</td></tr>
+<tr><td>ArgoCD</td><td>(Helm)</td><td>GitOps deployment</td></tr>
+<tr><td>Longhorn</td><td><code>longhorn/</code></td><td>Distributed block storage (CSI, snapshots)</td></tr>
+<tr><td>Testing lab</td><td><code>testing-lab/</code></td><td>Argo Workflows CI/CD test infra</td></tr>
+</tbody></table>
+</div>
+<p>Each directory has a <code>README.md</code> with deploy and operational instructions.</p>
+<hr />
+<h2 id="8-tailscale-operator-ingress"><a class="header" href="#8-tailscale-operator-ingress">8. Tailscale operator (ingress)</a></h2>
+<p>The <a href="https://tailscale.com/kb/1236/kubernetes-operator">Tailscale Operator</a> creates a Tailscale-side proxy pod for any <code>Ingress</code> resource with <code>ingressClassName: tailscale</code>. The proxy joins the tailnet with a name derived from the Ingress, and routes incoming traffic to the backing Service.</p>
+<p>Example:</p>
+<pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lemonade
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: lemonade
+      port:
+        number: 13305
+  tls:
+    - hosts:
+        - lemonade
+</code></pre>
+<p>The operator namespace is <code>tailscale</code>. Auth keys are configured during operator install — see Tailscale docs for renewal.</p>
+<hr />
+<h2 id="9-day-to-day-operations"><a class="header" href="#9-day-to-day-operations">9. Day-to-day operations</a></h2>
+<h3 id="from-your-workstation"><a class="header" href="#from-your-workstation">From your workstation</a></h3>
+<p>The <code>kube</code> role syncs <code>~/.kube/config</code> and <code>~/.talos/config</code> from Bitwarden, so on any desktop:</p>
+<pre><code class="language-bash">kubectl get pods -A
+talosctl -n 192.168.0.5 health
+talosctl -n 192.168.0.6 dmesg | grep -i amdgpu
+</code></pre>
+<h3 id="common-kubectl"><a class="header" href="#common-kubectl">Common kubectl</a></h3>
+<pre><code class="language-bash">kubectl get nodes -o wide
+kubectl top nodes                        # requires metrics-server (not currently installed)
+kubectl logs -f deployment/lemonade
+kubectl describe pod -l app=lemonade    # check GPU scheduling / events
+</code></pre>
+<h3 id="common-talosctl"><a class="header" href="#common-talosctl">Common talosctl</a></h3>
+<pre><code class="language-bash">talosctl -n 192.168.0.6 list /dev/dri/   # confirm GPU devices visible to host
+talosctl -n 192.168.0.6 services         # systemd-equivalent services
+talosctl -n 192.168.0.5 etcd status      # control-plane etcd health
+talosctl -n 192.168.0.5 logs kubelet
+talosctl -n 192.168.0.5 reboot           # graceful reboot
+</code></pre>
+<hr />
+<h2 id="10-reinstall-procedure"><a class="header" href="#10-reinstall-procedure">10. Reinstall procedure</a></h2>
+<p>If a node is wiped or replaced:</p>
+<ol>
+<li><strong>Boot Talos ISO</strong> on the node (or PXE if you set that up separately). Default Talos boots into maintenance mode and accepts an apply-config.</li>
+<li><strong>Apply config</strong>:
+<pre><code class="language-bash">talosctl apply-config --insecure --nodes &lt;node-ip&gt; --file &lt;controlplane|worker&gt;.yaml
+</code></pre>
+</li>
+<li><strong>Bootstrap etcd</strong> (control plane only, first time):
+<pre><code class="language-bash">talosctl bootstrap --nodes 192.168.0.5
+</code></pre>
+</li>
+<li><strong>Verify</strong>:
+<pre><code class="language-bash">talosctl -n 192.168.0.5 health
+kubectl get nodes
+</code></pre>
+</li>
+<li><strong>Create user volume</strong> (karnataka/worker only):
+<pre><code class="language-bash">talosctl -n 192.168.0.6 patch mc --patch @talos-k8s/longhorn/storage-volume.yaml
+</code></pre>
+</li>
+<li><strong>Create host directories</strong> for local PVs (if re-creating from scratch):
+<pre><code class="language-bash">kubectl exec -n kube-system $(kubectl get pods -n kube-system --field-selector spec.nodeName=karnataka -l app=kube-flannel -o name) -- \
+  mkdir -p /proc/1/root/var/tmp/lemonade-cache
+  mkdir -p /proc/1/root/var/tmp/lemonade-models
+</code></pre>
+</li>
+<li><strong>Re-apply workloads</strong> (idempotent):
+<pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml
+kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-labeller.yaml
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-cr.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
+kubectl apply -f talos-k8s/ai/lemonade.yaml
+</code></pre>
+</li>
+</ol>
+<p>If only the worker was reset, the existing kubeconfig still works — only steps 1, 2, 5, and 6 are needed for that node, plus re-applying any DaemonSet pods.</p>
+<blockquote>
+<p><strong>WD Black failure:</strong> Do not use the WD Black (<code>/dev/nvme1n1</code>) for installs or user volumes.
+Install only to the Crucial P3 (<code>/dev/nvme0n1</code>). Storage uses a directory-type volume
+on the Crucial P3's EPHEMERAL partition.</p>
+</blockquote>
+<hr />
+<h2 id="11-troubleshooting"><a class="header" href="#11-troubleshooting">11. Troubleshooting</a></h2>
+<h3 id="amdcomgpu-shows-0-on-karnataka"><a class="header" href="#amdcomgpu-shows-0-on-karnataka"><code>amd.com/gpu</code> shows <code>0</code> on karnataka</a></h3>
+<p>Check the device plugin actually scheduled and started:</p>
+<pre><code class="language-bash">kubectl -n kube-system get pods -l name=amdgpu-device-plugin-ds
+kubectl -n kube-system logs -l name=amdgpu-device-plugin-ds --tail=50
+talosctl -n 192.168.0.6 dmesg | grep -i amdgpu   # confirm driver loaded
+talosctl -n 192.168.0.6 list /dev/dri/           # confirm devices exist
+</code></pre>
+<h3 id="lemonade-pod-stuck-in-containercreating"><a class="header" href="#lemonade-pod-stuck-in-containercreating">Lemonade pod stuck in <code>ContainerCreating</code></a></h3>
+<p>Most often: pulling models from HuggingFace. Check:</p>
+<pre><code class="language-bash">kubectl describe pod -l app=lemonade
+kubectl get pv,pvc                       # confirm PVCs bound
+</code></pre>
+<h3 id="tailscale-ingress-not-reachable"><a class="header" href="#tailscale-ingress-not-reachable">Tailscale Ingress not reachable</a></h3>
+<pre><code class="language-bash">kubectl -n tailscale get pods            # operator + per-Ingress ts-* proxies
+kubectl -n tailscale logs deploy/operator
+tailscale status | grep -i &lt;ingress-name&gt;
+</code></pre>
+<h3 id="talos-node-unresponsive"><a class="header" href="#talos-node-unresponsive">Talos node unresponsive</a></h3>
+<pre><code class="language-bash">talosctl -n &lt;ip&gt; health --wait
+talosctl -n &lt;ip&gt; dmesg --tail
+talosctl -n &lt;ip&gt; reset                   # nuclear: wipes node, requires re-apply
+</code></pre>
+<h3 id="container-runtime-crash-karnataka"><a class="header" href="#container-runtime-crash-karnataka">Container runtime crash (karnataka)</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li><code>kubectl get nodes</code> shows karnataka <code>NotReady</code></li>
+<li><code>kubectl describe node karnataka</code> shows <code>Ready: False</code> with <code>container runtime is down</code></li>
+<li>All pods on karnataka stuck in <code>Terminating</code>/<code>Pending</code></li>
+<li>Ping to <code>192.168.0.6</code> still works (node is up, just CRI is dead)</li>
+</ul>
+<p><strong>Root cause:</strong> Memory pressure from simultaneous large container builds exhausts
+karnataka's 62GB unified memory. The node runs Lemonade (48-56Gi), Argo Workflow image
+builds, Forgejo Actions (podman-in-Docker), KubeVirt, and monitoring — when
+multiple 4GB image builds run concurrently, containerd OOMs and crashes.</p>
+<p><strong>Recovery:</strong></p>
+<pre><code class="language-bash"># Option 1: Graceful reboot via Talos
+talosctl -n 192.168.0.6 reboot
+
+# Option 2: Hard reboot via NanoKVM at 192.168.0.99
+</code></pre>
+<p>After reboot (~2 min), all pods recover automatically. PVC-backed services
+(Forgejo, local-path PVs) survive.</p>
+<p><strong>Prevention:</strong></p>
+<ul>
+<li>Don't run more than one large container build concurrently on karnataka</li>
+<li>Set <code>SKIP_CHUNKAH=1</code> for Forgejo builds (avoids extra 2GB memory spike)</li>
+<li>Consider moving non-GPU workloads to bihar or a third node</li>
+<li>The Forgejo runner has <code>timeout-minutes: 45</code> — builds that exceed this will be killed</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="bihar"><a class="header" href="#bihar">Bihar</a></h1>
+<p>Kubernetes control plane + home server. <a href="https://www.talos.dev/">Talos Linux</a> node.</p>
+<h2 id="hardware-11"><a class="header" href="#hardware-11">Hardware</a></h2>
+<ul>
+<li>Arch: x86_64 (Intel)</li>
+<li>Motherboard: ASRock (MAC <code>A8:A1:59:E1:6D:84</code>)</li>
+<li>LAN IP: <code>192.168.0.5</code></li>
+<li>Role: Control plane (Talos K8s)</li>
+<li>Tailscale IP: <code>100.85.9.86</code></li>
+</ul>
+<h2 id="os-5"><a class="header" href="#os-5">OS</a></h2>
+<p><a href="https://www.talos.dev/">Talos Linux</a> v1.13.2 (<a href="https://kubernetes.io/">Kubernetes</a> v1.36.1)</p>
+<h2 id="services-6"><a class="header" href="#services-6">Services</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Service</th><th>URL</th></tr></thead><tbody>
+<tr><td><a href="https://cockpit-project.org/">Cockpit</a></td><td><code>bihar.manatee-basking.ts.net/cockpit</code></td></tr>
+<tr><td><a href="https://grafana.com/">Grafana</a></td><td><code>bihar.manatee-basking.ts.net/grafana</code></td></tr>
+<tr><td><a href="https://prometheus.io/">Prometheus</a></td><td><code>bihar.manatee-basking.ts.net:9091</code></td></tr>
+<tr><td>Alertmanager</td><td><code>bihar.manatee-basking.ts.net:9093</code></td></tr>
+<tr><td><a href="https://goauthentik.io/">Authentik</a> SSO</td><td><code>bihar.manatee-basking.ts.net/auth</code></td></tr>
+<tr><td><a href="https://n8n.io/">n8n</a></td><td><code>bihar.manatee-basking.ts.net/n8n</code></td></tr>
+<tr><td><a href="https://appflowy.io/">AppFlowy</a></td><td><code>bihar.manatee-basking.ts.net/appflowy</code></td></tr>
+<tr><td><a href="https://github.com/lima-vm/lima">Lima</a> VM</td><td><code>bihar.manatee-basking.ts.net/lima</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="networking"><a class="header" href="#networking">Networking</a></h2>
+<ul>
+<li>Advertises subnet routes: <code>192.168.0.0/24</code></li>
+<li>Tailscale DNS: disabled (uses systemd-resolved directly)</li>
+<li>Operator: <code>james</code></li>
+</ul>
+<h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
+<ul>
+<li><a href="servers/talos-k8s/bihar/../cluster.html">Talos cluster handbook</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="karnataka"><a class="header" href="#karnataka">Karnataka</a></h1>
+<p>Kubernetes worker node with AMD GPU. <a href="https://www.talos.dev/">Talos Linux</a> node.</p>
+<h2 id="hardware-12"><a class="header" href="#hardware-12">Hardware</a></h2>
+<ul>
+<li>Arch: x86_64</li>
+<li>System: <a href="https://frame.work/">Framework Computer</a> (MAC <code>9C:BF:0D:00:E5:0F</code>)</li>
+<li>CPU: <a href="https://www.amd.com/en/products/processors/laptop/ryzen-ai-max-plus.html">AMD Strix Halo APU</a></li>
+<li>GPU: AMD integrated (exposed via <a href="https://www.talos.dev/latest/talos-guides/install/boot-assets/">KubeVirt Image Factory</a> schematic with <a href="https://github.com/siderolabs/extensions/tree/main/amdgpu"><code>siderolabs/amdgpu</code></a>)</li>
+<li>Role: Worker (Talos K8s)</li>
+<li>Tailscale IP: via MagicDNS</li>
+</ul>
+<h2 id="os-6"><a class="header" href="#os-6">OS</a></h2>
+<p><a href="https://www.talos.dev/">Talos Linux</a> v1.13.2 (<a href="https://kubernetes.io/">Kubernetes</a> v1.36.1)</p>
+<h2 id="services-7"><a class="header" href="#services-7">Services</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Service</th><th>URL</th></tr></thead><tbody>
+<tr><td><a href="https://cockpit-project.org/">Cockpit</a></td><td><code>karnataka.manatee-basking.ts.net/cockpit</code></td></tr>
+<tr><td>RamaLama (LLM)</td><td><code>karnataka.manatee-basking.ts.net:8174</code></td></tr>
+<tr><td>BuildStream Dashboard</td><td><code>karnataka.manatee-basking.ts.net/bst/</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="k8s-workloads"><a class="header" href="#k8s-workloads">K8s Workloads</a></h2>
+<ul>
+<li><strong><a href="https://lemonade-sdk.github.io/">Lemonade</a></strong> — AMD-optimized local AI runtime (<a href="https://lemonade-sdk.github.io/docs/category/endpoints">omni-modal</a>: chat, vision, image gen, speech, transcription) on iGPU</li>
+<li><strong><a href="https://kubevirt.io/">KubeVirt</a> v1.8.2</strong> — VM workloads</li>
+<li><strong><a href="https://tailscale.com/kb/1236/kubernetes-operator">Tailscale Operator</a></strong> — Ingress to <code>*.manatee-basking.ts.net</code></li>
+</ul>
+<h2 id="extra-brews"><a class="header" href="#extra-brews">Extra Brews</a></h2>
+<ul>
+<li><code>ublue-os/experimental-tap/rocm-smi-lib</code> (AMD GPU management)</li>
+</ul>
+<h2 id="see-also-1"><a class="header" href="#see-also-1">See also</a></h2>
+<ul>
+<li><a href="servers/talos-k8s/karnataka/../cluster.html">Talos cluster handbook</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="lkofoss"><a class="header" href="#lkofoss">lkofoss</a></h1>
+<p>VPS node in the hanthor fleet.</p>
+<h2 id="connection"><a class="header" href="#connection">Connection</a></h2>
+<ul>
+<li>Hostname: <code>lkofoss.club</code></li>
+<li>Tailscale IP: <code>77.42.94.83</code></li>
+<li>Arch: x86_64</li>
+<li>Auth: himachal's fleet key</li>
+</ul>
+<h2 id="specs"><a class="header" href="#specs">Specs</a></h2>
+<ul>
+<li>OS: <a href="https://releases.ubuntu.com/noble/">Ubuntu 24.04.4 LTS</a></li>
+<li>RAM: 7.6 GiB</li>
+<li>Disk: 75 GB (40% used — 29G/75G)</li>
+<li>Uptime: 16+ weeks (very stable)</li>
+</ul>
+<h2 id="services-8"><a class="header" href="#services-8">Services</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Port</th><th>Service</th><th>Exposure</th></tr></thead><tbody>
+<tr><td>22</td><td>SSH</td><td>Public (Tailscale logged out)</td></tr>
+<tr><td>6443</td><td>k8s API</td><td>Public</td></tr>
+<tr><td>10248-10259</td><td>kubelet/containerd</td><td>localhost</td></tr>
+</tbody></table>
+</div>
+<h2 id="security"><a class="header" href="#security">Security</a></h2>
+<ul>
+<li>✅ <code>unattended-upgrades</code>: active</li>
+<li>❌ <a href="https://github.com/fail2ban/fail2ban">fail2ban</a>: <strong>not installed</strong></li>
+<li>❌ <a href="https://help.ubuntu.com/community/UFW">UFW</a>: <strong>inactive</strong> — ports exposed to public internet</li>
+<li>❌ <a href="https://tailscale.com/">Tailscale</a>: <strong>logged out</strong> — SSH and k8s API exposed on public IP</li>
+<li>Fleet keys deployed: bihar, dilli, goa, himachal, kanpur, karnataka, termux, bluefin</li>
+<li>Cron: daily playbook at 3am (no secrets/homebrew)</li>
+</ul>
+<h2 id="recommendations"><a class="header" href="#recommendations">Recommendations</a></h2>
+<ul>
+<li>🚨 <strong>4.6 GB logs</strong> — set <code>SystemMaxUse=500M</code> in <code>/etc/systemd/journald.conf</code></li>
+<li>🚨 <strong>Reboot needed</strong> — kernel update pending from unattended-upgrades</li>
+<li>🔧 <strong>Enable swap</strong> — 7.6G RAM with no swap is risky for K8s</li>
+<li>🔧 <strong>Kernel livepatch</strong> — <code>sudo pro attach</code> (<a href="https://ubuntu.com/pro">Ubuntu Pro</a>, free for personal)</li>
+<li>🔧 <strong>SSH rate limiting</strong> — add <code>MaxStartups 3:50:10</code> to sshd_config</li>
+<li>🔧 <strong>UFW logging</strong> — enable with <code>sudo ufw logging on</code> for audit trail</li>
+</ul>
+<h2 id="actions-needed"><a class="header" href="#actions-needed">Actions needed</a></h2>
+<ol>
+<li><strong>Install fail2ban</strong> — <code>sudo apt install fail2ban</code></li>
+<li><strong>Enable UFW</strong> — allow Tailscale IPs only: <code>sudo ufw allow from 100.64.0.0/10</code></li>
+<li><strong>Re-auth Tailscale</strong> — run <code>just apply</code> to join with auth key</li>
+<li><strong>Run playbook</strong> — sync SSH keys, configs, monitoring</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="matrix"><a class="header" href="#matrix">Matrix</a></h1>
+<p>VPS node in the hanthor fleet.</p>
+<h2 id="connection-1"><a class="header" href="#connection-1">Connection</a></h2>
+<ul>
+<li>Hostname: <code>matrix.reilly.asia</code></li>
+<li>Tailscale IP: <code>100.73.19.81</code></li>
+<li>Public IP: <code>37.27.84.201</code></li>
+<li>Arch: x86_64</li>
+<li>Auth: himachal's fleet key</li>
+</ul>
+<h2 id="specs-1"><a class="header" href="#specs-1">Specs</a></h2>
+<ul>
+<li>OS: <a href="https://releases.ubuntu.com/noble/">Ubuntu 24.04.4 LTS</a></li>
+<li>RAM: 7.5 GiB</li>
+<li>Disk: 75 GB (64% used — 46G/75G)</li>
+<li>Uptime: typically days</li>
+</ul>
+<h2 id="services-9"><a class="header" href="#services-9">Services</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Port</th><th>Service</th><th>Exposure</th></tr></thead><tbody>
+<tr><td>22</td><td>SSH</td><td>Tailscale only</td></tr>
+<tr><td>25</td><td>SMTP</td><td>Tailscale</td></tr>
+<tr><td>6443</td><td>k8s API</td><td>Tailscale</td></tr>
+<tr><td>5432</td><td><a href="https://www.postgresql.org/">PostgreSQL</a></td><td>🚨 Public IP exposed</td></tr>
+<tr><td>10248-10259</td><td>kubelet/containerd</td><td>localhost</td></tr>
+</tbody></table>
+</div>
+<h2 id="security-1"><a class="header" href="#security-1">Security</a></h2>
+<ul>
+<li>✅ SSH: no root login, no password auth</li>
+<li>✅ <a href="https://github.com/fail2ban/fail2ban">fail2ban</a>: active</li>
+<li>✅ <a href="https://help.ubuntu.com/community/UFW">UFW</a>: active</li>
+<li>✅ <code>unattended-upgrades</code>: active</li>
+<li>✅ <a href="https://tailscale.com/">Tailscale</a>: running (<code>reilly-asia-matrix</code>)</li>
+<li>🚨 PostgreSQL on <code>37.27.84.201:5432</code> — should be firewalled to Tailscale IPs only</li>
+</ul>
+<h2 id="notes-9"><a class="header" href="#notes-9">Notes</a></h2>
+<ul>
+<li>Runs <a href="https://kubernetes.io/">Kubernetes</a> (kubelet + containerd ports)</li>
+<li><code>reilly.asia</code> DNS hosted on <a href="https://www.cloudflare.com/">Cloudflare</a>, not served from this VPS</li>
+<li>Fleet keys deployed: bihar, dilli, goa, himachal, kanpur, karnataka, termux</li>
+<li>Cron: daily playbook at 3am (no secrets/homebrew)</li>
+</ul>
+<h2 id="recommendations-1"><a class="header" href="#recommendations-1">Recommendations</a></h2>
+<ul>
+<li>⚠️ <strong>NTP not synced</strong> — time drift affects TLS, K8s certs</li>
+<li>🔧 <strong>Enable swap</strong> — 7.5G RAM with no swap is risky for K8s</li>
+<li>🔧 <strong>Kernel livepatch</strong> — <code>sudo pro attach</code> (<a href="https://ubuntu.com/pro">Ubuntu Pro</a>, free for personal)</li>
+<li>🔧 <strong>SSH rate limiting</strong> — protect against brute force despite fail2ban</li>
+<li>🔧 <strong>logrotate/journald</strong> — 731M logs, set <code>SystemMaxUse=500M</code> in journald.conf</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="sshd"><a class="header" href="#sshd">sshd</a></h1>
+<p><strong>Tags:</strong> <code>system</code>, <code>sshd</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> All machines</p>
+<p>Configures the SSH daemon to accept forwarded Bitwarden environment variables.</p>
+<h2 id="what-it-does"><a class="header" href="#what-it-does">What It Does</a></h2>
+<p>Drops a config file at <code>/etc/ssh/sshd_config.d/99-bw-env.conf</code>:</p>
+<pre><code>AcceptEnv BW_SESSION BW_CLIENTID BW_CLIENTSECRET
+</code></pre>
+<p>This is required for <code>just apply-remote</code> — it forwards your local Bitwarden session token over SSH so the remote machine can access secrets without its own unlock.</p>
+<h2 id="handlers"><a class="header" href="#handlers">Handlers</a></h2>
+<ul>
+<li><strong>Reload sshd</strong> — restarts the SSH service after config changes</li>
+</ul>
+<h2 id="notes-10"><a class="header" href="#notes-10">Notes</a></h2>
+<ul>
+<li>Only runs if <code>/etc/ssh/sshd_config.d/</code> exists (Debian/Ubuntu/Fedora convention)</li>
+<li>On Alpine/musl systems this directory may not exist — the role skips gracefully</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="sudo"><a class="header" href="#sudo">sudo</a></h1>
+<p><strong>Tags:</strong> <code>system</code>, <code>sudo</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> All machines</p>
+<p>Grants passwordless sudo to the current user and cleans up old sudoers entries.</p>
+<h2 id="what-it-does-1"><a class="header" href="#what-it-does-1">What It Does</a></h2>
+<ol>
+<li>Writes a sudoers drop-in at <code>/etc/sudoers.d/zz-&lt;user&gt;</code> granting <code>NOPASSWD:ALL</code></li>
+<li>Validates the file with <code>visudo -cf</code> before deploying</li>
+<li>Removes old/conflicting sudoers files from previous naming conventions</li>
+</ol>
+<h2 id="notes-11"><a class="header" href="#notes-11">Notes</a></h2>
+<ul>
+<li>Required for unattended playbook runs — many tasks use <code>become: true</code></li>
+<li>The <code>zz-</code> prefix ensures this file loads last, overriding any earlier restrictions</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="apk_packages"><a class="header" href="#apk_packages">apk_packages</a></h1>
+<p><strong>Tags:</strong> <code>system</code>, <code>packages</code>, <code>apk</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> All machines (skips if not musl/Alpine)</p>
+<p>Installs core packages on Alpine/musl-based systems where Homebrew is unavailable.</p>
+<h2 id="what-it-does-2"><a class="header" href="#what-it-does-2">What It Does</a></h2>
+<ol>
+<li>Detects musl libc (Alpine, postmarketOS) — skips entirely on glibc systems</li>
+<li>Installs core CLI tools via <code>apk</code>: bash, fish, zsh, git, neovim, tmux, ripgrep, fzf, jq, podman, etc.</li>
+<li>Installs Bitwarden CLI via npm (not available in apk repos)</li>
+<li>Enables podman and podman.socket system services</li>
+<li>Adds the user to the <code>podman</code> group</li>
+</ol>
+<h2 id="when-its-skipped"><a class="header" href="#when-its-skipped">When It's Skipped</a></h2>
+<p>On glibc systems (Fedora, Debian, Ubuntu, Bluefin), this role does nothing — Homebrew handles all package management.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="server_hardening"><a class="header" href="#server_hardening">server_hardening</a></h1>
+<p><strong>Tags:</strong> <code>system</code>, <code>hardening</code>, <code>security</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> Servers and VPS only (<code>is_desktop: false</code>)</p>
+<p>Applies security and reliability hardening for long-running server hosts.</p>
+<h2 id="what-it-does-3"><a class="header" href="#what-it-does-3">What It Does</a></h2>
+<ul>
+<li>Hardens SSH configuration (disable password auth, restrict ciphers)</li>
+<li>Configures automatic security updates</li>
+<li>Sets kernel hardening parameters via sysctl</li>
+<li>Configures log rotation and journald limits</li>
+<li>Installs and configures fail2ban for SSH brute-force protection</li>
+</ul>
+<h2 id="notes-12"><a class="header" href="#notes-12">Notes</a></h2>
+<ul>
+<li>Skips desktops — keyboard-interactive machines have different security needs</li>
+<li>Designed for unattended servers that may run for months between reboots</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="homebrew"><a class="header" href="#homebrew">homebrew</a></h1>
+<p><strong>Tags:</strong> <code>packages</code>, <code>homebrew</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> All glibc machines (skipped on musl/Alpine)</p>
+<p>Installs and manages <a href="https://brew.sh/">Homebrew</a> packages on Linux.</p>
+<h2 id="what-it-does-4"><a class="header" href="#what-it-does-4">What It Does</a></h2>
+<ol>
+<li>Installs Homebrew to <code>/home/linuxbrew/.linuxbrew</code> if missing</li>
+<li>Generates a <code>Brewfile</code> from <code>group_vars/all.yml</code> package lists</li>
+<li>Runs <code>brew bundle</code> to install/update all packages</li>
+<li>Ensures Python <code>packaging</code> module is available (required by Ansible's systemd module)</li>
+</ol>
+<h2 id="package-categories"><a class="header" href="#package-categories">Package Categories</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Where Defined</th><th>Scope</th></tr></thead><tbody>
+<tr><td><code>core_brews</code></td><td><code>group_vars/all.yml</code></td><td>All machines</td></tr>
+<tr><td><code>core_tap_brews</code></td><td><code>group_vars/all.yml</code></td><td>All machines (tapped)</td></tr>
+<tr><td><code>desktop_brews</code></td><td><code>group_vars/all.yml</code></td><td>Desktop group only</td></tr>
+</tbody></table>
+</div>
+<h2 id="key-packages"><a class="header" href="#key-packages">Key Packages</a></h2>
+<ul>
+<li><strong>Shells:</strong> fish, zsh, bash-preexec</li>
+<li><strong>CLI tools:</strong> neovim, tmux, direnv, just, make, ripgrep, fzf, eza, bat, fd, zoxide</li>
+<li><strong>Bluefin extras:</strong> atuin, starship, carapace, tealdeer (via <code>bluefin-cli</code>)</li>
+<li><strong>Dev tools:</strong> go, kubernetes-cli, helm, k9s, podman-compose, ansible, uv</li>
+<li><strong>AI/ML:</strong> ollama, ramalama, openai-whisper, pi-coding-agent</li>
+</ul>
+<h2 id="notes-13"><a class="header" href="#notes-13">Notes</a></h2>
+<ul>
+<li>Homebrew on Linux installs to <code>/home/linuxbrew/.linuxbrew</code> — no root needed</li>
+<li>The playbook adds <code>brew_bin</code> to <code>PATH</code> for all subsequent tasks</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="flatpak"><a class="header" href="#flatpak">flatpak</a></h1>
+<p><strong>Tags:</strong> <code>packages</code>, <code>desktop</code>, <code>flatpak</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> Desktop group only (<code>skip_flatpak: false</code>)</p>
+<p>Installs and manages <a href="https://flatpak.org/">Flatpak</a> applications from <a href="https://flathub.org/">Flathub</a>.</p>
+<h2 id="what-it-does-5"><a class="header" href="#what-it-does-5">What It Does</a></h2>
+<ol>
+<li>Fixes broken Flatpak symlinks if present</li>
+<li>Adds the Flathub remote</li>
+<li>Removes unwanted system flatpaks (Firefox, Thunderbird — replaced by Zen)</li>
+<li>Installs missing flatpaks in batch (fast path), falling back to individual installs</li>
+<li>Updates all flatpaks when <code>upgrade: true</code> is set</li>
+<li>Creates Chromium wrapper scripts for CLI compatibility</li>
+</ol>
+<h2 id="package-list"><a class="header" href="#package-list">Package List</a></h2>
+<p>Defined in <code>group_vars/all.yml</code> as <code>system_flatpaks</code>. Key apps:</p>
+<div class="table-wrapper"><table><thead><tr><th>App</th><th>Flatpak ID</th></tr></thead><tbody>
+<tr><td>Zen Browser</td><td><code>app.zen_browser.zen</code></td></tr>
+<tr><td>VS Code</td><td><code>com.visualstudio.code</code></td></tr>
+<tr><td>Ungoogled Chromium</td><td><code>com.github.Eloston.UngoogledChromium</code></td></tr>
+<tr><td>Flatseal</td><td><code>com.github.tchx84.Flatseal</code></td></tr>
+<tr><td>GNOME apps</td><td>Calculator, Calendar, Clocks, Contacts, Loupe, etc.</td></tr>
+<tr><td>Vesktop</td><td><code>dev.vencord.Vesktop</code></td></tr>
+<tr><td>Obsidian</td><td><code>md.obsidian.Obsidian</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="wrapper-scripts"><a class="header" href="#wrapper-scripts">Wrapper Scripts</a></h2>
+<p>Creates <code>~/.local/bin/chromium</code>, <code>~/.local/bin/google-chrome</code>, and <code>~/.local/bin/chromium-browser</code> that exec into the Ungoogled Chromium flatpak — tools that hardcode <code>google-chrome</code> or <code>chromium-browser</code> still work.</p>
+<h2 id="notes-14"><a class="header" href="#notes-14">Notes</a></h2>
+<ul>
+<li>Installs system-wide (<code>--system</code>) with <code>become: true</code></li>
+<li>Batch install tolerates partial failures — individual retries catch stragglers</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="shell"><a class="header" href="#shell">shell</a></h1>
+<p><strong>Tags:</strong> <code>dotfiles</code>, <code>shell</code><br />
+<strong>Secrets needed:</strong> No (except API key deploys from Bitwarden cache)<br />
+<strong>Runs on:</strong> All machines</p>
+<p>Deploys all shell configuration files and terminal setup.</p>
+<h2 id="what-it-does-6"><a class="header" href="#what-it-does-6">What It Does</a></h2>
+<h3 id="shell-configs"><a class="header" href="#shell-configs">Shell Configs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>File</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>~/.bashrc</code></td><td>Homebrew init, bluefin-cli PATH, aliases</td></tr>
+<tr><td><code>~/.zshrc</code></td><td>Same content, for zsh</td></tr>
+<tr><td><code>~/.zprofile</code></td><td>zsh login shell profile</td></tr>
+<tr><td><code>~/.config/fish/config.fish</code></td><td>Fish shell config</td></tr>
+<tr><td><code>~/.config/fish/conf.d/aliases.fish</code></td><td>Fish aliases</td></tr>
+<tr><td><code>~/.config/shell/aliases.sh</code></td><td>Shared bash/zsh aliases</td></tr>
+</tbody></table>
+</div>
+<h3 id="common-aliases"><a class="header" href="#common-aliases">Common Aliases</a></h3>
+<ul>
+<li><code>vim</code> → <code>nvim</code></li>
+<li><code>k</code> → <code>kubectl</code></li>
+<li><code>dots</code> → git pull + <code>just apply-nosecrets</code></li>
+<li><code>dots-apply</code> → git pull + <code>just apply</code> (with BW)</li>
+</ul>
+<h3 id="terminal-setup"><a class="header" href="#terminal-setup">Terminal Setup</a></h3>
+<ul>
+<li>Deploys <code>~/.tmux.conf</code> with vi copy mode and clipboard integration</li>
+<li>Sets zsh (from <a href="https://brew.sh/">Homebrew</a>) as the login shell</li>
+<li>Configures Ptyxis terminal to use <code>fish</code> from Homebrew on desktop machines</li>
+<li>Installs JetBrains Mono Nerd Font</li>
+</ul>
+<h3 id="ssh-config"><a class="header" href="#ssh-config">SSH Config</a></h3>
+<p>Deploys <code>~/.ssh/config</code> with short host aliases for all machines, including <code>SendEnv BW_SESSION</code> for Bitwarden session forwarding.</p>
+<h3 id="files-deployed"><a class="header" href="#files-deployed">Files Deployed</a></h3>
+<ul>
+<li><code>~/.config/shell/</code> — aliases and shared config</li>
+<li><code>~/.config/fish/</code> — fish shell config and completions</li>
+<li><code>~/.config/starship.toml</code> — <a href="https://starship.rs/">Starship</a> prompt config</li>
+<li><code>~/.config/atuin/</code> — <a href="https://atuin.sh/">Atuin</a> shell history config</li>
+<li><code>~/.ssh/config</code> — SSH host aliases</li>
+<li><code>~/.tmux.conf</code> — tmux config</li>
+</ul>
+<h2 id="per-host-secrets-atuin--deepseek--forgejo"><a class="header" href="#per-host-secrets-atuin--deepseek--forgejo">Per-host secrets (Atuin / DeepSeek / Forgejo)</a></h2>
+<p>Three BW-gated blocks deploy host-local credential files. All are wrapped in <code>when: bw_unlocked</code> and never wipe existing files on a locked vault:</p>
+<div class="table-wrapper"><table><thead><tr><th>BW item</th><th>Destination</th><th>When</th></tr></thead><tbody>
+<tr><td><code>atuin.sh</code> (login + <code>key</code> field)</td><td><code>atuin login</code> to sync history (no file written; atuin manages its own state)</td><td>Only when <code>atuin status</code> says not logged in</td></tr>
+<tr><td><code>deepseek-api-key</code> (password)</td><td><code>~/.pi/agent/auth.json</code> (mode 0600)</td><td>When the item exists; otherwise the previous file is preserved</td></tr>
+<tr><td><code>forgejo</code> (note containing <code>API Token: &lt;pat&gt;</code>)</td><td><code>~/.config/shell/secrets.sh</code> (mode 0600, exports <code>FORGEJO_TOKEN</code>)</td><td>When the note has a usable token</td></tr>
+</tbody></table>
+</div>
+<h2 id="failure-modes"><a class="header" href="#failure-modes">Failure modes</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td><code>dots</code> shell abbreviation doesn't exist after first apply</td><td>Fish/zsh hasn't re-read aliases yet</td><td><code>exec fish</code> or open a new terminal</td></tr>
+<tr><td><code>atuin</code> not syncing on this host</td><td>Vault locked at apply time and no prior key on disk</td><td>Unlock BW, run <code>dots-apply</code></td></tr>
+<tr><td>Login shell didn't change to zsh</td><td><code>chsh</code> required a sudo prompt that the role didn't catch</td><td><code>chsh -s $(brew --prefix)/bin/zsh</code> manually</td></tr>
+</tbody></table>
+</div>
+<h2 id="how-to-verify"><a class="header" href="#how-to-verify">How to verify</a></h2>
+<pre><code class="language-bash">echo $SHELL                       # should be the homebrew zsh path
+which dots                        # should be a function/alias, not "not found"
+atuin status                      # should say "[Sync] active" on hosts that signed in
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="pi"><a class="header" href="#pi">pi</a></h1>
+<p><strong>Tags:</strong> <code>dotfiles</code>, <code>pi</code><br />
+<strong>Secrets needed:</strong> No (API keys deployed from Bitwarden by shell role)<br />
+<strong>Runs on:</strong> All machines</p>
+<p>Deploys the <a href="https://github.com/earendil-works/pi-coding-agent">PI Coding Agent</a> configuration and extensions.</p>
+<h2 id="what-it-does-7"><a class="header" href="#what-it-does-7">What It Does</a></h2>
+<ol>
+<li>Creates <code>~/.pi/agent/</code> directory structure</li>
+<li>Deploys <code>settings.json</code> with provider, model, and package configuration</li>
+<li>Installs PI extensions via npm:
+<ul>
+<li><code>pi-subagents</code> — subagent orchestration</li>
+<li><code>grill-me</code> — interactive planning interviews</li>
+<li><code>goal-x</code> — goal tracking system</li>
+<li><code>import-claude-history</code> — Claude Code history import</li>
+<li><code>rpiv-todo</code> — task list integration</li>
+<li><code>pi-beads</code> — token/session tracking</li>
+</ul>
+</li>
+<li>Deploys Forgejo MCP bridge extension</li>
+</ol>
+<h2 id="notes-15"><a class="header" href="#notes-15">Notes</a></h2>
+<ul>
+<li>API keys (<code>auth.json</code>) are deployed by the <code>shell</code> role from Bitwarden</li>
+<li>Extensions are installed to <code>~/.pi/agent/npm/</code> via npm</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="git"><a class="header" href="#git">git</a></h1>
+<p><strong>Tags:</strong> <code>dotfiles</code>, <code>git</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> All machines</p>
+<p>Deploys Git configuration with SSH commit signing.</p>
+<h2 id="what-it-does-8"><a class="header" href="#what-it-does-8">What It Does</a></h2>
+<ol>
+<li>Deploys <code>~/.gitconfig</code> with name, email, and signing preferences</li>
+<li>Configures SSH commit signing using <code>~/.ssh/id_ed25519</code></li>
+<li>Deploys <code>~/.ssh/allowed_signers</code> for signature verification</li>
+<li>Deploys GitHub CLI config at <code>~/.config/gh/config.yml</code></li>
+</ol>
+<h2 id="key-settings"><a class="header" href="#key-settings">Key Settings</a></h2>
+<ul>
+<li><strong>Signing:</strong> SSH (<code>ssh-ed25519</code> key) for all commits</li>
+<li><strong>Allowed signers:</strong> All fleet machine keys from Bitwarden</li>
+<li><strong>Delta:</strong> Git diff viewer (<code>git-delta</code>) for side-by-side diffs</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="neovim"><a class="header" href="#neovim">neovim</a></h1>
+<p><strong>Tags:</strong> <code>dotfiles</code>, <code>neovim</code>, <code>editor</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> All machines</p>
+<p>Deploys <a href="https://neovim.io/">Neovim</a> configuration.</p>
+<h2 id="what-it-does-9"><a class="header" href="#what-it-does-9">What It Does</a></h2>
+<ol>
+<li>Creates <code>~/.config/nvim/</code> directory structure</li>
+<li>Deploys init.lua and plugin configuration</li>
+<li>Installs Lazy.nvim plugin manager and configured plugins</li>
+</ol>
+<h2 id="key-plugins"><a class="header" href="#key-plugins">Key Plugins</a></h2>
+<ul>
+<li><strong><a href="https://microsoft.github.io/language-server-protocol/">LSP</a>:</strong> nvim-lspconfig, <a href="https://github.com/williamboman/mason.nvim">mason.nvim</a> (language server management)</li>
+<li><strong>Completion:</strong> nvim-cmp with LuaSnip snippets</li>
+<li><strong>UI:</strong> Catppuccin theme, lualine statusline, nvim-tree file explorer</li>
+<li><strong>Editing:</strong> <a href="https://tree-sitter.github.io/">treesitter</a>, comment.nvim, autopairs</li>
+<li><strong>Git:</strong> gitsigns (inline git blame/diff)</li>
+<li><strong>Navigation:</strong> telescope.nvim (fuzzy finder)</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="bitwarden"><a class="header" href="#bitwarden">bitwarden</a></h1>
+<p><strong>Tags:</strong> <code>secrets</code>, <code>bitwarden</code>
+<strong>Secrets needed:</strong> Yes (provides secrets to other roles)
+<strong>Runs on:</strong> All machines</p>
+<p>Resolves a Bitwarden session, refreshes the local vault cache, and publishes a single <code>bw_unlocked</code> host fact that every other BW-using role consumes. Failure to unlock is <strong>never fatal</strong> to the play; it's reported once at the end and downstream BW operations are skipped cleanly.</p>
+<h2 id="what-it-does-10"><a class="header" href="#what-it-does-10">What it does</a></h2>
+<ol>
+<li>Resolves <code>BW_SESSION</code> in this order: environment → <code>/tmp/bw_session</code> cache → interactive <code>bw unlock</code>.</li>
+<li>Runs <code>bw sync</code> with a hard 15 s timeout (so a flaky vault server can't hang the whole play).</li>
+<li>Calls <code>bw status</code> and sets <code>bw_unlocked</code> (boolean host fact) — <code>true</code> only if <code>bw</code> is installed, a session was resolved, and the vault actually reports <code>unlocked</code>.</li>
+<li>If a session is set but the vault is still locked (common on remote applies — see below), emits a one-line debug warning so the operator knows secrets work is being skipped here.</li>
+</ol>
+<p>Every BW-using role downstream gates on <code>when: bw_unlocked | default(false)</code>. The end-of-play <code>post_tasks</code> summary then prints one of three messages:</p>
+<div class="table-wrapper"><table><thead><tr><th>State</th><th>Message</th></tr></thead><tbody>
+<tr><td>unlocked</td><td><code>vault unlocked — all secret roles executed normally</code></td></tr>
+<tr><td>locked</td><td><code>Bitwarden vault was LOCKED — … skipped. To enable: bw unlock …</code></td></tr>
+<tr><td><code>--skip-tags secrets</code></td><td><code>SKIPPED (--skip-tags secrets). Run dots-apply to include …</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="why-a-forwarded-bw_session-can-fail-on-a-remote-host"><a class="header" href="#why-a-forwarded-bw_session-can-fail-on-a-remote-host">Why a forwarded BW_SESSION can fail on a remote host</a></h2>
+<p><code>just apply-remote &lt;host&gt;</code> forwards your local <code>BW_SESSION</code> over SSH. The token is, however, <strong>derived from the master password + the local vault's KDF parameters</strong>. If the remote host's vault has different KDF iterations or a stale cached vault, <code>bw status</code> on the remote will keep reporting <code>locked</code> despite the forwarded token. This isn't a bug — it's a Bitwarden CLI portability limit. The role detects it via the <code>bw_unlocked</code> check and degrades gracefully.</p>
+<p>To enable secrets on a remote host where the forwarded session doesn't unlock:</p>
+<pre><code class="language-bash">ssh &lt;host&gt;
+bw unlock --raw | tee /tmp/bw_session &gt; /dev/null
+chmod 600 /tmp/bw_session
+exit
+just apply-remote-tags &lt;host&gt; secrets
+</code></pre>
+<h2 id="how-to-verify-it-ran-correctly"><a class="header" href="#how-to-verify-it-ran-correctly">How to verify it ran correctly</a></h2>
+<ul>
+<li><code>just doctor</code> will show <code>vault unlocked</code> if BW is good on this host.</li>
+<li>Check the end-of-play summary line printed by every <code>just apply*</code>.</li>
+<li>Look for any task in <code>ansible-playbook</code> output with a <code>[bitwarden : …]</code> prefix that ended in <code>failed:</code> — should never happen; only "skipping" is acceptable.</li>
+</ul>
+<h2 id="notes-16"><a class="header" href="#notes-16">Notes</a></h2>
+<ul>
+<li>Must run before any other secrets role (it does, by position in <code>site.yml</code>).</li>
+<li>The cached <code>/tmp/bw_session</code> persists for the user across reboots only as long as <code>/tmp</code> survives (most modern systemd boots clear it). The role re-resolves the session on every play.</li>
+<li><code>bw sync</code> failure is non-fatal; downstream operations use the locally cached vault, which may be stale.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ssh_keys"><a class="header" href="#ssh_keys">ssh_keys</a></h1>
+<p><strong>Tags:</strong> <code>secrets</code>, <code>ssh</code>, <code>ssh_keys</code>
+<strong>Secrets needed:</strong> Yes
+<strong>Runs on:</strong> All machines</p>
+<p>Manages per-machine ed25519 SSH keys, distributes the fleet's public keys via <code>authorized_keys</code>, and maintains the <code>allowed_signers</code> list for git commit verification.</p>
+<p><strong>Source of truth is the local disk.</strong> Bitwarden is the durable mirror that lets new/rebuilt machines recover and lets the rest of the fleet stay in sync.</p>
+<h2 id="what-it-does-11"><a class="header" href="#what-it-does-11">What it does</a></h2>
+<p>For the local machine's key (<code>james@&lt;hostname&gt;</code> in Bitwarden):</p>
+<ol>
+<li><strong>No key on disk</strong> → fetch from BW; if absent there too, <code>ssh-keygen</code> a fresh ed25519 pair.</li>
+<li><strong>Local pub key matches BW</strong> → no-op.</li>
+<li><strong>Local pub key differs from BW</strong> → <code>bw edit item</code> updates the BW entry so every other host sees the current key on their next apply. <em>(This is the case the old "create if missing" logic silently skipped, which caused stale public keys to linger in BW after a key rotation.)</em></li>
+</ol>
+<p>Then, regardless of whether the local item changed:</p>
+<ul>
+<li>Slurps every other <code>james@&lt;machine&gt;</code> SSH item from BW in a single <code>bw list</code> call.</li>
+<li>Rewrites <code>~/.ssh/authorized_keys</code> with the union of those + <code>extra_authorized_keys</code>.</li>
+<li>Refreshes <code>~/.ssh/known_hosts</code> for every fleet host via <code>ssh-keyscan</code>, removing stale entries first.</li>
+<li>Updates <code>~/.ssh/allowed_signers</code> with this host's pub key for git commit signing.</li>
+</ul>
+<p>If <code>bw_unlocked</code> is false (vault locked, BW not installed, etc.), every BW-touching step is skipped and <code>authorized_keys</code> is <strong>not</strong> rewritten — preserving the existing file rather than wiping it with an empty list.</p>
+<h2 id="failure-modes-1"><a class="header" href="#failure-modes-1">Failure modes</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td><code>Permission denied (publickey)</code> from a host that worked yesterday</td><td>Local key changed but BW still has the old pub key</td><td>Run <code>dots-apply</code> on the source host with BW unlocked — the role will detect the mismatch and update BW. Then run <code>dots-apply</code> on the failing host to pull the fresh <code>authorized_keys</code>.</td></tr>
+<tr><td>Some hosts missing from <code>authorized_keys</code></td><td>Those hosts never round-tripped their key to BW</td><td>Run <code>dots-apply</code> on each missing host once, with BW unlocked.</td></tr>
+<tr><td>New ed25519 key generated on a host that should have inherited an existing key</td><td>BW item missing/empty for this hostname</td><td>Verify the BW entry name matches <code>james@&lt;hostname&gt;</code> exactly.</td></tr>
+</tbody></table>
+</div>
+<h2 id="how-to-verify-1"><a class="header" href="#how-to-verify-1">How to verify</a></h2>
+<pre><code class="language-bash"># Check this host's key is in BW
+bw get item "james@$(hostname)" | jq '.sshKey.publicKey' | grep -F "$(awk '{print $2}' ~/.ssh/id_ed25519.pub)"
+
+# Check who can SSH in here
+cat ~/.ssh/authorized_keys
+
+# Test SSH to every fleet host
+for h in $(yq '.all.hosts | keys | join(" ")' inventory.yml); do
+  ssh -o BatchMode=yes -o ConnectTimeout=3 "$h" "echo OK" 2&gt;&amp;1 | head -1
+done
+</code></pre>
+<h2 id="notes-17"><a class="header" href="#notes-17">Notes</a></h2>
+<ul>
+<li>Every machine SSHes to every other machine without password prompts after one round-trip apply.</li>
+<li>The same key is used for GitHub auth + commit signing (registered by the <code>github</code> role).</li>
+<li>The role tolerates a locked vault and never destructively rewrites <code>authorized_keys</code> when BW returned no data.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="github"><a class="header" href="#github">github</a></h1>
+<p><strong>Tags:</strong> <code>secrets</code>, <code>github</code>
+<strong>Secrets needed:</strong> Yes (only on first auth — once <code>gh</code> is authenticated, BW is not required)
+<strong>Runs on:</strong> All machines with <code>gh</code> installed</p>
+<p>Logs <code>gh</code> in via a BW-stored PAT (only if not already authenticated), then registers this host's SSH key with GitHub for both auth and signing.</p>
+<h2 id="what-it-does-12"><a class="header" href="#what-it-does-12">What it does</a></h2>
+<ol>
+<li>Ensures <code>github.com</code>'s ed25519 host key is in <code>~/.ssh/known_hosts</code> (prevents MITM warnings on first push).</li>
+<li><code>gh auth status</code> — if already authenticated, skip the token fetch entirely (no BW dependency for steady-state).</li>
+<li>If not authenticated and BW is unlocked → <code>bw get password github-token</code> → <code>gh auth login --with-token</code>. If the BW item is missing, emits a one-line warning and continues.</li>
+<li>Sets <code>gh config set git_protocol ssh</code>.</li>
+<li>Lists existing keys on the GitHub account. For each key type (auth + signing), runs <code>gh ssh-key add</code> if this host's key isn't already there.</li>
+</ol>
+<h2 id="failure-modes-2"><a class="header" href="#failure-modes-2">Failure modes</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td><code>gh auth status</code> says <code>not logged in</code> after apply, vault locked</td><td>First run on this host with BW locked</td><td>Unlock BW and re-run <code>just apply-tags github</code>, or <code>gh auth login</code> manually</td></tr>
+<tr><td>Warning: <code>No 'github-token' item found</code></td><td>BW vault doesn't have the PAT</td><td>Create a BW <em>login</em> item named <code>github-token</code> with your PAT as the password</td></tr>
+<tr><td>Key registration silently fails</td><td><code>gh ssh-key add</code> returned non-zero (failed_when:false) — possibly key was just deleted on github.com side</td><td>Inspect with <code>gh ssh-key list</code> and re-run the role</td></tr>
+<tr><td>Stale keys clutter github.com</td><td>This host's previous key was rotated; the old gh entry stays forever</td><td>Delete the old key manually at <a href="https://github.com/settings/keys">https://github.com/settings/keys</a> — no automated cleanup yet</td></tr>
+</tbody></table>
+</div>
+<h2 id="how-to-verify-2"><a class="header" href="#how-to-verify-2">How to verify</a></h2>
+<pre><code class="language-bash">gh auth status                  # Should say "Logged in" with this account
+gh ssh-key list | grep "$(hostname)"   # Should show &lt;hostname&gt;-auth and &lt;hostname&gt;-signing
+git log --show-signature -1     # Latest commit should show "Good \"git\" signature for ..."
+</code></pre>
+<h2 id="notes-18"><a class="header" href="#notes-18">Notes</a></h2>
+<ul>
+<li>Depends on the <code>ssh_keys</code> role running first (the key must exist on disk).</li>
+<li>The signing key registration enables the "Verified" badge on commits — only if your local <code>~/.gitconfig</code> is also set to sign with the SSH key (the <code>git</code> role handles this).</li>
+<li>The PAT in BW needs <code>admin:public_key</code>, <code>write:gpg_key</code>, and <code>read:user</code> scopes for the registrations to succeed.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tailscale"><a class="header" href="#tailscale">tailscale</a></h1>
+<p><strong>Tags:</strong> <code>secrets</code>, <code>tailscale</code>
+<strong>Secrets needed:</strong> Yes (only to <em>join</em> — once connected, BW is not required)
+<strong>Runs on:</strong> All machines</p>
+<p>Installs Tailscale, fetches a reusable auth key from BW, joins the network, configures DNS, and keeps device hostname + advertised routes in sync.</p>
+<h2 id="what-it-does-13"><a class="header" href="#what-it-does-13">What it does</a></h2>
+<ol>
+<li>Configures <code>systemd-resolved</code> so MagicDNS works (link <code>/etc/resolv.conf</code> to the stub resolver, drop in <code>DNSStubListenerExtra=::1</code> for container DNS).</li>
+<li>Sets <code>net.ipv4.conf.{all,default}.rp_filter=2</code> and IP forwarding on, so exit-node and subnet-router traffic actually routes.</li>
+<li>If <code>tailscale status</code> reports connected → updates hostname, prefs, operator, systray, then exits the role.</li>
+<li>If not connected and the vault is unlocked → fetches <code>tailscale-apikey</code> from BW, deletes any stale device with this hostname via the Tailscale API, then <code>tailscale up --authkey …</code>.</li>
+<li>If not connected and the vault is <strong>locked</strong> → emits a one-line warning and ends the role. Joining without a key would either fail noisily or, worse, succeed with an empty key.</li>
+</ol>
+<h2 id="failure-modes-3"><a class="header" href="#failure-modes-3">Failure modes</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Role aborts with "vault locked" warning, host is not on tailnet</td><td>First-time apply on this host without BW unlocked</td><td>Unlock BW (`bw unlock --raw</td></tr>
+<tr><td>Tailscale connected but MagicDNS names don't resolve</td><td><code>systemd-resolved</code> link to <code>/etc/resolv.conf</code> was overwritten by NetworkManager / DHCP client</td><td>The role re-applies it; just re-run <code>dots-apply</code>. To make it sticky, check <code>network-manager</code> settings (Bluefin does this correctly out of the box)</td></tr>
+<tr><td>Duplicate device entries in admin console after rebuild</td><td>API-key device cleanup didn't run (vault locked at the time)</td><td>Manually delete in <a href="https://login.tailscale.com/admin/machines">tailscale admin console</a> or unlock vault and re-apply</td></tr>
+<tr><td>Joins but no routes advertised</td><td><code>tailscale_advertise_routes</code> not set in <code>host_vars</code></td><td>Add it: <code>tailscale_advertise_routes: "192.168.0.0/24"</code> (or similar)</td></tr>
+</tbody></table>
+</div>
+<h2 id="how-to-verify-3"><a class="header" href="#how-to-verify-3">How to verify</a></h2>
+<pre><code class="language-bash">tailscale status                # should show all fleet machines as peers
+tailscale ip -4                 # this host's 100.x.x.x
+host bihar.manatee-basking.ts.net   # MagicDNS resolves to a 100.x.x.x
+</code></pre>
+<h2 id="notes-19"><a class="header" href="#notes-19">Notes</a></h2>
+<ul>
+<li>All fleet machines are on the <code>manatee-basking.ts.net</code> tailnet.</li>
+<li>The auth key is reusable — new machines join without re-authentication.</li>
+<li>The Tailscale API key (<code>tailscale-apikey</code> in BW) is the same item used for joining and for device cleanup; rotate by editing the BW item and re-running this role on each host.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="kube"><a class="header" href="#kube">kube</a></h1>
+<p><strong>Tags:</strong> <code>secrets</code>, <code>kube</code>
+<strong>Secrets needed:</strong> Yes
+<strong>Runs on:</strong> Desktop group only (unless <code>skip_kube: true</code>)</p>
+<p>Pulls <code>kubeconfig</code> + <code>talosconfig</code> from BW so any desktop in the fleet can talk to the Talos cluster (Bihar + Karnataka).</p>
+<h2 id="what-it-does-14"><a class="header" href="#what-it-does-14">What it does</a></h2>
+<p>When <code>bw_unlocked</code> is true:</p>
+<ol>
+<li>Ensures <code>~/.kube/</code> and <code>~/.talos/</code> exist (mode 0700).</li>
+<li><code>bw get notes kubeconfig</code> → writes to <code>~/.kube/config</code> (0600). Skipped if BW returns empty.</li>
+<li><code>bw get notes talosconfig</code> → writes to <code>~/.talos/config</code> (0600). Skipped if BW returns empty.</li>
+<li>Emits a one-line warning if either note is missing in BW.</li>
+</ol>
+<p>When the vault is locked the role no-ops cleanly — existing local configs are preserved.</p>
+<h2 id="failure-modes-4"><a class="header" href="#failure-modes-4">Failure modes</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td><code>kubectl</code> returns <code>Unable to connect to the server</code> after onboarding</td><td>Vault was locked, configs never deployed</td><td>Unlock BW, re-run <code>just apply-tags kube</code></td></tr>
+<tr><td>Warning: <code>kubeconfig missing in BW</code></td><td>Vault was never seeded</td><td>Run <code>just seed-kube</code> from a host that already has a working config</td></tr>
+<tr><td>Configs deployed but auth fails</td><td>Cluster PKI rotated — local configs are stale</td><td>Re-run <code>just seed-kube</code> from a healthy host, then re-apply on consumers</td></tr>
+<tr><td>Role skipped silently on an LLM/server host that should have it</td><td><code>skip_kube: true</code> in <code>host_vars/&lt;host&gt;.yml</code>, or host not in <code>desktop</code> group</td><td>Adjust inventory or host_vars</td></tr>
+</tbody></table>
+</div>
+<h2 id="seeding-bw"><a class="header" href="#seeding-bw">Seeding BW</a></h2>
+<pre><code class="language-bash"># From a machine that already has working configs:
+just seed-kube
+</code></pre>
+<p>This packages <code>~/.kube/config</code> and <code>~/.talos/config</code> into BW notes named <code>kubeconfig</code> and <code>talosconfig</code>. After seeding, every desktop's next <code>dots-apply</code> (or <code>just apply-tags kube</code>) pulls them down.</p>
+<h2 id="how-to-verify-4"><a class="header" href="#how-to-verify-4">How to verify</a></h2>
+<pre><code class="language-bash">kubectl get nodes               # should list bihar + karnataka
+talosctl --talosconfig ~/.talos/config get members
+</code></pre>
+<h2 id="notes-20"><a class="header" href="#notes-20">Notes</a></h2>
+<ul>
+<li>Both files contain cluster PKI material; the repo's <code>.gitignore</code> excludes the cluster source files, and these caches live in <code>~/</code> only — never commit.</li>
+<li>The role is gated by <code>is_desktop | bool and not skip_kube</code>. Servers don't get a kubeconfig because they're either <em>in</em> the cluster (<code>bihar</code>, <code>karnataka</code>) or have no business talking to it.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="gnome"><a class="header" href="#gnome">gnome</a></h1>
+<p><strong>Tags:</strong> <code>desktop</code>, <code>gnome</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> Desktop group only</p>
+<p>Configures <a href="https://www.gnome.org/">GNOME</a> desktop environment: keybindings, terminal, avatar, extensions, and remote desktop.</p>
+<h2 id="what-it-does-15"><a class="header" href="#what-it-does-15">What It Does</a></h2>
+<h3 id="keybindings"><a class="header" href="#keybindings">Keybindings</a></h3>
+<p>Deploys custom keyboard shortcuts via dconf:</p>
+<ul>
+<li>Custom keybindings for terminal, browser, file manager</li>
+<li>Workspace navigation and window management shortcuts</li>
+</ul>
+<h3 id="ptyxis-terminal"><a class="header" href="#ptyxis-terminal">Ptyxis Terminal</a></h3>
+<p>Sets the default Ptyxis profile to use <code>fish</code> from Homebrew with JetBrains Mono Nerd Font at 12pt.</p>
+<h3 id="user-avatar"><a class="header" href="#user-avatar">User Avatar</a></h3>
+<ul>
+<li>Downloads avatar from <code>https://reilly.asia/profile.png</code></li>
+<li>Installs to both AccountsService and GDM cache</li>
+<li>Shows on login screen and user menu</li>
+</ul>
+<h3 id="gnome-extensions"><a class="header" href="#gnome-extensions">GNOME Extensions</a></h3>
+<p>Deploys and enables extensions from <code>group_vars/all.yml</code>:</p>
+<div class="table-wrapper"><table><thead><tr><th>Extension</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>Caffeine</td><td>Disable screen blanking</td></tr>
+<tr><td>AppIndicator</td><td>System tray icons</td></tr>
+<tr><td>Blur My Shell</td><td>Blur effects</td></tr>
+<tr><td>Dash to Dock</td><td>macOS-style dock</td></tr>
+<tr><td><a href="https://github.com/GSConnect/gnome-shell-extension-gsconnect">GSConnect</a></td><td>Phone integration</td></tr>
+<tr><td>PaperWM</td><td>Tiling window manager</td></tr>
+<tr><td>PaperShell</td><td>PaperWM companion</td></tr>
+<tr><td>Search Light</td><td>Spotlight-style search</td></tr>
+</tbody></table>
+</div>
+<h3 id="remote-desktop"><a class="header" href="#remote-desktop">Remote Desktop</a></h3>
+<p>Enables GNOME Remote Desktop (RDP) via <code>grdctl</code> and starts the systemd user service.</p>
+<h2 id="extension-sync"><a class="header" href="#extension-sync">Extension Sync</a></h2>
+<p>Extensions are synced omnidirectionally — the <code>gnome_enabled_extensions</code> list in <code>group_vars/all.yml</code> is the canonical list. To update it from a running desktop:</p>
+<pre><code class="language-bash">gsettings get org.gnome.shell enabled-extensions
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="zen_browser"><a class="header" href="#zen_browser">zen_browser</a></h1>
+<p><strong>Tags:</strong> <code>desktop</code>, <code>browser</code>, <code>zen_browser</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> Desktop group only</p>
+<p>Configures <a href="https://zen-browser.app/">Zen Browser</a> (Firefox-based) as the default browser.</p>
+<h2 id="what-it-does-16"><a class="header" href="#what-it-does-16">What It Does</a></h2>
+<ol>
+<li>Pins Zen Browser to the GNOME dock</li>
+<li>Removes Firefox and Thunderbird from the dock if present</li>
+<li>Sets Zen as the default web browser</li>
+</ol>
+<h2 id="notes-21"><a class="header" href="#notes-21">Notes</a></h2>
+<ul>
+<li>Zen is installed via Flatpak (<code>app.zen_browser.zen</code>)</li>
+<li>Firefox and Thunderbird are intentionally removed from the dock — Zen replaces both</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="browser_fxa"><a class="header" href="#browser_fxa">browser_fxa</a></h1>
+<p><strong>Tags:</strong> <code>desktop</code>, <code>browser</code>, <code>browser_fxa</code><br />
+<strong>Secrets needed:</strong> Yes (Firefox Account credentials from Bitwarden)<br />
+<strong>Runs on:</strong> Desktop group only</p>
+<p>Automates Firefox Account sign-in for Zen Browser (and optionally Firefox).</p>
+<h2 id="what-it-does-17"><a class="header" href="#what-it-does-17">What It Does</a></h2>
+<ol>
+<li>Fetches <code>accounts.firefox.com</code> credentials + TOTP from Bitwarden</li>
+<li>Writes <code>signedInUser.json</code> to the browser profile directory</li>
+<li>This pre-authenticates the browser with Firefox Sync</li>
+</ol>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<pre><code class="language-yaml"># group_vars/all.yml
+fxa_bw_item: "accounts.firefox.com"
+fxa_bw_username: "jreilly1821@gmail.com"
+fxa_browsers:
+  - zen
+  - firefox
+  - firefox-flatpak
+</code></pre>
+<h2 id="notes-22"><a class="header" href="#notes-22">Notes</a></h2>
+<ul>
+<li>This only enables FxA sign-in, not the full Sync key bundle</li>
+<li>Opening the browser once after deployment may still be needed to complete Sync</li>
+<li>If credentials are unavailable, the task fails silently — manual sign-in works fine</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="bluefin_common"><a class="header" href="#bluefin_common">bluefin_common</a></h1>
+<p><strong>Tags:</strong> <code>desktop</code>, <code>bluefin</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> Desktop group only (skipped on Bluefin hosts unless <code>force_bluefin: true</code>)</p>
+<p>Syncs <a href="https://projectbluefin.io/">Bluefin</a> branding, fonts, wallpapers, and GNOME extensions from the Project Bluefin OCI image.</p>
+<h2 id="what-it-does-18"><a class="header" href="#what-it-does-18">What It Does</a></h2>
+<ol>
+<li>Pulls the <code>ghcr.io/projectbluefin/common:latest</code> container image</li>
+<li>Extracts Bluefin gsettings/dconf overrides, backgrounds, icons, and logos</li>
+<li>Installs branding assets to <code>~/.local/share/</code></li>
+<li>Fixes XML background paths to point to home directory</li>
+<li>Applies dconf settings via a Python script</li>
+<li>Installs Bluefin-standard fonts (Inter, JetBrains Mono)</li>
+<li>Installs Bluefin-recommended GNOME extensions</li>
+<li>Deploys a wallpaper rotation service and timer</li>
+<li>Deploys the <code>tailvm</code> (Python) and <code>corral</code> (Go) utilities</li>
+</ol>
+<h2 id="fonts"><a class="header" href="#fonts">Fonts</a></h2>
+<ul>
+<li><strong><a href="https://rsms.me/inter/">Inter</a></strong> — UI font (from <a href="https://github.com/rsms/inter">GitHub releases</a>)</li>
+<li><strong><a href="https://www.jetbrains.com/lp/mono/">JetBrains Mono</a></strong> — monospace font for terminals and editors</li>
+</ul>
+<h2 id="wallpaper-rotation"><a class="header" href="#wallpaper-rotation">Wallpaper Rotation</a></h2>
+<p>A systemd timer (<code>bluefin-wallpaper-rotate.timer</code>) cycles through Bluefin backgrounds daily. The Python script applies the wallpaper via D-Bus.</p>
+<h2 id="tailvm--corral"><a class="header" href="#tailvm--corral">TailVM / Corral</a></h2>
+<p>Deploys the legacy Python <code>tailvm</code> script and <strong>corral</strong>, the Go VM manager
+(CLI + TUI + web). Corral is downloaded from the rolling <code>binaries</code> release of
+<a href="https://github.com/hanthor/corral">hanthor/corral</a> (checksum-verified, so it
+updates whenever CI publishes a new build). It is no longer embedded in this
+repo.</p>
+<h2 id="notes-23"><a class="header" href="#notes-23">Notes</a></h2>
+<ul>
+<li>Skips by default on actual Bluefin hosts (they already have this)</li>
+<li>Set <code>force_bluefin: true</code> to apply on Bluefin (e.g., after an image reset)</li>
+<li>Set <code>skip_bluefin: true</code> in <code>host_vars</code> to skip entirely</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="pipewire_audio"><a class="header" href="#pipewire_audio">pipewire_audio</a></h1>
+<p><strong>Tags:</strong> <code>desktop</code>, <code>audio</code>, <code>pipewire</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> Desktop group only</p>
+<p>Replaces Easy Effects with native PipeWire <code>filter-chain</code> modules using LSP LV2 and LADSPA plugins — no Flatpak, no GUI, no D-Bus service.</p>
+<h2 id="what-it-does-19"><a class="header" href="#what-it-does-19">What It Does</a></h2>
+<ol>
+<li>Deploys <code>speaker-dsp.conf</code> — a PipeWire filter-chain that creates a virtual "Speakers (DSP)" sink</li>
+<li>Deploys <code>mic-dsp.conf</code> — a PipeWire filter-chain that creates a virtual "Microphone (DSP)" source</li>
+<li>Configures WirePlumber to prefer the DSP nodes as default devices</li>
+<li>Cleans up any previous Easy Effects installation (Flatpak, autostart, presets)</li>
+</ol>
+<h2 id="output-chain-speaker-dsp"><a class="header" href="#output-chain-speaker-dsp">Output Chain: Speaker DSP</a></h2>
+<p>Signal path: <strong>16-band Parametric EQ → Bass Enhancer → Exciter → Limiter</strong> (all LSP LV2).</p>
+<div class="table-wrapper"><table><thead><tr><th>Stage</th><th>LV2 Plugin</th><th>What It Does</th></tr></thead><tbody>
+<tr><td><code>eq</code></td><td>LSP ParaEQ x16 LR</td><td>Corrective loudness curve with subsonic HPF @ 120 Hz</td></tr>
+<tr><td><code>bass</code></td><td>LSP Bass Enhancer</td><td>Harmonic bass synthesis for small speakers</td></tr>
+<tr><td><code>exciter</code></td><td>LSP Exciter</td><td>Crystalizer substitute — adds presence and air</td></tr>
+<tr><td><code>lim</code></td><td>LSP Limiter</td><td>Brickwall peak limiter @ -0.5 dBFS</td></tr>
+</tbody></table>
+</div>
+<p>The EQ curve is a direct translation of the Easy Effects 15-band preset — ~2.5 dB cut through low-mids (220-600 Hz), ~3.5 dB peak at 3.2 kHz, tapering to ~1.5 dB boost above 8 kHz.</p>
+<p><strong>Simplification:</strong> To run just EQ + Limiter (the most critical, crash-proof chain), comment out the <code>bass</code> and <code>exciter</code> nodes in <code>speaker-dsp.conf</code> and remove their links.</p>
+<h2 id="input-chain-microphone-dsp"><a class="header" href="#input-chain-microphone-dsp">Input Chain: Microphone DSP</a></h2>
+<p>Signal path: <strong>RNNoise → Compressor</strong> (LADSPA + LSP LV2).</p>
+<div class="table-wrapper"><table><thead><tr><th>Stage</th><th>Plugin</th><th>What It Does</th></tr></thead><tbody>
+<tr><td><code>rnnoise</code></td><td>librnnoise_ladspa.so</td><td>Real-time neural network noise suppression (VAD-enabled)</td></tr>
+<tr><td><code>comp</code></td><td>LSP Compressor Stereo</td><td>Downward compression, -24 dB threshold, 2:1 ratio</td></tr>
+</tbody></table>
+</div>
+<h2 id="bootc-image-requirements"><a class="header" href="#bootc-image-requirements">Bootc Image Requirements</a></h2>
+<p>These packages must be in the bootc image (<code>Containerfile</code>):</p>
+<pre><code>lsp-plugins-lv2
+noise-suppression-for-voice
+</code></pre>
+<p>The filter-chain configs reference:</p>
+<ul>
+<li>LSP LV2 bundles under <code>/usr/lib64/lv2/</code> (Fedora default LV2 path)</li>
+<li>RNNoise LADSPA at <code>/usr/lib64/ladspa/librnnoise_ladspa.so</code></li>
+</ul>
+<h2 id="verifying"><a class="header" href="#verifying">Verifying</a></h2>
+<p>On a target machine after deploy:</p>
+<pre><code class="language-bash"># Check DSP nodes appeared
+pw-cli ls Node | grep -E 'speaker_dsp|mic_dsp'
+
+# Check defaults
+wpctl status | head -20
+
+# Watch for plugin loading errors
+journalctl --user -u pipewire -f | grep -iE 'error|filter-chain|lv2'
+
+# Verify LSP plugins are discoverable
+lv2ls | grep lsp-plug
+lv2info http://lsp-plug.in/plugins/lv2/para_equalizer_x16_lr | head -5
+
+# Verify LADSPA plugin
+ls /usr/lib64/ladspa/librnnoise_ladspa.so
+</code></pre>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Symptom</th><th>Likely Cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>DSP node doesn't appear</td><td>LSP/LADSPA plugins missing from bootc image</td><td>Verify with <code>lv2ls</code>, <code>ls /usr/lib64/ladspa/</code></td></tr>
+<tr><td>Port name mismatch</td><td>LSP plugin version changed port symbols</td><td>Run <code>lv2info &lt;uri&gt; | grep 'port.*symbol'</code> and update config</td></tr>
+<tr><td>Audio routing loop</td><td>PipeWire/WirePlumber bug</td><td>Don't set the DSP sink as default manually; let WirePlumber handle it</td></tr>
+<tr><td>No bass enhancer/exciter effect</td><td>Plugin UID mismatch</td><td>Comment them out in config for a leaner chain</td></tr>
+</tbody></table>
+</div>
+<h2 id="notes-24"><a class="header" href="#notes-24">Notes</a></h2>
+<ul>
+<li>PipeWire must be restarted after deploying configs (handled by Ansible handlers)</li>
+<li>Select "Speakers (DSP)" and "Microphone (DSP)" in GNOME Sound settings if WirePlumber doesn't auto-select them</li>
+<li>The virtual sink approach works because PipeWire prevents self-looping when capture/playback share the same <code>node.name</code></li>
+<li>To skip: use <code>skip_flatpak: true</code> or exclude the pipewire_audio tag</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="syncthing"><a class="header" href="#syncthing">syncthing</a></h1>
+<p><strong>Tags:</strong> <code>services</code>, <code>syncthing</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> All except VPS</p>
+<p>Deploys <a href="https://syncthing.net/">Syncthing</a> as a systemd user service for continuous file synchronization.</p>
+<h2 id="what-it-does-20"><a class="header" href="#what-it-does-20">What It Does</a></h2>
+<ol>
+<li>Creates systemd user directory</li>
+<li>Deploys <code>syncthing.service</code> user unit</li>
+<li>Enables and starts the service</li>
+</ol>
+<h2 id="notes-25"><a class="header" href="#notes-25">Notes</a></h2>
+<ul>
+<li>Runs as the user's systemd service (not system-wide)</li>
+<li>Web UI available at <code>http://localhost:8384</code></li>
+<li>Skipped on VPS hosts (no file sync needed)</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="systemd"><a class="header" href="#systemd">systemd</a></h1>
+<p><strong>Tags:</strong> <code>services</code>, <code>systemd</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> All machines</p>
+<p>Deploys systemd user services and timers for background tasks.</p>
+<h2 id="services-deployed"><a class="header" href="#services-deployed">Services Deployed</a></h2>
+<h3 id="dotfiles-update"><a class="header" href="#dotfiles-update">dotfiles-update</a></h3>
+<p>Keeps the dotfiles repo up to date automatically.</p>
+<ul>
+<li><strong>Desktops/servers:</strong> Daily timer (<code>dotfiles-update.timer</code>)</li>
+<li><strong>Laptops:</strong> Runs on login via <code>graphical-session.target</code> (no timer)</li>
+</ul>
+<h3 id="atuin-daemon"><a class="header" href="#atuin-daemon">atuin-daemon</a></h3>
+<p>Keeps <a href="https://atuin.sh/">Atuin</a> shell history synced in the background.</p>
+<h3 id="podman-socket-conditional"><a class="header" href="#podman-socket-conditional">Podman socket (conditional)</a></h3>
+<p>If podman is installed:</p>
+<ul>
+<li>Creates the <code>podman</code> group</li>
+<li>Adds the user to the group</li>
+<li>Configures the podman socket for group access (mode 0660)</li>
+<li>Enables and starts <code>podman.socket</code></li>
+</ul>
+<h3 id="system-mitigator-himachal-only"><a class="header" href="#system-mitigator-himachal-only">system-mitigator (himachal only)</a></h3>
+<p>A Python daemon that monitors for Lenovo EC firmware bugs:</p>
+<ul>
+<li>Detects false <code>BD_PROCHOT</code> signals that lock CPU cores to 400 MHz</li>
+<li>Watches for <code>systemd-journald</code> watchdog loops</li>
+<li>Sends desktop notifications when issues are detected</li>
+</ul>
+<h2 id="notes-26"><a class="header" href="#notes-26">Notes</a></h2>
+<ul>
+<li>The <code>dotfiles-update.timer</code> on laptops is removed during the laptop-specific path</li>
+<li>All services run as user-level systemd units (no root needed)</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="proxy-caddy"><a class="header" href="#proxy-caddy">proxy (Caddy)</a></h1>
+<p><strong>Tags:</strong> <code>services</code>, <code>proxy</code>, <code>caddy</code><br />
+<strong>Secrets needed:</strong> Yes (TLS certificates)<br />
+<strong>Runs on:</strong> All except VPS (<code>skip_proxy: false</code>)</p>
+<p>Deploys <a href="https://caddyserver.com/">Caddy</a> as a reverse proxy with automatic TLS certificates.</p>
+<h2 id="what-it-does-21"><a class="header" href="#what-it-does-21">What It Does</a></h2>
+<ol>
+<li>Creates Caddy config directory</li>
+<li>Deploys <code>Caddyfile</code> from template with per-host service routes</li>
+<li>Proxies internal services to <code>*.manatee-basking.ts.net</code> subdomains</li>
+<li>Uses <a href="https://tailscale.com/">Tailscale</a> certificates for TLS</li>
+</ol>
+<h2 id="proxied-services"><a class="header" href="#proxied-services">Proxied Services</a></h2>
+<p>Caddy routes traffic for services like:</p>
+<ul>
+<li>Grafana (monitoring)</li>
+<li>Homepage dashboards</li>
+<li>Cockpit (system management)</li>
+<li>AppFlowy, Authentik, n8n (on bihar)</li>
+<li>BST Dashboard (on build machines)</li>
+</ul>
+<h2 id="notes-27"><a class="header" href="#notes-27">Notes</a></h2>
+<ul>
+<li>Skip with <code>skip_proxy: true</code> in <code>host_vars</code></li>
+<li>Caddyfile is templated per-host — each machine proxies its own services</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="homepage"><a class="header" href="#homepage">homepage</a></h1>
+<p><strong>Tags:</strong> <code>services</code>, <code>homepage</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> All except VPS</p>
+<p>Deploys <a href="https://gethomepage.dev/">Homepage</a> dashboards showing service links, fleet status, and monitoring.</p>
+<h2 id="what-it-does-22"><a class="header" href="#what-it-does-22">What It Does</a></h2>
+<ol>
+<li>Creates homepage config directory</li>
+<li>Deploys <code>services.yaml</code> from template with:
+<ul>
+<li><strong>Global services</strong> — links shown on every machine (AppFlowy, Proxmox, n8n)</li>
+<li><strong>Per-host services</strong> — defined in <code>host_vars/&lt;name&gt;.yml</code> as <code>web_services</code></li>
+<li><strong>Fleet section</strong> — links to every machine's homepage</li>
+</ul>
+</li>
+<li>Deploys widget configs for monitoring and status</li>
+<li>Proxied by Caddy at <code>https://&lt;host&gt;.manatee-basking.ts.net</code></li>
+</ol>
+<h2 id="per-host-configuration"><a class="header" href="#per-host-configuration">Per-Host Configuration</a></h2>
+<pre><code class="language-yaml"># host_vars/dilli.yml
+web_services:
+  - name: Cockpit
+    href: https://dilli.manatee-basking.ts.net/cockpit
+    icon: cockpit.png
+    description: System management
+    group: System
+</code></pre>
+<h2 id="global-services"><a class="header" href="#global-services">Global Services</a></h2>
+<p>Defined in <code>group_vars/all.yml</code> under <code>global_services</code> — shown on every machine's dashboard.</p>
+<h2 id="fleet-section"><a class="header" href="#fleet-section">Fleet Section</a></h2>
+<p>Lists all machines with homepage instances, rendered with icons and descriptions.</p>
+<h2 id="notes-28"><a class="header" href="#notes-28">Notes</a></h2>
+<ul>
+<li>Skip with <code>skip_homepage: true</code> or set <code>has_homepage: false</code></li>
+<li>Dashboard is served by a local container, proxied through Caddy</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="monitoring"><a class="header" href="#monitoring">monitoring</a></h1>
+<p><strong>Tags:</strong> <code>services</code>, <code>monitoring</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> bihar (monitoring hub), other hosts push metrics to bihar</p>
+<p>Deploys the <a href="https://grafana.com/">Grafana</a> + <a href="https://prometheus.io/">Prometheus</a> monitoring stack on bihar, and metric exporters on other machines.</p>
+<h2 id="what-it-does-23"><a class="header" href="#what-it-does-23">What It Does</a></h2>
+<h3 id="on-bihar-monitoring-hub"><a class="header" href="#on-bihar-monitoring-hub">On bihar (monitoring hub)</a></h3>
+<ul>
+<li>Deploys Grafana, Prometheus, and Loki via Quadlet containers</li>
+<li>Configures Prometheus to scrape metrics from fleet machines</li>
+<li>Grafana dashboards for system health, cluster status, and service uptime</li>
+</ul>
+<h3 id="on-other-machines"><a class="header" href="#on-other-machines">On other machines</a></h3>
+<ul>
+<li>Deploys Node Exporter for system metrics (CPU, memory, disk, network)</li>
+<li>Optionally deploys cAdvisor for container metrics</li>
+</ul>
+<h2 id="notes-29"><a class="header" href="#notes-29">Notes</a></h2>
+<ul>
+<li>The monitoring hub host is configurable via <code>monitoring_hub_host</code> in group vars</li>
+<li>Grafana is proxied at <code>https://bihar.manatee-basking.ts.net/grafana</code></li>
+<li>Skip with <code>skip_monitoring: true</code></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="cockpit"><a class="header" href="#cockpit">cockpit</a></h1>
+<p><strong>Tags:</strong> <code>services</code>, <code>cockpit</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> Desktops and servers</p>
+<p>Deploys Cockpit for web-based system management.</p>
+<h2 id="what-it-does-24"><a class="header" href="#what-it-does-24">What It Does</a></h2>
+<ol>
+<li>Creates TLS certificate directory</li>
+<li>Deploys Tailscale TLS certificates for Cockpit</li>
+<li>Configures Cockpit to use the Tailscale domain</li>
+</ol>
+<h2 id="access"><a class="header" href="#access">Access</a></h2>
+<p>Cockpit is proxied through Caddy at <code>https://&lt;host&gt;.manatee-basking.ts.net/cockpit</code>.</p>
+<h2 id="notes-30"><a class="header" href="#notes-30">Notes</a></h2>
+<ul>
+<li>Skip with <code>skip_cockpit: true</code></li>
+<li>Cockpit provides: terminal access, service management, storage monitoring, network config</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="lima"><a class="header" href="#lima">lima</a></h1>
+<p><strong>Tags:</strong> <code>services</code>, <code>lima</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> Desktops and bihar</p>
+<p>Manages Lima VM instances for local development environments.</p>
+<h2 id="what-it-does-25"><a class="header" href="#what-it-does-25">What It Does</a></h2>
+<ol>
+<li>Creates Lima data directories</li>
+<li>Deploys Lima instance configurations</li>
+<li>Manages VM startup</li>
+</ol>
+<h2 id="notes-31"><a class="header" href="#notes-31">Notes</a></h2>
+<ul>
+<li>Lima provides lightweight VMs using QEMU with automatic file sharing</li>
+<li>Skip with <code>skip_lima: true</code></li>
+<li>Requires KVM to be available on the host</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tailscale_cert"><a class="header" href="#tailscale_cert">tailscale_cert</a></h1>
+<p><strong>Tags:</strong> <code>services</code>, <code>tailscale_cert</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> All except VPS</p>
+<p>Fetches and deploys Tailscale TLS certificates for HTTPS on <code>*.manatee-basking.ts.net</code>.</p>
+<h2 id="what-it-does-26"><a class="header" href="#what-it-does-26">What It Does</a></h2>
+<ol>
+<li>Creates certificate storage directory</li>
+<li>Fetches TLS certificates from Tailscale for the machine's MagicDNS name</li>
+<li>Installs certificates where Caddy and other services can use them</li>
+</ol>
+<h2 id="notes-32"><a class="header" href="#notes-32">Notes</a></h2>
+<ul>
+<li>Tailscale provides free TLS certificates for nodes on your tailnet</li>
+<li>Certificates auto-renew — no Let's Encrypt needed for internal services</li>
+<li>The Caddy proxy uses these certificates for all <code>*.manatee-basking.ts.net</code> services</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="bst_dashboard"><a class="header" href="#bst_dashboard">bst_dashboard</a></h1>
+<p><strong>Tags:</strong> <code>services</code>, <code>bst_dashboard</code><br />
+<strong>Secrets needed:</strong> No<br />
+<strong>Runs on:</strong> Machines with build infrastructure</p>
+<p>Deploys a BuildStream build monitoring dashboard.</p>
+<h2 id="what-it-does-27"><a class="header" href="#what-it-does-27">What It Does</a></h2>
+<ol>
+<li>Creates dashboard directory based on hostname</li>
+<li>Deploys dashboard web UI files</li>
+<li>Configures dashboard to track local BuildStream build queues</li>
+</ol>
+<h2 id="access-1"><a class="header" href="#access-1">Access</a></h2>
+<p>Proxied through Caddy at <code>https://&lt;host&gt;.manatee-basking.ts.net/bst/</code>.</p>
+<h2 id="notes-33"><a class="header" href="#notes-33">Notes</a></h2>
+<ul>
+<li>Used to monitor BuildStream build jobs on machines that run builds</li>
+<li>Dashboard shows build queue status, job history, and artifact cache</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="appflowy"><a class="header" href="#appflowy">appflowy</a></h1>
+<p><strong>Migrated to Kubernetes (2026-06-12).</strong></p>
+<p>This Ansible role (Podman Quadlets on bihar) has been removed. AppFlowy Cloud now runs in the Talos K8s cluster.</p>
+<p>See <a href="roles/../../../talos-k8s/appflowy/"><code>talos-k8s/appflowy/</code></a> for the commercial Helm chart deployment manifest and operational instructions.</p>
+<p>Access: <code>https://appflowy.manatee-basking.ts.net</code></p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="authentik"><a class="header" href="#authentik">authentik</a></h1>
+<p><strong>Migrated to Kubernetes (2026-06-12).</strong></p>
+<p>This Ansible role (Podman Quadlets on bihar) has been removed. Authentik now runs in the Talos K8s cluster.</p>
+<p>See <a href="roles/../../../talos-k8s/authentik/"><code>talos-k8s/authentik/</code></a> for the Helm-based deployment manifest and operational instructions.</p>
+<p>Access: <code>https://auth.manatee-basking.ts.net</code></p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="n8n"><a class="header" href="#n8n">n8n</a></h1>
+<p><strong>Migrated to Kubernetes (2026-06-12).</strong></p>
+<p>This Ansible role (Podman Quadlet on bihar) has been removed. n8n now runs in the Talos K8s cluster.</p>
+<p>See <a href="roles/../../../talos-k8s/n8n/"><code>talos-k8s/n8n/</code></a> for the plain-K8s deployment manifest and operational instructions.</p>
+<p>Access: <code>https://n8n.manatee-basking.ts.net</code></p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="talos-kubernetes-cluster"><a class="header" href="#talos-kubernetes-cluster">Talos Kubernetes Cluster</a></h1>
+<p>Two-node Kubernetes cluster running on Talos Linux, managed from the <code>talos-k8s/</code> directory.</p>
+<h2 id="hardware-13"><a class="header" href="#hardware-13">Hardware</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Node</th><th>Role</th><th>Hardware</th></tr></thead><tbody>
+<tr><td>bihar</td><td>Control plane</td><td>Intel (bare metal)</td></tr>
+<tr><td>karnataka</td><td>Worker</td><td>AMD Strix Halo APU (GPU-enabled)</td></tr>
+</tbody></table>
+</div>
+<h2 id="software-stack"><a class="header" href="#software-stack">Software Stack</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Version</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Talos Linux</td><td>v1.13.2</td><td>Immutable, API-driven OS</td></tr>
+<tr><td>Kubernetes</td><td>v1.36.1</td><td>Via Talos</td></tr>
+<tr><td>CNI</td><td><a href="https://github.com/flannel-io/flannel">flannel</a></td><td>Simple overlay network</td></tr>
+<tr><td>Tailscale Operator</td><td>—</td><td>Ingress via <code>*.manatee-basking.ts.net</code></td></tr>
+<tr><td><a href="https://kubevirt.io/">KubeVirt</a></td><td>v1.8.2</td><td>VM workloads on K8s</td></tr>
+</tbody></table>
+</div>
+<h2 id="directory-structure"><a class="header" href="#directory-structure">Directory structure</a></h2>
+<pre><code>talos-k8s/
+├── ai/              lemonade
+├── appflowy/        appflowy cloud (Helm)
+├── authentik/       sso (Helm)
+├── forgejo/         git + ci/cd
+├── hive/            ai agent swarm
+├── homepage/        cluster landing page
+├── infrastructure/  kubevirt + corral
+├── longhorn/        storage
+├── monitoring/      prometheus + grafana + metrics-server
+├── n8n/             workflow automation
+├── networking/      tailscale configs
+└── testing-lab/     ci/cd test infra
+</code></pre>
+<h2 id="running-workloads"><a class="header" href="#running-workloads">Running Workloads</a></h2>
+<h3 id="lemonade"><a class="header" href="#lemonade">Lemonade</a></h3>
+<p><a href="https://lemonade-sdk.github.io/">Lemonade</a> — AMD-optimized local AI runtime providing omni-modal endpoints (chat, vision, image gen, speech, transcription) on karnataka's integrated AMD GPU (<code>amdgpu</code> driver baked into the Talos image via <a href="https://www.talos.dev/latest/talos-guides/install/boot-assets/">Image Factory</a>).</p>
+<p>Manifest: <code>talos-k8s/ai/lemonade.yaml</code></p>
+<h3 id="additional-services-1"><a class="header" href="#additional-services-1">Additional services</a></h3>
+<p>See the <a href="servers/talos-k8s/cluster.html">cluster handbook</a> for the full list — Forgejo, Hive, Authentik, n8n, AppFlowy Cloud, Grafana, Corral, and more.</p>
+<h2 id="cluster-access"><a class="header" href="#cluster-access">Cluster Access</a></h2>
+<pre><code class="language-bash"># kubectl (from kubeconfig in Bitwarden)
+kubectl get nodes
+
+# Talos CLI
+talosctl -n 100.85.9.86 version
+talosctl -n 100.67.142.116 version
+</code></pre>
+<h2 id="image-factory"><a class="header" href="#image-factory">Image Factory</a></h2>
+<p>Karnataka uses a custom Talos image from Image Factory that includes the <code>siderolabs/amdgpu</code> system extension for GPU passthrough to containers.</p>
+<h2 id="handbook"><a class="header" href="#handbook">Handbook</a></h2>
+<p>Full cluster documentation at <a href="servers/talos-k8s/cluster.html"><code>docs/src/servers/talos-k8s/cluster.md</code></a> (hardware details, reinstall procedure, troubleshooting).</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="hive--247-ai-agent-supervisor"><a class="header" href="#hive--247-ai-agent-supervisor">Hive — 24/7 AI Agent Supervisor</a></h1>
+<blockquote>
+<p><strong>Hive</strong> is an open-source AI agent orchestration system running on the Talos K8s cluster. A fleet of specialized agents autonomously maintain the <code>tuna-os/tunaos</code> repository — triaging issues, analyzing code, and creating PRs. A governor dynamically adjusts agent pace based on issue queue depth.</p>
+</blockquote>
+<h2 id="table-of-contents-1"><a class="header" href="#table-of-contents-1">Table of contents</a></h2>
+<ol>
+<li><a href="cluster/hive.html#1-architecture">Architecture</a></li>
+<li><a href="cluster/hive.html#2-what-hive-does">What Hive does</a></li>
+<li><a href="cluster/hive.html#3-deployment">Deployment</a></li>
+<li><a href="cluster/hive.html#4-ai-backend-pi--deepseek">AI backend: pi + DeepSeek</a></li>
+<li><a href="cluster/hive.html#5-agents">Agents</a></li>
+<li><a href="cluster/hive.html#6-acmm-levels">ACMM levels</a></li>
+<li><a href="cluster/hive.html#7-governor">Governor</a></li>
+<li><a href="cluster/hive.html#8-configuration">Configuration</a></li>
+<li><a href="cluster/hive.html#9-building-the-image">Building the image</a></li>
+<li><a href="cluster/hive.html#10-day-to-day-operations">Day-to-day operations</a></li>
+<li><a href="cluster/hive.html#11-troubleshooting">Troubleshooting</a></li>
+<li><a href="cluster/hive.html#12-github-app">GitHub App</a></li>
+</ol>
+<hr />
+<h2 id="1-architecture"><a class="header" href="#1-architecture">1. Architecture</a></h2>
+<pre><code>┌──────────────────────────────────────────────────────────────┐
+│ Namespace: hive (node: bihar)                                │
+│                                                              │
+│  ┌─────────┐  ┌──────────┐  ┌────────────────────────────┐  │
+│  │ hive    │  │ proxy    │  │ 9x pi agents (tmux sessions)│  │
+│  │ Go bin  │  │ node.js  │  │                            │  │
+│  │ :3002   │  │ :3001    │  │ supervisor  ADVISORY       │  │
+│  │ (API)   │  │ (web UI) │  │ scanner     ISSUES_AND_PRS │  │
+│  └────┬────┘  └────┬─────┘  │ ci-maintain ISSUES_AND_PRS │  │
+│       │            │        │ quality     ISSUES_AND_PRS │  │
+│       └────────────┘        │ sec-check   ISSUES_AND_PRS │  │
+│                             │ guide       ISSUES_AND_PRS │  │
+│  ┌──────────────────────────│ architect   ISSUES_AND_PRS │  │
+│  │  pi → DeepSeek API       │ strategist  ISSUES_AND_PRS │  │
+│  │  (native, no proxy)      │ brainstorm  on-demand     │  │
+│  │  GitHub App → gh CLI     └────────────┬───────────────┘  │
+│  └───────────────────────────────────────┘                  │
+│                                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
+│  │ ConfigMap│  │ Secret   │  │ PVC      │                  │
+│  │ hive.yaml│  │ DEEPSEEK │  │ hive-data│                  │
+│  │ backends │  │ GH App   │  │ (10Gi)   │                  │
+│  └──────────┘  └──────────┘  └──────────┘                  │
+└──────────────────────────────────────────────────────────────┘
+         │
+    ┌────▼────┐     ┌──────────────────┐
+    │ GitHub  │     │ Tailscale Ingress │
+    │ tuna-os │     │ hive.manatee-     │
+    │ repos   │     │ basking.ts.net    │
+    └─────────┘     └──────────────────┘
+</code></pre>
+<h3 id="components"><a class="header" href="#components">Components</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Language</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><strong>hive</strong> (Go binary)</td><td>Go</td><td>Agent manager, governor, scheduler, dashboard API</td></tr>
+<tr><td><strong>proxy</strong> (Node.js)</td><td>JS</td><td>Dashboard web UI + SSE, proxies to Go API</td></tr>
+<tr><td><strong>pi</strong> (coding agent)</td><td>Node.js</td><td>AI agent CLI running in tmux sessions</td></tr>
+<tr><td><strong>pi-wrapper.sh</strong></td><td>Shell</td><td>Tmux interface adapter — restart loop, ready markers</td></tr>
+</tbody></table>
+</div>
+<h3 id="how-agents-work"><a class="header" href="#how-agents-work">How agents work</a></h3>
+<p>Each agent runs as a long-lived <strong>pi</strong> process inside a tmux session. The Go binary:</p>
+<ol>
+<li>Creates a tmux session per agent (<code>hive-supervisor</code>, <code>hive-scanner</code>, etc.)</li>
+<li>Writes a boot prompt (agent role, authorized repos, instructions) via <code>send-keys</code></li>
+<li>Detects agent readiness from CLI markers in the pane output</li>
+<li><strong>Governor</strong> evaluates the issue queue every 5 minutes and sends <em>kick</em> prompts to due agents</li>
+<li><code>clear_on_kick: true</code> agents receive <code>^C</code> before each kick to reset their session</li>
+</ol>
+<p>Agents share a persistent <code>/data</code> volume (10Gi PVC) for beads, session state, and agent configs.</p>
+<hr />
+<h2 id="2-what-hive-does"><a class="header" href="#2-what-hive-does">2. What Hive does</a></h2>
+<h3 id="advisory-digest"><a class="header" href="#advisory-digest">Advisory digest</a></h3>
+<p>The dashboard shows agent findings — CI failures, test coverage gaps, security issues, documentation problems. Each agent produces <strong>beads</strong> (structured findings) that appear in the advisory digest.</p>
+<h3 id="issue-creation"><a class="header" href="#issue-creation">Issue creation</a></h3>
+<p>At ACMM L3+, agents create GitHub issues. At L4+, they can create hold-gated PRs. The <strong>sec-check</strong> agent scans dependencies for CVEs. The <strong>ci-maintainer</strong> agent monitors CI failures.</p>
+<h3 id="strategy-lab"><a class="header" href="#strategy-lab">Strategy Lab</a></h3>
+<p>Inception feature: describe what you want to build, and Hive scaffolds a new project with knowledge base facts and spec-kit specifications. Powered by the <strong>brainstorm</strong> agent (on-demand).</p>
+<h3 id="knowledge-base"><a class="header" href="#knowledge-base">Knowledge Base</a></h3>
+<p>Agents can contribute facts to a shared knowledge base. Facts are tagged by type (pattern, gotcha, regression, decision, etc.) and searchable from the dashboard.</p>
+<hr />
+<h2 id="3-deployment"><a class="header" href="#3-deployment">3. Deployment</a></h2>
+<h3 id="namespace-and-resources"><a class="header" href="#namespace-and-resources">Namespace and resources</a></h3>
+<p>All Hive resources live in the <code>hive</code> namespace on the Talos cluster:</p>
+<pre><code>hive (namespace)
+├── deploy/hive           — main controller pod
+├── svc/hive              — ClusterIP :3001 (dashboard), :3002 (API), :7681 (ttyd)
+├── ingress/hive          — Tailscale ingress → hive.manatee-basking.ts.net
+├── configmap/hive-config — hive.yaml (project config, agents, governor)
+├── secret/hive-secrets   — DEEPSEEK_API_KEY, GH App credentials
+├── pvc/hive-data         — 10Gi persistent state
+└── secret/ghcr-auth      — GHCR pull credentials
+</code></pre>
+<h3 id="files"><a class="header" href="#files">Files</a></h3>
+<pre><code>talos-k8s/hive/
+├── hive.yaml              — All K8s resources (namespace, deploy, svc, ingress, configmap)
+├── Dockerfile             — Custom image (hive v2 + pi + fd/ripgrep)
+├── pi-wrapper.sh          — Wrapper: Hive tmux interface → pi interactive TUI
+├── pi-marker.patch        — Adds "pi" to hive's cliPaneMarkers (source patch)
+├── build-job.yaml         — Kaniko build job (deprecated, use CI)
+├── deepseek-chat.py       — Python fallback (unused with pi)
+├── goose-wrapper.sh       — Legacy goose wrapper (replaced by pi-wrapper.sh)
+├── goose-marker.patch     — Legacy goose patch (replaced by pi-marker.patch)
+├── SKILL.md               — Skill file for pi coding agent
+├── README.md              — Quick reference
+└── HANDOFF.md             — Debugging session notes
+</code></pre>
+<h3 id="ci-workflow"><a class="header" href="#ci-workflow">CI workflow</a></h3>
+<p><code>.github/workflows/hive-build.yml</code> — triggers on push to <code>master</code>:</p>
+<ol>
+<li>Clones <code>kubestellar/hive</code> v2 source</li>
+<li>Applies <code>pi-marker.patch</code> and three sed patches to the Go source:
+<ul>
+<li>Adds <code>"pi"</code> to <code>cliPaneMarkers</code> (so agents aren't detected as crashed)</li>
+<li>Adds <code>"pi": true</code> to <code>validBackends</code> (config validation)</li>
+<li>Adds <code>"pi": "pi"</code> to <code>backendBinary()</code> (binary resolution)</li>
+</ul>
+</li>
+<li>Cross-compiles Go binary for amd64</li>
+<li>Builds Docker image with pi + pi-wrapper.sh + fd/ripgrep</li>
+<li>Pushes to <code>ghcr.io/hanthor/hive:latest</code></li>
+</ol>
+<h3 id="secrets"><a class="header" href="#secrets">Secrets</a></h3>
+<pre><code class="language-bash">kubectl create secret generic hive-secrets -n hive \
+  --from-literal=DEEPSEEK_API_KEY=sk-... \
+  --from-literal=GH_APP_ID=3942065 \
+  --from-literal=GH_APP_INSTALLATION_ID=137498420 \
+  --from-file=gh-app-key.pem=/path/to/key.pem
+</code></pre>
+<h3 id="deploy"><a class="header" href="#deploy">Deploy</a></h3>
+<pre><code class="language-bash">kubectl apply -f talos-k8s/hive/hive.yaml
+kubectl rollout restart deploy/hive -n hive
+</code></pre>
+<p>Access: <strong>https://hive.manatee-basking.ts.net</strong></p>
+<hr />
+<h2 id="4-ai-backend-pi--deepseek"><a class="header" href="#4-ai-backend-pi--deepseek">4. AI backend: pi + DeepSeek</a></h2>
+<h3 id="why-pi-not-goose"><a class="header" href="#why-pi-not-goose">Why pi (not goose)</a></h3>
+<p>Hive originally used <strong>goose</strong> (v1.36 from AAIF) as the AI agent CLI. Goose does not natively support DeepSeek, requiring a <strong>Python proxy</strong> (<code>deepseek-proxy.py</code>) to:</p>
+<ul>
+<li>Strip <code>reasoning_content</code> from message history</li>
+<li>Inject <code>thinking:{type:disabled}</code> to prevent thinking block generation</li>
+<li>Route through <code>litellm</code> pointing at a local proxy</li>
+</ul>
+<p>This was fragile. <strong>pi</strong> natively supports DeepSeek via its <code>deepseek</code> provider — no proxy, no litellm, no workaround.</p>
+<h3 id="why-pi-works-for-unattended-agents"><a class="header" href="#why-pi-works-for-unattended-agents">Why pi works for unattended agents</a></h3>
+<p>Pi intentionally has <strong>no permission popups</strong> — tools (<code>read</code>, <code>write</code>, <code>edit</code>, <code>bash</code>) auto-execute without user confirmation. This makes it ideal for Hive's unattended agent workflow where no human is available to approve tool calls.</p>
+<h3 id="pi-wrappersh"><a class="header" href="#pi-wrappersh">pi-wrapper.sh</a></h3>
+<p>The wrapper translates Hive's backend CLI interface to pi:</p>
+<pre><code class="language-bash"># Hive calls: pi --no-confirm --model deepseek-v4-pro
+# Wrapper strips --no-confirm (pi doesn't need it), passes --model to pi
+# Sets up ~/.pi/agent/settings.json with DeepSeek config
+# Runs pi in interactive TUI mode inside the tmux pane
+# Restart loop: ^C from clear_on_kick kills pi-real, wrapper re-emits ready markers
+</code></pre>
+<h3 id="pi-configuration"><a class="header" href="#pi-configuration">pi configuration</a></h3>
+<p>Written at runtime by the wrapper:</p>
+<pre><code class="language-json">{
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-v4-pro",
+  "quietStartup": true,
+  "hideThinkingBlock": true,
+  "enableInstallTelemetry": false
+}
+</code></pre>
+<h3 id="helper-tools"><a class="header" href="#helper-tools">Helper tools</a></h3>
+<p><code>fd</code> (fd-find) and <code>ripgrep</code> are pre-installed via apt in the Docker image so pi doesn't need to download them at runtime (the Hive MITM proxy would corrupt the downloads).</p>
+<hr />
+<h2 id="5-agents"><a class="header" href="#5-agents">5. Agents</a></h2>
+<h3 id="current-agents-acmm-l5"><a class="header" href="#current-agents-acmm-l5">Current agents (ACMM L5)</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Agent</th><th>Mode</th><th>Cadence</th><th>Role</th></tr></thead><tbody>
+<tr><td><strong>supervisor</strong></td><td>ADVISORY</td><td>5m</td><td>Agent health monitoring, sweep analysis, stall detection</td></tr>
+<tr><td><strong>scanner</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Issue triage, PR dispatch, merge management</td></tr>
+<tr><td><strong>ci-maintainer</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>CI/CD health, workflow fixes, build monitoring</td></tr>
+<tr><td><strong>quality</strong></td><td>ISSUES_AND_PRS</td><td>2h</td><td>Test coverage, integration tests, quality gates</td></tr>
+<tr><td><strong>sec-check</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Security scanning, dependency audit, CVE monitoring</td></tr>
+<tr><td><strong>guide</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Documentation gaps, onboarding analysis</td></tr>
+<tr><td><strong>architect</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Cross-cutting RFCs, refactors, new features</td></tr>
+<tr><td><strong>strategist</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Experiment design, A/B testing, strategy lab</td></tr>
+<tr><td><strong>brainstorm</strong></td><td>on-demand</td><td>—</td><td>Ideation via Inception; proposes features and architecture</td></tr>
+</tbody></table>
+</div>
+<h3 id="agent-modes"><a class="header" href="#agent-modes">Agent modes</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Mode</th><th>Can create issues</th><th>Can create PRs</th><th>Can merge</th></tr></thead><tbody>
+<tr><td>ADVISORY</td><td>✗</td><td>✗</td><td>✗</td></tr>
+<tr><td>ISSUES_ONLY</td><td>✓</td><td>✗</td><td>✗</td></tr>
+<tr><td>ISSUES_AND_PRS</td><td>✓</td><td>✓ (hold-gated)</td><td>✗</td></tr>
+</tbody></table>
+</div>
+<p>Mode is determined by ACMM level + agent config. At L5, most agents run in ISSUES_AND_PRS.</p>
+<h3 id="agent-lifecycle"><a class="header" href="#agent-lifecycle">Agent lifecycle</a></h3>
+<ol>
+<li><strong>Boot</strong>: Agent starts in tmux session, receives role prompt + authorized repos</li>
+<li><strong>Kick</strong>: Governor sends a task prompt (e.g., "scan for open issues", "check CI health")</li>
+<li><strong>Work</strong>: pi processes the prompt, runs tools, produces beads or GitHub issues/PRs</li>
+<li><strong>Idle</strong>: Agent waits for next kick</li>
+<li><strong>Clear on kick</strong> (<code>clear_on_kick: true</code>): <code>^C</code> kills the pi process before the next kick, wrapper restarts it fresh</li>
+</ol>
+<h3 id="adding-a-new-agent"><a class="header" href="#adding-a-new-agent">Adding a new agent</a></h3>
+<pre><code class="language-yaml"># In hive.yaml ConfigMap, under agents:
+my-agent:
+  enabled: true
+  backend: pi
+  model: deepseek-v4-pro
+  mode: ISSUES_AND_PRS
+  beads_dir: /data/beads/my-agent
+  clear_on_kick: true
+</code></pre>
+<p>Also add the agent to governor cadences for each mode:</p>
+<pre><code class="language-yaml">governor:
+  modes:
+    idle:
+      my-agent: 4h
+    quiet:
+      my-agent: 4h
+    busy:
+      my-agent: 1h
+    surge:
+      my-agent: pause
+</code></pre>
+<hr />
+<h2 id="6-acmm-levels"><a class="header" href="#6-acmm-levels">6. ACMM levels</a></h2>
+<p>The ACMM (Autonomous Code Maintenance Maturity) framework defines 6 levels:</p>
+<div class="table-wrapper"><table><thead><tr><th>Level</th><th>Name</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><strong>L1</strong></td><td>Advisory</td><td>Advisory-only reports, no writes</td></tr>
+<tr><td><strong>L2</strong></td><td>Issues</td><td>Can create issues, no PRs</td></tr>
+<tr><td><strong>L3</strong></td><td>CI/CD</td><td>Issues + hold-gated PRs, merge requires human LGTM</td></tr>
+<tr><td><strong>L4</strong></td><td>Guarded</td><td>Broader write access, more agents active</td></tr>
+<tr><td><strong>L5</strong></td><td>Guarded Auto-Merge</td><td>Auto-merge on green CI with guardrails</td></tr>
+<tr><td><strong>L6</strong></td><td>Full Autonomy</td><td>Unrestricted agent actions</td></tr>
+</tbody></table>
+</div>
+<p>Our Hive runs at <strong>L5</strong>. At each level, the Go binary enables additional pack agents and upgrades agent modes.</p>
+<h3 id="changing-acmm-level"><a class="header" href="#changing-acmm-level">Changing ACMM level</a></h3>
+<pre><code class="language-yaml"># In hive.yaml ConfigMap
+acmm_level: 5
+</code></pre>
+<p>After changing, nuke the persistent state to clear stale overrides:</p>
+<pre><code class="language-bash">kubectl exec -n hive deploy/hive -- sh -c 'echo "{}" &gt; /data/hive-state.json'
+kubectl rollout restart deploy/hive -n hive
+</code></pre>
+<hr />
+<h2 id="7-governor"><a class="header" href="#7-governor">7. Governor</a></h2>
+<p>The governor evaluates the issue queue every 5 minutes (<code>eval_interval_s: 300</code>) and switches between four modes:</p>
+<div class="table-wrapper"><table><thead><tr><th>Mode</th><th>Threshold</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><strong>idle</strong></td><td>0 issues</td><td>Slow cadences, minimal activity</td></tr>
+<tr><td><strong>quiet</strong></td><td>≤2 issues</td><td>Normal cadences</td></tr>
+<tr><td><strong>busy</strong></td><td>≤50 issues</td><td>Faster scanner, ci-maintainer still active</td></tr>
+<tr><td><strong>surge</strong></td><td>&gt;50 issues</td><td>Scanner every 15m, ci-maintainer paused</td></tr>
+</tbody></table>
+</div>
+<h3 id="current-cadences"><a class="header" href="#current-cadences">Current cadences</a></h3>
+<pre><code class="language-yaml">governor:
+  eval_interval_s: 300
+  modes:
+    surge:
+      threshold: 50
+      scanner: 15m
+      ci-maintainer: pause
+      quality: pause
+      sec-check: pause
+      guide: pause
+      architect: pause
+      strategist: pause
+    busy:
+      threshold: 10
+      scanner: 15m
+      ci-maintainer: 1h
+    quiet:
+      threshold: 2
+      scanner: 15m
+      ci-maintainer: 45m
+    idle:
+      threshold: 0
+      scanner: 4h
+      ci-maintainer: 4h
+</code></pre>
+<p>The supervisor always runs at 5m regardless of mode.</p>
+<hr />
+<h2 id="8-configuration"><a class="header" href="#8-configuration">8. Configuration</a></h2>
+<h3 id="backends-backendsconf"><a class="header" href="#backends-backendsconf">Backends (backends.conf)</a></h3>
+<p>The <code>backends.conf</code> in the ConfigMap defines supported AI backends. Adding a new backend requires entries in three places:</p>
+<ol>
+<li><code>KNOWN_BACKENDS</code> list</li>
+<li><code>backend_binary()</code> — maps backend name to binary in PATH</li>
+<li><code>backend_perm_flag()</code> — permission flag (pi returns empty — no permission popups)</li>
+</ol>
+<p>Current supported: <code>claude copilot bob gemini codex amazonq goose aider pi</code></p>
+<h3 id="agent-configuration-hiveyaml"><a class="header" href="#agent-configuration-hiveyaml">Agent configuration (hive.yaml)</a></h3>
+<pre><code class="language-yaml">agents:
+  supervisor:
+    enabled: true
+    backend: pi
+    model: deepseek-v4-pro
+    beads_dir: /data/beads/supervisor
+    clear_on_kick: true
+</code></pre>
+<h3 id="persistent-state"><a class="header" href="#persistent-state">Persistent state</a></h3>
+<p>Two locations store state that survives pod restarts:</p>
+<ul>
+<li><strong><code>/data/hive-state.json</code></strong> — Governor mode, agent overrides, kick history, cadence overrides</li>
+<li><strong><code>/data/agent-configs/*.yaml</code></strong> — Per-agent persistent config (backend, model, mode, enabled, display name)</li>
+</ul>
+<p>If the dashboard shows stale backend/model/mode values, these files have overrides from a previous configuration. Nuke them:</p>
+<pre><code class="language-bash">kubectl exec -n hive deploy/hive -- sh -c '
+  echo "{}" &gt; /data/hive-state.json
+  for f in /data/agent-configs/*.yaml; do
+    sed -i "s/backend: copilot/backend: pi/" "$f"
+    sed -i "s/model: claude-sonnet-4-6/model: deepseek-v4-pro/" "$f"
+    sed -i "s/model: claude-opus-4-6/model: deepseek-v4-pro/" "$f"
+  done
+'
+kubectl rollout restart deploy/hive -n hive
+</code></pre>
+<hr />
+<h2 id="9-building-the-image"><a class="header" href="#9-building-the-image">9. Building the image</a></h2>
+<h3 id="ci-recommended"><a class="header" href="#ci-recommended">CI (recommended)</a></h3>
+<p>Push to <code>master</code> — the workflow builds and pushes to <code>ghcr.io/hanthor/hive:latest</code>.</p>
+<h3 id="manual-kaniko"><a class="header" href="#manual-kaniko">Manual (Kaniko)</a></h3>
+<pre><code class="language-bash">kubectl apply -f talos-k8s/hive/build-job.yaml
+kubectl logs -n hive -f job/hive-build
+</code></pre>
+<h3 id="whats-in-the-image"><a class="header" href="#whats-in-the-image">What's in the image</a></h3>
+<ul>
+<li><strong>Base</strong>: <code>node:24-slim</code></li>
+<li><strong>Runtime deps</strong>: bash, curl, git, gosu, iptables, jq, procps, python3, tmux, <code>fd-find</code>, <code>ripgrep</code></li>
+<li><strong>Go binaries</strong>: hive (agent manager), bd (bead CLI) — cross-compiled from <code>kubestellar/hive</code> v2</li>
+<li><strong>Node.js proxy</strong>: Dashboard UI + SSE, serves on :3001</li>
+<li><strong>pi</strong>: <code>@earendil-works/pi-coding-agent</code> installed via npm</li>
+<li><strong>pi-wrapper.sh</strong>: Replaces <code>/usr/local/bin/pi</code> with the tmux interface wrapper</li>
+<li><strong>gh CLI</strong>: GitHub CLI with wrapper for App token auth</li>
+<li><strong>Entrypoint</strong>: UID isolation, tmux setup, config backup, App token generation</li>
+</ul>
+<hr />
+<h2 id="10-day-to-day-operations"><a class="header" href="#10-day-to-day-operations">10. Day-to-day operations</a></h2>
+<h3 id="check-agent-status"><a class="header" href="#check-agent-status">Check agent status</a></h3>
+<pre><code class="language-bash"># Dashboard API
+curl -sk https://hive.manatee-basking.ts.net/api/status | jq .
+
+# Or from within the pod
+kubectl exec -n hive deploy/hive -- curl -s localhost:3001/api/status
+</code></pre>
+<h3 id="view-agent-terminal"><a class="header" href="#view-agent-terminal">View agent terminal</a></h3>
+<pre><code class="language-bash"># List tmux sessions
+kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-1001/default ls
+
+# View an agent's terminal
+kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-1001/default capture-pane -t hive-scanner -p -S -30
+</code></pre>
+<h3 id="check-pi-processes"><a class="header" href="#check-pi-processes">Check pi processes</a></h3>
+<pre><code class="language-bash">kubectl exec -n hive deploy/hive -- ps aux | grep "pi$"
+# Should show 9 pi processes (one per active agent)
+</code></pre>
+<h3 id="view-logs"><a class="header" href="#view-logs">View logs</a></h3>
+<pre><code class="language-bash">kubectl logs -n hive -l app.kubernetes.io/name=hive -f --tail=100
+</code></pre>
+<h3 id="restart"><a class="header" href="#restart">Restart</a></h3>
+<pre><code class="language-bash">kubectl rollout restart deploy/hive -n hive
+</code></pre>
+<h3 id="nuke-persistent-state"><a class="header" href="#nuke-persistent-state">Nuke persistent state</a></h3>
+<p>If agents have stale backend/model overrides or wrong modes:</p>
+<pre><code class="language-bash">kubectl exec -n hive deploy/hive -- sh -c 'echo "{}" &gt; /data/hive-state.json'
+# Also check /data/agent-configs/ for stale copilot/goose references
+kubectl rollout restart deploy/hive -n hive
+</code></pre>
+<hr />
+<h2 id="11-troubleshooting-1"><a class="header" href="#11-troubleshooting-1">11. Troubleshooting</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Symptom</th><th>Check</th></tr></thead><tbody>
+<tr><td>ImagePullBackOff</td><td>IPv6 timeouts on ghcr.io. Verify <code>/etc/hosts</code> on bihar has <code>20.207.73.86 ghcr.io</code></td></tr>
+<tr><td>Agent CLI crashed</td><td>Check <code>ps aux | grep pi</code> — should see 9 pi processes</td></tr>
+<tr><td>Agent stuck in ADVISORY mode</td><td>Check ACMM level in state file. May need state nuke</td></tr>
+<tr><td>Dashboard shows old backend/model</td><td>Stale overrides in <code>/data/agent-configs/*.yaml</code>. Fix with sed + state nuke</td></tr>
+<tr><td>No kicks sent</td><td>Governor eval cycle: 5min. Agent cadences vary per mode</td></tr>
+<tr><td>Issues not created</td><td>Verify GitHub App installed on tuna-os. Check token: <code>cat /var/run/hive-metrics/gh-app-token.cache</code></td></tr>
+<tr><td>"CLI did not reach input prompt"</td><td>pi is mid-response when kick arrives. Normal — agent will pick up next kick</td></tr>
+<tr><td>fd/ripgrep download errors</td><td>pi can't download tools through MITM proxy. Pre-installed in Docker image</td></tr>
+<tr><td>"backend binary not found"</td><td>Missing binary in PATH. Check <code>backends.conf</code> and verify wrapper is at <code>/usr/local/bin/pi</code></td></tr>
+<tr><td>"failed to persist config"</td><td>Read-only ConfigMap mount. Cosmetic — config is cached in memory</td></tr>
+</tbody></table>
+</div>
+<h3 id="common-agent-issues"><a class="header" href="#common-agent-issues">Common agent issues</a></h3>
+<p><strong>Agent shows bare bash shell:</strong></p>
+<ul>
+<li>pi process died or never started</li>
+<li>Check: <code>tmux capture-pane -t hive-scanner -p | tail -5</code></li>
+<li>Should show pi's footer (<code>deepseek-v4-pro • high</code>), not <code>$</code> bash prompt</li>
+</ul>
+<p><strong>Agent stuck at <code>/clear</code>:</strong></p>
+<ul>
+<li>Hive sent <code>/clear</code> to reset the agent before a kick</li>
+<li>Agent processed it but new kick hasn't arrived yet</li>
+<li>Wait for next governor cycle</li>
+</ul>
+<p><strong>Agent mode mismatch:</strong></p>
+<ul>
+<li>State file has persistent mode override</li>
+<li>Nuke state and restart</li>
+</ul>
+<hr />
+<h2 id="12-github-app"><a class="header" href="#12-github-app">12. GitHub App</a></h2>
+<p>Hive authenticates to GitHub via a GitHub App (ID <strong>3942065</strong>) installed on <code>tuna-os</code>.</p>
+<h3 id="token-generation"><a class="header" href="#token-generation">Token generation</a></h3>
+<p>The entrypoint generates an installation token on startup and caches it at <code>/var/run/hive-metrics/gh-app-token.cache</code>. Agents access it via <code>$GH_TOKEN</code>.</p>
+<h3 id="required-permissions"><a class="header" href="#required-permissions">Required permissions</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Permission</th><th>Scope</th><th>Why</th></tr></thead><tbody>
+<tr><td><code>contents: read</code></td><td>Repo</td><td>Read code, files</td></tr>
+<tr><td><code>contents: write</code></td><td>Repo</td><td>Create branches, push commits for PRs</td></tr>
+<tr><td><code>issues: write</code></td><td>Repo</td><td>Create and update issues</td></tr>
+<tr><td><code>pull_requests: write</code></td><td>Repo</td><td>Create PRs</td></tr>
+<tr><td><code>metadata: read</code></td><td>Repo</td><td>Basic repo access</td></tr>
+<tr><td><code>security_events: read</code></td><td>Repo</td><td>Dependabot alerts (sec-check agent)</td></tr>
+</tbody></table>
+</div>
+<h3 id="rate-limits"><a class="header" href="#rate-limits">Rate limits</a></h3>
+<ul>
+<li>GitHub App: 15,000 req/hr (shared across all installations)</li>
+<li>Personal Access Token: 5,000 req/hr</li>
+</ul>
+<p>The App gives Hive its own rate limit pool, separate from personal API usage.</p>
+<h3 id="updating-permissions"><a class="header" href="#updating-permissions">Updating permissions</a></h3>
+<ol>
+<li>Go to: <code>https://github.com/organizations/tuna-os/settings/apps/hanthor-hive-agent/permissions</code></li>
+<li>Add the needed permissions</li>
+<li>Re-accept on the installation page</li>
+<li>Restart hive: <code>kubectl rollout restart deploy/hive -n hive</code></li>
+</ol>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+    </div>
+    </body>
+</html>
