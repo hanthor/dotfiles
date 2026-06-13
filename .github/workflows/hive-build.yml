@@ -1,4 +1,4 @@
-# Build and push custom hive image (upstream v2 + goose 1.37.0 + DeepSeek) to GHCR
+# Build and push custom hive image (upstream v2 + goose + DeepSeek) to GHCR
 name: Build Hive Image
 
 on:
@@ -25,11 +25,11 @@ jobs:
         with:
           path: dotfiles
 
-      - name: Checkout hanthor/hive goose-1.37 (fork with goose 1.37 patches)
+      - name: Checkout kubestellar/hive v2 (source, goose 1.37 support merged upstream)
         uses: actions/checkout@v4
         with:
-          repository: hanthor/hive
-          ref: goose-1.37
+          repository: kubestellar/hive
+          ref: v2
           path: hive-src
 
       - name: Prep build context
