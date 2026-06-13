@@ -43,6 +43,7 @@ data:
         - tuna-os/docs
         - tuna-os/xfce-linux
         - tuna-os/ubuntu
+        - tuna-os/github-copr
       ai_author: hanthor
       primary_repo: tuna-os/tunaos
 
