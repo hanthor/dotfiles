@@ -1,0 +1,333 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Operational Runbook - Dotfiles Fleet Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Ansible-driven dotfiles and infrastructure for a personal fleet of desktops, servers, and VPS">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Dotfiles Fleet Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/runbook.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="operational-runbook"><a class="header" href="#operational-runbook">Operational runbook</a></h1>
+<p>Recipes for the questions that recur. If you find yourself answering one of
+these from memory or commit logs more than twice, add it here.</p>
+<hr />
+<h2 id="i-rotated-my-ssh-key-on-host-x--how-do-i-propagate-it"><a class="header" href="#i-rotated-my-ssh-key-on-host-x--how-do-i-propagate-it">I rotated my SSH key on host X — how do I propagate it?</a></h2>
+<p>The <code>ssh_keys</code> role now syncs <strong>on mismatch</strong> (not just on missing), so:</p>
+<pre><code class="language-bash"># On host X (with BW unlocked locally, just unlocked with bw unlock --raw):
+dots-apply
+</code></pre>
+<p>That detects the local pub key differs from the BW entry, calls
+<code>bw edit item</code> to replace it, and rewrites this host's <code>authorized_keys</code> while
+it's at it. Then on every <em>other</em> host:</p>
+<pre><code class="language-bash">dots-apply           # picks up the fresh pubkey from BW into authorized_keys
+</code></pre>
+<p>If you can't reach an "other" host because of the stale key situation, you
+can also push the new key directly first:</p>
+<pre><code class="language-bash"># From a host that can still reach the broken one
+ssh-copy-id &lt;broken-host&gt;     # adds the rotating host's pub key by hand
+# then `dots-apply` on broken-host as above
+</code></pre>
+<hr />
+<h2 id="bw-is-locked-on-a-remote--how-do-i-unlock-it-there"><a class="header" href="#bw-is-locked-on-a-remote--how-do-i-unlock-it-there">BW is locked on a remote — how do I unlock it there?</a></h2>
+<p><code>just apply-remote-tags &lt;host&gt; ...</code> forwards your local <code>BW_SESSION</code>, but the
+remote host's vault can still report <code>locked</code> because the token isn't always
+portable across vaults. To unlock directly on that host:</p>
+<pre><code class="language-bash">ssh &lt;host&gt;
+bw unlock --raw | tee /tmp/bw_session &gt; /dev/null
+chmod 600 /tmp/bw_session
+exit
+
+# Then from your laptop:
+just apply-remote-tags &lt;host&gt; bitwarden,ssh_keys
+</code></pre>
+<p>The <code>bitwarden</code> role on <code>&lt;host&gt;</code> will read <code>/tmp/bw_session</code>, confirm the
+vault is unlocked, and downstream secrets roles will run.</p>
+<hr />
+<h2 id="the-timer-apply-failed-last-night--what-do-i-do"><a class="header" href="#the-timer-apply-failed-last-night--what-do-i-do">The timer apply failed last night — what do I do?</a></h2>
+<p>The user-level <code>dotfiles-update.service</code> runs <code>just apply-nosecrets</code> daily,
+which now writes <code>~/.cache/dotfiles/last-apply.json</code>. Quickest signal:</p>
+<pre><code class="language-bash">just doctor                 # `→ Last apply` line shows status + age
+</code></pre>
+<p>If <code>rc != 0</code>, see what blew up:</p>
+<pre><code class="language-bash">journalctl --user -u dotfiles-update.service -e --no-pager | tail -80
+</code></pre>
+<p>The most common causes:</p>
+<ul>
+<li><strong>git pull failure</strong> (DNS / network blip): the recipe tolerates it with
+<code>git pull --ff-only || true</code>; the ansible run continues with whatever's
+on disk. If the working tree drifted from main, fix manually.</li>
+<li><strong>a role started failing after a config change</strong>: re-run interactively
+with <code>just apply-nosecrets</code> and read the failure.</li>
+<li><strong><code>mkswap: /swapfile is mounted</code></strong>: pre-existing bug in
+<code>roles/server_hardening</code>; the swapfile is already active and the
+idempotency check is wrong. Set <code>skip_server_hardening: true</code> in that
+host's <code>host_vars/</code> as a workaround.</li>
+</ul>
+<hr />
+<h2 id="bw-master-password-just-returned-decryption-failed--vault-corrupt"><a class="header" href="#bw-master-password-just-returned-decryption-failed--vault-corrupt">BW master password just returned "decryption failed" — vault corrupt?</a></h2>
+<p>Two BW CLI processes can corrupt the local encrypted vault if they sync at the
+same time. Symptom: <code>bw unlock --raw</code> returns
+<code>Cryptography error, The decryption operation failed</code>.</p>
+<p>Fix is to re-login (downloads a clean vault):</p>
+<pre><code class="language-bash">bw logout
+bw login              # email + master password + 2FA
+export BW_SESSION=$(bw unlock --raw)
+printf '%s' "$BW_SESSION" &gt; /tmp/bw_session
+chmod 600 /tmp/bw_session
+</code></pre>
+<p>The <code>bitwarden</code> role now has a 15 s timeout on <code>bw sync</code>, which prevents the
+race in most cases going forward.</p>
+<hr />
+<h2 id="i-want-to-onboard-a-new-machine--full-sequence"><a class="header" href="#i-want-to-onboard-a-new-machine--full-sequence">I want to onboard a new machine — full sequence</a></h2>
+<pre><code class="language-bash"># 1. From an existing fleet machine (with BW unlocked):
+just onboard &lt;newhost&gt; desktop      # or server / vps / llm
+
+# 2. Copy the printed bootstrap command, then on the new machine:
+curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh \
+  | bash -s -- --name &lt;newhost&gt; --type desktop
+
+# 3. After bootstrap finishes, on the new machine, get BW into a usable state:
+bw login                            # if not logged in
+bw unlock --raw | tee /tmp/bw_session &gt; /dev/null
+
+# 4. Run the full apply (this pushes the new machine's pubkey to BW):
+dots-apply
+
+# 5. Back on each existing host (one at a time, or wait for the timer):
+dots-apply                          # picks up the new host's pubkey
+</code></pre>
+<p>Verify with <code>just doctor</code> on the new host — should be all green and report
+"last apply <minutes> ago".</p>
+<hr />
+<h2 id="i-added-a-flatpak--brew-package--how-do-i-roll-it-out"><a class="header" href="#i-added-a-flatpak--brew-package--how-do-i-roll-it-out">I added a flatpak / brew package — how do I roll it out?</a></h2>
+<p>Edit the relevant role's package list (<code>roles/flatpak/files/...</code> or the
+homebrew Brewfile), commit, push. Every host picks it up on the next
+<code>dots-apply</code> or the next timer fire.</p>
+<p>To force-apply immediately on the local machine:</p>
+<pre><code class="language-bash">just apply-tags packages
+</code></pre>
+<hr />
+<h2 id="i-want-to-disable-a-role-on-one-host"><a class="header" href="#i-want-to-disable-a-role-on-one-host">I want to disable a role on one host</a></h2>
+<p>In that host's <code>host_vars/&lt;name&gt;.yml</code>, add a <code>skip_&lt;role&gt;: true</code> line. The
+roles that respect this convention:</p>
+<p><code>skip_kube</code>, <code>skip_flatpak</code>, <code>skip_bluefin</code>, <code>skip_gnome</code>, <code>skip_proxy</code>,
+<code>skip_homepage</code>, <code>skip_lima</code>, <code>skip_zen_browser</code>, <code>skip_monitoring</code>,
+<code>skip_syncthing</code>, <code>skip_tailscale_cert</code>, <code>skip_cockpit</code>,
+<code>skip_server_hardening</code> (not all may be wired yet — grep <code>site.yml</code> to
+confirm).</p>
+<hr />
+<h2 id="how-do-i-verify-a-change-made-it-to-every-host"><a class="header" href="#how-do-i-verify-a-change-made-it-to-every-host">How do I verify a change made it to every host?</a></h2>
+<pre><code class="language-bash">just doctor-fleet
+</code></pre>
+<p>Runs <code>just doctor</code> on every online host in parallel. The <code>→ Last apply</code>
+line tells you which hosts have an old or failed convergence — those are
+the ones that need attention.</p>
+<p>To roll a single change out manually instead of waiting for the timer:</p>
+<pre><code class="language-bash">for h in $(scripts/nmap-inventory.sh | awk '/ON / {print $3}'); do
+  just apply-remote-tags "$h" &lt;tag-or-tags&gt; &amp;
+done
+wait
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="onboarding.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="network.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="onboarding.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="network.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

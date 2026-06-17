@@ -1,0 +1,262 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Talos Kubernetes - Dotfiles Fleet Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Ansible-driven dotfiles and infrastructure for a personal fleet of desktops, servers, and VPS">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Dotfiles Fleet Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/talos-k8s.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="talos-kubernetes-cluster"><a class="header" href="#talos-kubernetes-cluster">Talos Kubernetes Cluster</a></h1>
+<p>Two-node Kubernetes cluster running on Talos Linux, managed from the <code>talos-k8s/</code> directory.</p>
+<h2 id="hardware"><a class="header" href="#hardware">Hardware</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Node</th><th>Role</th><th>Hardware</th></tr></thead><tbody>
+<tr><td>bihar</td><td>Control plane</td><td>Intel (bare metal)</td></tr>
+<tr><td>karnataka</td><td>Worker</td><td>AMD Strix Halo APU (GPU-enabled)</td></tr>
+</tbody></table>
+</div>
+<h2 id="software-stack"><a class="header" href="#software-stack">Software Stack</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Version</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Talos Linux</td><td>v1.13.2</td><td>Immutable, API-driven OS</td></tr>
+<tr><td>Kubernetes</td><td>v1.36.1</td><td>Via Talos</td></tr>
+<tr><td>CNI</td><td><a href="https://github.com/flannel-io/flannel">flannel</a></td><td>Simple overlay network</td></tr>
+<tr><td>Tailscale Operator</td><td>—</td><td>Ingress via <code>*.manatee-basking.ts.net</code></td></tr>
+<tr><td><a href="https://kubevirt.io/">KubeVirt</a></td><td>v1.8.2</td><td>VM workloads on K8s</td></tr>
+</tbody></table>
+</div>
+<h2 id="directory-structure"><a class="header" href="#directory-structure">Directory structure</a></h2>
+<pre><code>talos-k8s/
+├── ai/              lemonade
+├── appflowy/        appflowy cloud (Helm)
+├── authentik/       sso (Helm)
+├── forgejo/         git + ci/cd
+├── hive/            ai agent swarm
+├── homepage/        cluster landing page
+├── infrastructure/  kubevirt + corral
+├── longhorn/        storage
+├── monitoring/      prometheus + grafana + metrics-server
+├── n8n/             workflow automation
+├── networking/      tailscale configs
+└── testing-lab/     ci/cd test infra
+</code></pre>
+<h2 id="running-workloads"><a class="header" href="#running-workloads">Running Workloads</a></h2>
+<h3 id="lemonade"><a class="header" href="#lemonade">Lemonade</a></h3>
+<p><a href="https://lemonade-sdk.github.io/">Lemonade</a> — AMD-optimized local AI runtime providing omni-modal endpoints (chat, vision, image gen, speech, transcription) on karnataka's integrated AMD GPU (<code>amdgpu</code> driver baked into the Talos image via <a href="https://www.talos.dev/latest/talos-guides/install/boot-assets/">Image Factory</a>).</p>
+<p>Manifest: <code>talos-k8s/ai/lemonade.yaml</code></p>
+<h3 id="additional-services"><a class="header" href="#additional-services">Additional services</a></h3>
+<p>See the <a href="servers/talos-k8s/cluster.html">cluster handbook</a> for the full list — Forgejo, Hive, Authentik, n8n, AppFlowy Cloud, Grafana, Corral, and more.</p>
+<h2 id="cluster-access"><a class="header" href="#cluster-access">Cluster Access</a></h2>
+<pre><code class="language-bash"># kubectl (from kubeconfig in Bitwarden)
+kubectl get nodes
+
+# Talos CLI
+talosctl -n 100.85.9.86 version
+talosctl -n 100.67.142.116 version
+</code></pre>
+<h2 id="image-factory"><a class="header" href="#image-factory">Image Factory</a></h2>
+<p>Karnataka uses a custom Talos image from Image Factory that includes the <code>siderolabs/amdgpu</code> system extension for GPU passthrough to containers.</p>
+<h2 id="handbook"><a class="header" href="#handbook">Handbook</a></h2>
+<p>Full cluster documentation at <a href="servers/talos-k8s/cluster.html"><code>docs/src/servers/talos-k8s/cluster.md</code></a> (hardware details, reinstall procedure, troubleshooting).</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="roles/n8n.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="cluster/hive.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="roles/n8n.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="cluster/hive.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

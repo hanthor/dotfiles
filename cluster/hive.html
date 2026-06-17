@@ -1,0 +1,631 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Hive Agent Supervisor - Dotfiles Fleet Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Ansible-driven dotfiles and infrastructure for a personal fleet of desktops, servers, and VPS">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Dotfiles Fleet Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/cluster/hive.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="hive--247-ai-agent-supervisor"><a class="header" href="#hive--247-ai-agent-supervisor">Hive — 24/7 AI Agent Supervisor</a></h1>
+<blockquote>
+<p><strong>Hive</strong> is an open-source AI agent orchestration system running on the Talos K8s cluster. A fleet of specialized agents autonomously maintain the <code>tuna-os/tunaos</code> repository — triaging issues, analyzing code, and creating PRs. A governor dynamically adjusts agent pace based on issue queue depth.</p>
+</blockquote>
+<h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of contents</a></h2>
+<ol>
+<li><a href="#1-architecture">Architecture</a></li>
+<li><a href="#2-what-hive-does">What Hive does</a></li>
+<li><a href="#3-deployment">Deployment</a></li>
+<li><a href="#4-ai-backend-pi--deepseek">AI backend: pi + DeepSeek</a></li>
+<li><a href="#5-agents">Agents</a></li>
+<li><a href="#6-acmm-levels">ACMM levels</a></li>
+<li><a href="#7-governor">Governor</a></li>
+<li><a href="#8-configuration">Configuration</a></li>
+<li><a href="#9-building-the-image">Building the image</a></li>
+<li><a href="#10-day-to-day-operations">Day-to-day operations</a></li>
+<li><a href="#11-troubleshooting">Troubleshooting</a></li>
+<li><a href="#12-github-app">GitHub App</a></li>
+</ol>
+<hr />
+<h2 id="1-architecture"><a class="header" href="#1-architecture">1. Architecture</a></h2>
+<pre><code>┌──────────────────────────────────────────────────────────────┐
+│ Namespace: hive (node: bihar)                                │
+│                                                              │
+│  ┌─────────┐  ┌──────────┐  ┌────────────────────────────┐  │
+│  │ hive    │  │ proxy    │  │ 9x pi agents (tmux sessions)│  │
+│  │ Go bin  │  │ node.js  │  │                            │  │
+│  │ :3002   │  │ :3001    │  │ supervisor  ADVISORY       │  │
+│  │ (API)   │  │ (web UI) │  │ scanner     ISSUES_AND_PRS │  │
+│  └────┬────┘  └────┬─────┘  │ ci-maintain ISSUES_AND_PRS │  │
+│       │            │        │ quality     ISSUES_AND_PRS │  │
+│       └────────────┘        │ sec-check   ISSUES_AND_PRS │  │
+│                             │ guide       ISSUES_AND_PRS │  │
+│  ┌──────────────────────────│ architect   ISSUES_AND_PRS │  │
+│  │  pi → DeepSeek API       │ strategist  ISSUES_AND_PRS │  │
+│  │  (native, no proxy)      │ brainstorm  on-demand     │  │
+│  │  GitHub App → gh CLI     └────────────┬───────────────┘  │
+│  └───────────────────────────────────────┘                  │
+│                                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
+│  │ ConfigMap│  │ Secret   │  │ PVC      │                  │
+│  │ hive.yaml│  │ DEEPSEEK │  │ hive-data│                  │
+│  │ backends │  │ GH App   │  │ (10Gi)   │                  │
+│  └──────────┘  └──────────┘  └──────────┘                  │
+└──────────────────────────────────────────────────────────────┘
+         │
+    ┌────▼────┐     ┌──────────────────┐
+    │ GitHub  │     │ Tailscale Ingress │
+    │ tuna-os │     │ hive.manatee-     │
+    │ repos   │     │ basking.ts.net    │
+    └─────────┘     └──────────────────┘
+</code></pre>
+<h3 id="components"><a class="header" href="#components">Components</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Language</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><strong>hive</strong> (Go binary)</td><td>Go</td><td>Agent manager, governor, scheduler, dashboard API</td></tr>
+<tr><td><strong>proxy</strong> (Node.js)</td><td>JS</td><td>Dashboard web UI + SSE, proxies to Go API</td></tr>
+<tr><td><strong>pi</strong> (coding agent)</td><td>Node.js</td><td>AI agent CLI running in tmux sessions</td></tr>
+<tr><td><strong>pi-wrapper.sh</strong></td><td>Shell</td><td>Tmux interface adapter — restart loop, ready markers</td></tr>
+</tbody></table>
+</div>
+<h3 id="how-agents-work"><a class="header" href="#how-agents-work">How agents work</a></h3>
+<p>Each agent runs as a long-lived <strong>pi</strong> process inside a tmux session. The Go binary:</p>
+<ol>
+<li>Creates a tmux session per agent (<code>hive-supervisor</code>, <code>hive-scanner</code>, etc.)</li>
+<li>Writes a boot prompt (agent role, authorized repos, instructions) via <code>send-keys</code></li>
+<li>Detects agent readiness from CLI markers in the pane output</li>
+<li><strong>Governor</strong> evaluates the issue queue every 5 minutes and sends <em>kick</em> prompts to due agents</li>
+<li><code>clear_on_kick: true</code> agents receive <code>^C</code> before each kick to reset their session</li>
+</ol>
+<p>Agents share a persistent <code>/data</code> volume (10Gi PVC) for beads, session state, and agent configs.</p>
+<hr />
+<h2 id="2-what-hive-does"><a class="header" href="#2-what-hive-does">2. What Hive does</a></h2>
+<h3 id="advisory-digest"><a class="header" href="#advisory-digest">Advisory digest</a></h3>
+<p>The dashboard shows agent findings — CI failures, test coverage gaps, security issues, documentation problems. Each agent produces <strong>beads</strong> (structured findings) that appear in the advisory digest.</p>
+<h3 id="issue-creation"><a class="header" href="#issue-creation">Issue creation</a></h3>
+<p>At ACMM L3+, agents create GitHub issues. At L4+, they can create hold-gated PRs. The <strong>sec-check</strong> agent scans dependencies for CVEs. The <strong>ci-maintainer</strong> agent monitors CI failures.</p>
+<h3 id="strategy-lab"><a class="header" href="#strategy-lab">Strategy Lab</a></h3>
+<p>Inception feature: describe what you want to build, and Hive scaffolds a new project with knowledge base facts and spec-kit specifications. Powered by the <strong>brainstorm</strong> agent (on-demand).</p>
+<h3 id="knowledge-base"><a class="header" href="#knowledge-base">Knowledge Base</a></h3>
+<p>Agents can contribute facts to a shared knowledge base. Facts are tagged by type (pattern, gotcha, regression, decision, etc.) and searchable from the dashboard.</p>
+<hr />
+<h2 id="3-deployment"><a class="header" href="#3-deployment">3. Deployment</a></h2>
+<h3 id="namespace-and-resources"><a class="header" href="#namespace-and-resources">Namespace and resources</a></h3>
+<p>All Hive resources live in the <code>hive</code> namespace on the Talos cluster:</p>
+<pre><code>hive (namespace)
+├── deploy/hive           — main controller pod
+├── svc/hive              — ClusterIP :3001 (dashboard), :3002 (API), :7681 (ttyd)
+├── ingress/hive          — Tailscale ingress → hive.manatee-basking.ts.net
+├── configmap/hive-config — hive.yaml (project config, agents, governor)
+├── secret/hive-secrets   — DEEPSEEK_API_KEY, GH App credentials
+├── pvc/hive-data         — 10Gi persistent state
+└── secret/ghcr-auth      — GHCR pull credentials
+</code></pre>
+<h3 id="files"><a class="header" href="#files">Files</a></h3>
+<pre><code>talos-k8s/hive/
+├── hive.yaml              — All K8s resources (namespace, deploy, svc, ingress, configmap)
+├── Dockerfile             — Custom image (hive v2 + pi + fd/ripgrep)
+├── pi-wrapper.sh          — Wrapper: Hive tmux interface → pi interactive TUI
+├── pi-marker.patch        — Adds "pi" to hive's cliPaneMarkers (source patch)
+├── build-job.yaml         — Kaniko build job (deprecated, use CI)
+├── deepseek-chat.py       — Python fallback (unused with pi)
+├── goose-wrapper.sh       — Legacy goose wrapper (replaced by pi-wrapper.sh)
+├── goose-marker.patch     — Legacy goose patch (replaced by pi-marker.patch)
+├── SKILL.md               — Skill file for pi coding agent
+├── README.md              — Quick reference
+└── HANDOFF.md             — Debugging session notes
+</code></pre>
+<h3 id="ci-workflow"><a class="header" href="#ci-workflow">CI workflow</a></h3>
+<p><code>.github/workflows/hive-build.yml</code> — triggers on push to <code>master</code>:</p>
+<ol>
+<li>Clones <code>kubestellar/hive</code> v2 source</li>
+<li>Applies <code>pi-marker.patch</code> and three sed patches to the Go source:
+<ul>
+<li>Adds <code>"pi"</code> to <code>cliPaneMarkers</code> (so agents aren't detected as crashed)</li>
+<li>Adds <code>"pi": true</code> to <code>validBackends</code> (config validation)</li>
+<li>Adds <code>"pi": "pi"</code> to <code>backendBinary()</code> (binary resolution)</li>
+</ul>
+</li>
+<li>Cross-compiles Go binary for amd64</li>
+<li>Builds Docker image with pi + pi-wrapper.sh + fd/ripgrep</li>
+<li>Pushes to <code>ghcr.io/hanthor/hive:latest</code></li>
+</ol>
+<h3 id="secrets"><a class="header" href="#secrets">Secrets</a></h3>
+<pre><code class="language-bash">kubectl create secret generic hive-secrets -n hive \
+  --from-literal=DEEPSEEK_API_KEY=sk-... \
+  --from-literal=GH_APP_ID=3942065 \
+  --from-literal=GH_APP_INSTALLATION_ID=137498420 \
+  --from-file=gh-app-key.pem=/path/to/key.pem
+</code></pre>
+<h3 id="deploy"><a class="header" href="#deploy">Deploy</a></h3>
+<pre><code class="language-bash">kubectl apply -f talos-k8s/hive/hive.yaml
+kubectl rollout restart deploy/hive -n hive
+</code></pre>
+<p>Access: <strong>https://hive.manatee-basking.ts.net</strong></p>
+<hr />
+<h2 id="4-ai-backend-pi--deepseek"><a class="header" href="#4-ai-backend-pi--deepseek">4. AI backend: pi + DeepSeek</a></h2>
+<h3 id="why-pi-not-goose"><a class="header" href="#why-pi-not-goose">Why pi (not goose)</a></h3>
+<p>Hive originally used <strong>goose</strong> (v1.36 from AAIF) as the AI agent CLI. Goose does not natively support DeepSeek, requiring a <strong>Python proxy</strong> (<code>deepseek-proxy.py</code>) to:</p>
+<ul>
+<li>Strip <code>reasoning_content</code> from message history</li>
+<li>Inject <code>thinking:{type:disabled}</code> to prevent thinking block generation</li>
+<li>Route through <code>litellm</code> pointing at a local proxy</li>
+</ul>
+<p>This was fragile. <strong>pi</strong> natively supports DeepSeek via its <code>deepseek</code> provider — no proxy, no litellm, no workaround.</p>
+<h3 id="why-pi-works-for-unattended-agents"><a class="header" href="#why-pi-works-for-unattended-agents">Why pi works for unattended agents</a></h3>
+<p>Pi intentionally has <strong>no permission popups</strong> — tools (<code>read</code>, <code>write</code>, <code>edit</code>, <code>bash</code>) auto-execute without user confirmation. This makes it ideal for Hive's unattended agent workflow where no human is available to approve tool calls.</p>
+<h3 id="pi-wrappersh"><a class="header" href="#pi-wrappersh">pi-wrapper.sh</a></h3>
+<p>The wrapper translates Hive's backend CLI interface to pi:</p>
+<pre><code class="language-bash"># Hive calls: pi --no-confirm --model deepseek-v4-pro
+# Wrapper strips --no-confirm (pi doesn't need it), passes --model to pi
+# Sets up ~/.pi/agent/settings.json with DeepSeek config
+# Runs pi in interactive TUI mode inside the tmux pane
+# Restart loop: ^C from clear_on_kick kills pi-real, wrapper re-emits ready markers
+</code></pre>
+<h3 id="pi-configuration"><a class="header" href="#pi-configuration">pi configuration</a></h3>
+<p>Written at runtime by the wrapper:</p>
+<pre><code class="language-json">{
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-v4-pro",
+  "quietStartup": true,
+  "hideThinkingBlock": true,
+  "enableInstallTelemetry": false
+}
+</code></pre>
+<h3 id="helper-tools"><a class="header" href="#helper-tools">Helper tools</a></h3>
+<p><code>fd</code> (fd-find) and <code>ripgrep</code> are pre-installed via apt in the Docker image so pi doesn't need to download them at runtime (the Hive MITM proxy would corrupt the downloads).</p>
+<hr />
+<h2 id="5-agents"><a class="header" href="#5-agents">5. Agents</a></h2>
+<h3 id="current-agents-acmm-l5"><a class="header" href="#current-agents-acmm-l5">Current agents (ACMM L5)</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Agent</th><th>Mode</th><th>Cadence</th><th>Role</th></tr></thead><tbody>
+<tr><td><strong>supervisor</strong></td><td>ADVISORY</td><td>5m</td><td>Agent health monitoring, sweep analysis, stall detection</td></tr>
+<tr><td><strong>scanner</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Issue triage, PR dispatch, merge management</td></tr>
+<tr><td><strong>ci-maintainer</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>CI/CD health, workflow fixes, build monitoring</td></tr>
+<tr><td><strong>quality</strong></td><td>ISSUES_AND_PRS</td><td>2h</td><td>Test coverage, integration tests, quality gates</td></tr>
+<tr><td><strong>sec-check</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Security scanning, dependency audit, CVE monitoring</td></tr>
+<tr><td><strong>guide</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Documentation gaps, onboarding analysis</td></tr>
+<tr><td><strong>architect</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Cross-cutting RFCs, refactors, new features</td></tr>
+<tr><td><strong>strategist</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Experiment design, A/B testing, strategy lab</td></tr>
+<tr><td><strong>brainstorm</strong></td><td>on-demand</td><td>—</td><td>Ideation via Inception; proposes features and architecture</td></tr>
+</tbody></table>
+</div>
+<h3 id="agent-modes"><a class="header" href="#agent-modes">Agent modes</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Mode</th><th>Can create issues</th><th>Can create PRs</th><th>Can merge</th></tr></thead><tbody>
+<tr><td>ADVISORY</td><td>✗</td><td>✗</td><td>✗</td></tr>
+<tr><td>ISSUES_ONLY</td><td>✓</td><td>✗</td><td>✗</td></tr>
+<tr><td>ISSUES_AND_PRS</td><td>✓</td><td>✓ (hold-gated)</td><td>✗</td></tr>
+</tbody></table>
+</div>
+<p>Mode is determined by ACMM level + agent config. At L5, most agents run in ISSUES_AND_PRS.</p>
+<h3 id="agent-lifecycle"><a class="header" href="#agent-lifecycle">Agent lifecycle</a></h3>
+<ol>
+<li><strong>Boot</strong>: Agent starts in tmux session, receives role prompt + authorized repos</li>
+<li><strong>Kick</strong>: Governor sends a task prompt (e.g., "scan for open issues", "check CI health")</li>
+<li><strong>Work</strong>: pi processes the prompt, runs tools, produces beads or GitHub issues/PRs</li>
+<li><strong>Idle</strong>: Agent waits for next kick</li>
+<li><strong>Clear on kick</strong> (<code>clear_on_kick: true</code>): <code>^C</code> kills the pi process before the next kick, wrapper restarts it fresh</li>
+</ol>
+<h3 id="adding-a-new-agent"><a class="header" href="#adding-a-new-agent">Adding a new agent</a></h3>
+<pre><code class="language-yaml"># In hive.yaml ConfigMap, under agents:
+my-agent:
+  enabled: true
+  backend: pi
+  model: deepseek-v4-pro
+  mode: ISSUES_AND_PRS
+  beads_dir: /data/beads/my-agent
+  clear_on_kick: true
+</code></pre>
+<p>Also add the agent to governor cadences for each mode:</p>
+<pre><code class="language-yaml">governor:
+  modes:
+    idle:
+      my-agent: 4h
+    quiet:
+      my-agent: 4h
+    busy:
+      my-agent: 1h
+    surge:
+      my-agent: pause
+</code></pre>
+<hr />
+<h2 id="6-acmm-levels"><a class="header" href="#6-acmm-levels">6. ACMM levels</a></h2>
+<p>The ACMM (Autonomous Code Maintenance Maturity) framework defines 6 levels:</p>
+<div class="table-wrapper"><table><thead><tr><th>Level</th><th>Name</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><strong>L1</strong></td><td>Advisory</td><td>Advisory-only reports, no writes</td></tr>
+<tr><td><strong>L2</strong></td><td>Issues</td><td>Can create issues, no PRs</td></tr>
+<tr><td><strong>L3</strong></td><td>CI/CD</td><td>Issues + hold-gated PRs, merge requires human LGTM</td></tr>
+<tr><td><strong>L4</strong></td><td>Guarded</td><td>Broader write access, more agents active</td></tr>
+<tr><td><strong>L5</strong></td><td>Guarded Auto-Merge</td><td>Auto-merge on green CI with guardrails</td></tr>
+<tr><td><strong>L6</strong></td><td>Full Autonomy</td><td>Unrestricted agent actions</td></tr>
+</tbody></table>
+</div>
+<p>Our Hive runs at <strong>L5</strong>. At each level, the Go binary enables additional pack agents and upgrades agent modes.</p>
+<h3 id="changing-acmm-level"><a class="header" href="#changing-acmm-level">Changing ACMM level</a></h3>
+<pre><code class="language-yaml"># In hive.yaml ConfigMap
+acmm_level: 5
+</code></pre>
+<p>After changing, nuke the persistent state to clear stale overrides:</p>
+<pre><code class="language-bash">kubectl exec -n hive deploy/hive -- sh -c 'echo "{}" &gt; /data/hive-state.json'
+kubectl rollout restart deploy/hive -n hive
+</code></pre>
+<hr />
+<h2 id="7-governor"><a class="header" href="#7-governor">7. Governor</a></h2>
+<p>The governor evaluates the issue queue every 5 minutes (<code>eval_interval_s: 300</code>) and switches between four modes:</p>
+<div class="table-wrapper"><table><thead><tr><th>Mode</th><th>Threshold</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><strong>idle</strong></td><td>0 issues</td><td>Slow cadences, minimal activity</td></tr>
+<tr><td><strong>quiet</strong></td><td>≤2 issues</td><td>Normal cadences</td></tr>
+<tr><td><strong>busy</strong></td><td>≤50 issues</td><td>Faster scanner, ci-maintainer still active</td></tr>
+<tr><td><strong>surge</strong></td><td>&gt;50 issues</td><td>Scanner every 15m, ci-maintainer paused</td></tr>
+</tbody></table>
+</div>
+<h3 id="current-cadences"><a class="header" href="#current-cadences">Current cadences</a></h3>
+<pre><code class="language-yaml">governor:
+  eval_interval_s: 300
+  modes:
+    surge:
+      threshold: 50
+      scanner: 15m
+      ci-maintainer: pause
+      quality: pause
+      sec-check: pause
+      guide: pause
+      architect: pause
+      strategist: pause
+    busy:
+      threshold: 10
+      scanner: 15m
+      ci-maintainer: 1h
+    quiet:
+      threshold: 2
+      scanner: 15m
+      ci-maintainer: 45m
+    idle:
+      threshold: 0
+      scanner: 4h
+      ci-maintainer: 4h
+</code></pre>
+<p>The supervisor always runs at 5m regardless of mode.</p>
+<hr />
+<h2 id="8-configuration"><a class="header" href="#8-configuration">8. Configuration</a></h2>
+<h3 id="backends-backendsconf"><a class="header" href="#backends-backendsconf">Backends (backends.conf)</a></h3>
+<p>The <code>backends.conf</code> in the ConfigMap defines supported AI backends. Adding a new backend requires entries in three places:</p>
+<ol>
+<li><code>KNOWN_BACKENDS</code> list</li>
+<li><code>backend_binary()</code> — maps backend name to binary in PATH</li>
+<li><code>backend_perm_flag()</code> — permission flag (pi returns empty — no permission popups)</li>
+</ol>
+<p>Current supported: <code>claude copilot bob gemini codex amazonq goose aider pi</code></p>
+<h3 id="agent-configuration-hiveyaml"><a class="header" href="#agent-configuration-hiveyaml">Agent configuration (hive.yaml)</a></h3>
+<pre><code class="language-yaml">agents:
+  supervisor:
+    enabled: true
+    backend: pi
+    model: deepseek-v4-pro
+    beads_dir: /data/beads/supervisor
+    clear_on_kick: true
+</code></pre>
+<h3 id="persistent-state"><a class="header" href="#persistent-state">Persistent state</a></h3>
+<p>Two locations store state that survives pod restarts:</p>
+<ul>
+<li><strong><code>/data/hive-state.json</code></strong> — Governor mode, agent overrides, kick history, cadence overrides</li>
+<li><strong><code>/data/agent-configs/*.yaml</code></strong> — Per-agent persistent config (backend, model, mode, enabled, display name)</li>
+</ul>
+<p>If the dashboard shows stale backend/model/mode values, these files have overrides from a previous configuration. Nuke them:</p>
+<pre><code class="language-bash">kubectl exec -n hive deploy/hive -- sh -c '
+  echo "{}" &gt; /data/hive-state.json
+  for f in /data/agent-configs/*.yaml; do
+    sed -i "s/backend: copilot/backend: pi/" "$f"
+    sed -i "s/model: claude-sonnet-4-6/model: deepseek-v4-pro/" "$f"
+    sed -i "s/model: claude-opus-4-6/model: deepseek-v4-pro/" "$f"
+  done
+'
+kubectl rollout restart deploy/hive -n hive
+</code></pre>
+<hr />
+<h2 id="9-building-the-image"><a class="header" href="#9-building-the-image">9. Building the image</a></h2>
+<h3 id="ci-recommended"><a class="header" href="#ci-recommended">CI (recommended)</a></h3>
+<p>Push to <code>master</code> — the workflow builds and pushes to <code>ghcr.io/hanthor/hive:latest</code>.</p>
+<h3 id="manual-kaniko"><a class="header" href="#manual-kaniko">Manual (Kaniko)</a></h3>
+<pre><code class="language-bash">kubectl apply -f talos-k8s/hive/build-job.yaml
+kubectl logs -n hive -f job/hive-build
+</code></pre>
+<h3 id="whats-in-the-image"><a class="header" href="#whats-in-the-image">What's in the image</a></h3>
+<ul>
+<li><strong>Base</strong>: <code>node:24-slim</code></li>
+<li><strong>Runtime deps</strong>: bash, curl, git, gosu, iptables, jq, procps, python3, tmux, <code>fd-find</code>, <code>ripgrep</code></li>
+<li><strong>Go binaries</strong>: hive (agent manager), bd (bead CLI) — cross-compiled from <code>kubestellar/hive</code> v2</li>
+<li><strong>Node.js proxy</strong>: Dashboard UI + SSE, serves on :3001</li>
+<li><strong>pi</strong>: <code>@earendil-works/pi-coding-agent</code> installed via npm</li>
+<li><strong>pi-wrapper.sh</strong>: Replaces <code>/usr/local/bin/pi</code> with the tmux interface wrapper</li>
+<li><strong>gh CLI</strong>: GitHub CLI with wrapper for App token auth</li>
+<li><strong>Entrypoint</strong>: UID isolation, tmux setup, config backup, App token generation</li>
+</ul>
+<hr />
+<h2 id="10-day-to-day-operations"><a class="header" href="#10-day-to-day-operations">10. Day-to-day operations</a></h2>
+<h3 id="check-agent-status"><a class="header" href="#check-agent-status">Check agent status</a></h3>
+<pre><code class="language-bash"># Dashboard API
+curl -sk https://hive.manatee-basking.ts.net/api/status | jq .
+
+# Or from within the pod
+kubectl exec -n hive deploy/hive -- curl -s localhost:3001/api/status
+</code></pre>
+<h3 id="view-agent-terminal"><a class="header" href="#view-agent-terminal">View agent terminal</a></h3>
+<pre><code class="language-bash"># List tmux sessions
+kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-1001/default ls
+
+# View an agent's terminal
+kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-1001/default capture-pane -t hive-scanner -p -S -30
+</code></pre>
+<h3 id="check-pi-processes"><a class="header" href="#check-pi-processes">Check pi processes</a></h3>
+<pre><code class="language-bash">kubectl exec -n hive deploy/hive -- ps aux | grep "pi$"
+# Should show 9 pi processes (one per active agent)
+</code></pre>
+<h3 id="view-logs"><a class="header" href="#view-logs">View logs</a></h3>
+<pre><code class="language-bash">kubectl logs -n hive -l app.kubernetes.io/name=hive -f --tail=100
+</code></pre>
+<h3 id="restart"><a class="header" href="#restart">Restart</a></h3>
+<pre><code class="language-bash">kubectl rollout restart deploy/hive -n hive
+</code></pre>
+<h3 id="nuke-persistent-state"><a class="header" href="#nuke-persistent-state">Nuke persistent state</a></h3>
+<p>If agents have stale backend/model overrides or wrong modes:</p>
+<pre><code class="language-bash">kubectl exec -n hive deploy/hive -- sh -c 'echo "{}" &gt; /data/hive-state.json'
+# Also check /data/agent-configs/ for stale copilot/goose references
+kubectl rollout restart deploy/hive -n hive
+</code></pre>
+<hr />
+<h2 id="11-troubleshooting"><a class="header" href="#11-troubleshooting">11. Troubleshooting</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Symptom</th><th>Check</th></tr></thead><tbody>
+<tr><td>ImagePullBackOff</td><td>IPv6 timeouts on ghcr.io. Verify <code>/etc/hosts</code> on bihar has <code>20.207.73.86 ghcr.io</code></td></tr>
+<tr><td>Agent CLI crashed</td><td>Check <code>ps aux | grep pi</code> — should see 9 pi processes</td></tr>
+<tr><td>Agent stuck in ADVISORY mode</td><td>Check ACMM level in state file. May need state nuke</td></tr>
+<tr><td>Dashboard shows old backend/model</td><td>Stale overrides in <code>/data/agent-configs/*.yaml</code>. Fix with sed + state nuke</td></tr>
+<tr><td>No kicks sent</td><td>Governor eval cycle: 5min. Agent cadences vary per mode</td></tr>
+<tr><td>Issues not created</td><td>Verify GitHub App installed on tuna-os. Check token: <code>cat /var/run/hive-metrics/gh-app-token.cache</code></td></tr>
+<tr><td>"CLI did not reach input prompt"</td><td>pi is mid-response when kick arrives. Normal — agent will pick up next kick</td></tr>
+<tr><td>fd/ripgrep download errors</td><td>pi can't download tools through MITM proxy. Pre-installed in Docker image</td></tr>
+<tr><td>"backend binary not found"</td><td>Missing binary in PATH. Check <code>backends.conf</code> and verify wrapper is at <code>/usr/local/bin/pi</code></td></tr>
+<tr><td>"failed to persist config"</td><td>Read-only ConfigMap mount. Cosmetic — config is cached in memory</td></tr>
+</tbody></table>
+</div>
+<h3 id="common-agent-issues"><a class="header" href="#common-agent-issues">Common agent issues</a></h3>
+<p><strong>Agent shows bare bash shell:</strong></p>
+<ul>
+<li>pi process died or never started</li>
+<li>Check: <code>tmux capture-pane -t hive-scanner -p | tail -5</code></li>
+<li>Should show pi's footer (<code>deepseek-v4-pro • high</code>), not <code>$</code> bash prompt</li>
+</ul>
+<p><strong>Agent stuck at <code>/clear</code>:</strong></p>
+<ul>
+<li>Hive sent <code>/clear</code> to reset the agent before a kick</li>
+<li>Agent processed it but new kick hasn't arrived yet</li>
+<li>Wait for next governor cycle</li>
+</ul>
+<p><strong>Agent mode mismatch:</strong></p>
+<ul>
+<li>State file has persistent mode override</li>
+<li>Nuke state and restart</li>
+</ul>
+<hr />
+<h2 id="12-github-app"><a class="header" href="#12-github-app">12. GitHub App</a></h2>
+<p>Hive authenticates to GitHub via a GitHub App (ID <strong>3942065</strong>) installed on <code>tuna-os</code>.</p>
+<h3 id="token-generation"><a class="header" href="#token-generation">Token generation</a></h3>
+<p>The entrypoint generates an installation token on startup and caches it at <code>/var/run/hive-metrics/gh-app-token.cache</code>. Agents access it via <code>$GH_TOKEN</code>.</p>
+<h3 id="required-permissions"><a class="header" href="#required-permissions">Required permissions</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Permission</th><th>Scope</th><th>Why</th></tr></thead><tbody>
+<tr><td><code>contents: read</code></td><td>Repo</td><td>Read code, files</td></tr>
+<tr><td><code>contents: write</code></td><td>Repo</td><td>Create branches, push commits for PRs</td></tr>
+<tr><td><code>issues: write</code></td><td>Repo</td><td>Create and update issues</td></tr>
+<tr><td><code>pull_requests: write</code></td><td>Repo</td><td>Create PRs</td></tr>
+<tr><td><code>metadata: read</code></td><td>Repo</td><td>Basic repo access</td></tr>
+<tr><td><code>security_events: read</code></td><td>Repo</td><td>Dependabot alerts (sec-check agent)</td></tr>
+</tbody></table>
+</div>
+<h3 id="rate-limits"><a class="header" href="#rate-limits">Rate limits</a></h3>
+<ul>
+<li>GitHub App: 15,000 req/hr (shared across all installations)</li>
+<li>Personal Access Token: 5,000 req/hr</li>
+</ul>
+<p>The App gives Hive its own rate limit pool, separate from personal API usage.</p>
+<h3 id="updating-permissions"><a class="header" href="#updating-permissions">Updating permissions</a></h3>
+<ol>
+<li>Go to: <code>https://github.com/organizations/tuna-os/settings/apps/hanthor-hive-agent/permissions</code></li>
+<li>Add the needed permissions</li>
+<li>Re-accept on the installation page</li>
+<li>Restart hive: <code>kubectl rollout restart deploy/hive -n hive</code></li>
+</ol>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../talos-k8s.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../talos-k8s.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
