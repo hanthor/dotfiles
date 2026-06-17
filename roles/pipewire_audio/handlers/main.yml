@@ -27,3 +27,11 @@
         state: restarted
         scope: user
       failed_when: false
+
+- name: Restart mic dsp link
+  ansible.builtin.systemd_service:
+    name: mic-dsp-link.service
+    state: restarted
+    scope: user
+    daemon_reload: true
+  failed_when: false

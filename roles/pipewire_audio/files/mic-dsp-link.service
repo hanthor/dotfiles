@@ -1,0 +1,12 @@
+[Unit]
+Description=Link hardware microphone to RNNoise DSP filter
+After=wireplumber.service
+Wants=wireplumber.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'sleep 2; HW_MIC=$$(pactl list short sources | grep alsa_input | grep -v monitor | head -1 | awk "{print $$2}"); [ -n "$$HW_MIC" ] || exit 0; pactl set-source-volume $$HW_MIC 75%; pw-link $$HW_MIC:capture_FL effect_input.mic_dsp:playback_FL; pw-link $$HW_MIC:capture_FR effect_input.mic_dsp:playback_FR; pactl set-default-source effect_output.mic_dsp; exit 0'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target

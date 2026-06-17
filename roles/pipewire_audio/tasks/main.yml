@@ -138,6 +138,35 @@
     state: directory
     mode: "0755"
 
+# ── Mic DSP persistent routing ──────────────────────────────────────────
+# WirePlumber 0.5 doesn't auto-route hardware mic to filter-chain.
+# Systemd oneshot creates the link at login.
+
+- name: Deploy mic DSP link service (routes hardware mic through RNNoise)
+  when: has_rnnoise | bool
+  ansible.builtin.copy:
+    src: mic-dsp-link.service
+    dest: ~/.config/systemd/user/mic-dsp-link.service
+    mode: "0644"
+  notify: Restart mic dsp link
+
+- name: Enable mic DSP link service
+  ansible.builtin.systemd_service:
+    name: mic-dsp-link.service
+    enabled: true
+    state: started
+    scope: user
+    daemon_reload: true
+  when: has_rnnoise | bool
+
+- name: Disable mic DSP link service (RNNoise unavailable)
+  ansible.builtin.systemd_service:
+    name: mic-dsp-link.service
+    enabled: false
+    state: stopped
+    scope: user
+  when: not (has_rnnoise | bool)
+
 # ── WirePlumber cleanup (old-format Lua unsupported in WP 0.5) ───────────
 
 - name: Remove old-format WirePlumber default-device Lua rule (WP 0.5+)
