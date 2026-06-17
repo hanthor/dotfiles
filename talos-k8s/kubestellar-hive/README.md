@@ -1,6 +1,8 @@
 # KubeStellar Hive Contributor
 
-KubeStellar Hive contributor pod running on the Talos cluster, backed by Lemonade's Qwen3.6-35B model.
+KubeStellar Hive contributor pod running on the Talos cluster, backed by Lemonade's Qwen3.6-27B model.
+
+> **Postmortem:** See [cluster-fixes-2026-06.md](cluster-fixes-2026-06.md) for the June 2026 death-loop incident and all fixes applied.
 
 Uses the upstream `ghcr.io/kubestellar/hive-contributor` image (pre-built with goose + gh + scripts).
 
@@ -37,12 +39,12 @@ kubectl apply -f manifest.yaml
 │    └─ goose (in tmux session)                       │
 │         │                                           │
 │         └─ POST /v1/chat/completions ───────────────┼───┐
-│              model: Qwen3.6-35B-GGUF                │   │
+│              model: Qwen3.6-27B-GGUF                │   │
 └─────────────────────────────────────────────────────┘   │
                                                           │
 ┌─────────────────────────────────────────────────────────┘
 │  Lemonade (karnataka)
 │  https://lemonade.manatee-basking.ts.net/v1
-│  Qwen3.6-35B-GGUF (18.5GB, 262K ctx, vision, tool-calling)
+│  Qwen3.6-27B-GGUF (18.5GB, 262K ctx, vision, tool-calling)
 └─────────────────────────────────────────────────────────
 ```
