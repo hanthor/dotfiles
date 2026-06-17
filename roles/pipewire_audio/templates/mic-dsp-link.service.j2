@@ -5,7 +5,18 @@ Wants=wireplumber.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'sleep 2; HW_MIC=$$(pactl list short sources | grep alsa_input | grep -v monitor | head -1 | awk "{print $$2}"); [ -n "$$HW_MIC" ] || exit 0; pactl set-source-volume $$HW_MIC {{ mic_hardware_volume_pct | default(100) }}%; pw-link $$HW_MIC:capture_FL effect_input.mic_dsp:playback_FL; pw-link $$HW_MIC:capture_FR effect_input.mic_dsp:playback_FR; pactl set-default-source effect_output.mic_dsp; exit 0'
+ExecStart=/bin/sh -c '\
+for i in 1 2 3 4 5; do \
+  HW_MIC=$$(pactl list short sources 2>/dev/null | grep alsa_input | grep -v monitor | head -1 | awk "{print $$2}"); \
+  [ -n "$$HW_MIC" ] && break; \
+  sleep 1; \
+done; \
+[ -n "$$HW_MIC" ] || exit 0; \
+pactl set-source-volume $$HW_MIC {{ mic_hardware_volume_pct | default(100) }}% 2>/dev/null || true; \
+pw-link $$HW_MIC:capture_FL effect_input.rnnoise:input_FL 2>/dev/null; \
+pw-link $$HW_MIC:capture_FR effect_input.rnnoise:input_FR 2>/dev/null; \
+pactl set-default-source effect_output.rnnoise 2>/dev/null || true; \
+exit 0'
 RemainAfterExit=yes
 
 [Install]

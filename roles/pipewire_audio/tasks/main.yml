@@ -107,14 +107,14 @@
   when: has_rnnoise | bool
   ansible.builtin.copy:
     src: mic-rnnoise.conf
-    dest: ~/.config/pipewire/pipewire.conf.d/60-mic-dsp.conf
+    dest: ~/.config/pipewire/filter-chain.conf.d/source-rnnoise.conf
     mode: "0644"
   notify: Restart pipewire
 
 - name: Remove mic DSP config (RNNoise unavailable)
   when: not (has_rnnoise | bool)
   ansible.builtin.file:
-    path: ~/.config/pipewire/pipewire.conf.d/60-mic-dsp.conf
+    path: ~/.config/pipewire/filter-chain.conf.d/source-rnnoise.conf
     state: absent
   notify: Restart pipewire
 
