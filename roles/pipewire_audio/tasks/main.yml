@@ -144,8 +144,8 @@
 
 - name: Deploy mic DSP link service (routes hardware mic through RNNoise)
   when: has_rnnoise | bool
-  ansible.builtin.copy:
-    src: mic-dsp-link.service
+  ansible.builtin.template:
+    src: mic-dsp-link.service.j2
     dest: ~/.config/systemd/user/mic-dsp-link.service
     mode: "0644"
   notify: Restart mic dsp link

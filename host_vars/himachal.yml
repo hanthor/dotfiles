@@ -4,3 +4,4 @@ is_laptop: true
 dotfiles_update_delay_seconds: 90
 has_homepage: true
 web_services: []
+mic_hardware_volume_pct: 75

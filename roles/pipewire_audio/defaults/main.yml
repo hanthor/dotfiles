@@ -1,0 +1,5 @@
+---
+# Default hardware mic volume percentage (0-100).
+# Machines with hot mics should override this in host_vars.
+# 100 = no attenuation (default).  himachal uses 75 to prevent peaking.
+mic_hardware_volume_pct: 100
