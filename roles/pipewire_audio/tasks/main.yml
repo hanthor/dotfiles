@@ -72,9 +72,12 @@
 
 - name: Ensure PipeWire config directories exist
   ansible.builtin.file:
-    path: ~/.config/pipewire/pipewire.conf.d
+    path: "{{ item }}"
     state: directory
     mode: "0755"
+  loop:
+    - ~/.config/pipewire/pipewire.conf.d
+    - ~/.config/pipewire/filter-chain.conf.d
 
 # ── Speaker DSP ──────────────────────────────────────────────────────────
 # Tier 1: LV2-based full chain (para EQ + bass enhancer + exciter + limiter)
@@ -107,14 +110,14 @@
   when: has_rnnoise | bool
   ansible.builtin.copy:
     src: mic-rnnoise.conf
-    dest: ~/.config/pipewire/filter-chain.conf.d/source-rnnoise.conf
+    dest: ~/.config/pipewire/pipewire.conf.d/60-mic-dsp.conf
     mode: "0644"
   notify: Restart pipewire
 
 - name: Remove mic DSP config (RNNoise unavailable)
   when: not (has_rnnoise | bool)
   ansible.builtin.file:
-    path: ~/.config/pipewire/filter-chain.conf.d/source-rnnoise.conf
+    path: ~/.config/pipewire/pipewire.conf.d/60-mic-dsp.conf
     state: absent
   notify: Restart pipewire
 

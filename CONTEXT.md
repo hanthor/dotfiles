@@ -36,3 +36,13 @@
 - **Interface** — everything a caller must know to use the module (task names, variables, tags, error modes, `when:` guards).
 - **Depth** — leverage at the interface. A module is **deep** when a lot of behaviour sits behind a small interface.
 - **Seam** — where an interface lives; a place behaviour can be altered without editing in place.
+
+## Audio (from pipewire DSP grilling)
+
+- **DSP chain** — a PipeWire filter-chain module that processes audio through a graph of plugins (biquads, LADSPA, or LV2). Each chain creates virtual sinks/sources that apps connect to.
+- **Bootc-compatible DSP** — a DSP chain that uses only PipeWire built-in plugins (e.g. `bq_peaking`, `bq_highpass`) with zero external package dependencies. Deployable on immutable bootc systems without image rebuilds.
+- **LV2 DSP** — a DSP chain that uses LV2 plugins (e.g. `lsp-plugins` for parametric EQ, compressor, limiter). Higher quality but requires `lsp-plugins-lv2` in the base image.
+- **Mic-DSP link** — the systemd oneshot service that routes the hardware microphone into a filter-chain and sets the default source. Exists because WirePlumber 0.5 does not auto-route hardware sources into passive filter inputs.
+- **Filter-chain config directory** — `~/.config/pipewire/pipewire.conf.d/`. Filter-chain module configs must live here to be auto-loaded by the system PipeWire daemon. The `filter-chain.conf.d/` directory is only scanned by a standalone filter-chain process (`pipewire -c filter-chain.conf`), not by the main daemon. The official `source-rnnoise.conf` comment is misleading on this point.
+- **Mic hardware volume** — a host-specific percentage (default 100) limiting the ALSA capture gain to prevent peaking on machines with hot microphones. Set via `mic_hardware_volume_pct` in `host_vars/`.
+- **Per-machine speaker tuning** (future) — the current 16-band biquad EQ curve is a one-size-fits-all preset migrated from Easy Effects. Per-machine tuning would require: (1) a measurement methodology using a reference microphone and pink noise, (2) a tool to generate EQ curves from measurements (e.g. REW, AutoEQ), (3) per-machine profiles in `host_vars/` driving a Jinja2-templated filter-chain config. Not built yet.
