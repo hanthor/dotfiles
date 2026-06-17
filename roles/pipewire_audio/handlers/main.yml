@@ -12,7 +12,7 @@
         scope: user
       loop:
         - pipewire
-        - pipewire-pulse
+        - pipewire-pulse.socket
       failed_when: false
 
 - name: Restart wireplumber
