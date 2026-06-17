@@ -1,0 +1,27 @@
+---
+# Tailscale binary installation. Two adapters: ujust (Bluefin) or upstream install script.
+
+- name: Check if tailscale command exists
+  ansible.builtin.command: which tailscale
+  register: _ts_installed
+  changed_when: false
+  failed_when: false
+
+- name: End install phase if already installed
+  ansible.builtin.meta: end_play
+  when: _ts_installed.rc == 0
+
+- name: Check if ujust exists
+  ansible.builtin.command: which ujust
+  register: _ujust_exists
+  changed_when: false
+  failed_when: false
+
+- name: Install tailscale via ujust (Bluefin)
+  ansible.builtin.command: ujust install-tailscale
+  when: _ujust_exists.rc == 0
+
+- name: Install tailscale via install script (non-Bluefin)
+  ansible.builtin.shell: curl -fsSL https://tailscale.com/install.sh | sh
+  become: true
+  when: _ujust_exists.rc != 0

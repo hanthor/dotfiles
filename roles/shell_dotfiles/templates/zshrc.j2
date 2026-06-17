@@ -1,0 +1,64 @@
+# Homebrew
+if [ -d /home/linuxbrew/.linuxbrew ]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
+# ── History ──────────────────────────────────────────────────────
+export HISTFILE=~/.zsh_history
+export HISTSIZE=100000
+export SAVEHIST=100000
+setopt INC_APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE HIST_REDUCE_BLANKS
+setopt AUTO_CD EXTENDED_GLOB INTERACTIVE_COMMENTS PROMPT_SUBST
+
+# ── Environment ──────────────────────────────────────────────────
+export EDITOR=nvim
+export VISUAL=nvim
+export PAGER=delta
+export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+
+# XDG
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+export XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+
+export PATH="$HOME/.local/bin:$PATH"
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+# ── Completion ───────────────────────────────────────────────────
+# Use a compilation cache to speed up startup (rebuilt once a day)
+_comp_dumpfile="${XDG_CACHE_HOME:-$HOME/.cache}/zcompdump"
+autoload -Uz compinit
+# Ensure EXTENDED_GLOB is set for the glob qualifier
+setopt EXTENDED_GLOB
+if [[ -n "$_comp_dumpfile"(#qN.mh-24) ]]; then
+  compinit -C -d "$_comp_dumpfile"
+else
+  compinit -d "$_comp_dumpfile"
+  # Compile the completion dump file for faster loading in the background
+  { zcompile "$_comp_dumpfile" } &!
+fi
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'  # case-insensitive
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# ── Bluefin CLI (eza, bat, zoxide, starship, atuin, fzf) ─────────
+if command -v bluefin-cli &>/dev/null; then
+  # Intercept and bypass the slow MOTD execution to speed up startup
+  eval "$(bluefin-cli init zsh | sed 's/bluefin-cli motd show/true/')"
+elif command -v atuin &>/dev/null; then
+  # Fallback: initialize atuin directly when bluefin-cli isn't available (e.g. Alpine)
+  eval "$(atuin init zsh)"
+fi
+
+# ── direnv ───────────────────────────────────────────────────────
+command -v direnv &>/dev/null && eval "$(direnv hook zsh)"
+
+# ── fzf (fallback if bluefin-cli didn't set it up) ───────────────
+command -v fzf &>/dev/null && ! type _fzf_complete &>/dev/null && source <(fzf --zsh)
+
+# ── Custom aliases ───────────────────────────────────────────────
+[ -f ~/.config/shell/aliases.sh ] && source ~/.config/shell/aliases.sh
+
+# ── tailvm completions ───────────────────────────────────────────
+[ -f ~/.tailvm-completion.zsh ] && source ~/.tailvm-completion.zsh

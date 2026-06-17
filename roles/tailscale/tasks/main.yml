@@ -1,219 +1,27 @@
 ---
-# Configure systemd-resolved to work properly with Tailscale MagicDNS.
-# resolv.conf must point to the stub resolver so Tailscale can configure
-# resolved via D-Bus instead of overwriting the file directly.
-- name: Create systemd-resolved drop-in directory
-  ansible.builtin.file:
-    path: /etc/systemd/resolved.conf.d
-    state: directory
-    mode: "0755"
-  become: true
+# ── Phase 1: Network prerequisites (always, before connection check) ──
+- name: Configure DNS and sysctl prerequisites
+  ansible.builtin.include_tasks: configure_prereqs.yml
 
-- name: Configure systemd-resolved to listen on [::1] for container DNS
-  ansible.builtin.copy:
-    dest: /etc/systemd/resolved.conf.d/ipv6-stub.conf
-    mode: "0644"
-    content: |
-      [Resolve]
-      DNSStubListenerExtra=::1
-  become: true
-  notify: Restart systemd-resolved
-
-- name: Point resolv.conf to systemd-resolved stub resolver
-  ansible.builtin.file:
-    src: /run/systemd/resolve/stub-resolv.conf
-    dest: /etc/resolv.conf
-    state: link
-    force: true
-    follow: false
-  become: true
-  notify: Restart systemd-resolved
-  when: not (tailscale_accept_dns is defined and not tailscale_accept_dns)
-
-# rp_filter=2 (loose mode) is required for exit node traffic to route correctly.
-# Tailscale v1.96+ sets this automatically, but net.ipv4.conf.default.rp_filter
-# defaults to 1 (strict) and applies to new interfaces, so set both explicitly.
-- name: Configure sysctl for Tailscale exit node compatibility
-  ansible.builtin.copy:
-    dest: /etc/sysctl.d/99-tailscale.conf
-    mode: "0644"
-    content: |
-      net.ipv4.conf.all.rp_filter = 2
-      net.ipv4.conf.default.rp_filter = 2
-      net.ipv4.ip_forward = 1
-      net.ipv6.conf.all.forwarding = 1
-  become: true
-  notify: Apply sysctl settings
-
+# ── Phase 2: Check connection state ──
 - name: Check if tailscale is already connected
   ansible.builtin.command: tailscale status
-  register: tailscale_status
+  register: _ts_status
   changed_when: false
   failed_when: false
 
-- name: Read current Tailscale prefs (for idempotency comparison)
-  ansible.builtin.command: tailscale debug prefs
-  register: tailscale_prefs
-  changed_when: false
-  failed_when: false
-  when:
-    - tailscale_status.rc == 0
-    - tailscale_advertise_routes is defined
+# ── Phase 3a: Already connected — configure routes, hostname, desktop extras ──
+- name: Configure connected Tailscale
+  ansible.builtin.include_tasks: configure_connected.yml
+  when: _ts_status.rc == 0
 
-- name: Advertise subnet routes (only when routes differ from current prefs)
-  ansible.builtin.command: >
-    tailscale up
-    --hostname={{ inventory_hostname }}
-    --advertise-routes={{ tailscale_advertise_routes }}
-    {% if tailscale_accept_dns is defined and not tailscale_accept_dns %}--accept-dns=false{% endif %}
-    {% if tailscale_operator is defined %}--operator={{ tailscale_operator }}{% endif %}
-
-  become: true
-  when:
-    - tailscale_status.rc == 0
-    - tailscale_advertise_routes is defined
-    - tailscale_advertise_routes not in (tailscale_prefs.stdout | default(''))
-  changed_when: true
-
-- name: Sync Tailscale hostname to match machine hostname
-  ansible.builtin.command: tailscale set --hostname={{ inventory_hostname }}
-  become: true
-  when:
-    - tailscale_status.rc == 0
-  changed_when: false
-
-- name: Fix resolv.conf when systemd-resolved is not active
-  ansible.builtin.copy:
-    dest: /etc/resolv.conf
-    content: "nameserver 1.1.1.1\nnameserver 8.8.8.8\n"
-    owner: root
-    group: root
-    mode: "0644"
-    force: true
-  become: true
-  when:
-    - tailscale_status.rc == 0
-    - tailscale_accept_dns is defined
-    - not tailscale_accept_dns
-
-- name: Set Tailscale operator to allow user-level management
-  ansible.builtin.command: tailscale set --operator={{ ansible_facts['env']['USER'] }}
-  become: true
-  when: is_desktop | bool
-  changed_when: false
-  failed_when: false
-
-- name: Install Tailscale systray service on desktop machines
-  ansible.builtin.command: tailscale configure systray --enable-startup=systemd
-  when: is_desktop | bool
-  changed_when: false
-  failed_when: false
-
-- name: Enable and start Tailscale systray service
-  ansible.builtin.shell: |
-    systemctl --user daemon-reload
-    systemctl --user enable --now tailscale-systray
-  when: is_desktop | bool
-  changed_when: false
-  failed_when: false
-
-- name: Skip if already connected
+# ── Phase 3b: Not connected — install, fetch auth, join ──
+- name: End role if already connected
   ansible.builtin.meta: end_role
-  when: tailscale_status.rc == 0
+  when: _ts_status.rc == 0
 
-- name: Check if tailscale command exists
-  ansible.builtin.command: which tailscale
-  register: tailscale_exists
-  changed_when: false
-  failed_when: false
+- name: Install Tailscale
+  ansible.builtin.include_tasks: install.yml
 
-- name: Check if ujust exists
-  ansible.builtin.command: which ujust
-  register: ujust_exists
-  changed_when: false
-  failed_when: false
-  when: tailscale_exists.rc != 0
-
-- name: Install tailscale via ujust
-  ansible.builtin.command: ujust install-tailscale
-  when:
-    - tailscale_exists.rc != 0
-    - ujust_exists.rc == 0
-
-- name: Install tailscale via install script
-  ansible.builtin.shell: curl -fsSL https://tailscale.com/install.sh | sh
-  become: true
-  when:
-    - tailscale_exists.rc != 0
-    - ujust_exists.rc != 0
-
-# Need BW to join tailscale (auth key lives there). If the vault is locked,
-# warn and end the role so we don't try `tailscale up` with an empty key.
-- name: Warn and skip tailscale join (vault locked)
-  ansible.builtin.debug:
-    msg: >-
-      tailscale is not connected but the Bitwarden vault is locked on this host,
-      so the auth key can't be fetched. Unlock the vault (`bw unlock`,
-      `printf '%s' "$session" > /tmp/bw_session`) and re-run.
-  when: not (bw_unlocked | default(false))
-
-- name: End role if vault is locked
-  ansible.builtin.meta: end_role
-  when: not (bw_unlocked | default(false))
-
-- name: Fetch tailscale auth/API key from Bitwarden
-  ansible.builtin.shell: BW_SESSION={{ bw_session }} bw get item tailscale-apikey | python3 -c "import sys,json; print(json.load(sys.stdin)['login']['password'])"
-  register: tailscale_apikey
-  changed_when: false
-  no_log: true
-  environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
-
-- name: Remove old tailscale device with same hostname
-  block:
-    - name: Fetch tailscale device list
-      ansible.builtin.uri:
-        url: https://api.tailscale.com/api/v2/tailnet/-/devices
-        method: GET
-        user: "{{ tailscale_apikey.stdout }}"
-        password: ""
-        force_basic_auth: true
-        status_code: 200
-        headers:
-          Content-Type: application/json
-      register: ts_devices
-      failed_when: false
-      no_log: true
-
-    - name: Find old device matching our hostname
-      ansible.builtin.set_fact:
-        ts_old_device_id: >-
-          {{ (ts_devices.json.devices | default([])
-            | selectattr('hostname', 'equalto', inventory_hostname + '.' + tailscale_domain)
-            | map(attribute='id') | first) | default('') }}
-
-    - name: Delete old tailscale device
-      ansible.builtin.uri:
-        url: https://api.tailscale.com/api/v2/device/{{ ts_old_device_id }}
-        method: DELETE
-        user: "{{ tailscale_apikey.stdout }}"
-        password: ""
-        force_basic_auth: true
-        status_code: 200
-      when: ts_old_device_id | length > 0
-      no_log: true
-
-  when: tailscale_apikey.stdout | default('') | length > 0
-
-- name: Join tailscale network
-  ansible.builtin.command: tailscale up --authkey {{ tailscale_apikey.stdout }} --advertise-tags=tag:fleet --accept-routes --hostname {{ inventory_hostname }}
-  become: true
-  no_log: true
-
-- name: Advertise subnet routes
-  ansible.builtin.command: >
-    tailscale up --advertise-routes={{ tailscale_advertise_routes }}
-    --reset=false
-  become: true
-  when: tailscale_advertise_routes is defined
-  changed_when: true
+- name: Join tailnet
+  ansible.builtin.include_tasks: connect.yml

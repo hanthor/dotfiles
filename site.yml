@@ -9,6 +9,7 @@
         is_desktop: "{{ is_desktop | default(inventory_hostname in groups.get('desktop', [])) }}"
         is_laptop: "{{ is_laptop | default(false) }}"
         brew_bin: "{{ brew_prefix }}/bin"
+        machine_profile: "{{ machine_profile | default('') }}"
       tags: always
 
     - name: Ensure brew is in PATH for this run
@@ -31,8 +32,10 @@
       tags: [packages, homebrew]
     - role: bitwarden
       tags: [secrets, bitwarden]
-    - role: shell
-      tags: [dotfiles, shell]
+    - role: shell_fonts
+      tags: [dotfiles, shell, fonts]
+    - role: shell_dotfiles
+      tags: [dotfiles, shell, dotfiles]
     - role: pi
       tags: [dotfiles, pi]
     - role: git
@@ -41,6 +44,10 @@
       tags: [dotfiles, neovim, editor]
 
     # Phase 2: Secrets + auth
+    - role: shell_atuin
+      tags: [dotfiles, shell, atuin, secrets]
+    - role: shell_ai
+      tags: [dotfiles, shell, ai, secrets]
     - role: ssh_keys
       tags: [secrets, ssh, ssh_keys]
     - role: github
@@ -49,21 +56,21 @@
       tags: [secrets, tailscale]
     - role: kube
       tags: [secrets, kube]
-      when: is_desktop | bool and not skip_kube | default(false)
+      when: is_desktop | bool and machine_profile != 'vm-test' and not skip_kube | default(false)
 
     # Phase 3: Desktop apps
     - role: flatpak
       tags: [packages, desktop, flatpak]
-      when: is_desktop | bool and not skip_flatpak | default(false)
+      when: is_desktop | bool and machine_profile != 'vm-test' and not skip_flatpak | default(false)
     - role: bluefin_common
       tags: [desktop, bluefin]
-      when: is_desktop | bool and not skip_bluefin | default(false)
+      when: is_desktop | bool and machine_profile != 'vm-test' and not skip_bluefin | default(false)
     - role: gnome
       tags: [desktop, gnome]
-      when: is_desktop | bool and not skip_gnome | default(false)
+      when: is_desktop | bool and machine_profile != 'vm-test' and not skip_gnome | default(false)
     - role: zen_browser
       tags: [desktop, browser, zen_browser]
-      when: is_desktop | bool and not skip_zen_browser | default(false)
+      when: is_desktop | bool and machine_profile != 'vm-test' and not skip_zen_browser | default(false)
     - role: pipewire_audio
       tags: [desktop, audio, pipewire]
       when: is_desktop | bool
@@ -71,29 +78,29 @@
     # Phase 4: Services
     - role: monitoring
       tags: [services, monitoring]
-      when: inventory_hostname not in groups.get('vps', []) and not skip_monitoring | default(false)
+      when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_monitoring | default(false)
     - role: syncthing
       tags: [services, syncthing]
-      when: inventory_hostname not in groups.get('vps', []) and not skip_syncthing | default(false)
+      when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_syncthing | default(false)
     - role: systemd
       tags: [services, systemd]
     - role: homepage
       tags: [services, homepage]
-      when: inventory_hostname not in groups.get('vps', []) and not skip_homepage | default(false)
+      when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_homepage | default(false)
     - role: bst_dashboard
       tags: [services, bst_dashboard]
     - role: proxy
       tags: [services, proxy, caddy]
-      when: inventory_hostname not in groups.get('vps', []) and not skip_proxy | default(false)
+      when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_proxy | default(false)
     - role: tailscale_cert
       tags: [services, tailscale_cert]
-      when: inventory_hostname not in groups.get('vps', []) and not skip_tailscale_cert | default(false)
+      when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_tailscale_cert | default(false)
     - role: cockpit
       tags: [services, cockpit]
-      when: (is_desktop | bool or inventory_hostname in groups.get('server', [])) and not skip_cockpit | default(false)
+      when: (is_desktop | bool or inventory_hostname in groups.get('server', [])) and machine_profile != 'vm-test' and not skip_cockpit | default(false)
     - role: lima
       tags: [services, lima]
-      when: (is_desktop | bool or inventory_hostname == 'bihar') and not skip_lima | default(false)
+      when: (is_desktop | bool or inventory_hostname == 'bihar') and machine_profile != 'vm-test' and not skip_lima | default(false)
     - role: server_hardening
       tags: [system, hardening, security]
       when: inventory_hostname in groups.get('server', []) or inventory_hostname in groups.get('vps', [])

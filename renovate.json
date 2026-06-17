@@ -2,5 +2,19 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "automerge": true,
+  "automergeType": "pr",
+  "packageRules": [
+    {
+      "description": "Auto-merge minor/patch/digest/pin updates",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "Require manual approval for major updates",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    }
   ]
 }

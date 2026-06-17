@@ -1,0 +1,103 @@
+---
+- name: Create ~/.config/shell/ directory
+  ansible.builtin.file:
+    path: ~/.config/shell
+    state: directory
+    mode: "0755"
+
+- name: Deploy shared aliases (bash/zsh)
+  ansible.builtin.template:
+    src: aliases.sh.j2
+    dest: ~/.config/shell/aliases.sh
+    mode: "0644"
+
+- name: Deploy ~/.bashrc
+  ansible.builtin.template:
+    src: bashrc.j2
+    dest: ~/.bashrc
+    mode: "0644"
+
+- name: Deploy ~/.zshrc
+  ansible.builtin.template:
+    src: zshrc.j2
+    dest: ~/.zshrc
+    mode: "0644"
+
+- name: Deploy ~/.zprofile
+  ansible.builtin.template:
+    src: zprofile.j2
+    dest: ~/.zprofile
+    mode: "0644"
+
+- name: Deploy ~/.tmux.conf
+  ansible.builtin.copy:
+    src: tmux.conf
+    dest: ~/.tmux.conf
+    mode: "0644"
+
+- name: Deploy ~/.inputrc (readline defaults for bash + readline apps)
+  ansible.builtin.copy:
+    src: inputrc
+    dest: ~/.inputrc
+    mode: "0644"
+
+- name: Ensure ~/.config/starship directory exists
+  ansible.builtin.file:
+    path: ~/.config
+    state: directory
+    mode: "0755"
+
+- name: Deploy starship.toml
+  ansible.builtin.copy:
+    src: starship.toml
+    dest: ~/.config/starship.toml
+    mode: "0644"
+
+- name: Create ~/.config/fish/ directory
+  ansible.builtin.file:
+    path: ~/.config/fish
+    state: directory
+    mode: "0755"
+
+- name: Create ~/.config/fish/conf.d/ directory
+  ansible.builtin.file:
+    path: ~/.config/fish/conf.d
+    state: directory
+    mode: "0755"
+
+- name: Deploy ~/.config/fish/config.fish
+  ansible.builtin.copy:
+    src: config.fish
+    dest: ~/.config/fish/config.fish
+    mode: "0644"
+
+- name: Deploy fish aliases
+  ansible.builtin.copy:
+    src: aliases.fish
+    dest: ~/.config/fish/conf.d/aliases.fish
+    mode: "0644"
+
+# ── tailvm shell completions ──────────────────────────────────────
+- name: Deploy tailvm bash completion
+  ansible.builtin.copy:
+    src: tailvm-completion.bash
+    dest: ~/.tailvm-completion.bash
+    mode: "0644"
+
+- name: Deploy tailvm zsh completion
+  ansible.builtin.copy:
+    src: tailvm-completion.zsh
+    dest: ~/.tailvm-completion.zsh
+    mode: "0644"
+
+- name: Ensure fish completions directory exists
+  ansible.builtin.file:
+    path: ~/.config/fish/completions
+    state: directory
+    mode: "0755"
+
+- name: Deploy tailvm fish completion
+  ansible.builtin.copy:
+    src: tailvm-completion.fish
+    dest: ~/.config/fish/completions/tailvm.fish
+    mode: "0644"

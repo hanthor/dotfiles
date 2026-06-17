@@ -42,3 +42,23 @@
     src: claude-import.ts
     dest: ~/.pi/agent/extensions/claude-import.ts
     mode: "0644"
+
+# ── SearXNG web search skill ────────────────────────────────────────────
+
+- name: Ensure pi skills directory exists
+  ansible.builtin.file:
+    path: ~/.pi/agent/skills/james/searxng-search
+    state: directory
+    mode: "0755"
+
+- name: Deploy searxng-search SKILL.md
+  ansible.builtin.copy:
+    src: skills/searxng-search/SKILL.md
+    dest: ~/.pi/agent/skills/james/searxng-search/SKILL.md
+    mode: "0644"
+
+- name: Deploy searxng-search script
+  ansible.builtin.copy:
+    src: skills/searxng-search/search.sh
+    dest: ~/.pi/agent/skills/james/searxng-search/search.sh
+    mode: "0755"

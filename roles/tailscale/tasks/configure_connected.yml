@@ -1,0 +1,61 @@
+---
+# Already-connected machine: sync routes, hostname, DNS, desktop extras.
+
+- name: Read current Tailscale prefs (for idempotency comparison)
+  ansible.builtin.command: tailscale debug prefs
+  register: tailscale_prefs
+  changed_when: false
+  failed_when: false
+  when: tailscale_advertise_routes is defined
+
+- name: Advertise subnet routes (only when routes differ from current prefs)
+  ansible.builtin.command: >
+    tailscale up
+    --hostname={{ inventory_hostname }}
+    --advertise-routes={{ tailscale_advertise_routes }}
+    {% if tailscale_accept_dns is defined and not tailscale_accept_dns %}--accept-dns=false{% endif %}
+    {% if tailscale_operator is defined %}--operator={{ tailscale_operator }}{% endif %}
+  become: true
+  when:
+    - tailscale_advertise_routes is defined
+    - tailscale_advertise_routes not in (tailscale_prefs.stdout | default(''))
+  changed_when: true
+
+- name: Sync Tailscale hostname to match machine hostname
+  ansible.builtin.command: tailscale set --hostname={{ inventory_hostname }}
+  become: true
+  changed_when: false
+
+- name: Fix resolv.conf when systemd-resolved is not active
+  ansible.builtin.copy:
+    dest: /etc/resolv.conf
+    content: "nameserver 1.1.1.1\nnameserver 8.8.8.8\n"
+    owner: root
+    group: root
+    mode: "0644"
+    force: true
+  become: true
+  when:
+    - tailscale_accept_dns is defined
+    - not tailscale_accept_dns
+
+- name: Set Tailscale operator to allow user-level management
+  ansible.builtin.command: tailscale set --operator={{ ansible_facts['env']['USER'] }}
+  become: true
+  when: is_desktop | bool
+  changed_when: false
+  failed_when: false
+
+- name: Install Tailscale systray service on desktop machines
+  ansible.builtin.command: tailscale configure systray --enable-startup=systemd
+  when: is_desktop | bool
+  changed_when: false
+  failed_when: false
+
+- name: Enable and start Tailscale systray service
+  ansible.builtin.shell: |
+    systemctl --user daemon-reload
+    systemctl --user enable --now tailscale-systray
+  when: is_desktop | bool
+  changed_when: false
+  failed_when: false

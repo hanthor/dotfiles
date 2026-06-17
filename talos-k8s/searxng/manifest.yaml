@@ -1,0 +1,133 @@
+# SearXNG — privacy-respecting metasearch engine
+# Used by the pi coding agent for web search over the Tailnet.
+#
+# SearXNG JSON API: GET /search?q=<query>&format=json
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: searxng
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: searxng-data
+  namespace: searxng
+spec:
+  storageClassName: longhorn
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: searxng
+  namespace: searxng
+  labels:
+    app: searxng
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: searxng
+  template:
+    metadata:
+      labels:
+        app: searxng
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: searxng
+        image: searxng/searxng:latest
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: SEARXNG_BASE_URL
+          value: https://search.manatee-basking.ts.net
+        - name: SEARXNG_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: searxng-secret
+              key: secret-key
+        - name: SEARXNG_BIND_ADDRESS
+          value: "0.0.0.0:8080"
+        - name: SEARXNG_SETTINGS_PATH
+          value: /etc/searxng/settings.yml
+        resources:
+          requests:
+            cpu: 50m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: data
+          mountPath: /etc/searxng
+        - name: settings
+          mountPath: /etc/searxng/settings.yml
+          subPath: settings.yml
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: searxng-data
+      - name: settings
+        configMap:
+          name: searxng-settings
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: searxng
+  namespace: searxng
+  labels:
+    app: searxng
+spec:
+  selector:
+    app: searxng
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: searxng
+  namespace: searxng
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: searxng
+      port:
+        number: 80
+  tls:
+  - hosts:
+    - search

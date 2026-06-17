@@ -1,17 +1,29 @@
 ---
-- name: Restart pipewire services
-  ansible.builtin.systemd_service:
-    name: "{{ item }}"
-    state: restarted
-    scope: user
-  loop:
-    - pipewire
-    - pipewire-pulse
-  failed_when: false
+- name: Restart pipewire
+  block:
+    - name: Reset pipewire failed state (clear start-limit-hit)
+      ansible.builtin.command: systemctl --user reset-failed pipewire.service pipewire.socket pipewire-pulse.service pipewire-pulse.socket  # noqa: command-instead-of-module
+      failed_when: false
+      changed_when: false
+    - name: Restart pipewire services
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: restarted
+        scope: user
+      loop:
+        - pipewire
+        - pipewire-pulse
+      failed_when: false
 
-- name: Restart wireplumber service
-  ansible.builtin.systemd_service:
-    name: wireplumber
-    state: restarted
-    scope: user
-  failed_when: false
+- name: Restart wireplumber
+  block:
+    - name: Reset wireplumber failed state
+      ansible.builtin.command: systemctl --user reset-failed wireplumber.service  # noqa: command-instead-of-module
+      failed_when: false
+      changed_when: false
+    - name: Restart wireplumber service
+      ansible.builtin.systemd_service:
+        name: wireplumber
+        state: restarted
+        scope: user
+      failed_when: false

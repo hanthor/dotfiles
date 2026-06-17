@@ -5,16 +5,7 @@
 is_desktop: false
 is_laptop: false
 has_homepage: false
-skip_flatpak: true
-skip_bluefin: true
-skip_gnome: true
-skip_zen_browser: true
-skip_kube: true
-skip_proxy: true
-skip_monitoring: true
-skip_syncthing: true
-skip_cockpit: true
-skip_lima: true
-skip_tailscale_cert: true
+machine_profile: vm-test
+# machine_profile: vm-test skips all desktop + service roles.
 # Test VMs use brew for atuin, but skip other brew-heavy roles
 user_login: james

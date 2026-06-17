@@ -1,0 +1,52 @@
+# Homebrew
+if [ -d /home/linuxbrew/.linuxbrew ]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
+# ── History ──────────────────────────────────────────────────────
+export HISTSIZE=100000
+export HISTFILESIZE=200000
+export HISTCONTROL=ignoredups:erasedups
+shopt -s histappend checkwinsize globstar autocd cdspell 2>/dev/null || true
+
+# ── Environment ──────────────────────────────────────────────────
+export EDITOR=nvim
+export VISUAL=nvim
+export PAGER=delta
+export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+
+# XDG
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+export XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+
+export PATH="$HOME/.local/bin:$PATH"
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+# ── Bluefin CLI shell integration (eza, bat, zoxide, starship, atuin, fzf) ──
+if [[ $- == *i* ]]; then
+  if command -v bluefin-cli &>/dev/null; then
+    eval "$(bluefin-cli init bash)"
+  elif command -v atuin &>/dev/null; then
+    # Fallback: initialize atuin directly when bluefin-cli isn't available (e.g. Alpine)
+    eval "$(atuin init bash)"
+  fi
+fi
+
+# ── direnv ───────────────────────────────────────────────────────
+command -v direnv &>/dev/null && eval "$(direnv hook bash)"
+
+# ── fzf (fallback if bluefin-cli didn't set it up) ───────────────
+if [[ $- == *i* ]]; then
+  command -v fzf &>/dev/null && ! type -t __fzf_history__ &>/dev/null && eval "$(fzf --bash)"
+fi
+
+# ── inputrc ──────────────────────────────────────────────────────
+[ -f ~/.inputrc ] && export INPUTRC=~/.inputrc
+
+# ── Custom aliases ───────────────────────────────────────────────
+[ -f ~/.config/shell/aliases.sh ] && source ~/.config/shell/aliases.sh
+
+# ── tailvm completions ───────────────────────────────────────────
+[ -f ~/.tailvm-completion.bash ] && source ~/.tailvm-completion.bash

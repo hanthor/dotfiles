@@ -1,0 +1,71 @@
+---
+# Join tailnet: fetch authkey from BW, cleanup old device, run tailscale up.
+
+# Need BW to join tailscale (auth key lives there).
+- name: Warn and skip tailscale join (vault locked)
+  ansible.builtin.debug:
+    msg: >-
+      tailscale is not connected but the Bitwarden vault is locked on this host,
+      so the auth key can't be fetched. Unlock the vault (`bw unlock`,
+      `printf '%s' "$session" > /tmp/bw_session`) and re-run.
+  when: not (bw_unlocked | default(false))
+
+- name: End role if vault is locked
+  ansible.builtin.meta: end_role
+  when: not (bw_unlocked | default(false))
+
+- name: Fetch tailscale auth/API key from Bitwarden
+  ansible.builtin.shell: BW_SESSION={{ bw_session }} bw get item tailscale-apikey | python3 -c "import sys,json; print(json.load(sys.stdin)['login']['password'])"
+  register: tailscale_apikey
+  changed_when: false
+  no_log: true
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+
+- name: Remove old tailscale device with same hostname
+  block:
+    - name: Fetch tailscale device list
+      ansible.builtin.uri:
+        url: https://api.tailscale.com/api/v2/tailnet/-/devices
+        method: GET
+        user: "{{ tailscale_apikey.stdout }}"
+        password: ""
+        force_basic_auth: true
+        status_code: 200
+        headers:
+          Content-Type: application/json
+      register: ts_devices
+      failed_when: false
+      no_log: true
+
+    - name: Find old device matching our hostname
+      ansible.builtin.set_fact:
+        ts_old_device_id: >-
+          {{ (ts_devices.json.devices | default([])
+            | selectattr('hostname', 'equalto', inventory_hostname + '.' + tailscale_domain)
+            | map(attribute='id') | first) | default('') }}
+
+    - name: Delete old tailscale device
+      ansible.builtin.uri:
+        url: https://api.tailscale.com/api/v2/device/{{ ts_old_device_id }}
+        method: DELETE
+        user: "{{ tailscale_apikey.stdout }}"
+        password: ""
+        force_basic_auth: true
+        status_code: 200
+      when: ts_old_device_id | length > 0
+      no_log: true
+  when: tailscale_apikey.stdout | default('') | length > 0
+
+- name: Join tailscale network
+  ansible.builtin.command: tailscale up --authkey {{ tailscale_apikey.stdout }} --advertise-tags=tag:fleet --accept-routes --hostname {{ inventory_hostname }}
+  become: true
+  no_log: true
+
+- name: Advertise subnet routes after join
+  ansible.builtin.command: >
+    tailscale up --advertise-routes={{ tailscale_advertise_routes }}
+    --reset=false
+  become: true
+  when: tailscale_advertise_routes is defined
+  changed_when: true

@@ -1,0 +1,136 @@
+---
+- name: Ensure atuin config dir exists
+  ansible.builtin.file:
+    path: ~/.config/atuin
+    state: directory
+    mode: "0755"
+
+- name: Deploy atuin config
+  ansible.builtin.copy:
+    dest: ~/.config/atuin/config.toml
+    mode: "0644"
+    content: |
+      sync_address = "https://api.atuin.sh"
+      sync_frequency = "5m"
+      auto_sync = true
+      search_mode = "fuzzy"
+      # ── filter_mode ──────────────────────────────────────────────
+      # "global" = search all history across every machine & session.
+      # "host"   = only this machine.
+      # "session" = only this shell session (empty in fresh terminals!).
+      # ──────────────────────────────────────────────────────────────
+      # DO NOT set filter_mode_shell_up_key_binding to "session" —
+      # it makes the Up arrow appear broken in fresh terminals because
+      # a new shell session has no commands yet.
+      # ──────────────────────────────────────────────────────────────
+      filter_mode = "global"
+      filter_mode_shell_up_key_binding = "global"
+      style = "compact"
+      show_preview = true
+      max_preview_height = 4
+
+# ── Atuin setup from Bitwarden ────────────────────────────────────
+- name: Ensure atuin data dir exists
+  ansible.builtin.file:
+    path: ~/.local/share/atuin
+    state: directory
+    mode: "0700"
+
+# bw sync is handled by the bitwarden role earlier in the play — skip here.
+
+# Skip BW round-trip when already logged in — atuin sync status is the source of truth.
+- name: Check Atuin sync status
+  ansible.builtin.command: atuin status
+  register: atuin_status_cmd
+  changed_when: false
+  failed_when: false
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+
+- name: Set Atuin logged in fact
+  ansible.builtin.set_fact:
+    atuin_logged_in: "{{ atuin_status_cmd.rc == 0 and '[Sync]' in atuin_status_cmd.stdout }}"
+
+- name: Check if atuin key exists
+  ansible.builtin.stat:
+    path: ~/.local/share/atuin/key
+  register: atuin_existing_key
+
+- name: Fetch atuin credentials from Bitwarden
+  ansible.builtin.command: bw get item atuin.sh
+  register: atuin_bw_item
+  no_log: true
+  changed_when: false
+  failed_when: false
+  when:
+    - not atuin_logged_in
+    - bw_unlocked | default(false)
+  environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+
+- name: Skip atuin login (already logged in or vault locked)
+  ansible.builtin.set_fact:
+    atuin_bw_item: {rc: 1, stdout: ""}
+  when: atuin_logged_in or not (bw_unlocked | default(false))
+
+- name: Warn if atuin.sh not found in Bitwarden
+  ansible.builtin.debug:
+    msg: >-
+      Bitwarden item 'atuin.sh' not found or vault locked — skipping atuin login.
+      Run 'bw unlock' on this machine and re-run, or log in to atuin manually.
+  when:
+    - not atuin_logged_in
+    - atuin_bw_item.rc != 0 or (atuin_bw_item.stdout | default('')) | length == 0
+
+- name: Parse atuin credentials
+  ansible.builtin.set_fact:
+    atuin_username: "{{ (atuin_bw_item.stdout | from_json).login.username }}"
+    atuin_password: "{{ (atuin_bw_item.stdout | from_json).login.password }}"
+    atuin_key: "{{ (atuin_bw_item.stdout | from_json).fields | selectattr('name', 'equalto', 'key') | map(attribute='value') | first }}"
+  no_log: true
+  when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default('')) | length > 0
+
+# NOTE: We do NOT write atuin_key (mnemonic) to ~/.local/share/atuin/key directly.
+# Atuin expects that file to be a base64-encoded binary key.
+# Running 'atuin login -k' with the mnemonic correctly generates the binary key file.
+- name: Remove atuin data directory before fresh login
+  ansible.builtin.file:
+    path: ~/.local/share/atuin
+    state: absent
+  when: >
+    atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
+    and not atuin_existing_key.stat.exists
+
+- name: Login to atuin sync
+  ansible.builtin.command: >
+    atuin login -u "{{ atuin_username }}" -p "{{ atuin_password }}" -k "{{ atuin_key }}"
+  when: >
+    atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
+    and not atuin_logged_in
+  changed_when: true
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+
+- name: Sync atuin history (best-effort — key mismatch is non-fatal)
+  ansible.builtin.command: atuin sync
+  changed_when: false
+  failed_when: false
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
+
+- name: Check if shell history has already been imported into atuin
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin/.history_imported"
+  register: atuin_import_sentinel
+
+- name: Import existing shell history into atuin
+  ansible.builtin.shell: |
+    atuin import auto 2>&1
+    touch "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin/.history_imported"
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  when: not atuin_import_sentinel.stat.exists
+  changed_when: false
+  failed_when: false

@@ -1,0 +1,70 @@
+---
+# ── AI Coding Tools configuration ────────────────────────────────
+- name: Create pi-coding-agent directory
+  ansible.builtin.file:
+    path: ~/.pi/agent
+    state: directory
+    mode: "0755"
+
+- name: Deploy pi-coding-agent models config
+  ansible.builtin.copy:
+    src: pi-models.json
+    dest: ~/.pi/agent/models.json
+    mode: "0644"
+
+# ── Per-host secrets from Bitwarden (DeepSeek + Forgejo) ─────────
+# Gated on `bw_unlocked` (set by the bitwarden role) so a locked vault
+# leaves any previously-written secret files untouched instead of writing
+# empty values.
+- name: Fetch and deploy shell secrets from Bitwarden
+  when: bw_unlocked | default(false)
+  environment:
+    BW_SESSION: "{{ bw_session }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  block:
+    - name: Fetch DeepSeek API key from Bitwarden
+      ansible.builtin.command: bw get password deepseek-api-key
+      register: deepseek_key
+      no_log: true
+      changed_when: false
+      failed_when: false
+
+    - name: Write pi-coding-agent auth.json
+      ansible.builtin.copy:
+        content: |
+          {
+            "deepseek": { "type": "api_key", "key": "{{ deepseek_key.stdout | trim }}" }
+          }
+        dest: ~/.pi/agent/auth.json
+        mode: "0600"
+      no_log: true
+      when: deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0
+
+    - name: Fetch Forgejo API token from Bitwarden
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bw get notes forgejo | grep "API Token:" | sed 's/API Token: //'
+      register: forgejo_token
+      no_log: true
+      changed_when: false
+      failed_when: false
+
+    - name: Write shell secrets file
+      ansible.builtin.copy:
+        content: |
+          # Managed by dotfiles playbook — DO NOT EDIT
+          export FORGEJO_TOKEN={{ forgejo_token.stdout | trim }}
+        dest: ~/.config/shell/secrets.sh
+        mode: "0600"
+      no_log: true
+      when: forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0
+
+- name: Warn if deepseek-api-key not found in Bitwarden
+  ansible.builtin.debug:
+    msg: >-
+      Bitwarden item 'deepseek-api-key' not found — skipping pi auth config.
+      Run: bw create item ... or seed it manually.
+  when:
+    - bw_unlocked | default(false)
+    - (deepseek_key | default({})).rc | default(1) != 0
+      or (deepseek_key | default({})).stdout | default('') | trim | length == 0

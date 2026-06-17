@@ -1,35 +1,170 @@
 ---
-- name: Ensure PipeWire filter-chain config directories exist
+# ── Platform detection ───────────────────────────────────────────────────
+
+- name: Detect if system is bootc-based (container-native, no package manager)
+  ansible.builtin.stat:
+    path: /usr/bin/bootc
+  register: bootc_bin
+
+- name: Detect if rpm-ostree is available (Fedora Atomic)
+  ansible.builtin.stat:
+    path: /usr/bin/rpm-ostree
+  register: rpm_ostree_bin
+
+- name: Detect if dnf is available (traditional Fedora)
+  ansible.builtin.stat:
+    path: /usr/bin/dnf
+  register: dnf_bin
+
+# ── Prerequisite packages (only on mutable systems) ──────────────────────
+# On bootc systems packages are baked into the image — we can't install at
+# runtime. LV2/LADSPA plugins must be in the Containerfile.
+
+- name: Install LV2 + LADSPA DSP prerequisites (dnf)
+  when: dnf_bin.stat.exists | default(false)
+  become: true
+  ansible.builtin.dnf:
+    name:
+      - lsp-plugins-lv2
+      - noise-suppression-for-voice
+    state: present
+
+- name: Layer LV2 + LADSPA DSP prerequisites (rpm-ostree)
+  when: rpm_ostree_bin.stat.exists | default(false)
+  become: true
+  ansible.builtin.command:
+    cmd: rpm-ostree install --apply-live lsp-plugins-lv2 noise-suppression-for-voice
+  register: rpm_ostree_install
+  changed_when: "'Already layered' not in rpm_ostree_install.stdout and 'No change' not in rpm_ostree_install.stdout"
+  failed_when: false
+
+- name: Install LV2 + LADSPA DSP prerequisites (Arch)
+  when: ansible_facts['os_family'] == 'Archlinux'
+  become: true
+  community.general.pacman:
+    name:
+      - lsp-plugins
+      - noise-suppression-for-voice
+    state: present
+
+# ── Plugin availability check ────────────────────────────────────────────
+
+- name: Find RNNoise LADSPA plugin (cross-distro paths)
+  ansible.builtin.shell: >
+    find /usr/lib /usr/lib64 -name librnnoise_ladspa.so 2>/dev/null | head -1
+  register: rnnoise_path
+  failed_when: false
+  changed_when: false
+
+- name: Check if LV2 plugins are available (lv2ls may not be installed)
+  ansible.builtin.command: lv2ls
+  register: lv2ls_result
+  failed_when: false
+  changed_when: false
+
+- name: Set DSP availability facts
+  ansible.builtin.set_fact:
+    has_rnnoise: "{{ rnnoise_path.stdout | default('') | length > 0 }}"
+    has_lv2_lsp: "{{ 'lsp-plug.in/plugins/lv2/para_equalizer_x16_lr' in lv2ls_result.stdout | default('') }}"
+    is_bootc: "{{ bootc_bin.stat.exists | default(false) }}"
+
+# ── PipeWire config directories ──────────────────────────────────────────
+
+- name: Ensure PipeWire config directories exist
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: ~/.config/pipewire/pipewire.conf.d
     state: directory
     mode: "0755"
-  loop:
-    - ~/.config/pipewire/pipewire.conf.d
-    - ~/.config/wireplumber/main.lua.d
 
-- name: Deploy speaker DSP filter-chain config (output)
+# ── Speaker DSP ──────────────────────────────────────────────────────────
+# Tier 1: LV2-based full chain (para EQ + bass enhancer + exciter + limiter)
+# Tier 2: Built-in biquad EQ (zero external deps, works everywhere)
+#
+# If LV2 plugins are available, speaker-dsp.conf (LV2) takes priority.
+# Otherwise speaker-biquad.conf (built-in biquads) is used.
+
+- name: Deploy speaker DSP (LV2-based, full chain)
+  when: has_lv2_lsp | bool
   ansible.builtin.copy:
     src: speaker-dsp.conf
     dest: ~/.config/pipewire/pipewire.conf.d/50-speaker-dsp.conf
     mode: "0644"
-  notify: restart pipewire
+  notify: Restart pipewire
 
-- name: Deploy mic DSP filter-chain config (input)
+- name: Deploy speaker DSP (built-in biquads, zero-dependency fallback)
+  when: not (has_lv2_lsp | bool)
   ansible.builtin.copy:
-    src: mic-dsp.conf
+    src: speaker-biquad.conf
+    dest: ~/.config/pipewire/pipewire.conf.d/50-speaker-dsp.conf
+    mode: "0644"
+  notify: Restart pipewire
+
+# ── Mic DSP ──────────────────────────────────────────────────────────────
+# Requires librnnoise_ladspa.so (RNNoise noise suppression).
+# Only deployed when the LADSPA plugin exists on the system.
+
+- name: Deploy mic DSP (RNNoise LADSPA)
+  when: has_rnnoise | bool
+  ansible.builtin.copy:
+    src: mic-rnnoise.conf
     dest: ~/.config/pipewire/pipewire.conf.d/60-mic-dsp.conf
     mode: "0644"
-  notify: restart pipewire
+  notify: Restart pipewire
 
-- name: Deploy WirePlumber default-sink rule for speaker DSP
+- name: Remove mic DSP config (RNNoise unavailable)
+  when: not (has_rnnoise | bool)
+  ansible.builtin.file:
+    path: ~/.config/pipewire/pipewire.conf.d/60-mic-dsp.conf
+    state: absent
+  notify: Restart pipewire
+
+# ── LADSPA_PATH for bootc systems ────────────────────────────────────────
+# On immutable systems /usr/lib*/ladspa is read-only. If we need user-space
+# LADSPA plugins, pipewire needs LADSPA_PATH to find them.
+
+- name: Ensure pipewire LADSPA_PATH includes user ladspa directory
   ansible.builtin.copy:
-    src: 51-speaker-dsp-default.lua
-    dest: ~/.config/wireplumber/main.lua.d/51-speaker-dsp-default.lua
+    content: |
+      [Service]
+      Environment=LADSPA_PATH=%h/.ladspa:/usr/lib/x86_64-linux-gnu/ladspa:/usr/lib/ladspa:/usr/lib64/ladspa
+    dest: ~/.config/systemd/user/pipewire.service.d/ladspa-path.conf
     mode: "0644"
-  notify: restart wireplumber
+  register: ladspa_path_dropin
+  notify: Restart pipewire
 
-# ── Easy Effects cleanup ──────────────────────────────────────────────
+- name: Ensure user ladspa directory exists
+  ansible.builtin.file:
+    path: ~/.ladspa
+    state: directory
+    mode: "0755"
+
+# ── WirePlumber cleanup (old-format Lua unsupported in WP 0.5) ───────────
+
+- name: Remove old-format WirePlumber default-device Lua rule (WP 0.5+)
+  ansible.builtin.file:
+    path: ~/.config/wireplumber/main.lua.d/51-speaker-dsp-default.lua
+    state: absent
+  notify: Restart wireplumber
+
+- name: Remove empty WirePlumber Lua config directory
+  ansible.builtin.file:
+    path: ~/.config/wireplumber/main.lua.d
+    state: absent
+
+# ── GNOME volume over-amplification ───────────────────────────────────────
+# Allows volume slider to exceed 100% (software amplification). Virtual
+# DSP sinks use software volume, so over-100% is safe and useful.
+
+- name: Enable GNOME over-100% volume (software amplification)
+  ansible.builtin.command:
+    cmd: gsettings set org.gnome.desktop.sound allow-volume-above-100-percent true
+  environment:
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ ansible_facts['user_uid'] }}/bus"
+  failed_when: false
+  changed_when: false
+
+# ── Easy Effects cleanup ─────────────────────────────────────────────────
+# Migrated to native PipeWire filter-chain above.
 
 - name: Remove Easy Effects autostart entry
   ansible.builtin.file:

@@ -1,0 +1,36 @@
+---
+- name: Ensure font directory exists
+  ansible.builtin.file:
+    path: ~/.local/share/fonts
+    state: directory
+    mode: "0755"
+
+- name: Check if JetBrains Mono Nerd Font is installed
+  ansible.builtin.stat:
+    path: ~/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFont-Regular.ttf
+  register: jb_font
+
+- name: Install JetBrains Mono Nerd Font
+  when: not jb_font.stat.exists and is_desktop | bool
+  block:
+    - name: Download JetBrains Mono Nerd Font
+      ansible.builtin.get_url:
+        url: https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+        dest: /tmp/JetBrainsMono.zip
+        mode: "0644"
+
+    - name: Create JetBrainsMono font directory
+      ansible.builtin.file:
+        path: ~/.local/share/fonts/JetBrainsMono
+        state: directory
+        mode: "0755"
+
+    - name: Unarchive JetBrains Mono Nerd Font
+      ansible.builtin.unarchive:
+        src: /tmp/JetBrainsMono.zip
+        dest: ~/.local/share/fonts/JetBrainsMono
+        remote_src: true
+
+    - name: Update font cache
+      ansible.builtin.command: fc-cache -f
+      changed_when: false
