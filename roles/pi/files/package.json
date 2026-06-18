@@ -3,7 +3,7 @@
   "private": true,
   "dependencies": {
     "@juicesharp/rpiv-todo": "^1.15.0",
-    "@majorgilles/pi-grill-me": "^0.2.6",
+    "@majorgilles/pi-grill-me": "^0.3.0",
     "pi-beads": "^0.2.0",
     "pi-goal-x": "^0.19.0",
     "pi-subagents": "^0.25.0"
