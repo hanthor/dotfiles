@@ -11,13 +11,15 @@
     state: directory
     mode: "0755"
 
-# Clone homelab-monitoring repo (holds quadlets, dashboards, Alloy config).
+# Clone homelab-monitoring repo (holds Grafana dashboards and provisioning).
+# Only needed on the monitoring hub.
 # Requires an SSH key registered with GitHub — skips gracefully on first run
 # (Phase 1 before secrets). Re-run with --tags monitoring after Phase 2.
 - name: Check if SSH key exists (needed for private repo clone)
   ansible.builtin.stat:
     path: "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519"
   register: ssh_key_stat
+  when: monitoring_hub | default(false) | bool
 
 - name: Clone homelab-monitoring repo
   ansible.builtin.git:
@@ -27,13 +29,17 @@
     update: false
     force: false
   register: monitoring_repo
-  when: ssh_key_stat.stat.exists
+  when:
+    - monitoring_hub | default(false) | bool
+    - ssh_key_stat.stat.exists
   failed_when: false
 
 - name: Warn if homelab-monitoring clone skipped (no SSH key yet)
   ansible.builtin.debug:
     msg: "Skipping homelab-monitoring clone — SSH key not set up yet. Re-run 'just apply-tags monitoring' after secrets phase."
-  when: not ssh_key_stat.stat.exists
+  when:
+    - monitoring_hub | default(false) | bool
+    - not ssh_key_stat.stat.exists
 
 # Add user to systemd-journal group for Alloy journal access
 - name: Add user to systemd-journal group
@@ -84,10 +90,9 @@
 - name: Deploy alloy config
   ansible.builtin.template:
     src: alloy.alloy.j2
-    dest: "{{ ansible_facts['env']['HOME'] }}/dev/homelab-monitoring/alloy.alloy"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/monitoring/alloy.alloy"
     mode: "0644"
   notify: Restart alloy
-  when: ssh_key_stat.stat.exists and (monitoring_repo.rc is defined and monitoring_repo.rc == 0 or monitoring_repo.changed)
 
 - name: Remove old promtail quadlet
   ansible.builtin.file:

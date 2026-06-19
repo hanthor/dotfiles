@@ -10,12 +10,9 @@ all:
     vm:
       ansible_host: localhost
       ansible_connection: local
-    karnataka:
-      ansible_host: localhost
-      ansible_connection: local
-    bihar:
-      ansible_host: 100.85.9.86
-      ansible_connection: ssh
+    # ── Talos K8s cluster (not ansible-managed — talosctl / kubectl only) ──
+    # karnataka:     Talos worker  — AMD Strix Halo APU, 192.168.0.6
+    # bihar:         Talos control-plane — Intel, 192.168.0.5
     matrix:
       ansible_host: 100.73.19.81
       ansible_connection: ssh
@@ -29,7 +26,7 @@ all:
       ansible_host: dilli
       ansible_connection: ssh
     kanpur:
-      ansible_host: kanpur
+      ansible_host: 100.107.52.37
       ansible_connection: ssh
     # ── KubeVirt test fleet VMs (accessible via virtctl port-forward) ──
     # Requires: virtctl port-forward -n default vmi/<name> <port>:22
@@ -45,17 +42,16 @@ all:
     desktop:
       hosts:
         kerala:
-        karnataka:
         kanpur:
         himachal:
         dilli:
-    llm:
-      hosts:
-        karnataka:
+    # llm group is dormant — karnataka (former LLM host) is now a Talos worker
+    # llm:
+    #   hosts:
+    #     karnataka:
     server:
       hosts:
         vm:
-        bihar:
         goa:
     test_fleet:
       hosts:

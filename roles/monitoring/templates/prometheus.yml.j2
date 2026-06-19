@@ -60,7 +60,7 @@ scrape_configs:
         replacement: {{ inventory_hostname }}
 
 remote_write:
-  - url: 'http://{{ monitoring_hub_ip }}:9091/api/v1/write'
+  - url: 'https://{{ monitoring_hub_ip }}/api/v1/write'
     queue_config:
       max_samples_per_send: 1000
       max_shards: 5

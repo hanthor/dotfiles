@@ -36,6 +36,9 @@ loki.relabel "journal_labels" {
 
 loki.write "hub" {
   endpoint {
-    url = "http://{{ monitoring_hub_ip }}:3100/loki/api/v1/push"
+    url = "{{ loki_hub_url }}/loki/api/v1/push"
+    tls_config {
+      insecure_skip_verify = false
+    }
   }
 }

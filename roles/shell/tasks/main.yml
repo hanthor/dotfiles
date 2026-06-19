@@ -259,6 +259,36 @@
   when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
   tags: [shell, secrets]
 
+# ── Atuin daemon systemd unit fix ─────────────────────────────────
+# The Homebrew formula installs a systemd user unit with a bare
+# 'atuin' in ExecStart=.  systemd user services run with a minimal
+# PATH that doesn't include the Homebrew prefix, so the daemon
+# fails with 203/EXEC (executable not found) and enters an
+# auto-restart loop.  This task patches the ExecStart line to use
+# the absolute Homebrew path.  We use lineinfile rather than a
+# template to avoid owning the whole unit — atuin's own installer
+# may add fields in future releases and we don't want to clobber them.
+- name: Fix atuin daemon systemd unit to use absolute binary path
+  ansible.builtin.lineinfile:
+    path: ~/.config/systemd/user/atuin-daemon.service
+    regexp: '^ExecStart=atuin '
+    line: 'ExecStart=/home/linuxbrew/.linuxbrew/bin/atuin daemon start --force'
+  register: atuin_daemon_unit_fix
+  tags: [shell]
+
+# Dump systemd's in-memory unit state so the edit takes effect
+# immediately.  systemctl daemon-reload is idempotent — no harm if
+# the unit wasn't changed.
+- name: Reload systemd and restart atuin daemon after unit fix
+  ansible.builtin.systemd_service:
+    name: atuin-daemon
+    scope: user
+    daemon_reload: true
+    state: restarted
+    enabled: true
+  when: atuin_daemon_unit_fix.changed | default(false)
+  tags: [shell]
+
 - name: Check if shell history has already been imported into atuin
   ansible.builtin.stat:
     path: "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin/.history_imported"

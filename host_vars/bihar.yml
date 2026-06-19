@@ -12,12 +12,7 @@ web_services:
     description: IP KVM (Plugged into Karnataka)
     group: Infrastructure
     siteMonitor: http://192.168.0.99
-  - name: Lima
-    href: https://bihar.manatee-basking.ts.net/lima
-    icon: mdi-virtual-machine
-    description: VM dashboard + bootc builder
-    group: Infrastructure
-    siteMonitor: http://127.0.0.1:8007
+
   - name: Cockpit
     href: https://bihar.manatee-basking.ts.net/cockpit
     icon: cockpit.png

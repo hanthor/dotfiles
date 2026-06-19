@@ -54,7 +54,37 @@
       ansible.builtin.command: gh config set git_protocol ssh
       changed_when: false
 
-    # ── SSH key registration (only from central machine) ──
+    # ── SSH key registration ─────────────────────────────────────
+    # Checks token scopes upfront so missing permissions produce a
+    # clear warning instead of a silent HTTP 404 on gh ssh-key add.
+    - name: Check GitHub token scopes for key management
+      ansible.builtin.shell: |
+        set -o pipefail
+        gh auth status -t 2>&1 | grep -o "Token scopes:.*" || true
+      register: gh_token_scopes
+      changed_when: false
+      failed_when: false
+
+    # Use a fact gate rather than separate when:/failed_when: on each
+    # downstream task so the scope check runs once and the result
+    # controls both the gh ssh-key list call and the two upload tasks
+    # uniformly — otherwise a scope-less token gets two silent 404s.
+    - name: Set key-scope fact
+      ansible.builtin.set_fact:
+        gh_has_key_scopes: >-
+          {{ ("admin:public_key" in gh_token_scopes.stdout | default(""))
+             and ("admin:ssh_signing_key" in gh_token_scopes.stdout | default("")) }}
+
+    - name: Warn about missing GitHub token scopes for SSH key upload
+      ansible.builtin.debug:
+        msg: >-
+          ⚠ GitHub token is missing scopes required to upload SSH keys.
+          Current scopes: {{ gh_token_scopes.stdout | default('unknown') }}
+          Missing: admin:public_key, admin:ssh_signing_key
+          → Regenerate the PAT at https://github.com/settings/tokens
+            with those scopes, then update the 'github-token' Bitwarden item.
+      when: not gh_has_key_scopes
+
     - name: Read SSH public key
       ansible.builtin.slurp:
         src: "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519.pub"
@@ -65,24 +95,55 @@
         ssh_pub_key_full: "{{ ssh_pub_key_raw.content | b64decode | trim }}"
         ssh_key_body: "{{ (ssh_pub_key_raw.content | b64decode).split()[1] }}"
 
+    # Gate on gh_has_key_scopes to avoid the HTTP 404 that gh returns
+    # when the token lacks admin:public_key / admin:ssh_signing_key.
+    # Keeps failed_when: false because a transient GitHub API glitch
+    # shouldn't fail the whole play — the follow-up warn task surfaces it.
     - name: List existing GitHub SSH keys
       ansible.builtin.command: gh ssh-key list
       register: gh_existing_keys
       changed_when: false
       failed_when: false
+      when: gh_has_key_scopes | bool
 
     - name: Register SSH authentication key with GitHub
       ansible.builtin.command: >
         gh ssh-key add "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519.pub"
         --title "{{ inventory_hostname }}-auth"
         --type authentication
-      when: ssh_key_body not in (gh_existing_keys.stdout | default(''))
+      when:
+        - gh_has_key_scopes | bool
+        - ssh_key_body not in (gh_existing_keys.stdout | default(''))
+      register: gh_auth_key_result
       failed_when: false
+
+    - name: Warn if SSH auth key upload failed
+      ansible.builtin.debug:
+        msg: >-
+          ⚠ Failed to upload SSH auth key for {{ inventory_hostname }} to GitHub.
+          stderr: {{ gh_auth_key_result.stderr | default('') }}
+      when:
+        - gh_has_key_scopes | bool
+        - gh_auth_key_result is defined
+        - gh_auth_key_result.rc | default(0) != 0
 
     - name: Register SSH signing key with GitHub
       ansible.builtin.command: >
         gh ssh-key add "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519.pub"
         --title "{{ inventory_hostname }}-signing"
         --type signing
-      when: ssh_key_body not in (gh_existing_keys.stdout | default(''))
+      when:
+        - gh_has_key_scopes | bool
+        - ssh_key_body not in (gh_existing_keys.stdout | default(''))
+      register: gh_sign_key_result
       failed_when: false
+
+    - name: Warn if SSH signing key upload failed
+      ansible.builtin.debug:
+        msg: >-
+          ⚠ Failed to upload SSH signing key for {{ inventory_hostname }} to GitHub.
+          stderr: {{ gh_sign_key_result.stderr | default('') }}
+      when:
+        - gh_has_key_scopes | bool
+        - gh_sign_key_result is defined
+        - gh_sign_key_result.rc | default(0) != 0

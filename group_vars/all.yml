@@ -1,8 +1,11 @@
 ---
 tailscale_domain: manatee-basking.ts.net
 monitoring_hub_host: bihar
-monitoring_hub_ip: "100.85.9.86"
-monitoring_hub_url: "https://bihar.manatee-basking.ts.net/grafana"
+# Prometheus hub now in-cluster (kube-prometheus-stack), exposed via Tailscale ingress
+monitoring_hub_ip: "prometheus.manatee-basking.ts.net"
+loki_hub_url: "https://loki.manatee-basking.ts.net"
+monitoring_hub_url: "https://grafana.manatee-basking.ts.net"
+skip_monitoring: true
 user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james

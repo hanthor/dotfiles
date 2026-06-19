@@ -206,3 +206,18 @@
     cmd: install-extensions.py
   changed_when: false
   ignore_errors: true
+
+- name: Optimize zRAM swappiness for desktop memory management
+  ansible.builtin.copy:
+    content: |
+      # Optimize zRAM swappiness for compressed RAM swap
+      vm.swappiness = 150
+    dest: /etc/sysctl.d/99-zram.conf
+    mode: "0644"
+  become: true
+  register: zram_sysctl
+
+- name: Apply zRAM swappiness setting immediately
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-zram.conf
+  become: true
+  when: zram_sysctl.changed

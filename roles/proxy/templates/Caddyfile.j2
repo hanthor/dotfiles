@@ -75,29 +75,7 @@
     }
 
 {% endif %}
-{% if is_desktop | bool or inventory_hostname == 'bihar' %}
-    # /rdp — shortcut redirect to Lima RDP client
-    handle /rdp* {
-        redir /lima/rdp/ 302
-    }
 
-{% endif %}
-{% if is_desktop | bool or inventory_hostname == 'bihar' %}
-    # /lima — lima-bootc VM dashboard and RDP client
-    handle /lima* {
-        uri strip_prefix /lima
-        reverse_proxy https://10.88.0.1:{{ lima_internal_port | default(8007) }} {
-            transport http {
-                tls_insecure_skip_verify
-            }
-            @redirect status 301 302 303 307 308
-            handle_response @redirect {
-                redir /lima{rp.header.Location} {rp.status_code}
-            }
-        }
-    }
-
-{% endif %}
     # /bst — BuildStream live build dashboard 
     redir /bst /bst/ 301 
     handle /bst/* { 

@@ -20,6 +20,8 @@ prometheus:
       matchLabels:
         release: kube-prometheus-stack
     podMonitorNamespaceSelector: {}
+    # Accept remote_write from fleet spoke machines
+    enableRemoteWriteReceiver: true
     # Retention & resources: keep it small for home use
     retention: 7d
     retentionSize: 8GB

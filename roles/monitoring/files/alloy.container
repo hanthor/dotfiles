@@ -8,8 +8,8 @@ Image=docker.io/grafana/alloy:latest
 ContainerName=alloy
 Network=monitoring.network
 
-# Alloy config from repo
-Volume=%h/dev/homelab-monitoring/alloy.alloy:/etc/alloy/config.alloy:ro,z
+# Alloy config
+Volume=%h/.config/monitoring/alloy.alloy:/etc/alloy/config.alloy:ro,z
 
 # Journal access (read-only)
 Volume=/var/log/journal:/var/log/journal:ro
