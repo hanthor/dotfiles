@@ -52,13 +52,13 @@ def check_cpu_throttling():
     try:
         cur_freq_files = glob.glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq")
         min_freq_files = glob.glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_min_freq")
-        
+
         if not cur_freq_files:
             return
-            
+
         cores_total = len(cur_freq_files)
         cores_at_min = 0
-        
+
         for cur_file in cur_freq_files:
             min_file = cur_file.replace("scaling_cur_freq", "scaling_min_freq")
             if os.path.exists(min_file):
@@ -66,38 +66,34 @@ def check_cpu_throttling():
                     cur_freq = int(f.read().strip())
                 with open(min_file, "r") as f:
                     min_freq = int(f.read().strip())
-                
+
                 # Check if core is running at or below the minimum scaling frequency (e.g. 400 MHz)
-                # Allowing a tiny tolerance of 5% in case of scaling deviations
                 if cur_freq <= min_freq * 1.05:
                     cores_at_min += 1
-                    
+
         ratio_at_min = cores_at_min / cores_total
-        
-        # If more than 85% of cores are locked at minimum frequency
-        if ratio_at_min >= 0.85:
+
+        # Only flag when ALL cores are at minimum frequency (genuine EC lock, not powersave idle)
+        if ratio_at_min >= 1.0:
             throttle_seconds_accumulator += 10
-            logging.warning(f"CPU Throttling detected: {cores_at_min}/{cores_total} cores locked at minimum frequency. Accumulator: {throttle_seconds_accumulator}s")
-            
-            # If stuck in this state for 20 seconds, and package is cool, it's a false EC lock
-            if throttle_seconds_accumulator >= 20:
+            logging.warning(f"All cores at min freq: {cores_at_min}/{cores_total}. Accumulator: {throttle_seconds_accumulator}s")
+
+            # Require sustained lock for 60s before alerting
+            if throttle_seconds_accumulator >= 60:
                 temp = get_pkg_temp()
                 if temp is not None and temp < 65.0:
                     current_time = time.time()
-                    # Rate limit notifications to once every 5 minutes
-                    if current_time - last_throttle_notification_time > 300:
-                        msg = (
-                            f"All CPU cores are locked at 400 MHz (EC Fail-safe) but the CPU temperature is cool ({temp:.1f}°C).\n\n"
-                            "Action Recommended:\n"
-                            "1. Unplug and replug your USB-C charger.\n"
-                            "2. Perform a 60-second power button reset (shut down, unplug power, hold power button for 60s)."
-                        )
-                        logging.critical("CRITICAL: CPU locked at 400 MHz with cool temperatures! Sending notification.")
-                        send_notification("System Throttling Alert", msg, critical=True)
+                    # Rate limit notifications to once every 15 minutes
+                    if current_time - last_throttle_notification_time > 900:
+                        logging.info(f"All cores stuck at min freq ({temp:.1f}°C) — throttled managing it, no action needed.")
+                        send_notification("CPU Throttle Bounce",
+                            f"All cores spent {throttle_seconds_accumulator}s at min freq (CPU {temp:.1f}°C).\n"
+                            "throttled is keeping the system stable — this should resolve on its own.",
+                            critical=False)
                         last_throttle_notification_time = current_time
         else:
-            if throttle_seconds_accumulator > 0:
-                logging.info(f"System recovered from throttling. Cores at min: {cores_at_min}/{cores_total}")
+            if throttle_seconds_accumulator >= 10:
+                logging.info(f"System recovered — cores at min: {cores_at_min}/{cores_total}")
             throttle_seconds_accumulator = 0
             
     except Exception as e:
