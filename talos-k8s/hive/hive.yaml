@@ -60,34 +60,34 @@ data:
       scanner:
         enabled: true
         backend: pi
-        model: deepseek-v4-pro
+        model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
         clear_on_kick: false
       ci-maintainer:
         enabled: true
         backend: pi
-        model: deepseek-v4-pro
+        model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
         clear_on_kick: false
       quality:
         enabled: true
         backend: pi
-        model: deepseek-v4-pro
+        model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/quality
         clear_on_kick: false
       guide:
         enabled: true
         backend: pi
-        model: deepseek-v4-pro
+        model: deepseek-v4-flash
         beads_dir: /data/beads/guide
         clear_on_kick: false
       sec-check:
         enabled: true
         backend: pi
-        model: deepseek-v4-pro
+        model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/sec-check
         clear_on_kick: false
@@ -108,7 +108,7 @@ data:
       outreach:
         enabled: true
         backend: pi
-        model: deepseek-v4-pro
+        model: deepseek-v4-flash
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/outreach
         clear_on_kick: false
