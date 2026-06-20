@@ -88,7 +88,10 @@ RUN npm install -g @github/copilot@${COPILOT_VERSION} && npm cache clean --force
 ARG CLAUDE_CODE_VERSION=latest
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} && npm cache clean --force
 
-# ── Goose CLI (NEW — our primary backend) ──────────────────────────
+# ── Pi Coding Agent (primary backend) ───────────────────────────
+RUN npm install -g @earendil-works/pi-coding-agent && npm cache clean --force
+
+# ── Goose CLI (fallback backend) ────────────────────────────────
 ARG GOOSE_VERSION=1.37.0
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then GOOSE_ARCH=x86_64; \

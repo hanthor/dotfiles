@@ -52,63 +52,63 @@ data:
     agents:
       supervisor:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         beads_dir: /data/beads/supervisor
         clear_on_kick: false
         bead_role: supervisor
       scanner:
         enabled: true
-        backend: goose
-        model: deepseek-v4-flash
+        backend: pi
+        model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
         clear_on_kick: false
       ci-maintainer:
         enabled: true
-        backend: goose
-        model: deepseek-v4-flash
+        backend: pi
+        model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
         clear_on_kick: false
       quality:
         enabled: true
-        backend: goose
-        model: deepseek-v4-flash
+        backend: pi
+        model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/quality
         clear_on_kick: false
       guide:
         enabled: true
-        backend: goose
-        model: deepseek-v4-flash
+        backend: pi
+        model: deepseek-v4-pro
         beads_dir: /data/beads/guide
         clear_on_kick: false
       sec-check:
         enabled: true
-        backend: goose
-        model: deepseek-v4-flash
+        backend: pi
+        model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/sec-check
         clear_on_kick: false
       architect:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/architect
         clear_on_kick: false
       strategist:
         enabled: true
-        backend: goose
+        backend: pi
         model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/strategist
         clear_on_kick: false
       outreach:
         enabled: true
-        backend: goose
-        model: deepseek-v4-flash
+        backend: pi
+        model: deepseek-v4-pro
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/outreach
         clear_on_kick: false
@@ -226,7 +226,14 @@ spec:
               # Fix goose state directory permissions for agent UIDs.
               # The PVC mount overrides image permissions, so fix at runtime.
               mkdir -p /data/home/.local/state/goose /data/home/.config/goose
-              chmod -R 777 /data/home/.local /data/home/.config 2>/dev/null || true
+              chmod -R 777 /data/home/.local /data/home/.config
+
+              # Setgid on log dirs so new subdirs inherit node group + group-writable.
+              # Goose agents share group 1000 (node) but create dirs with 0755 by default.
+              chmod g+s /data/home/.local/state/goose/logs/cli 2>/dev/null || true
+
+              # Agents inherit umask 000 from the hive process so files/dirs are world-writable.
+              umask 000
               exec /usr/local/bin/entrypoint.sh --config /etc/hive/hive.yaml
           command:
             - /bin/sh

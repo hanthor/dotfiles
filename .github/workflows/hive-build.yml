@@ -25,7 +25,7 @@ jobs:
         with:
           path: dotfiles
 
-      - name: Checkout kubestellar/hive v2 (source, goose 1.37 support merged upstream)
+      - name: Checkout kubestellar/hive v2 (upstream — user-configurable pack backends already merged)
         uses: actions/checkout@v4
         with:
           repository: kubestellar/hive
