@@ -6,6 +6,6 @@
     "@majorgilles/pi-grill-me": "^0.3.0",
     "pi-beads": "^0.2.0",
     "pi-goal-x": "^0.19.0",
-    "pi-subagents": "^0.29.0"
+    "pi-subagents": "^0.30.0"
   }
 }
