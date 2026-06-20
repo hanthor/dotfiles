@@ -225,8 +225,12 @@ spec:
             - |
               # Fix goose state directory permissions for agent UIDs.
               # The PVC mount overrides image permissions, so fix at runtime.
+              # Swap in pi-fixed hive binary (patched to launch pi, not goose)
+              cp /data/hive-fixed /usr/local/bin/hive 2>/dev/null && \
+                echo "[init] using pi-fixed hive binary" || true
+
               mkdir -p /data/home/.local/state/goose /data/home/.config/goose
-              chmod -R 777 /data/home/.local /data/home/.config
+              chmod -R 777 /data/home/.local /data/home/.config /data/home/.pi
 
               # Setgid on log dirs so new subdirs inherit node group + group-writable.
               # Goose agents share group 1000 (node) but create dirs with 0755 by default.

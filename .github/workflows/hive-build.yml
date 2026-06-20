@@ -25,10 +25,10 @@ jobs:
         with:
           path: dotfiles
 
-      - name: Checkout kubestellar/hive v2 (upstream — user-configurable pack backends already merged)
+      - name: Checkout hanthor/hive v2 (fork with pi binary fix)
         uses: actions/checkout@v4
         with:
-          repository: kubestellar/hive
+          repository: hanthor/hive
           ref: v2
           path: hive-src
 
