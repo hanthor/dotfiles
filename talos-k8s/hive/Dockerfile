@@ -1,6 +1,11 @@
 # Hive v2 Dockerfile — upstream kubestellar/hive + goose CLI + DeepSeek
 # Based on upstream v2/Dockerfile with goose binary and DeepSeek config added.
-# Build context: root of kubestellar/hive repo (or our fork).
+# Build context: root of hanthor/hive fork (our fork), v2 branch.
+#
+# Entrypoint fix (2026-07-01): CA cert install moved before gosu dev drop
+# so the MITM proxy CA gets installed in the system trust store while still
+# root. Without this, gosu root fails from dev (no CAP_SETUID in restricted
+# PodSecurity contexts) and agents get tls: bad certificate errors.
 
 # ── Stage 1: Go builder (unchanged from upstream) ──────────────────
 FROM golang:1.26-alpine AS builder

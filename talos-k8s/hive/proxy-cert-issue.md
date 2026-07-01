@@ -147,6 +147,12 @@ or suppress the warning since it's expected in this environment.
 ## Status
 
 Reported: 2026-07-01
-Fixed: pending (see [`../hive/Dockerfile`](Dockerfile) and upstream
-[`hanthor/hive`](https://github.com/hanthor/hive) `v2` branch,
-`v2/deploy/entrypoint.sh`)
+Fixed: 2026-07-01 (pushed to `hanthor/hive` v2 branch, commit `b12d6210`)
+
+### Fix
+
+1. Moved CA install before `exec gosu dev` in entrypoint (root section)
+2. Added `export SSL_CERT_FILE=/data/proxy-ca.pem` globally in non-root section
+3. Kept `NODE_EXTRA_CA_CERTS` for Node.js subprocesses
+
+Next rebuild will include the fix.
