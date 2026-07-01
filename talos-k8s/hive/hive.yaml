@@ -269,9 +269,15 @@ spec:
             - |
               # Fix goose state directory permissions for agent UIDs.
               # The PVC mount overrides image permissions, so fix at runtime.
-              # Swap in pi-fixed hive binary (patched to launch pi, not goose)
-              cp /data/hive-fixed /usr/local/bin/hive 2>/dev/null && \
-                echo "[init] using pi-fixed hive binary" || true
+              #
+              # NOTE: hive-fixed binary override is DISABLED because our fork
+              # now has pi backend built-in (3 custom commits on top of upstream
+              # v2). The old hive-fixed binary on the PVC predates the upstream
+              # rebase and would overwrite new features (bead synth, graph store,
+              # caveman_mode, ACMM eval, etc.).
+              # Re-enable only if pi backend stops working.
+              # cp /data/hive-fixed /usr/local/bin/hive 2>/dev/null && \
+              #   echo "[init] using pi-fixed hive binary" || true
 
               mkdir -p /data/home/.local/state/goose /data/home/.config/goose
               chmod -R 777 /data/home/.local /data/home/.config /data/home/.pi
