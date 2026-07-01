@@ -6,6 +6,7 @@
 # so the MITM proxy CA gets installed in the system trust store while still
 # root. Without this, gosu root fails from dev (no CAP_SETUID in restricted
 # PodSecurity contexts) and agents get tls: bad certificate errors.
+# Second fix (eb8f976e): fixed orphaned fi that caused CrashLoopBackOff.
 
 # ── Stage 1: Go builder (unchanged from upstream) ──────────────────
 FROM golang:1.26-alpine AS builder
