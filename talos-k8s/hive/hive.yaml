@@ -133,6 +133,19 @@ data:
     # Knowledge system: bead-to-wiki synthesizer, vaults, document sources
     knowledge:
       enabled: true
+      git_sources:
+        - name: tunaos-docs
+          url: https://github.com/tuna-os/docs.git
+          branch: main
+          layer: project
+        - name: tunaos-tunaos
+          url: https://github.com/tuna-os/tunaos.git
+          branch: main
+          layer: project
+      vaults:
+        - name: bead-synth-wiki
+          path: /data/vaults/bead-synth-wiki
+          auto_index: true
       bead_synthesizer:
         enabled: true
         schedule: hourly
