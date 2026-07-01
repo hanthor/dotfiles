@@ -44,6 +44,12 @@ data:
         - tuna-os/xfce-linux
         - tuna-os/ubuntu
         - tuna-os/github-copr
+        - tuna-os/bluefin-cli
+        - tuna-os/.github
+        - tuna-os/Tavern
+        - tuna-os/corral
+        - tuna-os/letters
+        - tuna-os/flatpak-index
       ai_author: hanthor
       primary_repo: tuna-os/tunaos
 
@@ -57,6 +63,7 @@ data:
         beads_dir: /data/beads/supervisor
         clear_on_kick: false
         bead_role: supervisor
+        caveman_mode: full
       scanner:
         enabled: true
         backend: pi
@@ -64,6 +71,7 @@ data:
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/scanner
         clear_on_kick: false
+        caveman_mode: full
       ci-maintainer:
         enabled: true
         backend: pi
@@ -71,6 +79,7 @@ data:
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/ci-maintainer
         clear_on_kick: false
+        caveman_mode: full
       quality:
         enabled: true
         backend: pi
@@ -78,12 +87,14 @@ data:
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/quality
         clear_on_kick: false
+        caveman_mode: full
       guide:
         enabled: true
         backend: pi
         model: deepseek-v4-flash
         beads_dir: /data/beads/guide
         clear_on_kick: false
+        caveman_mode: full
       sec-check:
         enabled: true
         backend: pi
@@ -91,6 +102,7 @@ data:
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/sec-check
         clear_on_kick: false
+        caveman_mode: full
       architect:
         enabled: true
         backend: pi
@@ -98,6 +110,7 @@ data:
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/architect
         clear_on_kick: false
+        caveman_mode: full
       strategist:
         enabled: true
         backend: pi
@@ -105,6 +118,7 @@ data:
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/strategist
         clear_on_kick: false
+        caveman_mode: full
       outreach:
         enabled: true
         backend: pi
@@ -112,8 +126,25 @@ data:
         mode: ISSUES_AND_PRS
         beads_dir: /data/beads/outreach
         clear_on_kick: false
+        caveman_mode: full
       brainstorm:
         enabled: false
+
+    # Knowledge system: bead-to-wiki synthesizer, vaults, document sources
+    knowledge:
+      enabled: true
+      bead_synthesizer:
+        enabled: true
+        schedule: hourly
+        min_confidence: 0.5
+        target_layer: project
+        max_facts_per_cycle: 20
+        vault_path: /data/vaults/bead-synth-wiki
+        retention_policy:
+          max_beads: 5000
+          archive_after_synth_days: 30
+          high_priority_retain_days: 90
+          preserve_with_deps: true
 
     governor:
       eval_interval_s: 300
