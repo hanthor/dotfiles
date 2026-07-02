@@ -142,6 +142,16 @@ data:
           url: https://github.com/tuna-os/tunaos.git
           branch: main
           layer: project
+        - name: dotfiles-docs
+          url: https://github.com/hanthor/dotfiles.git
+          branch: master
+          subpath: docs/src
+          layer: project
+        - name: dotfiles-hive
+          url: https://github.com/hanthor/dotfiles.git
+          branch: master
+          subpath: talos-k8s/hive
+          layer: project
       vaults:
         - name: bead-synth-wiki
           path: /data/vaults/bead-synth-wiki
@@ -215,10 +225,6 @@ data:
     dashboard:
       port: 3002
 
-    notifications:
-      ntfy:
-        server: https://ntfy.sh
-        topic: ${NTFY_TOPIC}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
