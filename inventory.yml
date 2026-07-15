@@ -1,6 +1,9 @@
 ---
 all:
   hosts:
+    pixel-9a:
+      ansible_host: localhost
+      ansible_connection: local
     goa:
       ansible_host: localhost
       ansible_connection: local
@@ -41,6 +44,7 @@ all:
   children:
     desktop:
       hosts:
+        pixel-9a:
         kerala:
         kanpur:
         himachal:
