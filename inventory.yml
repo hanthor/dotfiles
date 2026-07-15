@@ -2,8 +2,10 @@
 all:
   hosts:
     pixel-9a:
-      ansible_host: localhost
-      ansible_connection: local
+      ansible_host: 100.86.202.86
+      ansible_port: 2222
+      ansible_user: james
+      ansible_connection: ssh
     goa:
       ansible_host: localhost
       ansible_connection: local
