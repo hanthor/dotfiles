@@ -53,7 +53,7 @@ apply *args:
     scripts/record-apply.py "$rc" apply "$SKIP_TAGS"
     exit $rc
 
-# Apply only specific tags (e.g. just apply-tags homepage,proxy)
+# Apply only specific tags (e.g. just apply-tags kube,shell)
 apply-tags tags:
     #!/usr/bin/env bash
     set -uo pipefail
@@ -74,7 +74,7 @@ apply-nosecrets *args:
     scripts/record-apply.py "$rc" apply-nosecrets secrets
     exit $rc
 
-# Apply to a remote machine with specific tags (e.g. just apply-remote-tags bihar homepage,proxy)
+# Apply to a remote machine with specific tags (e.g. just apply-remote-tags bihar kube,shell)
 apply-remote-tags name tags:
     #!/usr/bin/env bash
     set -euo pipefail

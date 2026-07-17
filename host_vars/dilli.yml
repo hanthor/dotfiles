@@ -1,6 +1,5 @@
 ---
 is_arm: false
-has_homepage: true
 web_services:
   - name: Cockpit
     href: https://dilli.manatee-basking.ts.net/cockpit

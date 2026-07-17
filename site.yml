@@ -84,9 +84,6 @@
       when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_syncthing | default(false)
     - role: systemd
       tags: [services, systemd]
-    - role: homepage
-      tags: [services, homepage]
-      when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_homepage | default(false)
     - role: bst_dashboard
       tags: [services, bst_dashboard]
     - role: proxy
@@ -98,9 +95,6 @@
     - role: cockpit
       tags: [services, cockpit]
       when: (is_desktop | bool or inventory_hostname in groups.get('server', [])) and machine_profile != 'vm-test' and not skip_cockpit | default(false)
-    - role: lima
-      tags: [services, lima]
-      when: (is_desktop | bool or inventory_hostname == 'bihar') and machine_profile != 'vm-test' and not skip_lima | default(false)
     - role: server_hardening
       tags: [system, hardening, security]
       when: inventory_hostname in groups.get('server', []) or inventory_hostname in groups.get('vps', [])

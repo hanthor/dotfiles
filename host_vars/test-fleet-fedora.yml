@@ -4,7 +4,6 @@
 # Then: ssh -p 22024 fedora@127.0.0.1
 is_desktop: false
 is_laptop: false
-has_homepage: false
 machine_profile: vm-test
 # machine_profile: vm-test skips all desktop + service roles.
 # Test VMs use brew for atuin, but skip other brew-heavy roles

@@ -50,6 +50,6 @@ The playbook runs in tagged phases:
 | 3 — Dotfiles | `dotfiles` | Shell, PI, git, neovim |
 | 4 — Secrets | `secrets` | Bitwarden, SSH keys, GitHub, Tailscale, kubeconfig |
 | 5 — Desktop | `desktop` | GNOME, browser, fonts, wallpaper, PipeWire native DSP |
-| 6 — Services | `services` | Systemd timers, Caddy proxy, homepage, monitoring |
+| 6 — Services | `services` | Systemd timers, Caddy proxy, monitoring |
 
 Phases 4+ require Bitwarden session credentials.

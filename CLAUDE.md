@@ -33,7 +33,6 @@ just add-machine NAME   # Onboard + bootstrap an already-reachable machine via S
 - `bitwarden` resolves `BW_SESSION` (env, `/tmp/bw_session`, or interactive unlock), runs `bw sync` with a 15s timeout, and sets a `bw_unlocked` host fact. All BW-using roles gate on `when: bw_unlocked | default(false)`.
 - `kube` fetches `~/.kube/config` + `~/.talos/config` from Bitwarden — desktops only.
 - `ssh_keys` round-trips per-machine ed25519 keys through Bitwarden, building cross-machine `authorized_keys`.
-- `homepage` builds per-host dashboards from `web_services` + `global_services` in vars.
 
 Roles are conditional on inventory group (`desktop`, `server`, `vps`, `llm`) and on `skip_*` flags in `host_vars/`. See [`docs/roles.md`](docs/roles.md) for the full reference.
 

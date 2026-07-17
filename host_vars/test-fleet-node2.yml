@@ -4,7 +4,6 @@
 # Then: ssh -p 22026 fedora@127.0.0.1
 is_desktop: false
 is_laptop: false
-has_homepage: false
 machine_profile: vm-test
 # machine_profile: vm-test skips all desktop + service roles.
 user_login: james

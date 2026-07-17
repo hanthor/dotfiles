@@ -83,8 +83,5 @@
         reverse_proxy 10.88.0.1:8765 
     }
 
-    # / — homepage dashboard
-    handle {
-        reverse_proxy 10.88.0.1:3000
-    }
+    # / — no homepage; tailscale serve proxies here for service links only
 }

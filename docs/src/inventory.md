@@ -60,16 +60,14 @@ Each machine has a `host_vars/<name>.yml` file with common knobs:
 ```yaml
 is_arm: false          # ARM architecture
 is_laptop: true        # Laptop (runs on login, not timer)
-has_homepage: true     # Deploy dashboard
 skip_flatpak: true     # Skip Flatpak installs
 skip_gnome: true       # Skip GNOME config
 skip_kube: true        # Skip kubeconfig deploy
 skip_proxy: true       # Skip Caddy proxy
-skip_lima: true        # Skip Lima VM manager
-web_services: []       # Extra homepage service links
+web_services: []       # Service links for the local dashboard
 ```
 
 ## Group Variables
 
-- **`group_vars/all.yml`** — Packages (Homebrew, Flatpak), fleet homepage links, Firefox Accounts config, GNOME extensions, authorized SSH keys
+- **`group_vars/all.yml`** — Packages (Homebrew, Flatpak), Firefox Accounts config, GNOME extensions, authorized SSH keys
 - **`group_vars/vps.yml`** — VPS-specific monitoring and proxy settings

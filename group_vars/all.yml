@@ -10,7 +10,7 @@ user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james
 brew_prefix: /home/linuxbrew/.linuxbrew
-# Global services shown on ALL machine homepages
+# Global services
 global_services:
   - name: Authentik
     href: https://auth.manatee-basking.ts.net
@@ -37,8 +37,7 @@ global_services:
     group: Core
     siteMonitor: https://n8n.manatee-basking.ts.net
 
-# Fleet homepages — machines with a homepage instance.
-# Used to render the "Fleet" section on each machine's homepage.
+# Fleet machines
 fleet:
   bihar:
     name: Bihar
@@ -85,8 +84,8 @@ machines:
     hostname: bihar
   matrix:
     hostname: matrix.reilly.asia
-  lkofoss:
-    hostname: lkofoss.club
+  telengana:
+    hostname: telengana
   test-fleet-fedora:
     hostname: test-fleet-fedora
   test-fleet-node2:
