@@ -33,6 +33,8 @@ metadata:
     app.kubernetes.io/name: hive
 data:
   hive.yaml: |
+    # ACMM L6 "Fully Autonomous" — full agent pack, auto-merge with guardrails
+    acmm_level: 6
     project:
       org: tuna-os
       name: TunaOS
@@ -263,7 +265,7 @@ spec:
         app.kubernetes.io/component: controller
     spec:
       nodeSelector:
-        kubernetes.io/hostname: bihar
+        kubernetes.io/hostname: telengana
       imagePullSecrets:
         - name: ghcr-auth
       containers:
