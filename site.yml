@@ -50,6 +50,9 @@
       tags: [dotfiles, shell, ai, secrets]
     - role: ssh_keys
       tags: [secrets, ssh, ssh_keys]
+    - role: ssh_mesh
+      tags: [ssh, mesh_check]
+      when: machine_profile != 'vm-test' and not skip_ssh_mesh | default(false)
     - role: github
       tags: [secrets, github]
     - role: tailscale

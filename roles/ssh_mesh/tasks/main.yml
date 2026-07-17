@@ -1,0 +1,123 @@
+---
+# ── Self-healing SSH mesh ─────────────────────────────────────────
+# Distributes fleet public keys from git (machine_pubkeys in
+# group_vars/all.yml — public keys are safe in a public repo) and
+# verifies passwordless SSH to every fleet machine currently online
+# on the tailnet. Stale known_hosts entries (rebuilt machines) are
+# healed automatically. Runs on every apply, including the daily
+# no-secrets timer — no Bitwarden needed.
+
+- name: Ensure SSH key pair exists
+  ansible.builtin.command: >
+    ssh-keygen -t ed25519 -C "{{ inventory_hostname }}"
+    -f "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519" -N ""
+  args:
+    creates: "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519"
+
+- name: Authorize all fleet public keys from git (non-destructive merge)
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_facts['env']['HOME'] }}/.ssh/authorized_keys"
+    line: "{{ item.value }}"
+    create: true
+    mode: "0600"
+  loop: "{{ machine_pubkeys | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Read this machine's public key
+  ansible.builtin.slurp:
+    src: "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519.pub"
+  register: mesh_own_pub
+
+- name: Warn if this machine's public key is not committed to git
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: {{ inventory_hostname }}'s public key is missing or stale in
+      group_vars/all.yml machine_pubkeys. Other machines cannot self-heal
+      SSH to this host until it is committed:
+      {{ mesh_own_pub.content | b64decode | trim }}
+  when: >-
+    (machine_pubkeys | default({})).get(inventory_hostname, '').split()[:2]
+    != (mesh_own_pub.content | b64decode | trim).split()[:2]
+
+# ── Mesh verification ─────────────────────────────────────────────
+- name: Get online tailnet peers
+  ansible.builtin.shell: |
+    set -o pipefail
+    tailscale status --json 2>/dev/null | python3 -c "
+    import sys, json
+    st = json.load(sys.stdin)
+    online = set()
+    for p in (st.get('Peer') or {}).values():
+        if p.get('Online'):
+            name = (p.get('DNSName', '').split('.')[0] or p.get('HostName', '')).lower()
+            if name:
+                print(name)
+    "
+  args:
+    executable: /bin/bash
+  register: mesh_online
+  changed_when: false
+  failed_when: false
+
+- name: Compute mesh targets (online fleet members)
+  ansible.builtin.set_fact:
+    mesh_targets: >-
+      {{ machines.keys() | list
+         | intersect(mesh_online.stdout_lines | default([]))
+         | difference(ssh_mesh_exclude | default([]))
+         | difference([inventory_hostname]) }}
+
+# ControlMaster=no: a hung mux socket must not poison the probe — we are
+# testing the path + key auth, not the local multiplexer.
+- name: Probe passwordless SSH to online fleet members
+  ansible.builtin.command: >-
+    timeout 15 ssh -o BatchMode=yes -o PasswordAuthentication=no
+    -o ControlMaster=no -o ControlPath=none
+    -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8
+    {{ user_login }}@{{ machines[item].hostname }} true
+  loop: "{{ mesh_targets }}"
+  register: mesh_probe
+  changed_when: false
+  failed_when: false
+
+- name: Heal stale state and retry failed targets
+  ansible.builtin.shell: |
+    set -o pipefail
+    # reap a stale/hung mux master for this host, then refresh host key
+    timeout 5 ssh -O exit "{{ user_login }}@{{ machines[item].hostname }}" >/dev/null 2>&1 || true
+    ssh-keygen -R "{{ machines[item].hostname }}" >/dev/null 2>&1 || true
+    ssh-keyscan -t ed25519 -T 5 "{{ machines[item].hostname }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+    timeout 15 ssh -o BatchMode=yes -o PasswordAuthentication=no \
+        -o ControlMaster=no -o ControlPath=none \
+        -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 \
+        "{{ user_login }}@{{ machines[item].hostname }}" true
+  args:
+    executable: /bin/bash
+  loop: >-
+    {{ mesh_probe.results | default([])
+       | rejectattr('rc', 'eq', 0) | map(attribute='item') | list }}
+  register: mesh_retry
+  changed_when: true
+  failed_when: false
+
+- name: Fail if SSH mesh is still broken
+  vars:
+    mesh_failed: >-
+      {{ mesh_retry.results | default([])
+         | rejectattr('rc', 'eq', 0) | map(attribute='item') | list }}
+  ansible.builtin.fail:
+    msg: >-
+      SSH mesh broken from {{ inventory_hostname }} to:
+      {{ mesh_failed | join(', ') }}.
+      The remote is missing this machine's key in authorized_keys — it will
+      self-heal on its next daily apply, or run `just apply-remote-tags
+      <host> mesh_check` now. Ensure this machine's pubkey is committed in
+      group_vars/all.yml machine_pubkeys.
+  when: mesh_failed | length > 0
+
+- name: SSH mesh OK
+  ansible.builtin.debug:
+    msg: >-
+      SSH mesh OK from {{ inventory_hostname }} →
+      {{ mesh_targets | join(', ') if mesh_targets else 'no fleet peers online' }}

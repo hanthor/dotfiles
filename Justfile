@@ -87,6 +87,10 @@ apply-remote-tags name tags:
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply-tags {{ tags }}
     "
 
+# Verify (and self-heal) passwordless SSH to all online fleet members
+mesh-check:
+    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --tags mesh_check
+
 # Apply only dotfile configs (shell, git, tmux, etc.)
 dotfiles:
     cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --tags dotfiles

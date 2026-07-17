@@ -58,6 +58,7 @@
 
 - [bitwarden](roles/bitwarden.md)
 - [ssh_keys](roles/ssh_keys.md)
+- [ssh_mesh](roles/ssh_mesh.md)
 - [github](roles/github.md)
 - [tailscale](roles/tailscale.md)
 - [kube](roles/kube.md)
