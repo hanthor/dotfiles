@@ -142,8 +142,6 @@ desktop_brews:
   - android-platform-tools
   - aria2
   - btop
-  - exercism
-  - gemini-cli
   - rclone
   - nmap
   - go

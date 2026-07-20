@@ -73,6 +73,23 @@ if command -v tailscale &>/dev/null; then
   alias ts-exit-off='tailscale set --exit-node='
 fi
 
+# Typo corrections (found via `atuin search --exit 127` + raw shell history)
+alias jsut='just'
+alias jusr='just'
+alias justfg='just'
+alias tmuz='tmux'
+alias tmus='tmux'
+alias tmix='tmux'
+alias rmux='tmux'
+alias sudoc='sudo'
+alias podmand='podman'
+alias pii='pi'
+alias ssk-keygen='ssh-keygen'
+alias exut='exit'
+alias got='git'
+alias uups='uupd'
+alias brewinstall='brew install'
+
 # Misc
 alias reload='exec $SHELL -l'
 alias path='tr ":" "\n" <<< "$PATH"'

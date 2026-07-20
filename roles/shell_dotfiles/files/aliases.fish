@@ -70,6 +70,23 @@ if command -q tailscale
     abbr --add ts-exit-off 'tailscale set --exit-node='
 end
 
+# ── Typo corrections (found via atuin exit=127 + raw shell history) ─
+abbr --add jsut       just
+abbr --add jusr       just
+abbr --add justfg     just
+abbr --add tmuz       tmux
+abbr --add tmus       tmux
+abbr --add tmix       tmux
+abbr --add rmux       tmux
+abbr --add sudoc      sudo
+abbr --add podmand    podman
+abbr --add pii        pi
+abbr --add ssk-keygen ssh-keygen
+abbr --add exut       exit
+abbr --add got        git
+abbr --add uups       uupd
+abbr --add brewinstall 'brew install'
+
 # ── Misc ─────────────────────────────────────────────────────────
 abbr --add reload  'exec fish -l'
 abbr --add path    'string split : $PATH'
