@@ -8,7 +8,6 @@ skip_flatpak: true
 skip_bluefin: true
 skip_gnome: true
 skip_zen_browser: true
-skip_monitoring: true
 skip_syncthing: true
 skip_proxy: true
 skip_tailscale_cert: true

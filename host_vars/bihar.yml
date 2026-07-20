@@ -1,6 +1,5 @@
 is_arm: false
 has_proxy: true
-monitoring_hub: true
 tailscale_advertise_routes: "192.168.0.0/24"
 tailscale_accept_dns: false
 tailscale_operator: james
@@ -17,21 +16,3 @@ web_services:
     icon: cockpit.png
     description: System management
     group: System
-  - name: Grafana
-    href: https://bihar.manatee-basking.ts.net/grafana
-    icon: grafana.png
-    description: Metrics and logs dashboards
-    group: Monitoring
-    siteMonitor: https://bihar.manatee-basking.ts.net/grafana
-  - name: Prometheus
-    href: http://bihar.manatee-basking.ts.net:9091
-    icon: prometheus.png
-    description: Metrics (hub)
-    group: Monitoring
-    siteMonitor: http://bihar.manatee-basking.ts.net:9091
-  - name: Alertmanager
-    href: http://bihar.manatee-basking.ts.net:9093
-    icon: prometheus.png
-    description: Alert routing
-    group: Monitoring
-    siteMonitor: http://bihar.manatee-basking.ts.net:9093
