@@ -1,10 +1,21 @@
 ---
 all:
   hosts:
+    # This targets the Debian VM running inside Termux on the phone (tailnet
+    # node name "debian"), not the raw Termux/Android layer itself — that's
+    # the separate `termux` host below.
     pixel-9a:
       ansible_host: 100.86.202.86
       ansible_port: 2222
       ansible_user: james
+      ansible_connection: ssh
+    # Raw Termux/Android layer on the phone (tailnet node name "pixel-9a").
+    # Android/bionic libc — no root, no systemd, no Homebrew. Package
+    # management goes through the termux_packages role, gated on this group.
+    termux:
+      ansible_host: 100.115.116.35
+      ansible_port: 8022
+      ansible_user: u0_a372
       ansible_connection: ssh
     goa:
       ansible_host: localhost
@@ -67,3 +78,6 @@ all:
       hosts:
         matrix:
         telengana:
+    termux_hosts:
+      hosts:
+        termux:

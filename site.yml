@@ -18,11 +18,17 @@
       tags: always
 
   environment:
-    PATH: "{{ brew_bin | default('/home/linuxbrew/.linuxbrew/bin') }}:/home/linuxbrew/.linuxbrew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    PATH: "{{ brew_bin | default('/home/linuxbrew/.linuxbrew/bin') }}:/home/linuxbrew/.linuxbrew/bin:/data/data/com.termux/files/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    # Termux's non-interactive module execution doesn't reliably inherit
+    # HOME (Android has no real getpwuid()-backed home dir for the app
+    # user), which breaks every "~/..." dest: path in copy/template tasks.
+    # Re-assert it from the fact already gathered at play start.
+    HOME: "{{ ansible_facts['env']['HOME'] | default(omit) }}"
 
   roles:
     - role: sudo
       tags: [system, sudo]
+      when: not skip_sudo | default(false)
     # Phase 1: System + packages (no secrets needed)
     - role: sshd
       tags: [system, sshd]
@@ -30,6 +36,9 @@
       tags: [system, packages, apk]
     - role: homebrew
       tags: [packages, homebrew]
+    - role: termux_packages
+      tags: [system, packages, termux]
+      when: inventory_hostname in groups.get('termux_hosts', [])
     - role: bitwarden
       tags: [secrets, bitwarden]
     - role: shell_fonts
@@ -87,6 +96,7 @@
       when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_syncthing | default(false)
     - role: systemd
       tags: [services, systemd]
+      when: not skip_systemd | default(false)
     - role: bst_dashboard
       tags: [services, bst_dashboard]
     - role: proxy

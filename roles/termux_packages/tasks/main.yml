@@ -1,0 +1,46 @@
+---
+# Package + sshd management for the raw Termux/Android layer on the phone.
+# Only runs for hosts in the `termux` inventory group — see site.yml.
+
+- name: Update pkg package cache
+  ansible.builtin.command: pkg update -y
+  changed_when: true
+  register: termux_pkg_update
+  until: termux_pkg_update.rc == 0
+  retries: 3
+  delay: 5
+
+- name: Install Termux packages
+  ansible.builtin.command:
+    cmd: "pkg install -y {{ termux_pkgs | join(' ') }}"
+  changed_when: "'Setting up' in (termux_pkg_install.stdout | default(''))"
+  register: termux_pkg_install
+
+- name: Install global npm packages
+  ansible.builtin.command:
+    cmd: "npm install -g {{ item }}"
+  loop: "{{ termux_npm_global }}"
+  register: termux_npm_install
+  changed_when: "'added' in (termux_npm_install.stdout | default(''))"
+
+- name: Ensure Termux:Boot directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.termux/boot"
+    state: directory
+    mode: "0755"
+
+- name: Deploy sshd boot script
+  ansible.builtin.template:
+    src: start-sshd.sh.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.termux/boot/start-sshd"
+    mode: "0755"
+
+- name: Check if sshd is currently running
+  ansible.builtin.command: pgrep -x sshd
+  register: termux_sshd_running
+  changed_when: false
+  failed_when: false
+
+- name: Start sshd if not running
+  ansible.builtin.command: sshd
+  when: termux_sshd_running.rc != 0

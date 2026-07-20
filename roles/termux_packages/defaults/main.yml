@@ -1,0 +1,24 @@
+---
+# Captured from a live `pkg list-installed` on the phone (2026-07-20) plus
+# what was added this session to get SSH + Ansible + the pi coding agent working.
+termux_pkgs:
+  - openssh
+  - git
+  - python
+  - nodejs
+  - fish
+  - vim
+  - nano
+  - termux-api
+  - curl
+  - unzip
+  # file + lsattr: Ansible's stat/copy/template modules look these up via
+  # PATH and hard-fail without them (Termux ships neither by default).
+  - file
+  - e2fsprogs
+
+# Global npm packages usable directly under Termux's bionic libc.
+# claude-code, codex, and antigravity-cli ship no android-arm64 native
+# binary and cannot run here — they belong on the Debian VM (pixel-9a host).
+termux_npm_global:
+  - "@earendil-works/pi-coding-agent"

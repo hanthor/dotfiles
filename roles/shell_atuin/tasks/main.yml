@@ -7,7 +7,7 @@
 
 - name: Deploy atuin config
   ansible.builtin.copy:
-    dest: ~/.config/atuin/config.toml
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/atuin/config.toml"
     mode: "0644"
     content: |
       sync_address = "https://api.atuin.sh"

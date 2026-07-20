@@ -28,7 +28,7 @@
     - name: Unarchive JetBrains Mono Nerd Font
       ansible.builtin.unarchive:
         src: /tmp/JetBrainsMono.zip
-        dest: ~/.local/share/fonts/JetBrainsMono
+        dest: "{{ ansible_facts['env']['HOME'] }}/.local/share/fonts/JetBrainsMono"
         remote_src: true
 
     - name: Update font cache

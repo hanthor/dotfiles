@@ -9,7 +9,7 @@
 - name: Deploy pi-coding-agent models config
   ansible.builtin.copy:
     src: pi-models.json
-    dest: ~/.pi/agent/models.json
+    dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/models.json"
     mode: "0644"
 
 # ── Per-host secrets from Bitwarden (DeepSeek + Forgejo) ─────────
@@ -35,7 +35,7 @@
           {
             "deepseek": { "type": "api_key", "key": "{{ deepseek_key.stdout | trim }}" }
           }
-        dest: ~/.pi/agent/auth.json
+        dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/auth.json"
         mode: "0600"
       no_log: true
       when: deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0
@@ -54,7 +54,7 @@
         content: |
           # Managed by dotfiles playbook — DO NOT EDIT
           export FORGEJO_TOKEN={{ forgejo_token.stdout | trim }}
-        dest: ~/.config/shell/secrets.sh
+        dest: "{{ ansible_facts['env']['HOME'] }}/.config/shell/secrets.sh"
         mode: "0600"
       no_log: true
       when: forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0

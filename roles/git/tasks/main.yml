@@ -2,19 +2,19 @@
 - name: Deploy ~/.gitconfig
   ansible.builtin.template:
     src: gitconfig.j2
-    dest: ~/.gitconfig
+    dest: "{{ ansible_facts['env']['HOME'] }}/.gitconfig"
     mode: "0644"
 
 - name: Deploy ~/.gitignore_global
   ansible.builtin.copy:
     src: gitignore_global
-    dest: ~/.gitignore_global
+    dest: "{{ ansible_facts['env']['HOME'] }}/.gitignore_global"
     mode: "0644"
 
 - name: Deploy ~/.gitmessage commit template
   ansible.builtin.copy:
     src: gitmessage
-    dest: ~/.gitmessage
+    dest: "{{ ansible_facts['env']['HOME'] }}/.gitmessage"
     mode: "0644"
 
 - name: Create ~/.config/gh/ directory
@@ -26,5 +26,5 @@
 - name: Deploy ~/.config/gh/config.yml
   ansible.builtin.copy:
     src: gh_config.yml
-    dest: ~/.config/gh/config.yml
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/gh/config.yml"
     mode: "0644"

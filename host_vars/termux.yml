@@ -1,0 +1,35 @@
+# Termux's non-interactive SSH sessions don't reliably export HOME, so
+# Ansible's default `~/.ansible/tmp` remote-tmp resolves to /data (Android's
+# unwritable root) instead of Termux's real home. Pin it explicitly.
+ansible_remote_tmp: /data/data/com.termux/files/home/.ansible/tmp
+# Termux's sftp-server resolves "~" via Android's synthetic getpwuid(),
+# which returns /data instead of the real Termux home — breaking every
+# copy/template task's destination path. scp transfer goes through a normal
+# shell instead and doesn't hit this.
+ansible_scp_if_ssh: true
+# Root cause of the above: Ansible's connection plugin detects the remote
+# home directory by running `echo ~<user>` through /bin/sh — which on this
+# device is Android's toybox sh, and toybox doesn't support ~user expansion
+# at all, so it echoes the literal unexpanded string back. Ansible then
+# silently derives a bogus home path from that. Pointing the shell
+# executable at Termux's real bash (which does support ~user) fixes the
+# detection at its source, not just its symptoms.
+ansible_shell_executable: /data/data/com.termux/files/usr/bin/bash
+ansible_python_interpreter: /data/data/com.termux/files/usr/bin/python3
+is_arm: true
+is_laptop: false
+machine_profile: cli-only
+
+# No root, no sudo binary, no systemd, no glibc — none of these apply.
+skip_sudo: true
+skip_systemd: true
+skip_kube: true
+skip_flatpak: true
+skip_bluefin: true
+skip_gnome: true
+skip_zen_browser: true
+skip_monitoring: true
+skip_syncthing: true
+skip_proxy: true
+skip_tailscale_cert: true
+skip_cockpit: true

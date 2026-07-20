@@ -1,12 +1,17 @@
 ---
 # ── PI Coding Agent: extensions, packages, and settings ───────────────
-# Requires: ~/.pi/agent directory (created by shell role)
-# Requires: auth.json (created by shell role from Bitwarden)
+# Requires: auth.json (created by shell_ai role from Bitwarden)
+
+- name: Ensure ~/.pi/agent directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.pi/agent"
+    state: directory
+    mode: "0755"
 
 - name: Deploy pi settings.json (provider, model, packages)
   ansible.builtin.copy:
     src: settings.json
-    dest: ~/.pi/agent/settings.json
+    dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/settings.json"
     mode: "0644"
 
 - name: Ensure pi npm directory exists
@@ -18,7 +23,7 @@
 - name: Deploy pi npm package.json (extension dependencies)
   ansible.builtin.copy:
     src: package.json
-    dest: ~/.pi/agent/npm/package.json
+    dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/npm/package.json"
     mode: "0644"
 
 - name: Install pi npm extension packages
@@ -40,7 +45,7 @@
 - name: Deploy claude-import extension (patched with selector menu)
   ansible.builtin.copy:
     src: claude-import.ts
-    dest: ~/.pi/agent/extensions/claude-import.ts
+    dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/extensions/claude-import.ts"
     mode: "0644"
 
 # ── SearXNG web search skill ────────────────────────────────────────────
@@ -54,11 +59,11 @@
 - name: Deploy searxng-search SKILL.md
   ansible.builtin.copy:
     src: skills/searxng-search/SKILL.md
-    dest: ~/.pi/agent/skills/james/searxng-search/SKILL.md
+    dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/skills/james/searxng-search/SKILL.md"
     mode: "0644"
 
 - name: Deploy searxng-search script
   ansible.builtin.copy:
     src: skills/searxng-search/search.sh
-    dest: ~/.pi/agent/skills/james/searxng-search/search.sh
+    dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/skills/james/searxng-search/search.sh"
     mode: "0755"
