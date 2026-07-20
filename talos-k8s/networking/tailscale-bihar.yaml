@@ -1,10 +1,13 @@
 # Tailscale ExtensionServiceConfig for bihar (control-plane)
+# Before applying: replace TS_AUTHKEY below with a fresh key from the
+# Tailscale admin console (or the 'tailscale-authkey' Bitwarden item) —
+# never commit a real key here, this file is public.
 # Apply: talosctl -n 192.168.0.5 patch mc -p @talos-k8s/tailscale-bihar.yaml
 apiVersion: v1alpha1
 kind: ExtensionServiceConfig
 name: tailscale
 environment:
-  - TS_AUTHKEY=tskey-client-kbWi3FDmr521CNTRL-sHsvAMfoND67W7vGP184E6h7ByeFgj5z
+  - TS_AUTHKEY=REPLACE_WITH_KEY_FROM_BITWARDEN
   - TS_HOSTNAME=bihar
   - TS_ROUTES=192.168.0.0/24
   - TS_ACCEPT_DNS=false

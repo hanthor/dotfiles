@@ -46,9 +46,14 @@ prometheus:
         effect: NoSchedule
 
 # --- Grafana ---
+# adminPassword is intentionally omitted — this file is public.
+# Pass it at install time instead:
+#   helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     --namespace monitoring --create-namespace \
+#     --values talos-k8s/monitoring/kube-prometheus-stack-values.yaml \
+#     --set grafana.adminPassword="$(bw get password grafana-admin)"
 grafana:
   enabled: true
-  adminPassword: admin  # change after first login
   # Lightweight resources
   resources:
     requests:
