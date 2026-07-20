@@ -58,6 +58,18 @@ abbr --add dlogs 'podman logs -f'
 abbr --add dots       'cd ~/.local/share/dotfiles; and git pull --ff-only; and just apply --skip-tags secrets'
 abbr --add dots-apply 'cd ~/.local/share/dotfiles; and git pull --ff-only; and just apply'
 
+# ── tmux ─────────────────────────────────────────────────────────
+abbr --add ta 'tmux a'
+
+# ── Claude Code ──────────────────────────────────────────────────
+abbr --add claude-yolo 'claude --dangerously-skip-permissions'
+
+# ── Tailscale exit-node toggle (Mullvad Singapore) ──────────────
+if command -q tailscale
+    abbr --add ts-exit-sg  'tailscale set --exit-node=sg-sin-wg-001.mullvad.ts.net'
+    abbr --add ts-exit-off 'tailscale set --exit-node='
+end
+
 # ── Misc ─────────────────────────────────────────────────────────
 abbr --add reload  'exec fish -l'
 abbr --add path    'string split : $PATH'

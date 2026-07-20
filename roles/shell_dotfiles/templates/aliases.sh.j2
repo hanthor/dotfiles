@@ -61,6 +61,18 @@ alias dots='cd ~/.local/share/dotfiles && git pull --ff-only && just apply --ski
 alias dots-apply='cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
 alias dots-edit='cd ~/.local/share/dotfiles && ${EDITOR:-nvim} .'
 
+# tmux
+alias ta='tmux a'
+
+# Claude Code (matches how it's actually invoked most often)
+alias claude-yolo='claude --dangerously-skip-permissions'
+
+# Tailscale exit-node toggle (Mullvad Singapore)
+if command -v tailscale &>/dev/null; then
+  alias ts-exit-sg='tailscale set --exit-node=sg-sin-wg-001.mullvad.ts.net'
+  alias ts-exit-off='tailscale set --exit-node='
+fi
+
 # Misc
 alias reload='exec $SHELL -l'
 alias path='tr ":" "\n" <<< "$PATH"'
