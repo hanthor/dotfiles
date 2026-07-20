@@ -8,7 +8,7 @@ Ansible-driven dotfiles + infra for a personal fleet (desktops, servers, VPS). E
 
 Two distinct concerns live here:
 1. **Workstation config** (`roles/`, `site.yml`, `host_vars/`, `group_vars/`) — shells, packages, browser, SSH, Tailscale, kubeconfig, etc.
-2. **Talos K8s cluster IaC** (`talos-k8s/`) — manifests for the Bihar + Karnataka cluster. Detailed handbook in [`docs/cluster.md`](docs/cluster.md).
+2. **Talos K8s cluster IaC** (`talos-k8s/`) — manifests for the Bihar + Karnataka cluster. Detailed handbook in [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md).
 
 ## Core commands
 
@@ -48,7 +48,7 @@ Two nodes: **bihar** (control plane, Intel) and **karnataka** (worker, AMD Strix
 
 Production workloads: Lemonade (AMD-optimized local AI), KubeVirt v1.8.2 + KubeVirt Manager, Tailscale Operator (Ingress to `*.manatee-basking.ts.net`).
 
-**The cluster handbook is [`docs/cluster.md`](docs/cluster.md)** — hardware, network, reinstall, troubleshooting.
+**The cluster handbook is [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md)** — hardware, network, reinstall, troubleshooting.
 
 ## Don'ts
 
@@ -60,8 +60,8 @@ Production workloads: Lemonade (AMD-optimized local AI), KubeVirt v1.8.2 + KubeV
 
 ## References
 
-- [`docs/cluster.md`](docs/cluster.md) — Talos cluster handbook
+- [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md) — Talos cluster handbook
 - [`docs/roles.md`](docs/roles.md) — every Ansible role explained
-- [`docs/bitwarden.md`](docs/bitwarden.md) — BW vault structure
+- [`docs/src/bitwarden.md`](docs/src/bitwarden.md) — BW vault structure
 - `Justfile` — every task recipe; `just --list` for a menu
 - `ansible.cfg`, `site.yml`, `inventory.yml` — the playbook entrypoints

@@ -75,7 +75,6 @@
 - [syncthing](roles/syncthing.md)
 - [systemd](roles/systemd.md)
 - [proxy (Caddy)](roles/proxy.md)
-- [monitoring](roles/monitoring.md)
 - [cockpit](roles/cockpit.md)
 - [tailscale_cert](roles/tailscale_cert.md)
 - [bst_dashboard](roles/bst_dashboard.md)
