@@ -49,7 +49,6 @@
 
 ## Dotfiles
 
-- [shell](roles/shell.md)
 - [pi](roles/pi.md)
 - [git](roles/git.md)
 - [neovim](roles/neovim.md)

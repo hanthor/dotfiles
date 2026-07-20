@@ -1,7 +1,7 @@
 ---
 - name: Create ~/.config/shell/ directory
   ansible.builtin.file:
-    path: ~/.config/shell
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/shell"
     state: directory
     mode: "0755"
 
@@ -43,7 +43,7 @@
 
 - name: Ensure ~/.config/starship directory exists
   ansible.builtin.file:
-    path: ~/.config
+    path: "{{ ansible_facts['env']['HOME'] }}/.config"
     state: directory
     mode: "0755"
 
@@ -55,13 +55,13 @@
 
 - name: Create ~/.config/fish/ directory
   ansible.builtin.file:
-    path: ~/.config/fish
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/fish"
     state: directory
     mode: "0755"
 
 - name: Create ~/.config/fish/conf.d/ directory
   ansible.builtin.file:
-    path: ~/.config/fish/conf.d
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/fish/conf.d"
     state: directory
     mode: "0755"
 

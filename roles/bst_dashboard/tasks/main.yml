@@ -12,7 +12,7 @@
 - name: Deploy bst-dashboard service
   ansible.builtin.template:
     src: bst-dashboard.service.j2
-    dest: ~/.config/systemd/user/bst-dashboard.service
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/bst-dashboard.service"
     mode: "0644"
   when: _bst_dir.stat.exists
   notify: Reload systemd user daemon

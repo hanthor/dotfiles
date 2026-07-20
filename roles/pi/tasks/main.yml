@@ -16,7 +16,7 @@
 
 - name: Ensure pi npm directory exists
   ansible.builtin.file:
-    path: ~/.pi/agent/npm
+    path: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/npm"
     state: directory
     mode: "0755"
 
@@ -29,7 +29,7 @@
 - name: Install pi npm extension packages
   ansible.builtin.command:
     cmd: npm install --no-audit --no-fund --omit=dev
-    chdir: ~/.pi/agent/npm
+    chdir: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/npm"
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   register: pi_npm_install
@@ -38,7 +38,7 @@
 
 - name: Ensure pi extensions directory exists
   ansible.builtin.file:
-    path: ~/.pi/agent/extensions
+    path: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/extensions"
     state: directory
     mode: "0755"
 
@@ -52,7 +52,7 @@
 
 - name: Ensure pi skills directory exists
   ansible.builtin.file:
-    path: ~/.pi/agent/skills/james/searxng-search
+    path: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/skills/james/searxng-search"
     state: directory
     mode: "0755"
 

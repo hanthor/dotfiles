@@ -19,7 +19,7 @@
 
 - name: Create ~/.config/gh/ directory
   ansible.builtin.file:
-    path: ~/.config/gh
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/gh"
     state: directory
     mode: "0755"
 

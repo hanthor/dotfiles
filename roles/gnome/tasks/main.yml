@@ -95,7 +95,7 @@
 
 - name: Ensure user GNOME extensions directory exists
   ansible.builtin.file:
-    path: ~/.local/share/gnome-shell/extensions
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/share/gnome-shell/extensions"
     state: directory
     mode: "0755"
   when: is_desktop | bool
@@ -103,7 +103,7 @@
 - name: Deploy user GNOME extensions
   ansible.builtin.copy:
     src: "extensions/{{ item }}/"
-    dest: ~/.local/share/gnome-shell/extensions/{{ item }}/
+    dest: "{{ ansible_facts['env']['HOME'] }}/.local/share/gnome-shell/extensions/{{ item }}/"
     mode: "0644"
     directory_mode: "0755"
   loop:

@@ -85,7 +85,7 @@
       when: is_desktop | bool and machine_profile != 'vm-test' and not skip_zen_browser | default(false)
     - role: pipewire_audio
       tags: [desktop, audio, pipewire]
-      when: is_desktop | bool
+      when: is_desktop | bool and machine_profile != 'vm-test' and not skip_pipewire_audio | default(false)
 
     # Phase 4: Services
     - role: monitoring

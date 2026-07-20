@@ -36,19 +36,27 @@
     owner: root
     group: root
   become: true
-  when: swapfile.stat.exists
+
+# Gate format/enable on whether the swapfile is actually active, not on
+# file existence — the stat above is taken before creation, so on the run
+# that creates the file it's stale, and on every run after that mkswap/
+# swapon would otherwise run unconditionally against an already-active
+# swapfile and fail the play.
+- name: Check if swap file is already active
+  ansible.builtin.command: swapon --show=NAME --noheadings
+  become: true
+  register: swap_active
+  changed_when: false
 
 - name: Format swap file
   ansible.builtin.command: mkswap /swapfile
   become: true
-  when: swapfile.stat.exists
-  changed_when: false
+  when: "'/swapfile' not in swap_active.stdout"
 
 - name: Enable swap file
   ansible.builtin.command: swapon /swapfile
   become: true
-  when: swapfile.stat.exists
-  changed_when: false
+  when: "'/swapfile' not in swap_active.stdout"
 
 - name: Add swap to fstab
   ansible.builtin.lineinfile:

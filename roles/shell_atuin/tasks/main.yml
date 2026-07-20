@@ -1,7 +1,7 @@
 ---
 - name: Ensure atuin config dir exists
   ansible.builtin.file:
-    path: ~/.config/atuin
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/atuin"
     state: directory
     mode: "0755"
 
@@ -32,7 +32,7 @@
 # ── Atuin setup from Bitwarden ────────────────────────────────────
 - name: Ensure atuin data dir exists
   ansible.builtin.file:
-    path: ~/.local/share/atuin
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin"
     state: directory
     mode: "0700"
 
@@ -53,7 +53,7 @@
 
 - name: Check if atuin key exists
   ansible.builtin.stat:
-    path: ~/.local/share/atuin/key
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin/key"
   register: atuin_existing_key
 
 - name: Fetch atuin credentials from Bitwarden
@@ -96,7 +96,7 @@
 # Running 'atuin login -k' with the mnemonic correctly generates the binary key file.
 - name: Remove atuin data directory before fresh login
   ansible.builtin.file:
-    path: ~/.local/share/atuin
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin"
     state: absent
   when: >
     atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0

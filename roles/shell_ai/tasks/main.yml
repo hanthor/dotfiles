@@ -2,7 +2,7 @@
 # ── AI Coding Tools configuration ────────────────────────────────
 - name: Create pi-coding-agent directory
   ansible.builtin.file:
-    path: ~/.pi/agent
+    path: "{{ ansible_facts['env']['HOME'] }}/.pi/agent"
     state: directory
     mode: "0755"
 

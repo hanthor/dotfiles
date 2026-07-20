@@ -1,13 +1,13 @@
 ---
 - name: Ensure font directory exists
   ansible.builtin.file:
-    path: ~/.local/share/fonts
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/share/fonts"
     state: directory
     mode: "0755"
 
 - name: Check if JetBrains Mono Nerd Font is installed
   ansible.builtin.stat:
-    path: ~/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFont-Regular.ttf
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFont-Regular.ttf"
   register: jb_font
 
 - name: Install JetBrains Mono Nerd Font
@@ -21,7 +21,7 @@
 
     - name: Create JetBrainsMono font directory
       ansible.builtin.file:
-        path: ~/.local/share/fonts/JetBrainsMono
+        path: "{{ ansible_facts['env']['HOME'] }}/.local/share/fonts/JetBrainsMono"
         state: directory
         mode: "0755"
 

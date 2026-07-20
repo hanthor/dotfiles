@@ -13,3 +13,4 @@ skip_syncthing: true
 skip_proxy: true
 skip_tailscale_cert: true
 skip_cockpit: true
+skip_pipewire_audio: true

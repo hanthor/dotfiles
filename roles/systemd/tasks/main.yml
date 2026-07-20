@@ -59,14 +59,14 @@
 
 - name: Create systemd user directory
   ansible.builtin.file:
-    path: ~/.config/systemd/user
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user"
     state: directory
     mode: "0755"
 
 - name: Deploy dotfiles-update service
   ansible.builtin.template:
     src: dotfiles-update.service.j2
-    dest: ~/.config/systemd/user/dotfiles-update.service
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/dotfiles-update.service"
     mode: "0644"
   notify: Reload systemd user daemon
 
@@ -80,7 +80,7 @@
 
 - name: Remove dotfiles-update timer on laptop (not needed)
   ansible.builtin.file:
-    path: ~/.config/systemd/user/dotfiles-update.timer
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/dotfiles-update.timer"
     state: absent
   when: is_laptop | bool
 
@@ -88,7 +88,7 @@
 - name: Deploy dotfiles-update timer (non-laptop)
   ansible.builtin.template:
     src: dotfiles-update.timer.j2
-    dest: ~/.config/systemd/user/dotfiles-update.timer
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/dotfiles-update.timer"
     mode: "0644"
   when: not (is_laptop | bool)
   notify: Reload systemd user daemon
@@ -106,7 +106,7 @@
 - name: Deploy atuin daemon service
   ansible.builtin.template:
     src: atuin-daemon.service.j2
-    dest: ~/.config/systemd/user/atuin-daemon.service
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/atuin-daemon.service"
     mode: "0644"
   notify: Reload systemd user daemon
 
@@ -120,14 +120,14 @@
 - name: Deploy system-mitigator script (Lenovo 400MHz/Journald health)
   ansible.builtin.copy:
     src: system-mitigator.py
-    dest: ~/.local/bin/system-mitigator.py
+    dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/system-mitigator.py"
     mode: "0755"
   when: inventory_hostname == 'himachal'
 
 - name: Deploy system-mitigator service template
   ansible.builtin.template:
     src: system-mitigator.service.j2
-    dest: ~/.config/systemd/user/system-mitigator.service
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/system-mitigator.service"
     mode: "0644"
   when: inventory_hostname == 'himachal'
   notify: Reload systemd user daemon
