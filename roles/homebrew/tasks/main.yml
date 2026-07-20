@@ -13,6 +13,43 @@
       else 'musl libc detected (postmarketOS/Alpine). Install packages via apk instead.' }}
   when: not brew_supported
 
+- name: Check if /home/linuxbrew exists
+  ansible.builtin.stat:
+    path: /home/linuxbrew
+  register: linuxbrew_dir
+  when: brew_supported
+
+# Some base VM/cloud images pre-create /home/linuxbrew owned by a default
+# image user (e.g. Google's AVF Debian image ships it owned by "droid"),
+# which silently breaks every `brew` fetch with no clear error pointing here.
+- name: Ensure /home/linuxbrew is owned by the current user
+  ansible.builtin.file:
+    path: /home/linuxbrew
+    owner: "{{ ansible_facts['env']['USER'] | default(ansible_facts['user_id']) }}"
+    recurse: true
+  become: true
+  when: brew_supported and linuxbrew_dir.stat.exists and linuxbrew_dir.stat.pw_name != (ansible_facts['env']['USER'] | default(ansible_facts['user_id']))
+
+- name: Check for a C compiler
+  ansible.builtin.command: which cc gcc
+  register: brew_cc_check
+  changed_when: false
+  failed_when: false
+  when: brew_supported
+
+# Homebrew-on-Linux needs a real toolchain for any formula without a
+# prebuilt bottle for this arch — Bluefin/ostree hosts already ship one,
+# but a bare Debian/Ubuntu host (e.g. mumbai, the phone's VM) doesn't.
+- name: Install build tools (Debian/Ubuntu, no compiler present)
+  ansible.builtin.apt:
+    name: build-essential
+    state: present
+    update_cache: true
+  become: true
+  when: >-
+    brew_supported and brew_cc_check.rc != 0
+    and ansible_facts['os_family'] | default('') == 'Debian'
+
 - name: Check if Homebrew is installed
   ansible.builtin.stat:
     path: /home/linuxbrew/.linuxbrew/bin/brew
@@ -32,6 +69,48 @@
     dest: "{{ ansible_facts['env']['HOME'] }}/Brewfile"
     mode: "0644"
   when: brew_supported
+
+# Newer Homebrew refuses to load formulae from third-party taps until
+# explicitly trusted — `brew bundle` fails atomically on the whole
+# Brewfile the first time it hits an untrusted tap. This includes taps
+# that are never explicitly `tap`-ped in the Brewfile at all, only
+# referenced inline via a tap-qualified package name (e.g.
+# "charmbracelet/tap/crush") — so the trust list has to be derived from
+# every package name, not just core_taps/desktop_taps.
+- name: Derive full list of Homebrew taps (explicit + implied by tap-qualified package names)
+  ansible.builtin.set_fact:
+    brew_all_taps: >-
+      {{
+        ((core_taps | default([])) + (desktop_taps | default([])) +
+        (core_brews | default([])) + (core_tap_brews | default([])) +
+        (desktop_brews | default([])) + (extra_brews | default([])) +
+        (desktop_casks | default([])))
+        | select('match', '^[^/]+/[^/]+/.+$')
+        | map('regex_replace', '^([^/]+/[^/]+)/.+$', '\1')
+        | list
+        | unique
+      }}
+  when: brew_supported
+
+- name: Tap our own Homebrew taps
+  ansible.builtin.command:
+    cmd: /home/linuxbrew/.linuxbrew/bin/brew tap {{ item }}
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  loop: "{{ brew_all_taps | default([]) }}"
+  when: brew_supported
+  changed_when: false
+
+- name: Trust our own Homebrew taps
+  ansible.builtin.command:
+    cmd: /home/linuxbrew/.linuxbrew/bin/brew trust {{ item }}
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  loop: "{{ brew_all_taps | default([]) }}"
+  when: brew_supported
+  register: brew_trust
+  changed_when: "'now trusted' in (brew_trust.stdout | default(''))"
+  failed_when: false
 
 - name: Run brew bundle
   ansible.builtin.command:

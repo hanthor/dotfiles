@@ -142,7 +142,6 @@ core_tap_brews:
 desktop_taps:
   - hanthor/tap
 desktop_brews:
-  - android-platform-tools
   - aria2
   - btop
   - rclone
@@ -208,6 +207,13 @@ desktop_brews:
   - zsh-completions
   - zsh-syntax-highlighting
   - zstd
+# Homebrew casks (not plain formulae) — `brew "x"` fails with "unreadable
+# formula" if x is actually cask-only.
+desktop_casks:
+  - android-platform-tools
+  - claude-code
+  - codex
+  - antigravity-cli
 desktop_vscode_extensions:
   - bradlc.vscode-tailwindcss
   - catppuccin.catppuccin-vsc
