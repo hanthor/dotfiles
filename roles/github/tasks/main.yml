@@ -1,13 +1,13 @@
 ---
 - name: Check if gh CLI exists
   ansible.builtin.stat:
-    path: /home/linuxbrew/.linuxbrew/bin/gh
+    path: "{{ brew_prefix }}/bin/gh"
   register: gh_binary
 
 - name: GitHub authentication and key registration
   when: gh_binary.stat.exists
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
     BW_SESSION: "{{ bw_session | default('') }}"
   block:
     # ── Authentication ──
@@ -44,7 +44,9 @@
           when: gh_token.rc != 0 or (gh_token.stdout | default('')) | length == 0
 
         - name: Login to GitHub with token
-          ansible.builtin.shell: echo "{{ gh_token.stdout }}" | gh auth login --with-token
+          ansible.builtin.command: gh auth login --with-token
+          args:
+            stdin: "{{ gh_token.stdout }}"
           no_log: true
           when:
             - gh_token.rc == 0
