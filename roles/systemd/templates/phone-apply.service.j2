@@ -1,0 +1,21 @@
+[Unit]
+Description=Periodic push-apply to phone-hosted machines (termux, mumbai)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory={{ ansible_facts['env']['HOME'] }}/.local/share/dotfiles
+ExecStartPre=/usr/bin/git pull --ff-only
+# Phone hosts are frequently unreachable (asleep, app killed, off tailnet)
+# — that's expected, not an error, so each apply is allowed to fail
+# without failing the service (the leading "-").
+ExecStart=-{{ brew_prefix }}/bin/ansible-playbook -i inventory.yml -e target=termux site.yml --skip-tags secrets
+ExecStart=-{{ brew_prefix }}/bin/ansible-playbook -i inventory.yml -e target=mumbai site.yml --skip-tags secrets
+Environment="PATH={{ brew_prefix }}/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HOME={{ ansible_facts['env']['HOME'] }}"
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

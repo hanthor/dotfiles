@@ -1,6 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/sh
-# Deployed by termux_packages role — runs on device boot via Termux:Boot.
-# Requires the Termux:Boot and Termux:API companion apps to be installed
-# separately (not available via pkg — install from F-Droid/GitHub releases).
+# Deployed by termux_packages role. Runs twice over: once at device boot
+# via Termux:Boot, and periodically via Android's JobScheduler
+# (termux-job-scheduler) so sshd comes back even if Android killed
+# Termux in the background between opens — a phone isn't an always-on
+# machine. Requires the Termux:Boot and Termux:API companion apps
+# installed separately (not available via pkg — install from
+# F-Droid/GitHub releases).
 termux-wake-lock
 sshd

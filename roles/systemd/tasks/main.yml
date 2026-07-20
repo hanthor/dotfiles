@@ -139,3 +139,33 @@
     enabled: true
     state: started
   when: inventory_hostname == 'himachal'
+
+# Phone hosts (termux, mumbai) can't reliably self-apply on a schedule —
+# Termux can't run Ansible at all (no Rust target for the cryptography
+# dependency), and neither host is always reachable (asleep, app killed,
+# off tailnet). himachal periodically pushes to them instead, tolerating
+# unreachable as the expected common case rather than an error.
+- name: Deploy phone-apply service template
+  ansible.builtin.template:
+    src: phone-apply.service.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/phone-apply.service"
+    mode: "0644"
+  when: inventory_hostname == 'himachal'
+  notify: Reload systemd user daemon
+
+- name: Deploy phone-apply timer template
+  ansible.builtin.template:
+    src: phone-apply.timer.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/phone-apply.timer"
+    mode: "0644"
+  when: inventory_hostname == 'himachal'
+  notify: Reload systemd user daemon
+
+- name: Enable and start phone-apply timer
+  ansible.builtin.systemd:
+    name: phone-apply.timer
+    scope: user
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: inventory_hostname == 'himachal'

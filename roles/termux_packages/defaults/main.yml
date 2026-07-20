@@ -19,6 +19,12 @@ termux_pkgs:
 
 # Global npm packages usable directly under Termux's bionic libc.
 # claude-code, codex, and antigravity-cli ship no android-arm64 native
-# binary and cannot run here — they belong on the Debian VM (pixel-9a host).
+# binary and cannot run here — they belong on the Debian VM (the
+# `mumbai` host).
 termux_npm_global:
   - "@earendil-works/pi-coding-agent"
+
+# How often the JobScheduler keep-alive job re-asserts wake-lock + sshd.
+# Android N+ enforces a 900000ms (15min) floor for periodic jobs; this is
+# deliberately looser to be less aggressive on battery.
+termux_keepalive_period_ms: 1800000
