@@ -72,7 +72,7 @@
     mode: "0644"
 
 - name: Deploy fish aliases
-  ansible.builtin.copy:
-    src: aliases.fish
+  ansible.builtin.template:
+    src: aliases.fish.j2
     dest: "{{ ansible_facts['env']['HOME'] }}/.config/fish/conf.d/aliases.fish"
     mode: "0644"

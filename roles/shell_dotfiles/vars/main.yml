@@ -1,0 +1,100 @@
+---
+# Single source of truth for aliases shared across bash/zsh and fish.
+# Rendered into aliases.sh.j2 (POSIX `alias`) and aliases.fish.j2 (fish
+# `abbr`, or `alias` where fish_kind: alias is set — e.g. rm→trash, where
+# an abbreviation's visual text-expansion would be surprising).
+#
+# Entries requiring shell-specific syntax (&&/`; and`, ${VAR:-default},
+# heredocs, etc.) are NOT here — they're hand-written once per shell
+# template instead, clearly marked, to avoid subtle translation bugs.
+alias_groups:
+  - guard: nvim
+    fish_kind: alias
+    aliases:
+      - { name: vim, cmd: nvim }
+      - { name: vi, cmd: nvim }
+      - { name: v, cmd: nvim }
+
+  - aliases:
+      - { name: "..", cmd: "cd .." }
+      - { name: "...", cmd: "cd ../.." }
+      - { name: "....", cmd: "cd ../../.." }
+
+  - aliases:
+      - { name: gs, cmd: "git status -sb" }
+      - { name: ga, cmd: "git add" }
+      - { name: gaa, cmd: "git add -A" }
+      - { name: gc, cmd: "git commit" }
+      - { name: gcm, cmd: "git commit -m" }
+      - { name: gca, cmd: "git commit --amend --no-edit" }
+      - { name: gp, cmd: "git push" }
+      - { name: gpf, cmd: "git push --force-with-lease" }
+      - { name: gl, cmd: "git log --oneline --graph --decorate -20" }
+      - { name: gla, cmd: "git log --oneline --graph --decorate --all" }
+      - { name: gd, cmd: "git diff" }
+      - { name: gds, cmd: "git diff --staged" }
+      - { name: gco, cmd: "git checkout" }
+      - { name: gb, cmd: "git branch -vv" }
+      - { name: gpl, cmd: "git pull" }
+      - { name: gst, cmd: "git stash" }
+      - { name: gstp, cmd: "git stash pop" }
+      - { name: gclean, cmd: 'git branch --merged | grep -v "\*\|main\|master" | xargs -r git branch -d' }
+
+  - guard: kubectl
+    aliases:
+      - { name: k, cmd: kubectl }
+      - { name: kgp, cmd: "kubectl get pods" }
+      - { name: kgpa, cmd: "kubectl get pods -A" }
+      - { name: kgs, cmd: "kubectl get svc" }
+      - { name: kgn, cmd: "kubectl get nodes" }
+      - { name: kd, cmd: "kubectl describe" }
+      - { name: kl, cmd: "kubectl logs" }
+      - { name: klf, cmd: "kubectl logs -f" }
+      - { name: kx, cmd: "kubectl exec -it" }
+      - { name: kctx, cmd: "kubectl config use-context" }
+      - { name: kns, cmd: "kubectl config set-context --current --namespace" }
+
+  - aliases:
+      - { name: dc, cmd: "podman compose" }
+      - { name: dps, cmd: "podman ps" }
+      - { name: dpsa, cmd: "podman ps -a" }
+      - { name: dexec, cmd: "podman exec -it" }
+      - { name: dlogs, cmd: "podman logs -f" }
+
+  - aliases:
+      - { name: ta, cmd: "tmux a" }
+      - { name: claude-yolo, cmd: "claude --dangerously-skip-permissions" }
+
+  - guard: tailscale
+    aliases:
+      - { name: ts-exit-sg, cmd: "tailscale set --exit-node=sg-sin-wg-001.mullvad.ts.net" }
+      - { name: ts-exit-off, cmd: "tailscale set --exit-node=" }
+
+  - # Typo corrections — found via `atuin search --exit 127` + raw shell history
+    aliases:
+      - { name: jsut, cmd: just }
+      - { name: jusr, cmd: just }
+      - { name: justfg, cmd: just }
+      - { name: tmuz, cmd: tmux }
+      - { name: tmus, cmd: tmux }
+      - { name: tmix, cmd: tmux }
+      - { name: rmux, cmd: tmux }
+      - { name: sudoc, cmd: sudo }
+      - { name: podmand, cmd: podman }
+      - { name: pii, cmd: pi }
+      - { name: ssk-keygen, cmd: ssh-keygen }
+      - { name: exut, cmd: exit }
+      - { name: got, cmd: git }
+      - { name: uups, cmd: uupd }
+      - { name: brewinstall, cmd: "brew install" }
+
+  - aliases:
+      - { name: localip, cmd: 'ip route get 1.1.1.1 | grep -oP "src \K\S+"' }
+      - { name: cls, cmd: clear }
+      - { name: md, cmd: "mkdir -p" }
+      - { name: h, cmd: history }
+
+  - guard: trash
+    fish_kind: alias
+    aliases:
+      - { name: rm, cmd: trash }

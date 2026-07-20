@@ -1,0 +1,31 @@
+# Fish abbreviations + aliases — managed by Ansible
+# Abbreviations expand visually on space so you see (and learn) the real command.
+# NOTE: bluefin-cli init handles: eza/ll/ls, bat/cat, ugrep/grep,
+#       zoxide/cd, starship, atuin, fzf — do NOT duplicate those here
+#
+# Most of this file is generated from roles/shell_dotfiles/vars/main.yml,
+# the single source shared with the bash/zsh aliases template. To add/change
+# a plain alias, edit that file, not this one — it'll show up in both
+# shells. Only shell-specific-syntax aliases are hand-written below.
+{% for group in alias_groups %}
+{% if group.guard is defined %}
+if command -q {{ group.guard }}
+{% endif %}
+{% for a in group.aliases %}
+{% if group.fish_kind is defined and group.fish_kind == 'alias' %}
+{{ '    ' if group.guard is defined else '' }}alias {{ a.name }} {{ a.cmd }}
+{% else %}
+{{ '    ' if group.guard is defined else '' }}abbr --add {{ a.name }} '{{ a.cmd }}'
+{% endif %}
+{% endfor %}
+{% if group.guard is defined %}
+end
+{% endif %}
+{% endfor %}
+# ── Shell-specific aliases (syntax differs from bash/zsh; not in the shared source) ──
+abbr --add dots       'cd ~/.local/share/dotfiles; and git pull --ff-only; and just apply --skip-tags secrets'
+abbr --add dots-apply 'cd ~/.local/share/dotfiles; and git pull --ff-only; and just apply'
+abbr --add dots-edit  'cd ~/.local/share/dotfiles; and $EDITOR .'
+abbr --add reload     'exec fish -l'
+abbr --add path       'string split : $PATH'
+abbr --add myip       'curl -s ifconfig.me; and echo'
