@@ -1,10 +1,10 @@
 ---
 all:
   hosts:
-    # This targets the Debian VM running inside Termux on the phone (tailnet
-    # node name "debian"), not the raw Termux/Android layer itself — that's
-    # the separate `termux` host below.
-    pixel-9a:
+    # This targets the Debian VM running via Android's Virtualization
+    # Framework on the phone (tailnet node name "mumbai"), not the raw
+    # Termux/Android layer itself — that's the separate `termux` host below.
+    mumbai:
       ansible_host: 100.86.202.86
       ansible_port: 2222
       ansible_user: james
@@ -57,7 +57,7 @@ all:
   children:
     desktop:
       hosts:
-        pixel-9a:
+        mumbai:
         kerala:
         kanpur:
         himachal:

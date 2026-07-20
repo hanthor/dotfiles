@@ -103,7 +103,7 @@ machine_pubkeys:
   himachal: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPelaWkNsfwqnceB/5gftUcnprfnflCsDlMDeQkm0Hps himachal
   vm: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIISpsmEf1I6nKchkatNY08OInckBvQCGm0L3rDse6nBy james@Jamess-MacBook-Air.local
   termux: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyFPxxcqd3bA+SPDL5eGlYzS5mDV2gJcp6vuDpx+spR u0_a372@localhost
-  pixel-9a: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN059d8p5GeXivRywaeJwvx+pAcLdsebGaj7ypalFCuO pixel-9a
+  mumbai: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN059d8p5GeXivRywaeJwvx+pAcLdsebGaj7ypalFCuO pixel-9a
 
 # Machines never probed by the ssh_mesh check: Talos nodes (no user SSH)
 # and port-forwarded test VMs.
@@ -117,7 +117,7 @@ core_brews:
   - bitwarden-cli
   - gh
   - git-lfs
-  - node # Bluefin ships node OTB, but non-Bluefin hosts (e.g. pixel-9a's Debian VM) don't
+  - node # Bluefin ships node OTB, but non-Bluefin hosts (e.g. mumbai, the phone's Debian VM) don't
   - git-delta
   - neovim
   - fish
