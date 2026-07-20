@@ -71,14 +71,15 @@ if [ "$mode" = "remote" ]; then
       BW_MASTER_PASS=$(bw get password "James Bitwarden" --session "$local_session" 2>/dev/null || true)
       if [ -n "$BW_MASTER_PASS" ]; then
         echo "Unlocking Bitwarden on $host (non-interactive)..." >&2
-        remote_session=$(ssh "$host" \
-          "export PATH='/home/linuxbrew/.linuxbrew/bin:\$PATH'; BW_PASSWORD='${BW_MASTER_PASS}' bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null" \
-          | tr -d '\r\n')
-        if [ -z "$remote_session" ]; then
-          remote_session=$(ssh "$host" \
-            "export PATH='/home/linuxbrew/.linuxbrew/bin:\$PATH'; bw unlock --raw '${BW_MASTER_PASS}' 2>/dev/null" \
-            | tr -d '\r\n')
-        fi
+        # Password is piped over stdin and read into a remote env var via
+        # `read`, then passed with --passwordenv — never embedded in the
+        # remote command string, so it never shows up in `ps aux` on $host.
+        remote_session=$(ssh "$host" '
+            export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+            IFS= read -r BW_PASSWORD
+            export BW_PASSWORD
+            bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null
+          ' <<< "$BW_MASTER_PASS" | tr -d '\r\n')
       fi
     fi
     if [ -z "$remote_session" ]; then
