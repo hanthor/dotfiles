@@ -116,6 +116,7 @@ core_brews:
   - bitwarden-cli
   - gh
   - git-lfs
+  - node # Bluefin ships node OTB, but non-Bluefin hosts (e.g. pixel-9a's Debian VM) don't
   - git-delta
   - neovim
   - fish
