@@ -24,7 +24,7 @@ declare -A MACHINE_HOST=(
   [goa]="goa"
   [bihar]="bihar"
   [matrix]="matrix.reilly.asia"
-  [lkofoss]="lkofoss.club"
+  [telengana]="telengana"
 )
 
 SSH_USER="james"
