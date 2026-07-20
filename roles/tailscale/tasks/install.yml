@@ -8,7 +8,7 @@
   failed_when: false
 
 - name: End install phase if already installed
-  ansible.builtin.meta: end_play
+  ansible.builtin.meta: end_role
   when: _ts_installed.rc == 0
 
 - name: Check if ujust exists
