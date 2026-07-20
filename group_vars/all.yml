@@ -5,7 +5,6 @@ monitoring_hub_host: bihar
 monitoring_hub_ip: "prometheus.manatee-basking.ts.net"
 loki_hub_url: "https://loki.manatee-basking.ts.net"
 monitoring_hub_url: "https://grafana.manatee-basking.ts.net"
-skip_monitoring: true
 user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james
@@ -255,14 +254,6 @@ desktop_vscode_extensions:
 flatpak_remotes:
   - name: flathub
     url: https://dl.flathub.org/repo/flathub.flatpakrepo
-system_flatpaks:
-  - io.typora.Typora
-  - com.github.fabiocolacio.marker
-  - app.zen_browser.zen
-  - com.tailscale.tailscale
-  - com.visualstudio.code
-  - com.github.Eloston.UngoogledChromium
-
 # Bitwarden item name that holds Firefox Accounts credentials + TOTP
 fxa_bw_item: "accounts.firefox.com"
 fxa_bw_username: "jreilly1821@gmail.com"

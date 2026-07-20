@@ -4,6 +4,10 @@ flatpak_remotes:
     url: https://dl.flathub.org/repo/flathub.flatpakrepo
 
 system_flatpaks:
+  - io.typora.Typora
+  - com.github.fabiocolacio.marker
+  - com.tailscale.tailscale
+  - com.visualstudio.code
   - app.zen_browser.zen
   - com.github.tchx84.Flatseal
   - com.mattjakeman.ExtensionManager

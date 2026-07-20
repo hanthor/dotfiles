@@ -317,8 +317,8 @@ flatpak-install app:
     set -euo pipefail
     flatpak install --system -y flathub {{ app }}
     cd {{ dotfiles_dir }}
-    yq -i '.system_flatpaks += ["{{ app }}"]' group_vars/all.yml
-    git add group_vars/all.yml
+    yq -i '.system_flatpaks += ["{{ app }}"]' roles/flatpak/vars/main.yml
+    git add roles/flatpak/vars/main.yml
     git commit -m "flatpak: add {{ app }}"
     git push
 
