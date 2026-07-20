@@ -1,33 +1,15 @@
 ---
 # Homebrew requires glibc — skip on musl-based systems (Alpine, postmarketOS)
 # and on Termux (Android/bionic libc, no glibc at all).
-- name: Detect musl libc (Homebrew incompatible)
-  ansible.builtin.stat:
-    path: /lib/ld-musl-x86_64.so.1
-  register: musl_x86
-
-- name: Detect musl libc aarch64
-  ansible.builtin.stat:
-    path: /lib/ld-musl-aarch64.so.1
-  register: musl_aarch64
-
-- name: Detect Termux (Android/bionic libc)
-  ansible.builtin.stat:
-    path: /data/data/com.termux/files/usr
-    get_mime: false
-    get_checksum: false
-    get_attributes: false
-  register: termux_prefix
-
 - name: Set brew_supported fact
   ansible.builtin.set_fact:
-    brew_supported: "{{ not (musl_x86.stat.exists or musl_aarch64.stat.exists or termux_prefix.stat.exists) }}"
+    brew_supported: "{{ not (is_musl or is_termux) }}"
 
 - name: Warn that Homebrew is not supported on this system
   ansible.builtin.debug:
     msg: >-
       Skipping Homebrew —
-      {{ 'Termux (Android/bionic libc) detected. Use pkg instead.' if termux_prefix.stat.exists
+      {{ 'Termux (Android/bionic libc) detected. Use pkg instead.' if is_termux
       else 'musl libc detected (postmarketOS/Alpine). Install packages via apk instead.' }}
   when: not brew_supported
 

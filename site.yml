@@ -17,6 +17,36 @@
         ansible_env_path: "{{ brew_bin }}:{{ ansible_facts['env']['PATH'] }}"
       tags: always
 
+    # Platform detection, computed once — apk_packages, homebrew, and
+    # termux_packages each need to know libc flavor to decide whether to
+    # run; previously each re-implemented the same stat checks.
+    - name: Detect musl libc
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        get_mime: false
+        get_checksum: false
+        get_attributes: false
+      register: _musl_stat
+      loop:
+        - /lib/ld-musl-x86_64.so.1
+        - /lib/ld-musl-aarch64.so.1
+      tags: always
+
+    - name: Detect Termux (Android/bionic libc)
+      ansible.builtin.stat:
+        path: /data/data/com.termux/files/usr
+        get_mime: false
+        get_checksum: false
+        get_attributes: false
+      register: _termux_stat
+      tags: always
+
+    - name: Set platform facts
+      ansible.builtin.set_fact:
+        is_musl: "{{ _musl_stat.results | selectattr('stat.exists') | list | length > 0 }}"
+        is_termux: "{{ _termux_stat.stat.exists }}"
+      tags: always
+
   environment:
     PATH: "{{ brew_bin | default('/home/linuxbrew/.linuxbrew/bin') }}:/home/linuxbrew/.linuxbrew/bin:/data/data/com.termux/files/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     # Termux's non-interactive module execution doesn't reliably inherit

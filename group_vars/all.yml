@@ -102,6 +102,7 @@ machine_pubkeys:
   kanpur: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGR7ZHHHguM8yl4vbDsSMlk5VFg+PaLA4+kNtYLJwBxc james@kanpur
   himachal: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPelaWkNsfwqnceB/5gftUcnprfnflCsDlMDeQkm0Hps himachal
   vm: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIISpsmEf1I6nKchkatNY08OInckBvQCGm0L3rDse6nBy james@Jamess-MacBook-Air.local
+  termux: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyFPxxcqd3bA+SPDL5eGlYzS5mDV2gJcp6vuDpx+spR u0_a372@localhost
 
 # Machines never probed by the ssh_mesh check: Talos nodes (no user SSH)
 # and port-forwarded test VMs.
@@ -280,4 +281,3 @@ gnome_enabled_extensions:
 
 extra_authorized_keys:
   - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP9VKRfO6q+mk43mJ1BYn2omRyKJcieTgZem0jGGEtN2 goa
-  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIDWQMpTXLLE8z3sxeCFpW7RBURRuNEOdxbe5XBCG2eT u0_a266@localhost (termux)

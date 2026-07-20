@@ -2,19 +2,9 @@
 # Install packages via apk on Alpine/musl systems (when Homebrew is not available)
 # This role handles PostMarketOS, Alpine, and other musl-based distributions
 
-- name: Detect if musl libc (Alpine-based system)
-  ansible.builtin.stat:
-    path: /lib/ld-musl-x86_64.so.1
-  register: musl_x86
-
-- name: Detect if musl libc aarch64
-  ansible.builtin.stat:
-    path: /lib/ld-musl-aarch64.so.1
-  register: musl_aarch64
-
 - name: Set apk_available fact
   ansible.builtin.set_fact:
-    apk_available: "{{ musl_x86.stat.exists or musl_aarch64.stat.exists }}"
+    apk_available: "{{ is_musl }}"
 
 - name: Skip if apk not available
   ansible.builtin.debug:
