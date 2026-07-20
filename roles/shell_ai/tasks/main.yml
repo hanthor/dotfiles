@@ -20,7 +20,7 @@
   when: bw_unlocked | default(false)
   environment:
     BW_SESSION: "{{ bw_session }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
   block:
     - name: Fetch DeepSeek API key from Bitwarden
       ansible.builtin.command: bw get password deepseek-api-key

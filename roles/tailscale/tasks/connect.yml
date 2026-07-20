@@ -20,7 +20,7 @@
   changed_when: false
   no_log: true
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
 
 - name: Remove old tailscale device with same hostname
   block:

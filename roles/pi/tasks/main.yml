@@ -31,7 +31,7 @@
     cmd: npm install --no-audit --no-fund --omit=dev
     chdir: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/npm"
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
   register: pi_npm_install
   changed_when: "'added' in (pi_npm_install.stdout | default('')) or 'removed' in (pi_npm_install.stdout | default('')) or 'updated' in (pi_npm_install.stdout | default('')) or 'changed' in (pi_npm_install.stdout | default(''))"
   failed_when: false

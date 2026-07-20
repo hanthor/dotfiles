@@ -45,7 +45,7 @@
   changed_when: false
   failed_when: false
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
 
 - name: Set Atuin logged in fact
   ansible.builtin.set_fact:
@@ -67,7 +67,7 @@
     - bw_unlocked | default(false)
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
 
 - name: Skip atuin login (already logged in or vault locked)
   ansible.builtin.set_fact:
@@ -110,14 +110,14 @@
     and not atuin_logged_in
   changed_when: true
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
 
 - name: Sync atuin history (best-effort — key mismatch is non-fatal)
   ansible.builtin.command: atuin sync
   changed_when: false
   failed_when: false
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
   when: atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
 
 - name: Check if shell history has already been imported into atuin
@@ -130,7 +130,7 @@
     atuin import auto 2>&1
     touch "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin/.history_imported"
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
   when: not atuin_import_sentinel.stat.exists
   changed_when: false
   failed_when: false

@@ -52,13 +52,13 @@
   changed_when: false
   failed_when: false
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
 
 - name: Install nvim plugins (headless)
   ansible.builtin.shell: |
     nvim --headless "+Lazy! sync" +qa 2>&1 | tail -5
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
     HOME: "{{ ansible_facts['env']['HOME'] }}"
   changed_when: false
   failed_when: false

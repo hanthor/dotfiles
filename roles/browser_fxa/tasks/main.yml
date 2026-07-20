@@ -76,7 +76,7 @@
   failed_when: false
   changed_when: false
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
     BW_SESSION: "{{ bw_session | default('') }}"
 
 - name: Report BW lookup result (diagnostic)
@@ -113,7 +113,7 @@
     - bw_unlocked | default(false)
     - _fxa_item_id is defined
   environment:
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
     BW_SESSION: "{{ bw_session | default('') }}"
 
 - name: Warn if Firefox Account credentials not found in Bitwarden

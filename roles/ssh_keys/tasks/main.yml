@@ -55,7 +55,7 @@
   when: not priv_key_stat.stat.exists
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
 
 - name: Generate new SSH key pair if not on disk or in BW
   ansible.builtin.command: >
@@ -136,7 +136,7 @@
     BW_ITEM_NAME: "{{ user_login }}@{{ inventory_hostname }}"
     PRIV_PATH: "{{ priv_key }}"
     PUB_PATH: "{{ pub_key }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
 
 # ── Update allowed_signers for git commit signing ──
 - name: Read public key
@@ -237,7 +237,7 @@
   when: bw_unlocked | default(false)
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
-    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    PATH: "{{ ansible_env_path }}"
 
 - name: Write authorized_keys with all machine public keys
   ansible.builtin.copy:

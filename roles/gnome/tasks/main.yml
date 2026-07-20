@@ -26,9 +26,9 @@
     UUID=$(gsettings get org.gnome.Ptyxis default-profile-uuid | tr -d "'")
     CURRENT_CMD=$(gsettings get "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-command 2>/dev/null | tr -d "'")
     CURRENT_FONT=$(gsettings get org.gnome.Ptyxis font-name 2>/dev/null | tr -d "'")
-    if [ "$CURRENT_CMD" != "/home/linuxbrew/.linuxbrew/bin/fish" ] || [ "$CURRENT_FONT" != "JetBrainsMono Nerd Font 12" ]; then
+    if [ "$CURRENT_CMD" != "{{ brew_prefix }}/bin/fish" ] || [ "$CURRENT_FONT" != "JetBrainsMono Nerd Font 12" ]; then
       gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" use-custom-command true
-      gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-command '/home/linuxbrew/.linuxbrew/bin/fish'
+      gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${UUID}/" custom-command '{{ brew_prefix }}/bin/fish'
       gsettings set org.gnome.Ptyxis use-system-font false
       gsettings set org.gnome.Ptyxis font-name 'JetBrainsMono Nerd Font 12'
       echo changed
