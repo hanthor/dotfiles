@@ -261,11 +261,14 @@ talos-k8s/
 ├── hive/            Hive (AI agent swarm)
 ├── homepage/        Cluster landing page
 ├── infrastructure/  KubeVirt + Corral
+├── kubestellar-hive/ KubeStellar multi-cluster hive
 ├── longhorn/        Storage (CSI, snapshots)
 ├── monitoring/      Prometheus + Grafana + metrics-server
 ├── n8n/             n8n (workflow automation)
 ├── networking/      Tailscale node configs
-└── testing-lab/     CI/CD test infrastructure
+├── searxng/         SearXNG (self-hosted search)
+├── testing-lab/     CI/CD test infrastructure
+└── topolvm/         TopoLVM (dynamic LVM storage)
 ```
 
 ### Lemonade — AMD-optimized local AI runtime
@@ -336,6 +339,9 @@ All other production services have their own directory in [`talos-k8s/`](../../.
 | Grafana + Prometheus | `monitoring/` | kube-prometheus-stack + metrics-server |
 | ArgoCD | (Helm) | GitOps deployment |
 | Longhorn | `longhorn/` | Distributed block storage (CSI, snapshots) |
+| KubeStellar Hive | `kubestellar-hive/` | KubeStellar multi-cluster hive |
+| SearXNG | `searxng/` | Self-hosted metasearch |
+| TopoLVM | `topolvm/` | Dynamic LVM-backed storage |
 | Testing lab | `testing-lab/` | Argo Workflows CI/CD test infra |
 
 Each directory has a `README.md` with deploy and operational instructions.
@@ -385,7 +391,7 @@ talosctl -n 192.168.0.6 dmesg | grep -i amdgpu
 
 ```bash
 kubectl get nodes -o wide
-kubectl top nodes                        # requires metrics-server (not currently installed)
+kubectl top nodes                        # requires metrics-server (monitoring/metrics-server.yaml)
 kubectl logs -f deployment/lemonade
 kubectl describe pod -l app=lemonade    # check GPU scheduling / events
 ```
