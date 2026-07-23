@@ -3,7 +3,8 @@ Description=Atuin shell history sync daemon
 After=network.target
 
 [Service]
-ExecStart=atuin daemon start --force
+ExecStart={{ brew_prefix }}/bin/atuin daemon start --force
+Environment="PATH={{ brew_prefix }}/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
 Restart=on-failure
 RestartSec=5
 
