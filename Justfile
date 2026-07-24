@@ -157,6 +157,36 @@ onboard name type="desktop":
     echo ""
     echo "Or if it's already reachable over Tailscale:"
     echo "  just add-machine {{ name }}"
+    echo ""
+    echo "First get it on the tailnet by scanning a QR with your phone (run ON it):"
+    echo "  just tailscale-qr {{ name }}"
+
+# Phase-0 bootstrap-of-trust with NO auth key and NO Bitwarden: runs interactive
+# `tailscale up` and renders the login URL as a QR; scan it with your phone and
+# approve the device in the Tailscale admin (passwordless via your IdP). Once on
+# the tailnet, the machine's identity is its first credential and the rest of
+# onboarding (secrets + apply) flows from there. Run ON the new machine; uses
+# sudo (interactive onboarding, not the timer). Requires you to be a tagOwner of
+# tag:fleet in the ACL; drop --advertise-tags to join as a personal device.
+# Details: docs/src/qr-onboarding.md
+# Join this machine to the tailnet by scanning a QR with your phone (Phase 0)
+tailscale-qr name=machine:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v tailscale >/dev/null 2>&1; then
+      echo "→ Tailscale not found; installing..."
+      curl -fsSL https://tailscale.com/install.sh | sh
+    fi
+    echo ""
+    echo "Scan this QR with your phone to authorize '{{ name }}' onto the tailnet."
+    echo "Approve the device in the Tailscale admin — no password, no auth key."
+    echo ""
+    sudo tailscale up --qr \
+      --hostname="{{ name }}" \
+      --advertise-tags=tag:fleet \
+      --accept-routes
+    echo ""
+    echo "✓ '{{ name }}' is on the tailnet. Next: fetch secrets + apply (just apply / just add-machine)."
 
 # Apply to ALL online fleet machines in parallel (auto-detected via Tailscale)
 apply-all:

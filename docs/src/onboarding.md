@@ -1,5 +1,33 @@
 # Onboarding a New Machine
 
+## Step 0: Get on the tailnet by scanning a QR (recommended first step)
+
+Before secrets or SSH can flow, the machine needs to be on the tailnet. Instead
+of copying an auth key, join it by scanning a QR with your phone — **run this on
+the new machine**:
+
+```bash
+just tailscale-qr <name>
+```
+
+This runs interactive `tailscale up --qr`: it renders the login URL as a QR in
+the terminal. Scan it with your phone and approve the device in the Tailscale
+admin (passwordless via your IdP). No auth key, no Bitwarden, no master password.
+
+Once the machine is on the tailnet, its **tailnet identity becomes its first
+credential** — every other onboarding step (secret delivery, `apply`, SSH) flows
+from there. This is Phase 0 of the [QR secret onboarding](qr-onboarding.md)
+effort; the later phases replace the auth-key/master-password handshake below
+entirely.
+
+> Requires you to be a `tagOwner` of `tag:fleet` in the tailnet ACL (every fleet
+> node carries this tag). Drop `--advertise-tags` in the recipe to join as a
+> personal device instead.
+
+Then continue with Path A or B below.
+
+---
+
 Two paths depending on whether the machine is already reachable.
 
 ## Path A: Machine Already Online (Tailscale + SSH)
