@@ -52,3 +52,28 @@ jobs:
 
       - name: Validate Justfile
         run: just --justfile Justfile --list
+
+  broker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/secret-broker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/secret-broker/go.mod
+          cache-dependency-path: tools/secret-broker/go.sum
+
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - name: build
+        run: go build ./...
+
+      - name: vet
+        run: go vet ./...
+
+      - name: test
+        run: go test -count=1 ./...
