@@ -29,6 +29,32 @@ QR experience is mostly already in the stack:
 3. **No secret ever rides in the QR** — the QR carries a login URL; the phone
    approves; the identity does the rest.
 
+### End-to-end flow
+
+```mermaid
+sequenceDiagram
+    participant N as New machine
+    participant P as Your phone
+    participant TS as Tailscale admin
+    participant B as secret-broker (tailnet)
+    participant BW as Bitwarden Secrets Manager
+
+    Note over N,TS: Phase 0 — join the tailnet
+    N->>N: just tailscale-qr (renders login QR)
+    P->>TS: scan QR + approve device
+    TS-->>N: authenticated; tagged tag:fleet, gets a StableNodeID
+
+    Note over N,BW: Phase 1 — first secrets, over the tailnet
+    N->>B: GET /v1/secrets (identity = WhoIs, unforgeable)
+    B-->>N: 202 pending + fingerprint
+    P->>B: just broker-pending (see stableID + fingerprint)
+    P->>B: just broker-approve <stableID> (match fingerprint)
+    N->>B: GET /v1/secrets (retry)
+    B->>BW: bws get (only this node's policy refs)
+    BW-->>B: secret values
+    B-->>N: 200 + least-privilege secrets
+```
+
 Bitwarden stays the source of truth — we're replacing the *bootstrap*, not the
 vault. (The `bw` CLI cannot do passwordless "log in with device"; it only supports
 password / `--apikey` / `--sso`, so we don't build on that.)

@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -71,6 +72,19 @@ func TestHTTP_ApproveFlow(t *testing.T) {
 	}
 	if got := do(nodeH.getSecrets, "GET", "/v1/secrets").Code; got != http.StatusOK {
 		t.Fatalf("post-approval want 200, got %d", got)
+	}
+}
+
+// whoami echoes the caller's own identity + fingerprint (no auth needed).
+func TestHTTP_Whoami(t *testing.T) {
+	caller := fleet(nodeA, "kanpur")
+	h, _ := newTestHandler(caller, []string{adminID}, stubSource{})
+	rec := do(h.whoami, "GET", "/v1/whoami")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, fingerprint(nodeA)) {
+		t.Fatalf("whoami body should include the fingerprint; got %s", body)
 	}
 }
 

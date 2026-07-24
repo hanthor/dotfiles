@@ -33,7 +33,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"tailscale.com/client/local"
@@ -101,6 +103,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/secrets", h.getSecrets)
+	mux.HandleFunc("/v1/whoami", h.whoami)
 	mux.HandleFunc("/v1/admin/pending", h.adminPending)
 	mux.HandleFunc("/v1/admin/approve", h.adminApprove)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -113,7 +116,22 @@ func main() {
 		log.Fatalf("tailnet listen %s: %v", *addr, err)
 	}
 	log.Printf("secret-broker up as %q on %s (source=%s require=%s admins=%d)", *hostname, *addr, *sourceKind, *requireTag, len(reg.admins))
-	log.Fatal(http.Serve(ln, mux))
+
+	// Graceful shutdown: drain HTTP then deregister the tsnet node (matters most
+	// for ephemeral auth keys — the node should leave the tailnet cleanly).
+	httpSrv := &http.Server{Handler: mux}
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		log.Println("shutting down...")
+		sctx, scancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer scancel()
+		_ = httpSrv.Shutdown(sctx)
+	}()
+	if err := httpSrv.Serve(ln); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
 }
 
 // handler holds the request-scoped dependencies. Identity resolution is injected
@@ -175,6 +193,22 @@ func (h *handler) getSecrets(w http.ResponseWriter, r *http.Request) {
 			"warning":     "hostname is user-settable; authorization is scoped to stableID only",
 		})
 	}
+}
+
+// whoami echoes the caller's broker-visible identity + fingerprint. Useful during
+// onboarding: the node sees exactly what the broker will authorize on (its
+// StableID, not its hostname) and the fingerprint to match against the pending list.
+func (h *handler) whoami(w http.ResponseWriter, r *http.Request) {
+	id, err := h.resolveID(r)
+	if err != nil {
+		writeJSON(w, statusOf(err), map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"identity":       id,
+		"fingerprint":    fingerprint(id.StableID),
+		"hasRequiredTag": id.hasTag(h.requireTag),
+	})
 }
 
 func (h *handler) adminPending(w http.ResponseWriter, r *http.Request) {

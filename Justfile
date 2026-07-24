@@ -217,6 +217,12 @@ broker-approve id:
 broker-myid:
     @tailscale status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['Self']['ID'])"
 
+# Ask the broker what identity + fingerprint it sees for this node (no approval needed).
+broker-whoami:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    curl -sS {{ broker_url }}/v1/whoami
+
 # Apply to ALL online fleet machines in parallel (auto-detected via Tailscale)
 apply-all:
     #!/usr/bin/env bash
