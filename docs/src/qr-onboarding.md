@@ -42,7 +42,7 @@ couldn't SSH anywhere" incident — there'd be no `authorized_keys` to fall out 
 | Phase | What | Status |
 |-------|------|--------|
 | **0** | QR tailnet join — `just tailscale-qr` renders the `tailscale up` login URL as a console QR; scan + approve on phone. | **Done** |
-| **1** | Identity broker — a tailnet-only service (`tsnet`) that returns a short-TTL `BW_SESSION` (or only the derived secrets) to an authenticated, tagged node. | Planned |
+| **1** | Identity broker — a tailnet-only service (`tsnet`) that returns a short-TTL `BW_SESSION` (or only the derived secrets) to an authenticated, tagged node. | **Spike** ([`tools/secret-broker`](https://github.com/hanthor/dotfiles/tree/master/tools/secret-broker)) — compile-verified; identity gating real, secret source stubbed |
 | **2** | Least-privilege + hardening — per-machine secret scoping, TTLs, out-of-band verification fingerprint on phone + machine. | Planned |
 
 ### Phase 0 (implemented)

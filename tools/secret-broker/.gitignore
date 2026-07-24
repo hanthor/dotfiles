@@ -1,0 +1,3 @@
+# Built binary (build to a scratch dir, don't commit)
+/secret-broker
+*.err
