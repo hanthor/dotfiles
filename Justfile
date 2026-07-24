@@ -188,6 +188,35 @@ tailscale-qr name=machine:
     echo ""
     echo "✓ '{{ name }}' is on the tailnet. Next: fetch secrets + apply (just apply / just add-machine)."
 
+# ── secret-broker client (Phase 1, #49) — MANUAL/opt-in, not wired into apply ──
+# The broker delivers first secrets over the tailnet, gated on tailnet identity +
+# an operator approval. Requires a running broker (see tools/secret-broker). Set
+# BROKER_URL to override the default. Docs: docs/src/qr-onboarding.md
+broker_url := env("BROKER_URL", "http://secret-broker:8080")
+
+# On the NEW node: request secrets from the broker (prints status + fingerprint).
+broker-request:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    echo "Requesting secrets from {{ broker_url }} (tailnet identity authenticates me)..."
+    curl -sS -w '\nHTTP %{http_code}\n' {{ broker_url }}/v1/secrets
+
+# On your ADMIN node: list nodes awaiting approval (stableID + hostname + fingerprint).
+broker-pending:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    curl -sS {{ broker_url }}/v1/admin/pending
+
+# On your ADMIN node: approve a specific StableID (verify its fingerprint first).
+broker-approve id:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    curl -sS -X POST "{{ broker_url }}/v1/admin/approve?id={{ id }}" -w '\nHTTP %{http_code}\n'
+
+# Print this node's own Tailscale StableID (compare against the pending list).
+broker-myid:
+    @tailscale status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['Self']['ID'])"
+
 # Apply to ALL online fleet machines in parallel (auto-detected via Tailscale)
 apply-all:
     #!/usr/bin/env bash

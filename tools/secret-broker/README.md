@@ -1,82 +1,127 @@
-# secret-broker (Phase 1 spike)
+# secret-broker
 
-A tailnet-only secrets broker for [QR secret onboarding (#49)](https://github.com/hanthor/dotfiles/issues/49).
-See the design in [`docs/src/qr-onboarding.md`](../../docs/src/qr-onboarding.md).
+Tailnet identity secret broker for [QR secret onboarding (#49)](https://github.com/hanthor/dotfiles/issues/49).
+Design: [`docs/src/qr-onboarding.md`](../../docs/src/qr-onboarding.md).
 
-**Status: spike, compile-verified only.** It builds and vets; it has *not* been
-run end-to-end (that needs a `TS_AUTHKEY` to bring the broker onto the tailnet,
-which wasn't minted in the session that wrote this). The secret source is a stub
-— no real secret material. The point is to prove **identity-gated delivery**.
+Delivers a new/re-aligned machine its first secrets over the tailnet, authorized
+by the machine's **unforgeable tailnet identity** plus an **operator approval**
+that mirrors the Tailscale device-approve you already do on your phone. No master
+password on the new box; no secret ever travels in a QR.
 
-## What it does
+## Verification status
 
-Joins the tailnet as its own node via `tsnet` and serves `GET /v1/secrets` over
-the tailnet only (`tsnet.Listen` binds the tailnet interface by construction —
-no host port is exposed). For each request it resolves the caller's *verified*
-identity with `LocalClient().WhoIs(remoteAddr)` — the WireGuard-authenticated
-peer, not anything the caller asserts — and enforces:
+- `go build` + `go vet` clean; the security-critical gating logic is **unit-tested**
+  (`broker_test.go`, deny-paths) and passing.
+- **Not run end-to-end.** A live run needs a `TS_AUTHKEY` (to put the broker on
+  the tailnet) and a Bitwarden Secrets Manager token — neither minted in the
+  session that wrote this. Follow the [runbook](#operator-runbook) to run it.
+- The client is a **manual, opt-in** `just` recipe. It is deliberately **not**
+  wired into `just apply`/onboarding, so an untested bug here cannot break fleet
+  onboarding.
 
-1. **Admission gate** — the caller must carry an ACL tag (default `tag:fleet`).
-   This is *coarse*: every fleet node has it, so it gates reachability, not which
-   secrets you get.
-2. **Scoping by `StableNodeID`** — the unforgeable node ID assigned by the
-   coordination server. We deliberately **do not** key on hostname/DNSName:
-   Phase 0 sets `--hostname=<name>` and that is user-settable, so a malicious
-   node could claim to be `bihar`. Hostname is echoed back for display only.
-3. **Bootstrap-of-trust, made explicit** — a brand-new node has no prior
-   `StableNodeID` mapping. That first-contact case is a labelled decision point
-   in `SecretsFor` (`-tofu` trust-on-first-use for the spike). In production this
-   is exactly where a **phone-conveyed one-time pairing token** must gate
-   issuance — it is not an implicit map lookup.
+## How authorization works
 
-The response echoes the resolved identity (`stableID`, `hostname`, `tags`) so you
-can *see* that authorization is scoped to `stableID` and that hostname is
-whatever the node claimed.
+Every request is resolved to the caller's *verified* identity via
+`LocalClient().WhoIs(remoteAddr)` — the WireGuard-authenticated peer, never
+anything the caller asserts. Then:
+
+1. **Admission** — the caller must carry an ACL tag (default `tag:fleet`). Coarse:
+   every fleet node has it, so it gates reachability, not which secrets you get.
+2. **Authorization by `StableNodeID`** — the coordination-server-assigned, un­forgeable
+   node id. We never key on hostname: Phase 0 sets `--hostname=<name>` and it is
+   user-settable, so a node could claim to be `bihar`. Hostname is display-only.
+3. **Race-free pairing** — an unknown eligible node's request is *queued*
+   (`202 pending`) with a fingerprint. The operator approves that **specific
+   StableID** (`POST /v1/admin/approve?id=…`, admin-gated). We never auto-approve
+   "the next node within a window" — `tag:fleet` is broadly held, so a time-only
+   window is a race; identity-bound approval is not.
+4. **Least privilege** — an authorized node receives only the secrets its policy
+   lists (plus shared defaults), fetched from Bitwarden Secrets Manager.
+
+## Endpoints
+
+| Method | Path | Who | Purpose |
+|--------|------|-----|---------|
+| GET | `/v1/secrets` | any `tag:fleet` node | request secrets; `200` if approved, `202` if pending, `403` if untagged |
+| GET | `/v1/admin/pending` | admin StableID | list queued requests (stableID, hostname, fingerprint) |
+| POST | `/v1/admin/approve?id=<stableID>` | admin StableID | approve a specific node |
+| GET | `/healthz` | any | liveness |
+
+## Secret source & blast radius
+
+`-source=bws` reads from **Bitwarden Secrets Manager** via the `bws` CLI,
+authenticated by a machine-account token in `BWS_ACCESS_TOKEN` — **read-scoped to
+a single onboarding project, no vault master password**. That is a categorically
+smaller target than the fleet's normal `bw unlock` + master-password path.
+
+**Still:** the broker holds unattended read access to every secret it can serve,
+so **compromising the broker host = compromising those secrets**. Least-privilege
+per client shrinks each *client's* exposure, not the *broker's*. Run it on a
+trusted, minimal, always-on host (e.g. bihar), keep the token read-scoped to the
+onboarding project only, and treat the host as sensitive. `-source=stub` returns
+placeholders for local testing.
 
 ## Build
 
 ```bash
 cd tools/secret-broker
 go build .
-# Note: tailscale.com pulls a large dep tree (gvisor, wireguard-go). If /tmp is a
-# small tmpfs, point Go's scratch at a bigger disk:
-#   GOTMPDIR=$HOME/.cache/gotmp go build .
+# tailscale.com pulls a big dep tree (gvisor, wireguard-go). If /tmp is a small
+# tmpfs, point Go's scratch at a bigger disk:  GOTMPDIR=$HOME/.cache/gotmp go build .
+go test ./...    # runs the deny-path gating tests
 ```
 
-## Run (on the intended broker host — e.g. bihar)
+## Client recipes (manual, opt-in)
+
+From the repo root (`BROKER_URL` overrides the default `http://secret-broker:8080`):
 
 ```bash
-# Mint a tagged, ideally ephemeral auth key in the Tailscale admin for the broker
-# node (recommend a dedicated tag, e.g. tag:secret-broker, owned by you).
-export TS_AUTHKEY=tskey-auth-...
-./secret-broker -tofu            # spike: auto-register unknown nodes
-# flags: -hostname (default secret-broker) -addr (:8080) -require-tag (tag:fleet)
-#        -state-dir  -tofu
+# On the NEW node — request secrets (prints your fingerprint + status):
+just broker-request
+
+# On your ADMIN node (a StableID in the broker's -admins list) — see & approve:
+just broker-pending
+just broker-approve <stableID>     # verify the fingerprint matches first
+
+# Print this node's own StableID (to compare against the pending list):
+just broker-myid
 ```
 
-## Test (from any fleet node on the tailnet)
+## Operator runbook
 
-```bash
-curl -s http://secret-broker:8080/v1/secrets | jq
-```
+Live steps that must be done by hand (they can't be run from an automated
+session — they mint credentials and touch your Tailscale/BW tenancy):
 
-Expected (spike, with `-tofu`): a JSON blob echoing your node's `stableID`, real
-`hostname`, `tags`, `provenance: "tofu-first-contact"`, and a
-`PLACEHOLDER_BOOTSTRAP_SECRET`. A node lacking `tag:fleet` gets `403`.
+1. **Broker's own tailnet node.** In the Tailscale admin, mint an auth key
+   (ideally ephemeral) tagged for the broker, e.g. `tag:secret-broker`. Add ACL
+   `tagOwners` for it. Export as `TS_AUTHKEY` on the broker host.
+2. **Read-scoped secrets store.** In Bitwarden Secrets Manager: create a project
+   (e.g. `fleet-onboarding`), add the onboarding secrets to it, create a **machine
+   account** with **read** access to *only* that project, and generate its access
+   token. Export as `BWS_ACCESS_TOKEN`. Install `bws`.
+3. **Admin identity.** Get your admin machine's StableID (`just broker-myid` on it)
+   and pass it as `-admins` (comma-separated for more than one).
+4. **Policy.** Map each node's StableID → the SM secret ids it may receive (edit
+   `policy` in `main.go` / load from config). Keep it least-privilege.
+5. **Run** (see `deploy/secret-broker.service.example` for a systemd unit):
+   ```bash
+   TS_AUTHKEY=… BWS_ACCESS_TOKEN=… \
+     ./secret-broker -source=bws -admins=<your-stableID>
+   ```
+6. **ACL defense-in-depth** (optional but recommended): restrict who can reach the
+   broker port so the WhoIs tag check is the second layer:
+   ```jsonc
+   // tailnet ACL
+   {"action":"accept","src":["tag:fleet"],"dst":["tag:secret-broker:8080"]}
+   ```
+7. **First enrollment.** On the new node: `just broker-request` → note the
+   fingerprint + `202 pending`. On your admin node: `just broker-pending`, confirm
+   the fingerprint matches, `just broker-approve <stableID>`. Re-run
+   `just broker-request` on the node → `200` with its secrets.
 
-**Forgeability demo:** on a second fleet node, `sudo tailscale up
---hostname=bihar` then curl the broker — the response still shows *that node's*
-own `stableID` (not bihar's), proving hostname claims don't move authorization.
+## Not done here (deliberately)
 
-## Wiring real secrets (next steps, not in the spike)
-
-- Replace `stubSource` with a `bwSource` that, given a `StableNodeID`, resolves
-  the node name from your registry and runs least-privilege `bw get …` for only
-  the secrets that node needs (kubeconfig / ssh / tailscale authkey) — never a
-  full `BW_SESSION` where avoidable.
-- Replace `-tofu` with pairing-token verification (Phase 1 proper): the phone
-  mints a short-TTL single-use token at approval time; the broker requires it on
-  first contact and binds it to the node's `StableNodeID`.
-- Add a Tailscale ACL that only lets `tag:fleet` reach the broker's port, so the
-  WhoIs tag check is defense-in-depth, not the only layer.
-- Phase 2: out-of-band verification fingerprint shown on phone + machine; TTLs.
+Live provisioning, the real per-node policy values, deploy automation, and ACL
+changes are runbook steps, not executed code — they can't be verified from this
+environment. Wiring the client into `just onboard`/`apply` waits until the flow
+has been run live at least once.

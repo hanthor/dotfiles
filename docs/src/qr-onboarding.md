@@ -42,8 +42,8 @@ couldn't SSH anywhere" incident — there'd be no `authorized_keys` to fall out 
 | Phase | What | Status |
 |-------|------|--------|
 | **0** | QR tailnet join — `just tailscale-qr` renders the `tailscale up` login URL as a console QR; scan + approve on phone. | **Done** |
-| **1** | Identity broker — a tailnet-only service (`tsnet`) that returns a short-TTL `BW_SESSION` (or only the derived secrets) to an authenticated, tagged node. | **Spike** ([`tools/secret-broker`](https://github.com/hanthor/dotfiles/tree/master/tools/secret-broker)) — compile-verified; identity gating real, secret source stubbed |
-| **2** | Least-privilege + hardening — per-machine secret scoping, TTLs, out-of-band verification fingerprint on phone + machine. | Planned |
+| **1** | Identity broker — a tailnet-only service ([`tools/secret-broker`](https://github.com/hanthor/dotfiles/tree/master/tools/secret-broker)) that issues per-node least-privilege secrets from Bitwarden Secrets Manager, gated on unforgeable StableNodeID + operator approval (mirrors Tailscale device approve). | **Code-complete** — deny-path unit-tested; live run pending (needs TS authkey + BWS token per the runbook) |
+| **2** | Hardening — ACL restricting `tag:fleet`→broker port, wiring the client into onboarding once run live, richer per-node policy config. | Planned |
 
 ### Phase 0 (implemented)
 
@@ -56,6 +56,28 @@ Runs interactive `tailscale up --qr --hostname=<name> --advertise-tags=tag:fleet
 --accept-routes`. Uses the Tailscale CLI's native `--qr` flag (confirmed on the
 fleet's 1.98.x) — no `qrencode` dependency. See the `tailscale-qr` recipe in the
 `Justfile`; if `tailscale` isn't installed yet, the recipe installs it first.
+
+### Phase 1 (code-complete, live run pending)
+
+Once the node is on the tailnet, it fetches its first secrets from the broker,
+gated on its unforgeable tailnet identity plus a one-time operator approval:
+
+```bash
+just broker-request              # on the NEW node — prints its fingerprint + "pending"
+just broker-pending              # on your ADMIN node — see the queued request
+just broker-approve <stableID>   # approve that specific node (verify the fingerprint)
+just broker-request              # on the NEW node — now returns its secrets
+```
+
+Authorization is scoped to the **StableNodeID** (unforgeable), never hostname;
+approval is per-node (no time-window race); secrets come per-node least-privilege
+from **Bitwarden Secrets Manager** (read-scoped machine-account token, no vault
+master password). Full design, security model, blast-radius note, and the
+**operator runbook** for the live setup (mint TS authkey, provision the BWS
+project/token, systemd unit, ACL) live in
+[`tools/secret-broker/README.md`](https://github.com/hanthor/dotfiles/tree/master/tools/secret-broker).
+The client recipes are **manual/opt-in** — deliberately not wired into
+`just apply`/onboarding until the flow has been run live once.
 
 ## Security requirements (all phases)
 
