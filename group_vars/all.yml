@@ -100,6 +100,7 @@ machine_pubkeys:
   dilli: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPOZx220I8Av7KmEAOib4iAKZFCzPp8cwtzvteJJ7VB
   kanpur: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGR7ZHHHguM8yl4vbDsSMlk5VFg+PaLA4+kNtYLJwBxc james@kanpur
   himachal: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPelaWkNsfwqnceB/5gftUcnprfnflCsDlMDeQkm0Hps himachal
+  kerala: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMbH9ulPQ0TFZAEMH86P9O17xqxgjpOqEYGfpLPfglwW james@Kerala
   vm: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIISpsmEf1I6nKchkatNY08OInckBvQCGm0L3rDse6nBy james@Jamess-MacBook-Air.local
   termux: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyFPxxcqd3bA+SPDL5eGlYzS5mDV2gJcp6vuDpx+spR u0_a372@localhost
   mumbai: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN059d8p5GeXivRywaeJwvx+pAcLdsebGaj7ypalFCuO pixel-9a
