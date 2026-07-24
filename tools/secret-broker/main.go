@@ -49,6 +49,7 @@ func main() {
 		sourceKind = flag.String("source", envOr("BROKER_SOURCE", "stub"), "secret source: stub|bws")
 		adminCSV   = flag.String("admins", os.Getenv("BROKER_ADMINS"), "comma-separated StableNodeIDs allowed to approve nodes")
 		pendingTTL = flag.Duration("pending-ttl", 30*time.Minute, "how long a pending (unapproved) request is kept")
+		configPath = flag.String("config", envOr("BROKER_CONFIG", ""), "path to per-node policy JSON (see policy.example.json)")
 	)
 	flag.Parse()
 
@@ -62,9 +63,17 @@ func main() {
 		log.Println("warning: no -admins set; approvals will be rejected until an admin StableID is configured")
 	}
 
-	// Secret source. Policy is empty by default — provision it per the runbook.
-	// A node with no policy entries authorizes but receives an empty secret set.
+	// Per-node policy. Loaded from -config if set, else empty (a node then
+	// authorizes but receives an empty secret set — safe default).
 	pol := policy{byStableID: map[string][]secretRef{}, def: nil}
+	if *configPath != "" {
+		loaded, perr := loadPolicy(*configPath)
+		if perr != nil {
+			log.Fatalf("load policy: %v", perr)
+		}
+		pol = loaded
+		log.Printf("loaded policy: %d node(s), %d default ref(s)", len(pol.byStableID), len(pol.def))
+	}
 	var src SecretSource
 	switch *sourceKind {
 	case "bws":
@@ -88,7 +97,7 @@ func main() {
 		log.Fatalf("LocalClient: %v", err)
 	}
 
-	h := &handler{lc: lc, reg: reg, src: src, requireTag: *requireTag}
+	h := &handler{resolveID: tsnetResolver(lc), reg: reg, src: src, requireTag: *requireTag}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/secrets", h.getSecrets)
@@ -107,31 +116,34 @@ func main() {
 	log.Fatal(http.Serve(ln, mux))
 }
 
-// handler holds the request-scoped dependencies. Identity resolution goes
-// through whois so the HTTP layer never trusts caller-asserted identity.
+// handler holds the request-scoped dependencies. Identity resolution is injected
+// (resolveID) so the HTTP layer never trusts caller-asserted identity and can be
+// tested with a fake resolver in handler_test.go.
 type handler struct {
-	lc         *local.Client
+	resolveID  func(*http.Request) (identity, error)
 	reg        *registry
 	src        SecretSource
 	requireTag string
 }
 
-// whois resolves the WireGuard-authenticated caller. r.RemoteAddr on a tsnet
-// listener is the caller's tailnet IP:port — exactly what WhoIs expects.
-func (h *handler) whois(r *http.Request) (identity, error) {
-	who, err := h.lc.WhoIs(r.Context(), r.RemoteAddr)
-	if err != nil || who.Node == nil {
-		return identity{}, &brokerError{status: http.StatusForbidden, msg: "could not identify caller"}
+// tsnetResolver resolves the WireGuard-authenticated caller via WhoIs.
+// r.RemoteAddr on a tsnet listener is the caller's tailnet IP:port.
+func tsnetResolver(lc *local.Client) func(*http.Request) (identity, error) {
+	return func(r *http.Request) (identity, error) {
+		who, err := lc.WhoIs(r.Context(), r.RemoteAddr)
+		if err != nil || who.Node == nil {
+			return identity{}, &brokerError{status: http.StatusForbidden, msg: "could not identify caller"}
+		}
+		return identity{
+			StableID: string(who.Node.StableID),
+			Hostname: who.Node.ComputedName, // display only
+			Tags:     append([]string(nil), who.Node.Tags...),
+		}, nil
 	}
-	return identity{
-		StableID: string(who.Node.StableID),
-		Hostname: who.Node.ComputedName, // display only
-		Tags:     append([]string(nil), who.Node.Tags...),
-	}, nil
 }
 
 func (h *handler) getSecrets(w http.ResponseWriter, r *http.Request) {
-	id, err := h.whois(r)
+	id, err := h.resolveID(r)
 	if err != nil {
 		writeJSON(w, statusOf(err), map[string]any{"error": err.Error()})
 		return
@@ -166,7 +178,7 @@ func (h *handler) getSecrets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) adminPending(w http.ResponseWriter, r *http.Request) {
-	id, err := h.whois(r)
+	id, err := h.resolveID(r)
 	if err != nil {
 		writeJSON(w, statusOf(err), map[string]any{"error": err.Error()})
 		return
@@ -194,7 +206,7 @@ func (h *handler) adminApprove(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "use POST"})
 		return
 	}
-	id, err := h.whois(r)
+	id, err := h.resolveID(r)
 	if err != nil {
 		writeJSON(w, statusOf(err), map[string]any{"error": err.Error()})
 		return

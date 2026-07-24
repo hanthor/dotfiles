@@ -11,8 +11,8 @@ import (
 // secretRef names a secret the broker may hand out and where it lives in
 // Bitwarden Secrets Manager (SMID = the SM secret UUID).
 type secretRef struct {
-	Name string // key written on the target, e.g. "kubeconfig"
-	SMID string // Bitwarden Secrets Manager secret id
+	Name string `json:"name"` // key written on the target, e.g. "kubeconfig"
+	SMID string `json:"smID"` // Bitwarden Secrets Manager secret id
 }
 
 // policy is the least-privilege map: which secrets a given node may receive.

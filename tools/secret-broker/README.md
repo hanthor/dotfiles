@@ -101,12 +101,15 @@ session — they mint credentials and touch your Tailscale/BW tenancy):
    token. Export as `BWS_ACCESS_TOKEN`. Install `bws`.
 3. **Admin identity.** Get your admin machine's StableID (`just broker-myid` on it)
    and pass it as `-admins` (comma-separated for more than one).
-4. **Policy.** Map each node's StableID → the SM secret ids it may receive (edit
-   `policy` in `main.go` / load from config). Keep it least-privilege.
+4. **Policy.** Copy `policy.example.json` → `policy.json` and map each node's
+   StableID → the SM secret ids it may receive (`just broker-myid` on a node
+   prints its StableID). Keep it least-privilege. The file names *which* secrets a
+   node may get — no secret material — so it is safe to commit. Parsing is strict
+   (unknown fields rejected), and the shipped example is covered by a test.
 5. **Run** (see `deploy/secret-broker.service.example` for a systemd unit):
    ```bash
    TS_AUTHKEY=… BWS_ACCESS_TOKEN=… \
-     ./secret-broker -source=bws -admins=<your-stableID>
+     ./secret-broker -source=bws -admins=<your-stableID> -config=policy.json
    ```
 6. **ACL defense-in-depth** (optional but recommended): restrict who can reach the
    broker port so the WhoIs tag check is the second layer:
