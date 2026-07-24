@@ -76,3 +76,61 @@
     src: aliases.fish.j2
     dest: "{{ ansible_facts['env']['HOME'] }}/.config/fish/conf.d/aliases.fish"
     mode: "0644"
+
+# ── Ghostty terminfo ──────────────────────────────────────────────
+# SSH-ing in from a Ghostty terminal exports TERM=xterm-ghostty. Hosts
+# without that terminfo entry break ncurses apps ("missing or unsuitable
+# terminal: xterm-ghostty" from tmux/vim/etc). Ship the entry and compile
+# it into the user's ~/.terminfo so every host understands the term.
+- name: Check whether tic (ncurses) is available
+  ansible.builtin.command: which tic
+  register: _tic_bin
+  changed_when: false
+  failed_when: false
+
+- name: Deploy ghostty terminfo source
+  ansible.builtin.copy:
+    src: xterm-ghostty.terminfo
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/shell/ghostty.terminfo"
+    mode: "0644"
+  register: _ghostty_ti_src
+  when: _tic_bin.rc == 0
+
+- name: Check whether xterm-ghostty terminfo is already installed
+  ansible.builtin.command: infocmp -x xterm-ghostty
+  register: _ghostty_ti_installed
+  changed_when: false
+  failed_when: false
+  when: _tic_bin.rc == 0
+
+- name: Compile ghostty terminfo into ~/.terminfo
+  ansible.builtin.command: >
+    tic -x -o {{ ansible_facts['env']['HOME'] }}/.terminfo
+    {{ ansible_facts['env']['HOME'] }}/.config/shell/ghostty.terminfo
+  when:
+    - _tic_bin.rc == 0
+    - _ghostty_ti_installed.rc != 0 or _ghostty_ti_src.changed
+  changed_when: true
+
+- name: Warn if tic is unavailable (ghostty terminfo not installable)
+  ansible.builtin.debug:
+    msg: >-
+      tic (ncurses) is not installed on {{ inventory_hostname }}; the
+      xterm-ghostty terminfo cannot be compiled. SSH sessions from Ghostty
+      will need `TERM=xterm-256color` until ncurses is present.
+  when: _tic_bin.rc != 0
+
+# ── Ghostty config (auto light/dark, follows GNOME) ───────────────
+# Inert on headless hosts (Ghostty never launched there); active wherever
+# Ghostty runs. Kept alongside the rest of the managed shell config.
+- name: Create ~/.config/ghostty/ directory
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/ghostty"
+    state: directory
+    mode: "0755"
+
+- name: Deploy ghostty config
+  ansible.builtin.copy:
+    src: ghostty.config
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/ghostty/config"
+    mode: "0644"
