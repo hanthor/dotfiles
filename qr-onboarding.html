@@ -1,0 +1,315 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>QR Secret Onboarding - Dotfiles Fleet Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Ansible-driven dotfiles and infrastructure for a personal fleet of desktops, servers, and VPS">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Dotfiles Fleet Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/qr-onboarding.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="qr-secret-onboarding"><a class="header" href="#qr-secret-onboarding">QR Secret Onboarding</a></h1>
+<blockquote>
+<p>Tracking issue: <a href="https://github.com/hanthor/dotfiles/issues/49">hanthor/dotfiles#49</a></p>
+</blockquote>
+<p>Onboard (or re-align) a machine and deliver its secrets <strong>seamlessly and
+securely by scanning a QR from your phone</strong> — no master password typed on the new
+box, no hand-copied <code>BW_SESSION</code>, no chicken-and-egg SSH setup.</p>
+<h2 id="the-core-problem-bootstrap-of-trust"><a class="header" href="#the-core-problem-bootstrap-of-trust">The core problem: bootstrap-of-trust</a></h2>
+<p>The hard part is delivering the <em>first</em> credential to a machine that has nothing.
+Once the box holds any one of {tailnet membership, a single Bitwarden credential},
+everything else — the full <code>BW_SESSION</code>, kubeconfig, SSH keys, Tailscale auth key
+— already flows through existing automation (<a href="https://github.com/hanthor/dotfiles/blob/master/scripts/bw-resolve.sh"><code>bw-resolve.sh</code></a>,
+the <code>tailscale</code>/<code>kube</code>/<code>ssh_keys</code> roles). So the whole question is: <em>how does that
+first secret arrive?</em></p>
+<h2 id="the-spine-tailscale-identity-as-the-bootstrap-credential"><a class="header" href="#the-spine-tailscale-identity-as-the-bootstrap-credential">The spine: Tailscale identity as the bootstrap credential</a></h2>
+<p>We already run Tailscale everywhere and Authentik for SSO, so the passwordless +
+QR experience is mostly already in the stack:</p>
+<ol>
+<li><strong>Approve the new device on your phone.</strong> <code>tailscale up --qr</code> renders the login
+URL as a QR; scan it and approve in the Tailscale admin (passwordless via the
+IdP). The box joins the tailnet, tagged <code>tag:fleet</code>.</li>
+<li><strong>The machine's tailnet identity is then its first credential.</strong> A small
+tailnet-only secrets broker sees the authenticated node identity and hands it
+exactly the secrets it needs, read from Bitwarden server-side.</li>
+<li><strong>No secret ever rides in the QR</strong> — the QR carries a login URL; the phone
+approves; the identity does the rest.</li>
+</ol>
+<h3 id="end-to-end-flow"><a class="header" href="#end-to-end-flow">End-to-end flow</a></h3>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant N as New machine
+    participant P as Your phone
+    participant TS as Tailscale admin
+    participant B as secret-broker (tailnet)
+    participant BW as Bitwarden Secrets Manager
+
+    Note over N,TS: Phase 0 — join the tailnet
+    N-&gt;&gt;N: just tailscale-qr (renders login QR)
+    P-&gt;&gt;TS: scan QR + approve device
+    TS--&gt;&gt;N: authenticated; tagged tag:fleet, gets a StableNodeID
+
+    Note over N,BW: Phase 1 — first secrets, over the tailnet
+    N-&gt;&gt;B: GET /v1/secrets (identity = WhoIs, unforgeable)
+    B--&gt;&gt;N: 202 pending + fingerprint
+    P-&gt;&gt;B: just broker-pending (see stableID + fingerprint)
+    P-&gt;&gt;B: just broker-approve &lt;stableID&gt; (match fingerprint)
+    N-&gt;&gt;B: GET /v1/secrets (retry)
+    B-&gt;&gt;BW: bws get (only this node's policy refs)
+    BW--&gt;&gt;B: secret values
+    B--&gt;&gt;N: 200 + least-privilege secrets
+</code></pre>
+<p>Bitwarden stays the source of truth — we're replacing the <em>bootstrap</em>, not the
+vault. (The <code>bw</code> CLI cannot do passwordless "log in with device"; it only supports
+password / <code>--apikey</code> / <code>--sso</code>, so we don't build on that.)</p>
+<p><strong>Bonus:</strong> adopting Tailscale identity here also opens the door to Tailscale SSH
+(auth by tailnet identity, ACL-gated), which would have prevented the "kerala
+couldn't SSH anywhere" incident — there'd be no <code>authorized_keys</code> to fall out of.</p>
+<h2 id="phases"><a class="header" href="#phases">Phases</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Phase</th><th>What</th><th>Status</th></tr></thead><tbody>
+<tr><td><strong>0</strong></td><td>QR tailnet join — <code>just tailscale-qr</code> renders the <code>tailscale up</code> login URL as a console QR; scan + approve on phone.</td><td><strong>Done</strong></td></tr>
+<tr><td><strong>1</strong></td><td>Identity broker — a tailnet-only service (<a href="https://github.com/hanthor/dotfiles/tree/master/tools/secret-broker"><code>tools/secret-broker</code></a>) that issues per-node least-privilege secrets from Bitwarden Secrets Manager, gated on unforgeable StableNodeID + operator approval (mirrors Tailscale device approve).</td><td><strong>Code-complete</strong> — deny-path unit-tested; live run pending (needs TS authkey + BWS token per the runbook)</td></tr>
+<tr><td><strong>2</strong></td><td>Hardening — ACL restricting <code>tag:fleet</code>→broker port, wiring the client into onboarding once run live, richer per-node policy config.</td><td>Planned</td></tr>
+</tbody></table>
+</div>
+<h3 id="phase-0-implemented"><a class="header" href="#phase-0-implemented">Phase 0 (implemented)</a></h3>
+<pre><code class="language-bash"># On the new machine:
+just tailscale-qr &lt;name&gt;
+</code></pre>
+<p>Runs interactive <code>tailscale up --qr --hostname=&lt;name&gt; --advertise-tags=tag:fleet --accept-routes</code>. Uses the Tailscale CLI's native <code>--qr</code> flag (confirmed on the
+fleet's 1.98.x) — no <code>qrencode</code> dependency. See the <code>tailscale-qr</code> recipe in the
+<code>Justfile</code>; if <code>tailscale</code> isn't installed yet, the recipe installs it first.</p>
+<h3 id="phase-1-code-complete-live-run-pending"><a class="header" href="#phase-1-code-complete-live-run-pending">Phase 1 (code-complete, live run pending)</a></h3>
+<p>Once the node is on the tailnet, it fetches its first secrets from the broker,
+gated on its unforgeable tailnet identity plus a one-time operator approval:</p>
+<pre><code class="language-bash">just broker-request              # on the NEW node — prints its fingerprint + "pending"
+just broker-pending              # on your ADMIN node — see the queued request
+just broker-approve &lt;stableID&gt;   # approve that specific node (verify the fingerprint)
+just broker-request              # on the NEW node — now returns its secrets
+</code></pre>
+<p>Authorization is scoped to the <strong>StableNodeID</strong> (unforgeable), never hostname;
+approval is per-node (no time-window race); secrets come per-node least-privilege
+from <strong>Bitwarden Secrets Manager</strong> (read-scoped machine-account token, no vault
+master password). Full design, security model, blast-radius note, and the
+<strong>operator runbook</strong> for the live setup (mint TS authkey, provision the BWS
+project/token, systemd unit, ACL) live in
+<a href="https://github.com/hanthor/dotfiles/tree/master/tools/secret-broker"><code>tools/secret-broker/README.md</code></a>.
+The client recipes are <strong>manual/opt-in</strong> — deliberately not wired into
+<code>just apply</code>/onboarding until the flow has been run live once.</p>
+<h2 id="security-requirements-all-phases"><a class="header" href="#security-requirements-all-phases">Security requirements (all phases)</a></h2>
+<ul>
+<li>No long-lived secret encoded in a QR that persists on screen/scrollback.</li>
+<li>Tokens are short-TTL and single-use; pairing nonces expire fast.</li>
+<li>Out-of-band verification fingerprint on both phone and machine (anti-MITM).</li>
+<li>Master password stays on the phone; never keyed into the onboarding box.</li>
+<li>Transport is the tailnet (WireGuard) or otherwise E2E-encrypted.</li>
+<li>Repo stays public — code and docs only, never secrets.</li>
+</ul>
+<h2 id="references"><a class="header" href="#references">References</a></h2>
+<ul>
+<li><a href="onboarding.html">Onboarding a New Machine</a> — practical steps</li>
+<li><a href="bitwarden.html">Secrets with Bitwarden</a> — vault structure and the BW handshake</li>
+<li><a href="https://github.com/hanthor/dotfiles/blob/master/scripts/bw-resolve.sh"><code>scripts/bw-resolve.sh</code></a> — current session resolution</li>
+<li>Tracking issue <a href="https://github.com/hanthor/dotfiles/issues/49">#49</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="onboarding.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="runbook.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="onboarding.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="runbook.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
