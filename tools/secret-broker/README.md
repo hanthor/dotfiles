@@ -11,10 +11,12 @@ password on the new box; no secret ever travels in a QR.
 ## Verification status
 
 - `go build` + `go vet` clean; the security-critical gating logic is **unit-tested**
-  (`broker_test.go`, deny-paths) and passing.
-- **Not run end-to-end.** A live run needs a `TS_AUTHKEY` (to put the broker on
-  the tailnet) and a Bitwarden Secrets Manager token — neither minted in the
-  session that wrote this. Follow the [runbook](#operator-runbook) to run it.
+  (`broker_test.go`, `handler_test.go`, deny-paths) and passing; guarded in CI.
+- **Verified live end-to-end** on matrix with `-source=stub`: real WhoIs identity
+  gating, `tag:fleet` admission, operator approval, secret delivery, and the
+  deny-paths (untagged → 403, non-admin → 403) — all over the real tailnet.
+- The `-source=bw` (regular Bitwarden vault) path is compile + unit tested; going
+  live with real secrets needs the read-only onboarding account (see the runbook).
 - The client is a **manual, opt-in** `just` recipe. It is deliberately **not**
   wired into `just apply`/onboarding, so an untested bug here cannot break fleet
   onboarding.
@@ -36,7 +38,7 @@ anything the caller asserts. Then:
    "the next node within a window" — `tag:fleet` is broadly held, so a time-only
    window is a race; identity-bound approval is not.
 4. **Least privilege** — an authorized node receives only the secrets its policy
-   lists (plus shared defaults), fetched from Bitwarden Secrets Manager.
+   lists (plus shared defaults), fetched from the regular Bitwarden vault (`bw`).
 
 ## Endpoints
 
@@ -49,17 +51,22 @@ anything the caller asserts. Then:
 
 ## Secret source & blast radius
 
-`-source=bws` reads from **Bitwarden Secrets Manager** via the `bws` CLI,
-authenticated by a machine-account token in `BWS_ACCESS_TOKEN` — **read-scoped to
-a single onboarding project, no vault master password**. That is a categorically
-smaller target than the fleet's normal `bw unlock` + master-password path.
+`-source=bw` reads from the **regular Bitwarden vault** via the `bw` CLI (Secrets
+Manager is a paid add-on and is intentionally not used). The broker holds a
+`BW_SESSION`; if a `bw get` fails while `BW_PASSWORD` is set, it re-unlocks once
+and retries, so an expired session self-heals unattended. Each `policy.json` ref
+names a `bw` item + which part to read (`notes`/`password`/…).
 
-**Still:** the broker holds unattended read access to every secret it can serve,
-so **compromising the broker host = compromising those secrets**. Least-privilege
-per client shrinks each *client's* exposure, not the *broker's*. Run it on a
-trusted, minimal, always-on host, keep the token read-scoped to the onboarding
-project only, and treat the host as sensitive. `-source=stub` returns placeholders
-for local testing.
+**Blast radius — stated plainly:** unattended `bw` means a **standing master
+password lives on the broker host**, and the broker can read everything its `bw`
+account can. Compromising the broker host compromises that. Shrink the *read*
+scope (the part that matters) **for free** without Secrets Manager: put the
+onboarding secrets in a dedicated **collection** inside a Bitwarden **free
+organization** (2 users, unlimited collections) and give the broker a **read-only
+member account** scoped to only that collection. Then the broker — and a
+compromise of it — sees only the onboarding collection, not your whole vault.
+Run it on a trusted, minimal, always-on host and treat the host as sensitive.
+`-source=stub` returns placeholders for local testing.
 
 ### Where to run it
 
@@ -72,9 +79,9 @@ it can't host a systemd binary. Two viable homes:
   writing). A bootstrap-of-trust broker should not depend on the thing you're
   often bootstrapping access *to*.
 - **In-cluster (Talos-native), when the cluster is up:** deploy as a Kubernetes
-  Deployment with `TS_AUTHKEY`/`BWS_ACCESS_TOKEN` as k8s Secrets — see
-  `deploy/secret-broker.k8s.yaml` and `Dockerfile`. Consolidated, but coupled to
-  cluster uptime.
+  Deployment with `TS_AUTHKEY` + the `bw` creds (`BW_SESSION`/`BW_PASSWORD`) as
+  k8s Secrets — see `deploy/secret-broker.k8s.yaml` and `Dockerfile` (the image
+  must include the `bw` CLI). Consolidated, but coupled to cluster uptime.
 
 ## Build
 
@@ -107,26 +114,28 @@ just broker-myid
 Live steps that must be done by hand (they can't be run from an automated
 session — they mint credentials and touch your Tailscale/BW tenancy):
 
-1. **Broker's own tailnet node.** In the Tailscale admin, mint an auth key
-   (ideally ephemeral) tagged for the broker, e.g. `tag:secret-broker`. Add ACL
-   `tagOwners` for it. Export as `TS_AUTHKEY` on the broker host.
-2. **Read-scoped secrets store.** In Bitwarden Secrets Manager: create a project
-   (e.g. `fleet-onboarding`), add the onboarding secrets to it, create a **machine
-   account** with **read** access to *only* that project, and generate its access
-   token. Export as `BWS_ACCESS_TOKEN`. Install `bws`.
+1. **Broker's own tailnet node.** Either mint an auth key (ideally ephemeral,
+   tagged e.g. `tag:secret-broker`) and export `TS_AUTHKEY`, **or** run it once
+   with no key and approve the printed login URL on your phone (what we did on
+   matrix); tsnet then saves the identity and reuses it across restarts.
+2. **Read-scoped Bitwarden account.** Create a Bitwarden **free organization** →
+   a **collection** (e.g. `fleet-onboarding`) → put the onboarding secrets in it.
+   Create a **member account** with **read-only** access to *only* that collection
+   (this is the free-tier stand-in for a Secrets-Manager machine account). Install
+   `bw` (`npm i -g @bitwarden/cli`), `bw login` that account once on the host, and
+   provide `BW_SESSION` (+ `BW_PASSWORD` so the broker can self-refresh).
 3. **Admin identity.** Get your admin machine's StableID (`just broker-myid` on it)
    and pass it as `-admins` (comma-separated for more than one).
 4. **Policy.** Copy `policy.example.json` → `policy.json` and map each node's
-   StableID → the SM secret ids it may receive (`just broker-myid` on a node
-   prints its StableID). Keep it least-privilege. The file names *which* secrets a
-   node may get — no secret material — so it is safe to commit. Parsing is strict
-   (unknown fields rejected), and the shipped example is covered by a test.
+   StableID → the `bw` items it may receive (`{name, item, get}`; `just broker-myid`
+   on a node prints its StableID). Least-privilege. The file names *which* secrets
+   a node gets — no secret material — so it is safe to commit. Parsing is strict.
 5. **Run** on a non-Talos always-on host (VPS) via the systemd unit
    `deploy/secret-broker.service.example`, or in-cluster via
    `deploy/secret-broker.k8s.yaml` (see [Where to run it](#where-to-run-it)):
    ```bash
-   TS_AUTHKEY=… BWS_ACCESS_TOKEN=… \
-     ./secret-broker -source=bws -admins=<your-stableID> -config=policy.json
+   TS_AUTHKEY=… BW_SESSION=… BW_PASSWORD=… \
+     ./secret-broker -source=bw -admins=<your-stableID> -config=policy.json
    ```
 6. **ACL defense-in-depth** (optional but recommended): restrict who can reach the
    broker port so the WhoIs tag check is the second layer:

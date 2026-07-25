@@ -118,7 +118,7 @@ func TestForgedHostname_DoesNotEscalate(t *testing.T) {
 		t.Fatal(err)
 	}
 	pol := policy{byStableID: map[string][]secretRef{
-		nodeB: {{Name: "bihar-only", SMID: "sm-bihar"}},
+		nodeB: {{Name: "bihar-only", Item: "bihar-item"}},
 	}}
 	src := stubSource{pol: pol}
 
@@ -141,9 +141,9 @@ func TestForgedHostname_DoesNotEscalate(t *testing.T) {
 func TestPolicy_LeastPrivilege(t *testing.T) {
 	pol := policy{
 		byStableID: map[string][]secretRef{
-			nodeA: {{Name: "kubeconfig", SMID: "sm-kube"}},
+			nodeA: {{Name: "kubeconfig", Item: "kube-item"}},
 		},
-		def: []secretRef{{Name: "ts-authkey", SMID: "sm-ts"}},
+		def: []secretRef{{Name: "ts-authkey", Item: "ts-item"}},
 	}
 	src := stubSource{pol: pol}
 

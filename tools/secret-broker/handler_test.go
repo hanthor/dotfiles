@@ -50,7 +50,7 @@ func TestHTTP_Secrets_UnknownPending(t *testing.T) {
 
 // Full flow over HTTP: pending -> admin approves -> 200 with secrets.
 func TestHTTP_ApproveFlow(t *testing.T) {
-	pol := policy{byStableID: map[string][]secretRef{nodeA: {{Name: "k", SMID: "sm-k"}}}}
+	pol := policy{byStableID: map[string][]secretRef{nodeA: {{Name: "k", Item: "k-item"}}}}
 	node := fleet(nodeA, "kanpur")
 	nodeH, reg := newTestHandler(node, []string{adminID}, stubSource{pol: pol})
 

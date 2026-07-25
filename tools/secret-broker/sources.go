@@ -2,17 +2,30 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"os"
 	"os/exec"
+	"strings"
+	"sync"
 	"time"
 )
 
-// secretRef names a secret the broker may hand out and where it lives in
-// Bitwarden Secrets Manager (SMID = the SM secret UUID).
+// secretRef names a secret the broker may hand out and where it lives in the
+// regular Bitwarden vault (accessed via the `bw` CLI).
+//
+//	Item — bw item id or name
+//	Get  — which part of the item to read: notes|password|username|uri|totp
+//	       (default "notes"; secure notes hold things like kubeconfig/talosconfig)
 type secretRef struct {
-	Name string `json:"name"` // key written on the target, e.g. "kubeconfig"
-	SMID string `json:"smID"` // Bitwarden Secrets Manager secret id
+	Name string `json:"name"`
+	Item string `json:"item"`
+	Get  string `json:"get,omitempty"`
+}
+
+func (r secretRef) getObject() string {
+	if r.Get == "" {
+		return "notes"
+	}
+	return r.Get
 }
 
 // policy is the least-privilege map: which secrets a given node may receive.
@@ -20,7 +33,7 @@ type secretRef struct {
 // any defaults). Pure and unit-tested — no network.
 type policy struct {
 	byStableID map[string][]secretRef
-	def        []secretRef // handed to every authorized node (e.g. tailscale authkey)
+	def        []secretRef // handed to every authorized node
 }
 
 func (p policy) refsFor(id identity) []secretRef {
@@ -39,64 +52,93 @@ func (s stubSource) SecretsFor(id identity) (map[string]string, error) {
 	refs := s.pol.refsFor(id)
 	out := map[string]string{}
 	for _, r := range refs {
-		out[r.Name] = "STUB:" + r.SMID + ":not-a-real-secret"
+		out[r.Name] = "STUB:" + r.Item + ":" + r.getObject() + ":not-a-real-secret"
 	}
 	return out, nil
 }
 
-// ── bwsSource ─────────────────────────────────────────────────────────────
-// Production source: reads from Bitwarden Secrets Manager via the `bws` CLI,
-// authenticated by BWS_ACCESS_TOKEN (a machine-account token, read-scoped to a
-// single onboarding project — categorically smaller blast radius than the vault
-// master password). Compile-verified only here; needs a real token to run.
+// ── bwSource ──────────────────────────────────────────────────────────────
+// Production source: reads from the regular Bitwarden vault via the `bw` CLI.
+//
+// Auth: the broker process holds a BW_SESSION (from the env). For unattended
+// operation, if a `bw get` fails while BW_PASSWORD is set, the source re-unlocks
+// (`bw unlock --passwordenv BW_PASSWORD --raw`) once and retries — so an expired
+// session self-heals. This means a standing master password lives on the broker
+// host; scope the blast radius by pointing the broker's `bw` account at a
+// dedicated read-only collection (see the README runbook). Compile-verified here;
+// needs a logged-in `bw` to run.
 
-type bwsSource struct {
+type bwSource struct {
 	pol     policy
-	bwsBin  string        // path to `bws` (default "bws")
-	timeout time.Duration // per-secret fetch timeout
+	bwBin   string
+	timeout time.Duration
+
+	mu      sync.Mutex
+	session string // cached; refreshed on lock
 }
 
-func newBwsSource(pol policy, bwsBin string, timeout time.Duration) bwsSource {
-	if bwsBin == "" {
-		bwsBin = "bws"
+func newBwSource(pol policy, bwBin string, timeout time.Duration) *bwSource {
+	if bwBin == "" {
+		bwBin = "bw"
 	}
 	if timeout == 0 {
-		timeout = 10 * time.Second
+		timeout = 15 * time.Second
 	}
-	return bwsSource{pol: pol, bwsBin: bwsBin, timeout: timeout}
+	return &bwSource{pol: pol, bwBin: bwBin, timeout: timeout, session: os.Getenv("BW_SESSION")}
 }
 
-// bwsSecret is the subset of `bws secret get <id>` JSON we consume.
-type bwsSecret struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-func (s bwsSource) SecretsFor(id identity) (map[string]string, error) {
+func (s *bwSource) SecretsFor(id identity) (map[string]string, error) {
 	refs := s.pol.refsFor(id)
 	out := map[string]string{}
 	for _, r := range refs {
-		val, err := s.fetch(r.SMID)
+		val, err := s.fetch(r)
 		if err != nil {
-			return nil, &brokerError{status: 502, msg: fmt.Sprintf("fetch %s: %v", r.Name, err)}
+			return nil, &brokerError{status: 502, msg: "fetch " + r.Name + ": " + err.Error()}
 		}
 		out[r.Name] = val
 	}
 	return out, nil
 }
 
-func (s bwsSource) fetch(smID string) (string, error) {
+func (s *bwSource) fetch(r secretRef) (string, error) {
+	val, err := s.bwGet(r)
+	// Self-heal an expired/locked session once if we have a master password.
+	if err != nil && os.Getenv("BW_PASSWORD") != "" {
+		if rerr := s.refresh(); rerr == nil {
+			val, err = s.bwGet(r)
+		}
+	}
+	return val, err
+}
+
+func (s *bwSource) bwGet(r secretRef) (string, error) {
+	s.mu.Lock()
+	session := s.session
+	s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
-	// BWS_ACCESS_TOKEN is inherited from the broker process environment.
-	cmd := exec.CommandContext(ctx, s.bwsBin, "secret", "get", smID)
-	stdout, err := cmd.Output()
+	args := []string{"get", r.getObject(), r.Item}
+	if session != "" {
+		args = append(args, "--session", session)
+	}
+	out, err := exec.CommandContext(ctx, s.bwBin, args...).Output()
 	if err != nil {
 		return "", err
 	}
-	var sec bwsSecret
-	if err := json.Unmarshal(stdout, &sec); err != nil {
-		return "", fmt.Errorf("parse bws output: %w", err)
+	return strings.TrimRight(string(out), "\r\n"), nil
+}
+
+func (s *bwSource) refresh() error {
+	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
+	defer cancel()
+	// Reads the master password from BW_PASSWORD; requires the account to be
+	// logged in already (`bw login` / `bw login --apikey` done once on the host).
+	out, err := exec.CommandContext(ctx, s.bwBin, "unlock", "--passwordenv", "BW_PASSWORD", "--raw").Output()
+	if err != nil {
+		return err
 	}
-	return sec.Value, nil
+	s.mu.Lock()
+	s.session = strings.TrimRight(string(out), "\r\n")
+	s.mu.Unlock()
+	return nil
 }

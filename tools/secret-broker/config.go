@@ -11,9 +11,9 @@ import (
 // StableNodeID (the unforgeable id) — the same key the broker authorizes on.
 //
 //	{
-//	  "defaults": [{"name": "ts-authkey", "smID": "<sm-uuid>"}],
+//	  "defaults": [{"name": "ts-authkey", "item": "<bw-item>", "get": "password"}],
 //	  "nodes": {
-//	    "nABC123...": [{"name": "kubeconfig", "smID": "<sm-uuid>"}]
+//	    "nABC123...": [{"name": "kubeconfig", "item": "<bw-item>", "get": "notes"}]
 //	  }
 //	}
 type policyConfig struct {
@@ -58,8 +58,8 @@ func validateRefs(where string, refs []secretRef) error {
 		if r.Name == "" {
 			return fmt.Errorf("%s: ref %d has empty name", where, i)
 		}
-		if r.SMID == "" {
-			return fmt.Errorf("%s: ref %q has empty smID", where, r.Name)
+		if r.Item == "" {
+			return fmt.Errorf("%s: ref %q has empty item", where, r.Name)
 		}
 		if seen[r.Name] {
 			return fmt.Errorf("%s: duplicate ref name %q", where, r.Name)

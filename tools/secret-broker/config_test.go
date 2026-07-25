@@ -17,8 +17,8 @@ func writeTemp(t *testing.T, content string) string {
 
 func TestLoadPolicy_Valid(t *testing.T) {
 	p, err := loadPolicy(writeTemp(t, `{
-		"defaults": [{"name":"ts-authkey","smID":"sm-ts"}],
-		"nodes": {"nABC": [{"name":"kubeconfig","smID":"sm-kube"}]}
+		"defaults": [{"name":"ts-authkey","item":"sm-ts"}],
+		"nodes": {"nABC": [{"name":"kubeconfig","item":"sm-kube"}]}
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -36,19 +36,19 @@ func TestLoadPolicy_RejectsUnknownField(t *testing.T) {
 }
 
 func TestLoadPolicy_RejectsEmptyName(t *testing.T) {
-	if _, err := loadPolicy(writeTemp(t, `{"nodes":{"nABC":[{"name":"","smID":"x"}]}}`)); err == nil {
+	if _, err := loadPolicy(writeTemp(t, `{"nodes":{"nABC":[{"name":"","item":"x"}]}}`)); err == nil {
 		t.Fatal("empty ref name must be rejected")
 	}
 }
 
-func TestLoadPolicy_RejectsEmptySMID(t *testing.T) {
-	if _, err := loadPolicy(writeTemp(t, `{"nodes":{"nABC":[{"name":"k","smID":""}]}}`)); err == nil {
-		t.Fatal("empty smID must be rejected")
+func TestLoadPolicy_RejectsEmptyItem(t *testing.T) {
+	if _, err := loadPolicy(writeTemp(t, `{"nodes":{"nABC":[{"name":"k","item":""}]}}`)); err == nil {
+		t.Fatal("empty item must be rejected")
 	}
 }
 
 func TestLoadPolicy_RejectsDuplicateName(t *testing.T) {
-	if _, err := loadPolicy(writeTemp(t, `{"nodes":{"nABC":[{"name":"k","smID":"a"},{"name":"k","smID":"b"}]}}`)); err == nil {
+	if _, err := loadPolicy(writeTemp(t, `{"nodes":{"nABC":[{"name":"k","item":"a"},{"name":"k","item":"b"}]}}`)); err == nil {
 		t.Fatal("duplicate ref name must be rejected")
 	}
 }

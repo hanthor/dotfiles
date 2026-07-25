@@ -1,12 +1,12 @@
 {
-  "_comment": "Per-node secret policy. Keyed by Tailscale StableNodeID (get it with `just broker-myid` on the node). smID values are Bitwarden Secrets Manager secret UUIDs in the broker's read-scoped project. This file names WHICH secrets a node may receive — it holds no secret material and is safe to commit. Copy to policy.json and fill in. Parsing is strict (unknown fields other than this top-level _comment are rejected).",
+  "_comment": "Per-node secret policy. Keyed by Tailscale StableNodeID (get it with `just broker-myid` on the node). 'item' is a Bitwarden item id or name in the broker account's vault; 'get' is which part to read (notes|password|username|uri|totp, default notes). This file names WHICH secrets a node may receive — no secret material — so it is safe to commit. Copy to policy.json and fill in. Parsing is strict (unknown fields other than this top-level _comment are rejected).",
   "defaults": [
-    { "name": "ts-authkey", "smID": "00000000-0000-0000-0000-000000000000" }
+    { "name": "ts-authkey", "item": "tailscale-onboard-authkey", "get": "password" }
   ],
   "nodes": {
     "nEXAMPLE_STABLE_ID_1": [
-      { "name": "kubeconfig", "smID": "11111111-1111-1111-1111-111111111111" },
-      { "name": "ssh-key", "smID": "22222222-2222-2222-2222-222222222222" }
+      { "name": "kubeconfig", "item": "kubeconfig", "get": "notes" },
+      { "name": "ssh-key", "item": "james@example-ssh", "get": "notes" }
     ]
   }
 }

@@ -1,7 +1,8 @@
 # Multi-stage build for the secret-broker (in-cluster / Talos option, #49).
-# Produces a small static image. NOTE: for -source=bws the image must ALSO carry
-# the `bws` CLI (add a pinned release below, or run a k8s-secret source). With
-# -source=stub (placeholders) no extra binary is needed.
+# Produces a small static image. NOTE: for -source=bw the image must ALSO carry
+# the `bw` CLI (npm i -g @bitwarden/cli) — so a distroless-static base won't work
+# for the bw path; use a node-based runtime, or a k8s-secret source. With
+# -source=stub (placeholders) the static image below is sufficient.
 
 FROM golang:1.26-bookworm AS build
 WORKDIR /src

@@ -12,14 +12,16 @@
 //   - race-free pairing: an unknown eligible node is QUEUED and the operator
 //     approves that specific StableID (mirrors Tailscale device approval).
 //
-// The secret source is pluggable: -source=stub (spike, placeholders) or
-// -source=bws (Bitwarden Secrets Manager via the `bws` CLI, read-scoped machine
-// account token in BWS_ACCESS_TOKEN — no vault master password).
+// The secret source is pluggable: -source=stub (placeholders) or -source=bw
+// (regular Bitwarden vault via the `bw` CLI, using a BW_SESSION; self-heals an
+// expired session via BW_PASSWORD). Secrets Manager (paid) is intentionally not
+// used.
 //
-// Blast radius: even with a read-scoped SM token, compromising the broker host
-// exposes every secret it can serve. This is a deliberate, documented tradeoff
-// (see README "Blast radius"). Keep the client a manual, opt-in recipe — do not
-// wire it into `just apply`/onboarding until it has been run live.
+// Blast radius: the broker holds unattended vault access, so compromising the
+// broker host exposes every secret it can serve — and with -source=bw a standing
+// master password lives on the host. Shrink the read scope by pointing the
+// broker's `bw` account at a dedicated collection (see README). Deliberate,
+// documented tradeoff. Keep the client manual/opt-in until it has been run live.
 //
 // Verification status: builds + vets; the pure gating logic is unit-tested
 // (broker_test.go). Not run end-to-end — a live run needs a TS_AUTHKEY and a
@@ -48,7 +50,7 @@ func main() {
 		addr       = flag.String("addr", envOr("BROKER_ADDR", ":8080"), "tailnet listen address")
 		requireTag = flag.String("require-tag", envOr("BROKER_REQUIRE_TAG", "tag:fleet"), "ACL tag a caller must carry (admission gate)")
 		stateDir   = flag.String("state-dir", envOr("TS_STATE_DIR", ""), "tsnet state dir (default: OS config dir)")
-		sourceKind = flag.String("source", envOr("BROKER_SOURCE", "stub"), "secret source: stub|bws")
+		sourceKind = flag.String("source", envOr("BROKER_SOURCE", "stub"), "secret source: stub|bw")
 		adminCSV   = flag.String("admins", os.Getenv("BROKER_ADMINS"), "comma-separated StableNodeIDs allowed to approve nodes")
 		pendingTTL = flag.Duration("pending-ttl", 30*time.Minute, "how long a pending (unapproved) request is kept")
 		configPath = flag.String("config", envOr("BROKER_CONFIG", ""), "path to per-node policy JSON (see policy.example.json)")
@@ -78,12 +80,12 @@ func main() {
 	}
 	var src SecretSource
 	switch *sourceKind {
-	case "bws":
-		src = newBwsSource(pol, os.Getenv("BWS_BIN"), 10*time.Second)
+	case "bw":
+		src = newBwSource(pol, os.Getenv("BW_BIN"), 15*time.Second)
 	case "stub":
 		src = stubSource{pol: pol}
 	default:
-		log.Fatalf("unknown -source %q (want stub|bws)", *sourceKind)
+		log.Fatalf("unknown -source %q (want stub|bw)", *sourceKind)
 	}
 
 	srv := &tsnet.Server{Hostname: *hostname, AuthKey: authKey, Dir: *stateDir}
