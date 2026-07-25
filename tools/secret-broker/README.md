@@ -62,9 +62,11 @@ password lives on the broker host**, and the broker can read everything its `bw`
 account can. Compromising the broker host compromises that. Shrink the *read*
 scope (the part that matters) **for free** without Secrets Manager: put the
 onboarding secrets in a dedicated **collection** inside a Bitwarden **free
-organization** (2 users, unlimited collections) and give the broker a **read-only
-member account** scoped to only that collection. Then the broker — and a
-compromise of it — sees only the onboarding collection, not your whole vault.
+organization** (2 users, up to 2 collections) and give the broker a **member
+account assigned to only that collection**. Then the broker — and a compromise of
+it — sees only the onboarding collection, not your whole vault. (Read-only per
+collection is nice if your tier offers it, but the guarantee that matters is the
+account being scoped to the one collection — true on the free tier regardless.)
 Run it on a trusted, minimal, always-on host and treat the host as sensitive.
 `-source=stub` returns placeholders for local testing.
 
@@ -118,12 +120,14 @@ session — they mint credentials and touch your Tailscale/BW tenancy):
    tagged e.g. `tag:secret-broker`) and export `TS_AUTHKEY`, **or** run it once
    with no key and approve the printed login URL on your phone (what we did on
    matrix); tsnet then saves the identity and reuses it across restarts.
-2. **Read-scoped Bitwarden account.** Create a Bitwarden **free organization** →
-   a **collection** (e.g. `fleet-onboarding`) → put the onboarding secrets in it.
-   Create a **member account** with **read-only** access to *only* that collection
-   (this is the free-tier stand-in for a Secrets-Manager machine account). Install
-   `bw` (`npm i -g @bitwarden/cli`), `bw login` that account once on the host, and
-   provide `BW_SESSION` (+ `BW_PASSWORD` so the broker can self-refresh).
+2. **Scoped Bitwarden account.** Create a Bitwarden **free organization** (2 users,
+   up to 2 collections) → a **collection** (e.g. `fleet-onboarding`) → put the
+   onboarding secrets in it. Invite/create a second **member account assigned to
+   only that collection** (free-tier stand-in for a Secrets-Manager machine
+   account — it sees only that collection, which is the blast-radius guarantee;
+   read-only on top if your tier allows). Install `bw` (`npm i -g @bitwarden/cli`),
+   `bw login` that account once on the host, and provide `BW_SESSION`
+   (+ `BW_PASSWORD` so the broker can self-refresh an expired session).
 3. **Admin identity.** Get your admin machine's StableID (`just broker-myid` on it)
    and pass it as `-admins` (comma-separated for more than one).
 4. **Policy.** Copy `policy.example.json` → `policy.json` and map each node's
