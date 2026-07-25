@@ -57,9 +57,24 @@ smaller target than the fleet's normal `bw unlock` + master-password path.
 **Still:** the broker holds unattended read access to every secret it can serve,
 so **compromising the broker host = compromising those secrets**. Least-privilege
 per client shrinks each *client's* exposure, not the *broker's*. Run it on a
-trusted, minimal, always-on host (e.g. bihar), keep the token read-scoped to the
-onboarding project only, and treat the host as sensitive. `-source=stub` returns
-placeholders for local testing.
+trusted, minimal, always-on host, keep the token read-scoped to the onboarding
+project only, and treat the host as sensitive. `-source=stub` returns placeholders
+for local testing.
+
+### Where to run it
+
+**Not on bihar** — bihar is a Talos node: immutable, API-only, no SSH/systemd, so
+it can't host a systemd binary. Two viable homes:
+
+- **A non-Talos always-on host (recommended): a VPS like `telengana` or `matrix`.**
+  Runs the systemd unit directly, and — importantly — stays available to onboard
+  machines **even when the home Talos cluster is down** (it was offline as of this
+  writing). A bootstrap-of-trust broker should not depend on the thing you're
+  often bootstrapping access *to*.
+- **In-cluster (Talos-native), when the cluster is up:** deploy as a Kubernetes
+  Deployment with `TS_AUTHKEY`/`BWS_ACCESS_TOKEN` as k8s Secrets — see
+  `deploy/secret-broker.k8s.yaml` and `Dockerfile`. Consolidated, but coupled to
+  cluster uptime.
 
 ## Build
 
@@ -106,7 +121,9 @@ session — they mint credentials and touch your Tailscale/BW tenancy):
    prints its StableID). Keep it least-privilege. The file names *which* secrets a
    node may get — no secret material — so it is safe to commit. Parsing is strict
    (unknown fields rejected), and the shipped example is covered by a test.
-5. **Run** (see `deploy/secret-broker.service.example` for a systemd unit):
+5. **Run** on a non-Talos always-on host (VPS) via the systemd unit
+   `deploy/secret-broker.service.example`, or in-cluster via
+   `deploy/secret-broker.k8s.yaml` (see [Where to run it](#where-to-run-it)):
    ```bash
    TS_AUTHKEY=… BWS_ACCESS_TOKEN=… \
      ./secret-broker -source=bws -admins=<your-stableID> -config=policy.json
