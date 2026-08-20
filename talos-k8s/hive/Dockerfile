@@ -9,7 +9,7 @@
 # Second fix (eb8f976e): fixed orphaned fi that caused CrashLoopBackOff.
 
 # ── Stage 1: Go builder (unchanged from upstream) ──────────────────
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27-alpine AS builder
 RUN apk add --no-cache git
 WORKDIR /src
 
