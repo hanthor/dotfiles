@@ -4,7 +4,7 @@
 # for the bw path; use a node-based runtime, or a k8s-secret source. With
 # -source=stub (placeholders) the static image below is sufficient.
 
-FROM golang:1.26-bookworm AS build
+FROM golang:1.27-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
