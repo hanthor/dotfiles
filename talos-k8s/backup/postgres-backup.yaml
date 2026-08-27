@@ -74,20 +74,33 @@ spec:
                   DEST="/backups/${STAMP}"
                   mkdir -p "$DEST"
 
+                  # Discord is the primary channel: ntfy.sh was observed
+                  # returning 502s and then going fully unreachable, which is not
+                  # acceptable for the one signal that tells you backups broke.
+                  # ntfy is kept as a best-effort second channel.
                   notify() {   # $1=priority $2=title $3=body
-                    [ -n "${NTFY_TOPIC:-}" ] || return 0
-                    command -v curl >/dev/null || { echo "notify skipped: no curl" >&2; return 0; }
-                    # Retry: a single-shot POST to ntfy was observed failing
-                    # with a TLS reset and then succeeding immediately after.
-                    # An alert dropped by one transient blip is an alert that
-                    # never existed.
-                    for attempt in 1 2 3; do
-                      curl -fsS --max-time 25 \
+                    local sent=0
+                    if [ -n "${DISCORD_BOT_TOKEN:-}" ] && [ -n "${DISCORD_CHANNEL:-}" ] && command -v curl >/dev/null; then
+                      local payload
+                      payload=$(printf '{"content":"**%s**\n%s"}' "$2" "$3")
+                      for attempt in 1 2 3; do
+                        if curl -fsS --max-time 25 -X POST \
+                             -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+                             -H "Content-Type: application/json" \
+                             -H "User-Agent: TunaOS-Hive-Ops/1.0" \
+                             -d "$payload" \
+                             "https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages" >/dev/null; then
+                          sent=1; break
+                        fi
+                        sleep 5
+                      done
+                    fi
+                    if [ -n "${NTFY_TOPIC:-}" ] && command -v curl >/dev/null; then
+                      curl -fsS --max-time 15 \
                         -H "Title: $2" -H "Priority: $1" -H "Tags: floppy_disk" \
-                        -d "$3" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null && return 0
-                      sleep 5
-                    done
-                    echo "notify failed to reach ntfy after 3 attempts" >&2
+                        -d "$3" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null 2>&1 && sent=1
+                    fi
+                    [ "$sent" = 1 ] || echo "WARNING: could not deliver alert on any channel" >&2
                   }
                   fail() {
                     notify urgent "Postgres backup FAILED" "$1"
@@ -143,6 +156,16 @@ spec:
                     secretKeyRef:
                       name: fleet-alerts
                       key: NTFY_TOPIC
+                - name: DISCORD_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: DISCORD_BOT_TOKEN
+                - name: DISCORD_CHANNEL
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: DISCORD_CHANNEL
               volumeMounts:
                 - name: backups
                   mountPath: /backups
@@ -195,15 +218,20 @@ spec:
                   NOW=$(date +%s)
 
                   alert() {
-                    if [ -n "${NTFY_TOPIC:-}" ]; then
+                    if [ -n "${DISCORD_BOT_TOKEN:-}" ] && [ -n "${DISCORD_CHANNEL:-}" ]; then
                       for attempt in 1 2 3; do
-                        curl -fsS --max-time 25 \
-                          -H "Title: Postgres backup STALE" -H "Priority: urgent" \
-                          -H "Tags: rotating_light" -d "$1" \
-                          "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null && break
+                        curl -fsS --max-time 25 -X POST \
+                          -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+                          -H "Content-Type: application/json" \
+                          -H "User-Agent: TunaOS-Hive-Ops/1.0" \
+                          -d "$(printf '{"content":"**Postgres backup STALE**\n%s"}' "$1")" \
+                          "https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages" >/dev/null && break
                         sleep 5
                       done
                     fi
+                    [ -n "${NTFY_TOPIC:-}" ] && curl -fsS --max-time 15 \
+                      -H "Title: Postgres backup STALE" -H "Priority: urgent" \
+                      -d "$1" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null 2>&1 || true
                     echo "STALE: $1" >&2
                     exit 1
                   }
@@ -218,6 +246,16 @@ spec:
                     secretKeyRef:
                       name: fleet-alerts
                       key: NTFY_TOPIC
+                - name: DISCORD_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: DISCORD_BOT_TOKEN
+                - name: DISCORD_CHANNEL
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: DISCORD_CHANNEL
               volumeMounts:
                 - name: backups
                   mountPath: /backups
