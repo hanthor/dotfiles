@@ -360,22 +360,24 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
-          # The control-plane node is an m6i.large (7.7Gi) and also runs etcd,
-          # the API server, scheduler and controller-manager. hive's agents
-          # (agy/codex) are memory-hungry: a 4Gi limit here let them consume the
-          # node's headroom until the *scheduler* was OOM-killed (exit 137),
-          # which deadlocked the cluster — nothing could schedule, and the
-          # scale-down that would have relieved it needed the very
-          # controller-manager that was dead. Keep hive bounded so the kubelet
-          # evicts hive rather than the control plane.
-          # Raise this only after the node has more RAM.
+          # hive shares the control-plane node with etcd and the API server
+          # (its data PVC is local-path and node-bound there, so it cannot move
+          # to the worker). On the old m6i.large (7.7Gi) a 4Gi limit let hive's
+          # agy/codex agents eat the node's headroom until the *scheduler* was
+          # OOM-killed (exit 137) — which deadlocks the cluster, because with no
+          # scheduler nothing can be placed and the scale-down that would
+          # relieve it is the controller-manager's job, and that was dead too.
+          #
+          # The node is now an m6i.xlarge (15.7Gi), so 4Gi leaves real headroom.
+          # Keep a limit set: the kubelet must evict hive, never the control
+          # plane. Do not raise this without checking free memory on the node.
           resources:
             requests:
               cpu: 300m
               memory: 1Gi
             limits:
-              cpu: 1500m
-              memory: 2560Mi
+              cpu: "2"
+              memory: 4Gi
       volumes:
         - name: config
           configMap:
