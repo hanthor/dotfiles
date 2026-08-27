@@ -152,6 +152,8 @@ desktop_brews:
   - k9s
   - kubernetes-cli
   - kubectx
+  - krew
+  - talosctl
   - podman-compose
   - act
   - actionlint

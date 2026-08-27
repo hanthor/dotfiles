@@ -1,0 +1,6 @@
+---
+# Name the Talos API-server cert is actually valid for (a SAN entry). kubeconfig
+# dials the control plane over the tailnet IP but verifies TLS against this, so
+# `kubectl` works from any tailnet machine without disabling cert verification.
+# Control-plane (bihar) LAN IP — present in the API-server cert SANs.
+kube_tls_server_name: "192.168.0.5"
