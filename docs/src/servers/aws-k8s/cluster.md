@@ -11,7 +11,7 @@ has no SSH, no package manager, and an immutable root. They are deliberately
 
 | Role | Instance | Private | Elastic IP | Labels |
 |------|----------|---------|------------|--------|
-| control-plane | `m6i.large` | `10.20.1.10` | `13.63.243.56` | `workload-role=hive` |
+| control-plane | `m6i.xlarge` | `10.20.1.10` | `13.63.243.56` | `workload-role=hive` |
 | worker | `m6i.xlarge` | `10.20.1.11` | `13.62.161.5` | `workload-role=matrix` |
 
 Talos `v1.13.9`, Kubernetes `v1.36.2`, flannel CNI, `local-path` storage.
@@ -40,19 +40,43 @@ The RTC ports match what the ESS chart's MatrixRTC SFU exposes as NodePorts.
 
 The Traefik `Service` is `type: LoadBalancer` and stays **`<pending>` forever**:
 Talos on EC2 has no cloud-controller-manager, so nothing provisions an ELB.
-Public traffic works only because the Traefik *Deployment* binds **hostPorts
-80/443** on whichever node it runs.
+Public traffic works only because the Traefik pod binds **hostPorts 80/443**.
 
-Consequences:
+Driven from [`talos-k8s/traefik/values.yaml`](../../../../talos-k8s/traefik/values.yaml).
+Three non-obvious settings, all load-bearing:
 
-- Traefik runs on the **control-plane** node, so all public DNS points at
-  `13.63.243.56` — not the worker, despite the worker holding the ESS pods.
-- Traefik is pinned with `nodeSelector: kubernetes.io/hostname=ip-10-20-1-10`
-  and `strategy: Recreate`. A RollingUpdate **cannot** work with hostPorts —
-  the new pod can't bind ports the old one still holds and hangs `Pending`.
-- **That pin is a live `kubectl patch`, not in the Traefik Helm values.** A
-  `helm upgrade` of Traefik will revert it. Fold it into the release values, or
-  convert Traefik to a DaemonSet so both node IPs serve (also removes the SPOF).
+- **`deployment.kind: DaemonSet`.** A single-replica Deployment is a SPOF whose
+  rescheduling silently kills all ingress.
+- **`maxSurge: 0 / maxUnavailable: 1`.** hostPorts make the chart default
+  (surge-then-delete) impossible — the new pod can never bind ports the old one
+  still holds, so rollouts hang with the replacement `Pending` forever. Costs a
+  few seconds of downtime per Traefik upgrade.
+- **`nodeSelector: workload-role=matrix`.** Running Traefik on *every* node was
+  tried and reverted — see the incident note below.
+
+DNS points only at the worker EIP `13.62.161.5`.
+
+### Incident 2026-08-27: don't put workloads on an undersized control-plane
+
+Running Traefik on both nodes tipped the control-plane over. Root cause was not
+Traefik: the node was an `m6i.large` (7.7Gi) running etcd, the API server *and*
+hive, whose agy/codex agent processes had grown into a 4Gi limit. Free memory
+hit ~650Mi and **kube-scheduler and kube-controller-manager were OOM-killed**
+(exit 137).
+
+That deadlocks the cluster in a way that resists the obvious fix: with no
+scheduler nothing can be placed, and `kubectl scale` cannot relieve the pressure
+because actioning a scale-down is the controller-manager's job — and it was dead
+too. The scale-to-zero appeared to succeed and did nothing. Recovery required
+force-deleting the hive pods so the kubelet released memory.
+
+Fixed properly by resizing the control-plane to `m6i.xlarge` (15.7Gi) — free
+memory went from ~650Mi to ~12Gi — and keeping an explicit memory limit on hive
+so the kubelet evicts *hive*, never the control plane.
+
+Lesson: hive cannot move to the worker (its PVC is `local-path` and node-bound),
+so the control-plane must be sized for it. Ingress HA on both nodes only becomes
+viable with that headroom.
 
 ## Workloads
 
@@ -104,9 +128,14 @@ credits zero the bill, so a commitment buys nothing and locks in instance shape.
 
 - Traefik pin is not in Helm values (above).
 - 50GB Postgres volume unmounted (above).
-- No backups yet — no EBS snapshot lifecycle, no `pg_dump` to S3. The old box's
-  nightly dumps had been silently producing 0-byte files since ~Aug 5, so this
-  is a **pre-existing** gap that followed the data across, not a new one.
+- **Backups are partial.** Postgres now has verified nightly dumps —
+  see [`talos-k8s/backup/postgres-backup.yaml`](../../../../talos-k8s/backup/postgres-backup.yaml)
+  — but they land on a **local-path PVC on the same node as the database**.
+  That protects against dropped tables and bad migrations, *not* against losing
+  the node. `ess-synapse-media` (4.6GB) and `hive-data` (17GB) have **no backup
+  at all**. Off-cluster copies are blocked: `james-admin` has neither `dlm:*`
+  (managed EBS snapshots) nor IAM permissions (to mint a scoped S3 writer for an
+  in-cluster job). Granting those two is the unblock.
 - API-server OIDC + finer-grained RBAC still deferred; access is a single admin
   client cert.
 
