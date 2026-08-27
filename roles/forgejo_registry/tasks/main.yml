@@ -38,7 +38,7 @@
       failed_when: false
       when: _podman_bin.rc == 0 and _fj_login.rc != 0
 
-    - name: podman login to Forgejo registry
+    - name: Podman login to Forgejo registry
       ansible.builtin.command:
         cmd: "podman login {{ forgejo_registry }} -u {{ _fj_user.stdout | trim }} --password-stdin"
         stdin: "{{ _fj_pass.stdout }}"
