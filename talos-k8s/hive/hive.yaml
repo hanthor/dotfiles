@@ -360,9 +360,20 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
+          # hive shares the control-plane node with etcd and the API server
+          # (its data PVC is local-path and node-bound there, so it cannot move
+          # to the worker). On the old m6i.large (7.7Gi) a 4Gi limit let hive's
+          # agy/codex agents eat the node's headroom until the *scheduler* was
+          # OOM-killed (exit 137) — which deadlocks the cluster, because with no
+          # scheduler nothing can be placed and the scale-down that would
+          # relieve it is the controller-manager's job, and that was dead too.
+          #
+          # The node is now an m6i.xlarge (15.7Gi), so 4Gi leaves real headroom.
+          # Keep a limit set: the kubelet must evict hive, never the control
+          # plane. Do not raise this without checking free memory on the node.
           resources:
             requests:
-              cpu: 500m
+              cpu: 300m
               memory: 1Gi
             limits:
               cpu: "2"
