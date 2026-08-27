@@ -1,0 +1,82 @@
+# IndiaFOSS CFP review dashboard → https://review.manatee-basking.ts.net
+#
+# Matches the cluster's homepage pattern: Deployment + Service + Tailscale Ingress
+# (ingressClassName: tailscale, tls.hosts: [review]) in the default namespace.
+# The Tailscale operator publishes it on the tailnet; no per-app auth key needed.
+#
+# Image must be pushed to the private Forgejo registry first (PII is baked in):
+#   podman build -f deploy/Dockerfile -t forgejo.manatee-basking.ts.net/james/cfp-dashboard:latest .
+#   podman push forgejo.manatee-basking.ts.net/james/cfp-dashboard:latest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: review-dashboard
+  namespace: default
+  labels: { app: review-dashboard }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: review-dashboard }
+  template:
+    metadata:
+      labels: { app: review-dashboard }
+    spec:
+      imagePullSecrets:
+        - name: forgejo-pull        # created from your Forgejo creds (see README)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: web
+          image: forgejo.manatee-basking.ts.net/james/cfp-dashboard:latest
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          ports:
+            - { containerPort: 8000 }
+          env:
+            # Optional: seed an initial sid so posting works before you click "sign in".
+            # - name: FOSS_SID
+            #   valueFrom: { secretKeyRef: { name: foss-sid, key: sid } }
+            # Set once the FossUnited review-submit endpoint is captured:
+            # - name: REVIEW_ENDPOINT
+            #   value: "https://fossunited.org/api/resource/FOSS Event CFP Review"
+            - name: SID_FILE
+              value: /data/.sid
+          volumeMounts:
+            - { name: sid, mountPath: /data }
+          resources:
+            requests: { cpu: "10m", memory: "48Mi" }
+            limits: { cpu: "250m", memory: "192Mi" }
+      volumes:
+        - name: sid
+          emptyDir: {}        # sid re-entered via the login button after a restart
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: review-dashboard
+  namespace: default
+  labels: { app: review-dashboard }
+spec:
+  selector: { app: review-dashboard }
+  ports:
+    - { name: http, port: 80, targetPort: 8000 }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: review-dashboard
+  namespace: default
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: review-dashboard
+      port: { number: 80 }
+  tls:
+    - hosts: [review]      # → https://review.manatee-basking.ts.net

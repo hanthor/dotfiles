@@ -77,6 +77,13 @@ data:
                 <div class="card-desc">Git hosting &middot; CI/CD pipelines</div>
               </div>
             </a>
+            <a class="card" href="https://review.manatee-basking.ts.net">
+              <span class="card-icon">&#128221;</span>
+              <div class="card-text">
+                <div class="card-title">CFP Review <span class="badge badge-up">up</span></div>
+                <div class="card-desc">IndiaFOSS 2026 CFP triage &amp; review dashboard</div>
+              </div>
+            </a>
           </div>
         </div>
 

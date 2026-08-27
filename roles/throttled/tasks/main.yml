@@ -1,0 +1,49 @@
+---
+- name: Ensure ~/.local/bin directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/bin"
+    state: directory
+    mode: "0755"
+
+- name: Deploy throttled core python scripts to ~/.local/bin
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/{{ item }}"
+    mode: "0755"
+  loop:
+    - throttled.py
+    - mmio.py
+  register: scripts_deploy
+
+- name: Deploy default throttled configuration
+  ansible.builtin.copy:
+    src: throttled.conf
+    dest: /etc/throttled.conf
+    owner: root
+    group: root
+    mode: "0644"
+    force: false # Do not overwrite user's custom changes
+  become: true
+
+- name: Deploy systemd service unit from template
+  ansible.builtin.template:
+    src: throttled.service.j2
+    dest: /etc/systemd/system/throttled.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  register: service_deploy
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: service_deploy.changed
+
+- name: Enable and start throttled service
+  ansible.builtin.systemd:
+    name: throttled.service
+    enabled: true
+    state: started
+  become: true

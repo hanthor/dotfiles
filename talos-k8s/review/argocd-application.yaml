@@ -1,0 +1,23 @@
+# ArgoCD Application — deploys the CFP review dashboard from Forgejo (GitOps).
+# Source of truth: the app repo's deploy/ dir on Forgejo. ArgoCD self-heals to it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: review-dashboard
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://forgejo.manatee-basking.ts.net/james/indiafoss-2026-cfp.git
+    targetRevision: main
+    path: deploy
+    directory:
+      include: 'k8s.yaml'   # only the manifest (ignore Dockerfile/README)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      selfHeal: true        # prune left off for safety — enable later if desired
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
