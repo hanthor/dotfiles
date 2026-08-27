@@ -1,0 +1,15 @@
+# Triggers pi-peak-stop.service at the start of each DeepSeek peak window.
+# Peak hours (UTC): 01:00–04:00 and 06:00–10:00.
+# WEEKDAYS ONLY since DeepSeek's 2026-08-23 policy change: weekends (Sat-Sun,
+# Beijing time) are all-day off-peak, so no stop fires on Sat/Sun. At these
+# hours the Beijing weekday equals the UTC weekday (see hive-peak-pause.timer).
+[Unit]
+Description=Timer to stop Pi at DeepSeek peak-hour starts (weekdays UTC 01:00, 06:00)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 01:00:00 UTC
+OnCalendar=Mon..Fri *-*-* 06:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

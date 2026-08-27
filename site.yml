@@ -77,6 +77,8 @@
       tags: [dotfiles, shell, dotfiles]
     - role: pi
       tags: [dotfiles, pi]
+    - role: hive_ops
+      tags: [hive, hive_ops]
     - role: git
       tags: [dotfiles, git]
     - role: neovim
@@ -99,6 +101,9 @@
     - role: kube
       tags: [secrets, kube]
       when: is_desktop | bool and machine_profile != 'vm-test' and not skip_kube | default(false)
+    - role: forgejo_registry
+      tags: [secrets, forgejo, registry]
+      when: machine_profile != 'vm-test' and not skip_forgejo | default(false)
 
     # Phase 3: Desktop apps
     - role: flatpak

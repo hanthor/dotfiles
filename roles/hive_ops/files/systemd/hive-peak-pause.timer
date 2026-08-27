@@ -1,0 +1,17 @@
+# Triggers hive-peak-pause.service at the start of each DeepSeek peak window.
+# Peak hours (UTC): 01:00-04:00 and 06:00-10:00.
+# WEEKDAYS ONLY since DeepSeek's 2026-08-23 policy change: weekends (Sat-Sun,
+# Beijing time) are all-day off-peak, so no pause fires on Sat/Sun. At these
+# hours (01:00-06:00 UTC, i.e. 09:00-14:00 Beijing) the Beijing weekday equals
+# the UTC weekday (+8h stays on the same calendar date), so Mon..Fri UTC ==
+# Mon..Fri Beijing.
+[Unit]
+Description=Timer to pause Hive agents at DeepSeek peak-hour starts (weekdays UTC 01:00, 06:00)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 01:00:00 UTC
+OnCalendar=Mon..Fri *-*-* 06:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

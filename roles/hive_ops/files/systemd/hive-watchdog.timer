@@ -1,0 +1,10 @@
+[Unit]
+Description=Hive watchdog timer — probe agent panes every 5 minutes, heal broken ones
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

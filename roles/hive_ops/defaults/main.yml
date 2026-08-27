@@ -1,0 +1,22 @@
+---
+# Only the host that drives the hive should run these timers — two hosts both
+# rotating models or pausing agents would fight each other. Opt a host in with
+# `hive_ops_enabled: true` in its host_vars.
+hive_ops_enabled: false
+
+# Hive now runs on the AWS Talos cluster. The scripts default to this too, but
+# the systemd units set it explicitly so they don't depend on shell rc files.
+hive_ops_kubeconfig: "{{ ansible_facts['env']['HOME'] }}/.kube/config-aws-migration"
+
+hive_ops_timers:
+  - hive-watchdog
+  - hive-rotate
+  - hive-tiers
+  - hive-peak-pause
+  - hive-peak-resume
+  - pi-peak-start
+  - pi-peak-stop
+
+# systemd user units get a minimal PATH that excludes Homebrew, where kubectl
+# and jq live. Prepend the brew prefix so the scripts can find their tools.
+hive_ops_path: "/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"

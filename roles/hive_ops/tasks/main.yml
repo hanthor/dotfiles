@@ -1,0 +1,76 @@
+---
+# ── Hive operations: rotation, watchdog, peak/off-peak scheduling ──────
+# Drives the tuna-os Hive on the AWS Talos cluster (see the tunaos-hive-checkin
+# skill). These were previously user units on telengana talking to a local k3s;
+# they now use plain kubectl against the AWS cluster's kubeconfig.
+#
+# Off by default — set `hive_ops_enabled: true` on exactly one host.
+
+- name: Deploy hive operations
+  when: hive_ops_enabled | bool
+  block:
+    - name: Ensure ~/.local/bin exists
+      ansible.builtin.file:
+        path: "{{ ansible_facts['env']['HOME'] }}/.local/bin"
+        state: directory
+        mode: "0755"
+
+    - name: Deploy hive helper scripts
+      ansible.builtin.copy:
+        src: "bin/{{ item }}"
+        dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/{{ item }}"
+        mode: "0755"
+      loop:
+        - hive-peak.sh
+        - hive-rotate.sh
+        - hive-tiers.sh
+
+    - name: Ensure user systemd directory exists
+      ansible.builtin.file:
+        path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user"
+        state: directory
+        mode: "0755"
+
+    - name: Deploy hive systemd units
+      ansible.builtin.copy:
+        src: systemd/
+        dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/"
+        mode: "0644"
+      register: hive_units
+
+    # The units run non-interactively, so they can't rely on shell rc files.
+    # KUBECONFIG has no default outside the shell, and the systemd *user*
+    # manager's PATH is only /usr/local/bin:/usr/bin:/snap/bin — which does not
+    # include Homebrew, where kubectl actually lives. Without this the scripts
+    # fail opaquely ("no hive pod found") because kubectl isn't found at all.
+    - name: Ensure drop-in directories for hive services
+      ansible.builtin.file:
+        path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/{{ item }}.service.d"
+        state: directory
+        mode: "0755"
+      loop: "{{ hive_ops_timers }}"
+
+    - name: Pin KUBECONFIG and PATH for hive services
+      ansible.builtin.copy:
+        dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/{{ item }}.service.d/kubeconfig.conf"
+        mode: "0644"
+        content: |
+          [Service]
+          Environment=KUBECONFIG={{ hive_ops_kubeconfig }}
+          Environment=PATH={{ hive_ops_path }}
+      loop: "{{ hive_ops_timers }}"
+      register: hive_dropins
+
+    - name: Reload user systemd
+      ansible.builtin.systemd:
+        scope: user
+        daemon_reload: true
+      when: hive_units.changed or hive_dropins.changed
+
+    - name: Enable and start hive timers
+      ansible.builtin.systemd:
+        name: "{{ item }}.timer"
+        scope: user
+        enabled: true
+        state: started
+      loop: "{{ hive_ops_timers }}"

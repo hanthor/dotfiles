@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly refresh of benchmark-sourced model tiers
+
+[Timer]
+OnCalendar=Mon 04:30 UTC
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

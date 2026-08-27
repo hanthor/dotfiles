@@ -1,0 +1,7 @@
+[Unit]
+Description=Hive agent self-healing watchdog (liveness probe, rotate-off unhealthy backends, kill+kick)
+Documentation=https://github.com/kubestellar/hive/issues/4665
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/hive-rotate.sh watchdog
