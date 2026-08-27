@@ -10,6 +10,24 @@ Two distinct concerns live here:
 1. **Workstation config** (`roles/`, `site.yml`, `host_vars/`, `group_vars/`) — shells, packages, browser, SSH, Tailscale, kubeconfig, etc.
 2. **Talos K8s cluster IaC** (`talos-k8s/`) — manifests for the Bihar + Karnataka cluster. Detailed handbook in [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md).
 
+### Two Talos clusters, not one
+
+- **Home** (`bihar` + `karnataka`) — on the LAN. Configs: `~/.kube/config`, `~/.talos/config`.
+  **Currently powered down and in storage; expected back.** Treat it as
+  temporarily offline, not decommissioned — don't delete its configs, Bitwarden
+  notes, or `talos-k8s/` manifests, and expect `just doctor`/`kubectl` against it
+  to fail until it returns.
+- **AWS** (`eu-north-1`, built 2026-08-27) — runs Matrix/ESS, the Hive, and the CFP dashboard.
+  Configs: `~/.kube/config-aws-migration`, `~/.talos/config-aws-migration`.
+  Handbook: [`docs/src/servers/aws-k8s/cluster.md`](docs/src/servers/aws-k8s/cluster.md).
+
+Neither cluster's nodes are Ansible-managed — Talos has no SSH. They are not in
+`inventory.yml`; access is `talosctl`/`kubectl` only.
+
+The two Hetzner VPSes it replaced (`matrix`, `telengana`) are retired but still
+powered on for burn-in. **Nothing on them may be restarted** — see the
+[cutover runbook](docs/matrix-cutover-runbook.md).
+
 ## Core commands
 
 ```bash

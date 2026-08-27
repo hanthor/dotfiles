@@ -1,5 +1,12 @@
 # Matrix
 
+> **Retired 2026-08-27.** The Matrix homeserver was migrated to the
+> [AWS Talos cluster](../../servers/aws-k8s/cluster.md). This box is kept
+> powered on for burn-in only — Synapse and MAS are scaled to zero and must
+> **never** be restarted (two live homeservers sharing one federation identity
+> is unrecoverable). `auto-upgrade.timer` is disabled so nothing resurrects
+> them. Everything below describes the box as it was.
+
 VPS node in the hanthor fleet.
 
 ## Connection

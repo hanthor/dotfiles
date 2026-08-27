@@ -30,6 +30,7 @@
   - [Talos K8s Cluster](servers/talos-k8s/cluster.md)
     - [Bihar](servers/talos-k8s/bihar/README.md)
     - [Karnataka](servers/talos-k8s/karnataka/README.md)
+  - [AWS Talos Cluster](servers/aws-k8s/cluster.md)
 - [VPS]()
   - [lkofoss](vps/lkofoss/README.md)
   - [Matrix](vps/matrix/README.md)
@@ -51,6 +52,7 @@
 ## Dotfiles
 
 - [pi](roles/pi.md)
+- [hive_ops](roles/hive_ops.md)
 - [git](roles/git.md)
 - [neovim](roles/neovim.md)
 
