@@ -1,0 +1,197 @@
+# Nightly application-consistent Postgres backups for the AWS Talos cluster.
+#
+# Written against the exact way the old telengana backups failed: the recipe was
+#     pg_dump -d synapse | gzip > out.sql.gz
+# in a `just` recipe with no shebang, so no `pipefail`. When pg_dump failed the
+# pipeline's exit status was gzip's 0, gzip wrote a valid ~20-byte archive of
+# empty input, and the job "succeeded" every night for three weeks.
+#
+# So this job:
+#   * uses `pg_dump -Fc` (compresses natively — no pipe, nothing to mask an
+#     exit code),
+#   * proves the archive parses with `pg_restore --list` rather than trusting a
+#     non-zero file size,
+#   * asserts a size floor as a second, independent signal,
+#   * fails loudly to ntfy, and
+#   * reports success too, so a *silent* job is itself the alarm (see the
+#     companion staleness check).
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pg-backups
+  namespace: postgres
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 60Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: postgres
+spec:
+  schedule: "17 2 * * *"          # 02:17 UTC, off the hour to avoid pile-ups
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid        # a 14GB dump must never overlap itself
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 7        # keep failures around longer than successes
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          # Must land where the PVCs are: local-path is node-bound.
+          nodeSelector:
+            workload-role: matrix
+          containers:
+            - name: dump
+              image: postgres:16
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -Eeuo pipefail
+
+                  STAMP="$(date -u +%Y-%m-%d)"
+                  DEST="/backups/${STAMP}"
+                  mkdir -p "$DEST"
+
+                  notify() {   # $1=priority $2=title $3=body
+                    [ -n "${NTFY_TOPIC:-}" ] || return 0
+                    curl -fsS --max-time 20 \
+                      -H "Title: $2" -H "Priority: $1" -H "Tags: floppy_disk" \
+                      -d "$3" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null || true
+                  }
+                  fail() {
+                    notify urgent "Postgres backup FAILED" "$1"
+                    exit 1
+                  }
+                  trap 'fail "unexpected error on line $LINENO"' ERR
+
+                  export PGHOST=postgres.postgres.svc.cluster.local
+                  export PGUSER=postgres
+                  export PGPASSWORD="${POSTGRES_PASSWORD}"
+
+                  for DB in synapse mas; do
+                    OUT="${DEST}/${DB}.dump"
+
+                    # -Fc is compressed already; no pipe means no masked exit code.
+                    pg_dump -Fc --no-owner -d "$DB" -f "$OUT" \
+                      || fail "pg_dump failed for ${DB}"
+
+                    # The real check: a truncated or empty archive fails to parse.
+                    pg_restore --list "$OUT" >/dev/null 2>&1 \
+                      || fail "archive for ${DB} is unreadable (truncated/corrupt)"
+
+                    SZ=$(stat -c%s "$OUT")
+                    case "$DB" in
+                      synapse) FLOOR=1000000000 ;;   # ~1GB; real dump is several GB
+                      mas)     FLOOR=100000 ;;       # ~100KB; real dump is ~1MB
+                    esac
+                    [ "$SZ" -ge "$FLOOR" ] \
+                      || fail "${DB} dump only ${SZ} bytes, below floor ${FLOOR}"
+
+                    TABLES=$(pg_restore --list "$OUT" | grep -c 'TABLE DATA' || true)
+                    echo "${DB}: $(numfmt --to=iec "$SZ") across ${TABLES} tables"
+                  done
+
+                  # Retention: keep 7 days locally. Off-cluster copies live in S3.
+                  find /backups -maxdepth 1 -type d -name '20*' -mtime +7 \
+                    -exec rm -rf {} + 2>/dev/null || true
+
+                  SUMMARY=$(du -sh "$DEST" | cut -f1)
+                  KEPT=$(find /backups -maxdepth 1 -type d -name '20*' | wc -l)
+                  trap - ERR
+                  notify default "Postgres backup ok" \
+                    "${STAMP}: ${SUMMARY} written, ${KEPT} day(s) retained"
+                  echo "backup complete: ${DEST} (${SUMMARY}), ${KEPT} retained"
+              env:
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-superuser
+                      key: POSTGRES_PASSWORD
+                - name: NTFY_TOPIC
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: NTFY_TOPIC
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: pg-backups
+---
+# Dead-man's switch. A job that never runs emits no error — that is precisely
+# how three weeks of empty backups went unnoticed. This complains when the
+# newest dump is older than ~36h, so silence stops being ambiguous.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup-staleness
+  namespace: postgres
+spec:
+  schedule: "42 8 * * *"           # ~6h after the backup window
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            workload-role: matrix
+          containers:
+            - name: check
+              image: postgres:16
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -Eeuo pipefail
+                  NEWEST=$(find /backups -maxdepth 2 -name '*.dump' -printf '%T@\n' 2>/dev/null | sort -n | tail -1)
+                  NOW=$(date +%s)
+
+                  alert() {
+                    [ -n "${NTFY_TOPIC:-}" ] && curl -fsS --max-time 20 \
+                      -H "Title: Postgres backup STALE" -H "Priority: urgent" \
+                      -H "Tags: rotating_light" -d "$1" \
+                      "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null || true
+                    echo "STALE: $1" >&2
+                    exit 1
+                  }
+
+                  [ -n "$NEWEST" ] || alert "no Postgres dump exists at all"
+                  AGE=$(( (NOW - ${NEWEST%.*}) / 3600 ))
+                  [ "$AGE" -le 36 ] || alert "newest Postgres dump is ${AGE}h old (>36h)"
+                  echo "ok: newest dump is ${AGE}h old"
+              env:
+                - name: NTFY_TOPIC
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: NTFY_TOPIC
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+                  readOnly: true
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: pg-backups
