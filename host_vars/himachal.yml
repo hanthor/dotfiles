@@ -2,5 +2,14 @@
 is_arm: false
 is_laptop: true
 dotfiles_update_delay_seconds: 90
+# Keep login responsive; run `just apply-nosecrets` manually when desired.
+dotfiles_auto_update: false
+# Phone pushes launch two Ansible runs and are better done on demand.
+phone_apply_enabled: false
 web_services: []
 mic_hardware_volume_pct: 75
+
+# Drives the tuna-os Hive on the AWS cluster (rotation, watchdog, peak windows).
+# Previously ran as user timers on telengana; moved here when telengana was
+# retired. Exactly one host should have this enabled.
+hive_ops_enabled: true

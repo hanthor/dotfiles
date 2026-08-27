@@ -1,0 +1,60 @@
+---
+# Automate `podman login` to the private Forgejo container registry using the
+# credential stored in Bitwarden (item name == {{ forgejo_registry }}).
+# Idempotent: skips if already logged in. Gated on an unlocked vault.
+
+- name: Set up Forgejo registry login
+  when: bw_unlocked | default(false)
+  environment:
+    BW_SESSION: "{{ bw_session | default('') }}"
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  block:
+    - name: Check podman is available
+      ansible.builtin.command: command -v podman
+      register: _podman_bin
+      changed_when: false
+      failed_when: false
+
+    - name: Check existing Forgejo registry login
+      ansible.builtin.command: "podman login --get-login {{ forgejo_registry }}"
+      register: _fj_login
+      changed_when: false
+      failed_when: false
+      when: _podman_bin.rc == 0
+
+    - name: Fetch Forgejo registry username from Bitwarden
+      ansible.builtin.command: "bw get username {{ forgejo_registry }}"
+      register: _fj_user
+      changed_when: false
+      no_log: true
+      failed_when: false
+      when: _podman_bin.rc == 0 and _fj_login.rc != 0
+
+    - name: Fetch Forgejo registry password from Bitwarden
+      ansible.builtin.command: "bw get password {{ forgejo_registry }}"
+      register: _fj_pass
+      changed_when: false
+      no_log: true
+      failed_when: false
+      when: _podman_bin.rc == 0 and _fj_login.rc != 0
+
+    - name: Podman login to Forgejo registry
+      ansible.builtin.command:
+        cmd: "podman login {{ forgejo_registry }} -u {{ _fj_user.stdout | trim }} --password-stdin"
+        stdin: "{{ _fj_pass.stdout }}"
+      register: _fj_do
+      changed_when: "'Login Succeeded' in _fj_do.stdout"
+      no_log: true
+      when:
+        - _podman_bin.rc == 0
+        - _fj_login.rc != 0
+        - _fj_user.rc == 0 and (_fj_user.stdout | length) > 0
+        - _fj_pass.rc == 0 and (_fj_pass.stdout | length) > 0
+
+    - name: Warn if Forgejo credential missing in Bitwarden
+      ansible.builtin.debug:
+        msg: "Forgejo registry credential ({{ forgejo_registry }}) not found in Bitwarden — add a login item named '{{ forgejo_registry }}' with the registry token."
+      when:
+        - _podman_bin.rc == 0
+        - _fj_login.rc != 0
+        - (_fj_user.rc | default(1)) != 0 or (_fj_pass.rc | default(1)) != 0

@@ -1,0 +1,9 @@
+# Starts the Pi Hive contributor after DeepSeek peak pricing hours end.
+# Off-peak resumes at UTC 04:00 and 10:00, WEEKDAYS ONLY since
+# DeepSeek's 2026-08-23 policy change (weekends are all-day off-peak).
+[Unit]
+Description=Start Pi after DeepSeek peak pricing hours end
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl --user start pi.service

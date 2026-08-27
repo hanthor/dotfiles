@@ -239,10 +239,46 @@
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "{{ ansible_env_path }}"
 
-- name: Write authorized_keys with all machine public keys
+# Self-healing authorized_keys (shrink guard).
+# A full overwrite gated only on "≥1 key" silently DROPS keys whenever the BW
+# batch is partial (a machine's item momentarily missing, a `bw list` hiccup) —
+# that is what repeatedly wiped himachal's key off goa. Instead, UNION the
+# desired set with whatever is already authorized: every unlocked run re-adds
+# all known machine keys (healing a prior wipe) and NEVER removes a live key.
+# Decommissioning a key is now an explicit action: ssh_keys_force_authorized=true.
+- name: Read current authorized_keys (shrink guard)
+  ansible.builtin.slurp:
+    src: "{{ ansible_facts['env']['HOME'] }}/.ssh/authorized_keys"
+  register: _existing_ak
+  failed_when: false
+  when:
+    - all_machine_keys.stdout_lines is defined
+    - all_machine_keys.stdout_lines | length > 0
+
+- name: Compute authorized_keys sets
+  ansible.builtin.set_fact:
+    _ak_desired: "{{ (all_machine_keys.stdout_lines | default([]) + (extra_authorized_keys | default([]))) | map('trim') | select | unique | list }}"
+    _ak_current: "{{ ((_existing_ak.content | b64decode).splitlines() | map('trim') | select | list) if (_existing_ak.content is defined and _existing_ak.content is string) else [] }}"
+  when:
+    - all_machine_keys.stdout_lines is defined
+    - all_machine_keys.stdout_lines | length > 0
+
+- name: Warn when a live key would have been removed (kept instead)
+  ansible.builtin.debug:
+    msg: >-
+      Kept {{ (_ak_current | difference(_ak_desired)) | length }} authorized key(s) that
+      are not in the current Bitwarden batch (likely a partial result). Set
+      ssh_keys_force_authorized=true only when intentionally decommissioning a key.
+  when:
+    - all_machine_keys.stdout_lines is defined
+    - all_machine_keys.stdout_lines | length > 0
+    - (_ak_current | difference(_ak_desired)) | length > 0
+    - not (ssh_keys_force_authorized | default(false))
+
+- name: Write authorized_keys (union — self-healing, never silently removes a key)
   ansible.builtin.copy:
     dest: "{{ ansible_facts['env']['HOME'] }}/.ssh/authorized_keys"
-    content: "{{ (all_machine_keys.stdout_lines + extra_authorized_keys) | unique | join('\n') }}\n"
+    content: "{{ ((_ak_desired if (ssh_keys_force_authorized | default(false)) else (_ak_current | union(_ak_desired))) | unique | join('\n')) }}\n"
     mode: "0600"
   when:
     - all_machine_keys.stdout_lines is defined

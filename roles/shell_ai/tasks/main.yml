@@ -49,15 +49,31 @@
       changed_when: false
       failed_when: false
 
+    # Consumed by the tavily-search pi skill, which reads $TAVILY_API_KEY
+    # rather than hardcoding a key (this repo is public).
+    - name: Fetch Tavily API key from Bitwarden
+      ansible.builtin.command: bw get password tavily-api-key
+      register: tavily_key
+      no_log: true
+      changed_when: false
+      failed_when: false
+
     - name: Write shell secrets file
       ansible.builtin.copy:
         content: |
           # Managed by dotfiles playbook — DO NOT EDIT
+          {% if forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0 %}
           export FORGEJO_TOKEN={{ forgejo_token.stdout | trim }}
+          {% endif %}
+          {% if tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0 %}
+          export TAVILY_API_KEY={{ tavily_key.stdout | trim }}
+          {% endif %}
         dest: "{{ ansible_facts['env']['HOME'] }}/.config/shell/secrets.sh"
         mode: "0600"
       no_log: true
-      when: forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0
+      when: >-
+        (forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0)
+        or (tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0)
 
 - name: Warn if deepseek-api-key not found in Bitwarden
   ansible.builtin.debug:

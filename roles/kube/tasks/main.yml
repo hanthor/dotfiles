@@ -49,9 +49,62 @@
       when: _talosconfig.rc == 0 and (_talosconfig.stdout | length) > 0
       no_log: true
 
+    # The kubeconfig connects to the control-plane over its *tailnet* IP, but the
+    # Talos API-server cert only lists the LAN IP / loopback in its SANs — so TLS
+    # verification fails ("certificate is valid for …, not 100.x.x.x"). Pin
+    # tls-server-name to a name the cert IS valid for: kubectl still dials the
+    # tailnet IP but verifies the cert against this SAN. (Alternative long-term
+    # fix: add the tailnet IP to machine.certSANs in the Talos config + regen.)
+    - name: List kubeconfig clusters
+      ansible.builtin.command: kubectl config get-clusters
+      register: _clusters
+      changed_when: false
+      when: _kubeconfig.rc == 0 and (_kubeconfig.stdout | length) > 0
+
+    - name: Pin kubeconfig tls-server-name to a valid cert SAN
+      ansible.builtin.command:
+        cmd: kubectl config set-cluster {{ item }} --tls-server-name={{ kube_tls_server_name }}
+      loop: "{{ _clusters.stdout_lines[1:] | default([]) }}"   # skip the NAME header row
+      changed_when: false
+      when: _kubeconfig.rc == 0 and (_kubeconfig.stdout | length) > 0
+
     - name: Warn if either config missing in Bitwarden
       ansible.builtin.debug:
         msg: >-
           {% if _kubeconfig.rc != 0 %}kubeconfig missing in BW — seed it with scripts/bw-seed-kube.sh.{% endif %}
           {% if _talosconfig.rc != 0 %}talosconfig missing in BW — seed it with scripts/bw-seed-kube.sh.{% endif %}
       when: _kubeconfig.rc != 0 or _talosconfig.rc != 0
+
+    # AWS migration cluster (matrix/hive workloads) — kept as separate files
+    # rather than merged into the primary configs above, so both clusters stay
+    # independently usable. To merge contexts ad hoc:
+    #   KUBECONFIG=~/.kube/config:~/.kube/config-aws-migration kubectl config view --flatten
+    - name: Fetch AWS migration kubeconfig from Bitwarden
+      ansible.builtin.command: bw get notes kubeconfig-aws-migration
+      register: _kubeconfig_aws
+      changed_when: false
+      no_log: true
+      failed_when: false
+
+    - name: Fetch AWS migration talosconfig from Bitwarden
+      ansible.builtin.command: bw get notes talosconfig-aws-migration
+      register: _talosconfig_aws
+      changed_when: false
+      no_log: true
+      failed_when: false
+
+    - name: Write AWS migration kubeconfig
+      ansible.builtin.copy:
+        content: "{{ _kubeconfig_aws.stdout }}"
+        dest: "{{ ansible_facts['env']['HOME'] }}/.kube/config-aws-migration"
+        mode: "0600"
+      when: _kubeconfig_aws.rc == 0 and (_kubeconfig_aws.stdout | length) > 0
+      no_log: true
+
+    - name: Write AWS migration talosconfig
+      ansible.builtin.copy:
+        content: "{{ _talosconfig_aws.stdout }}"
+        dest: "{{ ansible_facts['env']['HOME'] }}/.talos/config-aws-migration"
+        mode: "0600"
+      when: _talosconfig_aws.rc == 0 and (_talosconfig_aws.stdout | length) > 0
+      no_log: true

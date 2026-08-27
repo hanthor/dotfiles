@@ -1,0 +1,6 @@
+machine:
+  network:
+    extraHostEntries:
+      - ip: 100.88.105.60
+        aliases:
+          - forgejo.manatee-basking.ts.net

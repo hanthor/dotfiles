@@ -76,7 +76,23 @@
     name: dotfiles-update.service
     scope: user
     enabled: true
-  when: is_laptop | bool
+  when: is_laptop | bool and dotfiles_auto_update | default(true) | bool
+
+- name: Stop and disable dotfiles-update service when automatic updates are off
+  ansible.builtin.systemd:
+    name: dotfiles-update.service
+    scope: user
+    enabled: false
+    state: stopped
+  when: is_laptop | bool and not (dotfiles_auto_update | default(true) | bool)
+  failed_when: false
+
+- name: Remove disabled dotfiles-update service unit
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/dotfiles-update.service"
+    state: absent
+  when: is_laptop | bool and not (dotfiles_auto_update | default(true) | bool)
+  notify: Reload systemd user daemon
 
 - name: Remove dotfiles-update timer on laptop (not needed)
   ansible.builtin.file:
@@ -168,4 +184,23 @@
     enabled: true
     state: started
     daemon_reload: true
-  when: inventory_hostname == 'himachal'
+  when: inventory_hostname == 'himachal' and phone_apply_enabled | default(true) | bool
+
+- name: Stop and disable phone-apply timer when automatic pushes are off
+  ansible.builtin.systemd:
+    name: phone-apply.timer
+    scope: user
+    enabled: false
+    state: stopped
+  when: inventory_hostname == 'himachal' and not (phone_apply_enabled | default(true) | bool)
+  failed_when: false
+
+- name: Remove disabled phone-apply units
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/{{ item }}"
+    state: absent
+  loop:
+    - phone-apply.service
+    - phone-apply.timer
+  when: inventory_hostname == 'himachal' and not (phone_apply_enabled | default(true) | bool)
+  notify: Reload systemd user daemon

@@ -1,0 +1,19 @@
+# Talos registry mirror: pull forgejo.manatee-basking.ts.net images via the
+# in-cluster Forgejo ClusterIP over HTTP. The nodes can't reach Forgejo's tailnet
+# IP (ACL/route), but they DO reach ClusterIPs via kube-proxy — and the registry
+# answers over plain HTTP there (verified: GET http://10.97.108.245:3000/v2/ → 401,
+# no HTTPS redirect). Auth comes from the existing `forgejo-pull` imagePullSecret.
+#
+# Supersedes the extraHostEntries host patch (DNS resolved but the tailnet route
+# timed out). Apply from a host that can reach Talos apid :50000 (e.g. goa):
+#
+#   talosctl -e 192.168.0.5 -n 192.168.0.5,192.168.0.6 \
+#     patch mc --patch @talos-k8s/review/forgejo-registry-mirror-patch.yaml
+#
+# (No reboot; registries config is hot-reloaded. Then delete the stuck pods.)
+machine:
+  registries:
+    mirrors:
+      forgejo.manatee-basking.ts.net:
+        endpoints:
+          - http://10.97.108.245:3000

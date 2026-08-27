@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Hive capability tiers from the Artificial Analysis benchmark API
+Documentation=https://artificialanalysis.ai/data-api/docs
+
+[Service]
+Type=oneshot
+# Exit 1 when no API key is configured or the API is down; that is not a
+# failure worth alerting on, since hive-rotate.sh falls back to its built-in
+# table and keeps working.
+SuccessExitStatus=0 1
+ExecStart=%h/.local/bin/hive-tiers.sh refresh

@@ -1,0 +1,149 @@
+# Loki — log aggregation for fleet spoke machines
+# Single-replica, 10Gi PVC, Tailscale Ingress
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: loki
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: loki-data
+  namespace: loki
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+  namespace: loki
+data:
+  loki.yaml: |
+    auth_enabled: false
+    server:
+      http_listen_port: 3100
+      grpc_listen_port: 9095
+    ingester:
+      chunk_idle_period: 30m
+      max_chunk_age: 2h
+      chunk_target_size: 1536000
+      chunk_retain_period: 1m
+      wal:
+        dir: /loki/wal
+    common:
+      ring:
+        kvstore:
+          store: inmemory
+      replication_factor: 1
+    schema_config:
+      configs:
+        - from: "2025-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+    storage_config:
+      tsdb_shipper:
+        active_index_directory: /loki/tsdb-index
+        cache_location: /loki/tsdb-cache
+      filesystem:
+        directory: /loki/chunks
+    limits_config:
+      retention_period: 168h  # 7 days
+      allow_structured_metadata: true
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+    compactor:
+      working_directory: /loki/compactor
+      retention_enabled: true
+      delete_request_store: filesystem
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+  namespace: loki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+    spec:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: loki
+          image: docker.io/grafana/loki:3.6.2
+          args:
+            - -config.file=/etc/loki/loki.yaml
+          ports:
+            - containerPort: 3100
+              name: http
+            - containerPort: 9095
+              name: grpc
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki
+            - name: data
+              mountPath: /loki
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+      volumes:
+        - name: config
+          configMap:
+            name: loki-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: loki-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: loki
+spec:
+  selector:
+    app: loki
+  ports:
+    - name: http
+      port: 3100
+      targetPort: 3100
+    - name: grpc
+      port: 9095
+      targetPort: 9095
+---
+# Tailscale Ingress — fleet spoke machines ship logs here
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: loki
+  namespace: loki
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: loki
+      port:
+        number: 3100
+  tls:
+    - hosts:
+        - loki

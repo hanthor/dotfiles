@@ -1,0 +1,9 @@
+# Pauses all tuna-os Hive agents during DeepSeek peak pricing hours.
+# Peak hours (UTC): 01:00-04:00 and 06:00-10:00, WEEKDAYS ONLY since
+# DeepSeek's 2026-08-23 policy change (weekends are all-day off-peak).
+[Unit]
+Description=Pause Hive agents during DeepSeek peak pricing hours
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/hive-peak.sh pause

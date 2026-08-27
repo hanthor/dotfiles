@@ -1,0 +1,9 @@
+[Unit]
+Description=Hive capability-preserving backend rotation (provider headroom failover)
+Documentation=file:///home/james/hive-backend-rotation-design.md
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/hive-rotate.sh apply
+# The probes drive tmux panes inside the pod and are deliberately unhurried.
+TimeoutStartSec=600

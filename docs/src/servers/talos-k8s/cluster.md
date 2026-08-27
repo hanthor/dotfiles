@@ -1,5 +1,13 @@
 # Cluster Handbook — Talos Linux on Bihar + Karnataka
 
+> **Status: powered down and in storage (as of 2026-08-27), expected back.**
+> Temporarily offline, *not* decommissioned — keep its configs, Bitwarden notes
+> (`kubeconfig` / `talosconfig`), and `talos-k8s/` manifests. `kubectl` and
+> `just doctor` will fail against it until it returns. Workloads that needed to
+> stay up (Matrix, Hive, CFP dashboard) run on the
+> [AWS Talos cluster](../aws-k8s/cluster.md).
+
+
 > **Two-node [Talos Linux](https://www.talos.dev/) [Kubernetes](https://kubernetes.io/) cluster.**
 > AMD Strix Halo GPU acceleration · [Lemonade](https://lemonade-sdk.github.io/) · [KubeVirt](https://kubevirt.io/) · [Tailscale](https://tailscale.com/) ingress.
 > Everything you need to bring this cluster back from zero.

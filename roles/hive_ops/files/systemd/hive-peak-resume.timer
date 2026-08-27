@@ -1,0 +1,16 @@
+# Triggers hive-peak-resume.service at the end of each DeepSeek peak window.
+# Off-peak resumes at UTC 04:00 and 10:00.
+# WEEKDAYS ONLY since DeepSeek's 2026-08-23 policy change: weekends (Sat-Sun,
+# Beijing time) are all-day off-peak, so nothing to resume on Sat/Sun (a resume
+# on an un-paused set is a no-op anyway, but keep the pair symmetric with the
+# pause timer).
+[Unit]
+Description=Timer to resume Hive agents at DeepSeek off-peak starts (weekdays UTC 04:00, 10:00)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 04:00:00 UTC
+OnCalendar=Mon..Fri *-*-* 10:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

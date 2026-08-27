@@ -73,14 +73,15 @@
     state: directory
     mode: "0755"
 
-- name: Create chromium wrapper scripts pointing to ungoogled-chromium
+- name: Create chromium wrapper scripts pointing to flatpak Chromium
   ansible.builtin.copy:
     dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/{{ item }}"
     content: |
       #!/usr/bin/env bash
-      exec flatpak run com.github.Eloston.UngoogledChromium "$@"
+      exec flatpak run org.chromium.Chromium "$@"
     mode: "0755"
   loop:
     - google-chrome
+    - google-chrome-stable
     - chromium-browser
     - chromium

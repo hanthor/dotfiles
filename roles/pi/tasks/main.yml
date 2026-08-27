@@ -48,22 +48,64 @@
     dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/extensions/claude-import.ts"
     mode: "0644"
 
-# ── SearXNG web search skill ────────────────────────────────────────────
+# ── Personal skill collection ───────────────────────────────────────────
+# Everything under files/skills/ is deployed as the `james` collection.
+# Adding a skill is just adding a directory there — no task edits needed.
+# Vendored third-party collections (e.g. mattpocock) are installed by their
+# own setup skills and are deliberately not tracked here.
 
-- name: Ensure pi skills directory exists
+- name: Ensure pi skills collection directory exists
   ansible.builtin.file:
-    path: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/skills/james/searxng-search"
+    path: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/skills/james"
     state: directory
     mode: "0755"
 
-- name: Deploy searxng-search SKILL.md
+- name: Deploy pi skill collection
   ansible.builtin.copy:
-    src: skills/searxng-search/SKILL.md
-    dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/skills/james/searxng-search/SKILL.md"
+    src: skills/
+    dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/skills/james/"
     mode: "0644"
+    directory_mode: "0755"
 
-- name: Deploy searxng-search script
-  ansible.builtin.copy:
-    src: skills/searxng-search/search.sh
-    dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/skills/james/searxng-search/search.sh"
+# copy's `mode` applies to every file, so re-mark the executables afterwards.
+- name: Find skill scripts that need to be executable
+  ansible.builtin.find:
+    paths: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/skills/james"
+    patterns: "*.sh,*.mjs"
+    recurse: true
+  register: pi_skill_scripts
+
+- name: Make skill scripts executable
+  ansible.builtin.file:
+    path: "{{ item.path }}"
     mode: "0755"
+  loop: "{{ pi_skill_scripts.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+# ── Expose the same skills to Claude Code ───────────────────────────────
+# Claude reads ~/.claude/skills/<name>/SKILL.md. Symlink each skill rather
+# than copying so there is a single source of truth on disk.
+
+- name: Ensure ~/.claude/skills exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.claude/skills"
+    state: directory
+    mode: "0755"
+
+- name: Enumerate deployed skills
+  ansible.builtin.find:
+    paths: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/skills/james"
+    file_type: directory
+    recurse: false
+  register: pi_skill_dirs
+
+- name: Link pi skills into Claude's skill directory
+  ansible.builtin.file:
+    src: "{{ item.path }}"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.claude/skills/{{ item.path | basename }}"
+    state: link
+    force: true
+  loop: "{{ pi_skill_dirs.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
