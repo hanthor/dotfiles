@@ -1,0 +1,56 @@
+# Traefik on the AWS Talos cluster.
+#
+# Talos on EC2 has no cloud-controller-manager, so a `type: LoadBalancer`
+# Service never gets an address — it sits <pending> forever and nothing serves.
+# Public traffic therefore relies on binding hostPorts 80/443 directly.
+#
+# Run it as a DaemonSet, not a Deployment:
+#   * A single-replica Deployment is a SPOF *and* deadlocks on rollout — a
+#     RollingUpdate can't bind hostPorts the outgoing pod still holds, so the
+#     new pod hangs Pending. That forces `strategy: Recreate` plus a node pin,
+#     and any reschedule silently breaks all ingress.
+#   * A DaemonSet puts one Traefik on every node, so both Elastic IPs serve and
+#     there is nothing to pin or reschedule.
+#
+# Pinned to the worker (`workload-role=matrix`), NOT every node. The
+# control-plane is an m6i.large already at ~141% CPU limits running etcd, the
+# API server, hive's agents and the Discord bot; adding Traefik there starved it
+# — the liveness probe timed out reaching the pod's own IP and the API server
+# began failing TLS handshakes. Running ingress on both nodes is only viable
+# once the control-plane has headroom (bigger instance, or move hive off it).
+#
+# This costs little availability: the ESS pods are node-bound to the worker by
+# their local-path PVCs, so losing the worker takes Matrix down regardless.
+deployment:
+  kind: DaemonSet
+
+ports:
+  web:
+    hostPort: 80
+  websecure:
+    hostPort: 443
+
+# No cloud LB to point at; the hostPorts are the ingress. ClusterIP keeps the
+# Service useful for in-cluster traffic without provisioning anything.
+service:
+  type: ClusterIP
+
+nodeSelector:
+  workload-role: matrix
+
+log:
+  level: INFO
+
+accessLog:
+  format: json
+
+# hostPorts make surge-then-delete impossible: a new pod can never bind ports
+# the outgoing pod still holds, so the chart default (maxSurge 1 /
+# maxUnavailable 0) deadlocks with the replacement stuck Pending forever.
+# Delete first, then create. This means a few seconds of ingress downtime on
+# every Traefik upgrade — unavoidable while hostPorts are the ingress path.
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+    maxSurge: 0
