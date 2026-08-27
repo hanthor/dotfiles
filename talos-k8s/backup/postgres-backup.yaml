@@ -57,15 +57,37 @@ spec:
                 - |
                   set -Eeuo pipefail
 
+                  # The postgres image ships no curl. Without this the alerting
+                  # below fails with "command not found" and — because notify()
+                  # tolerates errors so a flaky ntfy can't fail a good backup —
+                  # every alert silently does nothing. Install it up front and
+                  # assert it, so a broken notifier is loud at start rather than
+                  # discovered during an incident.
+                  export DEBIAN_FRONTEND=noninteractive
+                  apt-get update -qq >/dev/null 2>&1 \
+                    && apt-get install -y -qq --no-install-recommends curl ca-certificates >/dev/null 2>&1 \
+                    || echo "WARNING: could not install curl; alerts will not send" >&2
+                  command -v curl >/dev/null \
+                    || echo "WARNING: curl unavailable — this backup will not be able to alert" >&2
+
                   STAMP="$(date -u +%Y-%m-%d)"
                   DEST="/backups/${STAMP}"
                   mkdir -p "$DEST"
 
                   notify() {   # $1=priority $2=title $3=body
                     [ -n "${NTFY_TOPIC:-}" ] || return 0
-                    curl -fsS --max-time 20 \
-                      -H "Title: $2" -H "Priority: $1" -H "Tags: floppy_disk" \
-                      -d "$3" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null || true
+                    command -v curl >/dev/null || { echo "notify skipped: no curl" >&2; return 0; }
+                    # Retry: a single-shot POST to ntfy was observed failing
+                    # with a TLS reset and then succeeding immediately after.
+                    # An alert dropped by one transient blip is an alert that
+                    # never existed.
+                    for attempt in 1 2 3; do
+                      curl -fsS --max-time 25 \
+                        -H "Title: $2" -H "Priority: $1" -H "Tags: floppy_disk" \
+                        -d "$3" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null && return 0
+                      sleep 5
+                    done
+                    echo "notify failed to reach ntfy after 3 attempts" >&2
                   }
                   fail() {
                     notify urgent "Postgres backup FAILED" "$1"
@@ -165,14 +187,23 @@ spec:
               args:
                 - |
                   set -Eeuo pipefail
+                  export DEBIAN_FRONTEND=noninteractive
+                  apt-get update -qq >/dev/null 2>&1 \
+                    && apt-get install -y -qq --no-install-recommends curl ca-certificates >/dev/null 2>&1 || true
+
                   NEWEST=$(find /backups -maxdepth 2 -name '*.dump' -printf '%T@\n' 2>/dev/null | sort -n | tail -1)
                   NOW=$(date +%s)
 
                   alert() {
-                    [ -n "${NTFY_TOPIC:-}" ] && curl -fsS --max-time 20 \
-                      -H "Title: Postgres backup STALE" -H "Priority: urgent" \
-                      -H "Tags: rotating_light" -d "$1" \
-                      "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null || true
+                    if [ -n "${NTFY_TOPIC:-}" ]; then
+                      for attempt in 1 2 3; do
+                        curl -fsS --max-time 25 \
+                          -H "Title: Postgres backup STALE" -H "Priority: urgent" \
+                          -H "Tags: rotating_light" -d "$1" \
+                          "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null && break
+                        sleep 5
+                      done
+                    fi
                     echo "STALE: $1" >&2
                     exit 1
                   }
