@@ -532,18 +532,20 @@ gather() {
       if [ -n "$when" ]; then
         epoch=$(date -u -d "$when" +%s 2>/dev/null \
                 || python3 -c "import datetime,sys;print(int(datetime.datetime.fromisoformat(sys.argv[1]).replace(tzinfo=datetime.timezone.utc).timestamp()))" "$when" 2>/dev/null)
-        [ -n "$epoch" ] && echo "$epoch $p" >> "$STATE_DIR/resets.tmp"
+        [ -n "$epoch" ] && { mkdir -p "$STATE_DIR/resets.d"; echo "$epoch" > "$STATE_DIR/resets.d/$p"; }
       fi
     fi
   done
-  # Keep only the SOONEST pending renewal: that is the next moment the fleet's
-  # situation can change, and one marker is all the watchdog needs to check.
-  if [ -s "$STATE_DIR/resets.tmp" ]; then
-    sort -n "$STATE_DIR/resets.tmp" | head -1 > "$STATE_DIR/next-reset"
-  else
-    rm -f "$STATE_DIR/next-reset"
-  fi
-  rm -f "$STATE_DIR/resets.tmp"
+  # One marker PER PROVIDER, not just the soonest. deepseek, anthropic, openai
+  # and google renew on independent clocks (a 5-hour window, a weekly cap, a
+  # 4-day account cap, a prepaid balance), so collapsing them to one "next"
+  # loses every renewal after the first — the fleet would wake for Anthropic at
+  # 23:00 and then sleep through codex coming back on the 6th.
+  # A provider that is NO LONGER exhausted has nothing pending: drop its marker
+  # so a stale timestamp cannot re-fire.
+  for _p in deepseek anthropic openai google; do
+    provider_exhausted "$_p" || rm -f "$STATE_DIR/resets.d/$_p" 2>/dev/null
+  done
 
   # A peak-priced provider is "unavailable" for planning purposes even at 0% used.
   if in_peak_window; then
@@ -961,20 +963,25 @@ if [ "$ACTION" = watchdog ]; then
   # difference between the fleet restarting within 5 minutes of a renewal and
   # sitting idle for up to 20 (or indefinitely, when being parked is itself
   # what makes the provider unmeasurable).
-  if [ -s "$STATE_DIR/next-reset" ]; then
-    read -r reset_at reset_p < "$STATE_DIR/next-reset"
-    if [ -n "$reset_at" ] && [ "$(date +%s)" -ge "$reset_at" ] 2>/dev/null; then
-      printf 'renewal reached for %s — resuming parked agents and re-probing\n' "${reset_p:-a provider}"
-      rm -f "$STATE_DIR/next-reset"
-      for a in $(agent_names); do
-        [ "$(agent_field "$a" paused)" = true ] || continue
-        [ "$(agent_field "$a" pausedTrigger)" = login-detector ] && continue
-        rs=$(hive_api POST "/api/resume/$a" | jq -r '.status // .error')
-        printf '  %-14s resume: %s\n' "$a" "$rs"
-        [ -s "$STATE_DIR/stranded" ] && sed -i "/^$a|/d" "$STATE_DIR/stranded"
-      done
-      reconcile_contributors
-    fi
+  renewed=""
+  now_s=$(date +%s)
+  for f in "$STATE_DIR"/resets.d/*; do
+    [ -e "$f" ] || continue
+    due=$(cat "$f" 2>/dev/null)
+    [ -n "$due" ] && [ "$now_s" -ge "$due" ] 2>/dev/null || continue
+    renewed="$renewed $(basename "$f")"
+    rm -f "$f"
+  done
+  if [ -n "$renewed" ]; then
+    # Renewal means the CREDIT PICTURE CHANGED, so re-derive placement from
+    # scratch rather than only unpausing: an agent parked onto a worse rung
+    # while its provider was dry should move back now that it is not, and a
+    # contributor parked at 0 replicas should come back. `apply` re-probes,
+    # re-places every agent on the best available rung, un-strands, and
+    # reconciles contributors — which is exactly the decision that is now stale.
+    printf 'renewal reached for:%s — re-deciding placement from current credits\n' "$renewed"
+    "$0" apply || echo "  ! re-decision failed" >&2
+    exit 0
   fi
 
   # 2) Per-agent liveness: classify the pane and heal broken agents with the
