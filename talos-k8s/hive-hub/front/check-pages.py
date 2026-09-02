@@ -23,15 +23,41 @@ from playwright.async_api import async_playwright
 PAGES = [
     ("hub front door", "https://hub.tunaos.org/", False, ["TunaOS Hive Constellation", "reef"]),
     ("hub registry api", "https://hub.tunaos.org/api/registry", False, ["hives"]),
-    ("console", "https://hive.tunaos.org/console/", True, ["Provider headroom", "Hive agents"]),
-    ("tunaos dashboard", "https://hive.tunaos.org/", True, []),
+    ("console", "https://school.tunaos.org/console/", True, ["Provider headroom", "Hive agents"]),
+    ("school dashboard", "https://school.tunaos.org/", True, []),
     ("reef dashboard", "https://reef.tunaos.org/", True, []),
 ]
 
-# Colours the branding override is supposed to install. Checked as *computed*
-# style so we prove the CSS actually applied, not merely that it downloaded.
-BRAND_BG = ("4, 22, 31")      # #04161f deep water
-BRAND_INK = ("232, 246, 248")  # #e8f6f8 foam
+# Colours the branding override installs, checked as *computed* style so we
+# prove the CSS applied rather than merely downloaded. BOTH themes are listed:
+# the dashboard ships a light mode (body.light-mode) that overrides :root, so
+# looking only for the dark palette reports a correctly-branded light page as
+# unbranded — which it did.
+BRAND_COLOURS = (
+    "4, 22, 31",       # #04161f deep water   (dark bg)
+    "232, 246, 248",   # #e8f6f8 foam         (dark ink)
+    "242, 249, 250",   # #f2f9fa shallow      (light bg)
+    "6, 35, 46",       # #06232e deep teal    (light ink)
+)
+
+# Cloudflare injects its analytics beacon into proxied HTML. It is blocked in
+# this environment and is not served by us — failing the run on it would mean
+# every page is permanently red for a third-party script we do not control.
+IGNORED_ERROR_SUBSTRINGS = ("cloudflareinsights.com", "beacon.min.js")
+
+# Endpoints the SPA probes optimistically and that legitimately 404 on a hive
+# which does not use them. Verified individually rather than assumed:
+#   /api/inference/models/*  optional inference providers we do not configure
+#   /api/auth/token          an auth mode this deployment does not use
+#   /api/pane/brainstorm     a pack agent deliberately TOMBSTONED here; the SPA
+#                            still asks for its pane
+# Listing them keeps the run's signal meaningful — a permanently-red check gets
+# ignored, and then a real regression hides in the noise.
+BENIGN_404_PATHS = (
+    "/api/inference/models/",
+    "/api/auth/token",
+    "/api/pane/brainstorm",
+)
 
 
 async def check(page, label, url, expect, shots, session):
@@ -40,9 +66,13 @@ async def check(page, label, url, expect, shots, session):
     page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
     page.on("requestfailed",
             lambda r: failed_reqs.append(f"{r.method} {r.url.split('?')[0]}"))
-    page.on("response",
-            lambda r: failed_reqs.append(f"HTTP {r.status} {r.url.split('?')[0]}")
-            if r.status >= 500 else None)
+    def _resp(r):
+        u = r.url.split("?")[0]
+        if r.status >= 500:
+            failed_reqs.append(f"HTTP {r.status} {u}")
+        elif r.status == 404 and not any(b in u for b in BENIGN_404_PATHS):
+            failed_reqs.append(f"HTTP 404 {u}")
+    page.on("response", _resp)
 
     out = {"label": label, "ok": True, "notes": []}
     try:
@@ -71,8 +101,7 @@ async def check(page, label, url, expect, shots, session):
         bg = await page.evaluate("getComputedStyle(document.body).backgroundColor")
         fg = await page.evaluate("getComputedStyle(document.body).color")
         out["bg"], out["fg"] = bg, fg
-        out["branded"] = any(c in (bg or "") for c in [BRAND_BG]) or \
-                         any(c in (fg or "") for c in [BRAND_INK])
+        out["branded"] = any(c in (bg or "") or c in (fg or "") for c in BRAND_COLOURS)
     except Exception:
         out["branded"] = None
 
@@ -89,10 +118,19 @@ async def check(page, label, url, expect, shots, session):
     except Exception:
         pass
 
-    if errors:
+    # A console "Failed to load resource" line has no URL, so it cannot be
+    # matched against BENIGN_404_PATHS; the response listener above already
+    # judged those by URL. Drop the generic ones and trust that instead.
+    ours = [e for e in errors
+            if not any(i in e for i in IGNORED_ERROR_SUBSTRINGS)
+            and "Failed to load resource" not in e]
+    if ours:
         out["ok"] = False
-        out["notes"].append(f"{len(errors)} console error(s): {errors[0][:110]}")
-    hard = [r for r in failed_reqs if "favicon" not in r]
+        out["notes"].append(f"{len(ours)} console error(s): {ours[0][:110]}")
+    if len(errors) != len(ours):
+        out["notes"].append(f"{len(errors) - len(ours)} third-party error(s) ignored")
+    hard = [r for r in failed_reqs
+            if "favicon" not in r and not any(i in r for i in IGNORED_ERROR_SUBSTRINGS)]
     if hard:
         out["notes"].append(f"{len(hard)} failed request(s): {hard[0][:110]}")
 
@@ -122,7 +160,7 @@ async def main():
             await ctx.add_cookies([
                 {"name": "hive_session", "value": session, "domain": d, "path": "/",
                  "secure": True, "httpOnly": True}
-                for d in ("hive.tunaos.org", "reef.tunaos.org", "hub.tunaos.org")
+                for d in ("hive.tunaos.org", "school.tunaos.org", "reef.tunaos.org", "hub.tunaos.org")
             ])
         for label, url, needs_auth, expect in PAGES:
             if needs_auth and not session:
