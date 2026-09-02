@@ -65,7 +65,17 @@ fi
 
 set -u
 
-NS=hive
+# Which hive this run manages. Overridable because the fleet is no longer ONE
+# spoke: reef ran for hours with 7 of 11 agents parked on the Claude Code
+# login-method picker and nothing healed them, because the watchdog only ever
+# looked at `hive`. An unwatched spoke fails silently and indefinitely — its
+# agents still report state=running and busy=working while the pane shows a
+# login prompt, so nothing short of a pane check notices.
+#
+# Contributor reconciliation is deliberately NOT per-hive (see CONTRIB_NS): the
+# contributor deployments are a single fleet-wide pool, so only the run that
+# manages the primary hive should touch them.
+NS="${HIVE_NS:-hive}"
 LABEL=app.kubernetes.io/name=hive
 API=http://127.0.0.1:3002
 STATE_DIR="${HIVE_ROTATE_STATE:-$HOME/.local/state/hive-rotate}"
@@ -895,6 +905,14 @@ contrib_provider() {
 
 reconcile_contributors() {
   local ds d p want have
+  # The contributor pool is FLEET-WIDE, not per-hive: one set of deployments
+  # serves every spoke. Only the run managing the primary hive may scale them —
+  # otherwise two spokes' runs race, each scaling on its own view of provider
+  # headroom, and a contributor flaps between 0 and 1 every tick.
+  if [ "$NS" != "${HIVE_PRIMARY_NS:-hive}" ]; then
+    echo "contributors: skipped — pool is managed by the primary hive (${HIVE_PRIMARY_NS:-hive}), not $NS"
+    return 0
+  fi
   ds=$(kubectl get deploy -n "$CONTRIB_NS" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
   [ -z "$ds" ] && { echo "no contributor deployments in $CONTRIB_NS"; return 0; }
   for d in $ds; do
