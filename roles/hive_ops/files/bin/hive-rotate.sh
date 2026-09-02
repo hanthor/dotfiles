@@ -354,7 +354,18 @@ probe_anthropic() {
     curl -s --max-time 15 -H "Authorization: Bearer $TOK" \
          -H "anthropic-beta: oauth-2025-04-20" \
          https://api.anthropic.com/api/oauth/usage' 2>/dev/null)
-  case "$out" in -1*) echo "$out"; return ;; esac
+  # An EMPTY or missing credential is not an unreadable measurement — it is
+  # positive evidence the provider cannot serve. Claude Code zeroes this file
+  # when a refresh fails (observed 2026-09-02: accessToken, refreshToken and
+  # expiresAt all emptied after a refresh race), and reporting that as "-1
+  # unknown" let provider_ok's unmeasured-so-allow rule keep placing agents on
+  # a backend whose every pane said "Login expired · Please run /login".
+  # 100 routes agents away and, unlike a quota cap, only a human /login clears
+  # it — so say so in the note rather than implying it will reset on its own.
+  case "$out" in
+    -1\ no-token) echo "100 no-credential (needs an interactive /login)"; return ;;
+    -1*) echo "$out"; return ;;
+  esac
   pct=$(printf '%s' "$out" | jq -r 'try ([.limits[]?.percent // 0] | max) // empty' 2>/dev/null)
   r=$(printf '%s' "$out" | jq -r 'try ([.limits[]? | select(.percent != null)] | max_by(.percent) | .resets_at) // empty' 2>/dev/null)
   if [ -z "$pct" ]; then
@@ -365,7 +376,24 @@ probe_anthropic() {
 }
 
 probe_openai() {
-  local a; a=$(first_agent_on openai); [ -z "$a" ] && { echo "-1 no-agent"; return; }
+  local a text; a=$(first_agent_on openai); [ -z "$a" ] && { echo "-1 no-agent"; return; }
+  # A HARD account cap is announced in the pane itself, not in /status:
+  #   "■ You've hit your usage limit. ... or try again at Sep 6th, 2026 10:35 PM."
+  # Read that FIRST. Without it the /status probe returns unparsed -> "unknown",
+  # and provider_ok() deliberately admits an unmeasured provider so the ladder
+  # always has a way back in — which meant rotation kept filling a pool that was
+  # dead for four days. Observed 2026-09-02: 8 of 11 agents parked on an
+  # exhausted codex while the free pool sat empty. An exhaustion notice is
+  # POSITIVE evidence and must outrank the unmeasured-so-allow rule.
+  if pane_is_live "$a"; then
+    text=$(as_agent "$a" "tmux -S $(tmux_sock "$a") capture-pane -pt hive-$a -S -60")
+    if printf '%s' "$text" | grep -qiE "hit your usage limit|usage limit reached|out of credits"; then
+      local when
+      when=$(printf '%s' "$text" | grep -oiE 'try again at [^.]*' | head -1)
+      echo "100 ${when:-account limit reached}"
+      return
+    fi
+  fi
   # codex /status -> "Weekly limit: [####....] NN% left  (resets HH:MM on DD Mon)"
   probe_pane "$a" /status '
     /Weekly limit/ {for(i=1;i<=NF;i++) if($i ~ /%$/){gsub(/%/,"",$i); left=$i}}
