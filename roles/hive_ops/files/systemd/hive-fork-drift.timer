@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily check for whether the hive fork can be retired in favor of upstream
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

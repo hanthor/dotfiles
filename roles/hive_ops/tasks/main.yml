@@ -24,6 +24,8 @@
         - hive-peak.sh
         - hive-rotate.sh
         - hive-tiers.sh
+        - hive-repo-sync.sh
+        - hive-fork-drift.sh
 
     - name: Ensure user systemd directory exists
       ansible.builtin.file:

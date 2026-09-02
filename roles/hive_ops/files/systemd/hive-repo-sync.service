@@ -1,0 +1,8 @@
+[Unit]
+Description=Add newly created tuna-os org repos to Hive's managed repo list
+Documentation=https://github.com/tuna-os/hive
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/hive-repo-sync.sh apply
+TimeoutStartSec=120

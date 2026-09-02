@@ -52,8 +52,22 @@ data:
         - tuna-os/corral
         - tuna-os/letters
         - tuna-os/flatpak-index
+        - tuna-os/hive
       ai_author: hanthor
       primary_repo: tuna-os/tunaos
+
+    # tuna-os/hive is this hive's own fork of kubestellar/hive (transferred
+    # from hanthor/hive 2026-09-02 so the existing GH App installation, which
+    # is tuna-os-org-scoped, covers it — the App has no installation on
+    # personal accounts, and hive.yaml supports exactly one installation_id
+    # per project, so a cross-owner repo would silently fail auth the same
+    # way operations/telemetry silently failed on copilot). Runs at the same
+    # ACMM L6 as every other managed repo, so scanner/ci-maintainer/quality/
+    # guide/sec-check/architect/strategist/outreach can open PRs here too —
+    # the safety net is GitHub-side, not ACMM-side: branch protection on `v4`
+    # requires 1 approving review with enforce_admins:true, so nothing merges
+    # (auto-merge included) without a human, even though the bot has admin
+    # access to the repo.
 
     # ACMM level set explicitly in agent config; packs override backends to copilot
 

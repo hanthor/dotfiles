@@ -1,0 +1,8 @@
+[Unit]
+Description=Check whether tuna-os/hive fork is fully absorbed by kubestellar/hive upstream
+Documentation=https://github.com/tuna-os/hive
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/hive-fork-drift.sh check
+TimeoutStartSec=180

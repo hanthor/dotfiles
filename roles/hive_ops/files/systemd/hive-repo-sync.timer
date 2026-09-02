@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily check for new tuna-os repos to add to Hive
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

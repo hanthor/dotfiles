@@ -16,7 +16,10 @@ hive_ops_timers:
   - hive-peak-resume
   - pi-peak-start
   - pi-peak-stop
+  - hive-repo-sync
+  - hive-fork-drift
 
 # systemd user units get a minimal PATH that excludes Homebrew, where kubectl
-# and jq live. Prepend the brew prefix so the scripts can find their tools.
-hive_ops_path: "/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
+# and jq live, and ~/.local/bin, where gh lives (hive-fork-drift.sh's PR
+# lookups). Prepend both so the scripts can find their tools.
+hive_ops_path: "{{ ansible_facts['env']['HOME'] }}/.local/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
