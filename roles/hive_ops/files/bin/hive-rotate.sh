@@ -478,7 +478,17 @@ HIGH_VOLUME_CADENCE_S="${HIVE_ROTATE_HIGH_VOLUME_S:-1800}"
 METERED_EXHAUSTION_FAILOVER="${HIVE_ROTATE_METERED_FAILOVER:-1}"
 # agy 5h-window stewardship: cap how many high-cadence agents may land on the
 # free pool — its rolling five-hour limit is exactly what a 5m driver burns.
-AGY_MAX_HIGH_VOLUME="${HIVE_ROTATE_AGY_MAX_HIGH_VOLUME:-2}"
+#
+# Raised 2->5 on 2026-09-02. The old value silently assumed most agents were
+# NOT high-volume. Once the surge cadences were tightened, every one of the 11
+# agents fell under HIGH_VOLUME_CADENCE_S (30m), so the cap of 2 made 9 of them
+# ineligible for the FREE pool and they all piled onto Anthropic — which burned
+# a weekly subscription cap at ~10%/hour. Worse, it removed the failover floor:
+# when Anthropic exhausts, choose_rung can seat only 2 agents on google and
+# STRANDS (pauses) the rest, so the cheapest, most available provider cannot
+# catch the fleet. A cap below the fleet size is a cap on failover capacity,
+# not just on cost.
+AGY_MAX_HIGH_VOLUME="${HIVE_ROTATE_AGY_MAX_HIGH_VOLUME:-5}"
 # Watchdog: minimum minutes between auto-heal kicks of the same agent (the
 # k8s CrashLoopBackOff analog; a fresh launch needs ~1min to reach ready).
 WATCHDOG_KICK_INTERVAL_MIN="${HIVE_WATCHDOG_KICK_INTERVAL_MIN:-5}"
@@ -680,7 +690,22 @@ pane_classify() {
   # a copilot pane sits misclassified as ready forever (confirmed: the
   # watchdog logged "liveness ok" every 5min for 43h straight while /api/status
   # reported PaneShowsLogin the whole time).
-  if printf '%s' "$text" | grep -qiE 'login expired|run /login|not logged in|please run /login|please use /login|\[next\]|terms of service & data use|accent: highlighted|enter toggl|enter confirm|↑/↓ navigate'; then
+  #
+  # A dismissible FIRST-RUN WIZARD is classified separately from a login, and
+  # deliberately so. Every agent's ~/.gemini is a SYMLINK to the shared
+  # /data/home/.gemini, so when one agent writes
+  # antigravity-cli/cache/onboarding.json mode 600, every OTHER agent gets
+  # EACCES and re-enters agy's theme/ToS/trust wizard. Lumping that in with
+  # `auth` made the watchdog rotate the agent OFF google onto a metered
+  # provider. Observed 2026-09-02: agents placed on the FREE pool were
+  # evacuated to Anthropic within minutes, repeatedly, which is how a weekly
+  # subscription cap burned at ~10%/hour while agy sat at 29% used. The right
+  # response is to repair the shared-home permissions and relaunch on the SAME
+  # rung — never to abandon a healthy provider over a dialog box.
+  if printf '%s' "$text" | grep -qiE '\[next\]|\[previous\]|terms of service & data use|accent: highlighted|enter toggl|choose your color scheme|do you trust the contents|i trust this folder|welcome to (the )?antigravity'; then
+    echo wizard; return
+  fi
+  if printf '%s' "$text" | grep -qiE 'login expired|run /login|not logged in|please run /login|please use /login|select login method|sign in to use'; then
     echo auth; return
   fi
   # shell prompt = the CLI died and the pane fell back to bash.
@@ -712,10 +737,16 @@ if [ "$ACTION" = watchdog ]; then
   # settings/onboarding files as mode 600 owned by the writing agent, so the
   # next launch hits EACCES and falls into the onboarding trap. Normalize the
   # shared tree each pass (the durable fix is umask 007 at launch, RFC #4665).
-  kubectl exec -n "$NS" "$POD" -- sh -c '
-    find /data/home/.gemini/antigravity-cli -type f -exec chmod 660 {} + 2>/dev/null
-    find /data/home/.gemini/antigravity-cli -type d -exec chmod 770 {} + 2>/dev/null
-    chown -R dev:node /data/home/.gemini/antigravity-cli 2>/dev/null' 2>/dev/null
+  # Directories are 2770, not 770: the setgid bit makes everything created
+  # inside inherit the `node` group, which is what keeps a file written by one
+  # agent readable by the next even before this sweep runs again.
+  gemini_hygiene() {
+    kubectl exec -n "$NS" "$POD" -- sh -c '
+      find /data/home/.gemini/antigravity-cli -type f -exec chmod 660 {} + 2>/dev/null
+      find /data/home/.gemini/antigravity-cli -type d -exec chmod 2770 {} + 2>/dev/null
+      chown -R dev:node /data/home/.gemini/antigravity-cli 2>/dev/null' 2>/dev/null
+  }
+  gemini_hygiene
 
   # 2) Per-agent liveness: classify the pane and heal broken agents with the
   # kill-then-kick sequence (a direct kick of a wedged TUI hangs the API).
@@ -732,6 +763,16 @@ if [ "$ACTION" = watchdog ]; then
       continue
     fi
     printf '%-14s %-8s -> healing (kill + kick)\n' "$a" "$state"
+    # A wizard is a DIALOG, not a dead backend: repair the shared-home
+    # permissions that put the agent there and relaunch on the SAME rung.
+    # Rotating here is what evacuated agents off the free pool onto a metered
+    # one (see pane_classify). Re-running hygiene immediately before the kick
+    # matters — the sweep at the top of this pass may predate the launch that
+    # re-created onboarding.json mode 600.
+    if [ "$state" = wizard ]; then
+      gemini_hygiene
+      printf '%-14s %-8s shared-home perms repaired; relaunching in place\n' "$a" "$state"
+    fi
     # If the failure is backend-level (auth chrome, or a crash-looping rung),
     # restarting on the same backend just re-breaks the agent. Rotate onto a
     # positively-measured-healthy rung first, then kick.

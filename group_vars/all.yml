@@ -280,6 +280,11 @@ gnome_enabled_extensions:
   - copyous@boerdereinar.dev
   - paperwm@paperwm.github.com
   - papershell@lalovene.github.com
+  # Listing a UUID the shell has not discovered yet is harmless — GNOME ignores
+  # unknown entries and honours this one as soon as the extension directory is
+  # seen, which for a NEW extension is the next login (the shell only scans for
+  # new extension dirs at session start, and Wayland has no in-place restart).
+  - hive-monitor@tunaos.org
 
 extra_authorized_keys:
   - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP9VKRfO6q+mk43mJ1BYn2omRyKJcieTgZem0jGGEtN2 goa
