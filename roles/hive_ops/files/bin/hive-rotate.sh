@@ -766,6 +766,26 @@ if [ "$ACTION" = watchdog ]; then
   exit 0
 fi
 
+# publish_usage: mirror the probe results into a ConfigMap the in-cluster
+# hive-console reads. openai and google headroom is ONLY readable by typing a
+# slash command into a live CLI pane (probe_openai / probe_google), which a
+# plain HTTP service has no way to do — so the console shows what this timer
+# last measured, alongside updated_at so a stale reading is visibly stale
+# rather than quietly wrong. Best-effort: never let a publish failure affect
+# rotation, which is the job that actually matters.
+publish_usage() {
+  local args=() p v
+  for p in deepseek anthropic openai google; do
+    v="${PCT[$p]}"
+    if [ "$v" = "-1" ]; then v="unknown"; else v="${v}% used"; fi
+    args+=("--from-literal=$p=$v ${NOTE[$p]}")
+  done
+  kubectl create configmap hive-provider-usage -n "$NS" \
+    "${args[@]}" "--from-literal=updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --dry-run=client -o yaml 2>/dev/null | kubectl apply -f - >/dev/null 2>&1 \
+    || echo "WARN: could not publish provider usage ConfigMap" >&2
+}
+
 if [ "$ACTION" = probe ]; then
   printf '%-11s %-9s %s\n' PROVIDER USED NOTE
   for p in deepseek anthropic openai google; do
@@ -774,8 +794,14 @@ if [ "$ACTION" = probe ]; then
   done
   in_peak_window && echo && echo "peak window ACTIVE (UTC $(date -u +%H:%M)); avoiding: $PEAK_PROVIDERS"
   deepseek_reserve_warning
+  publish_usage
   exit 0
 fi
+
+# The apply/plan paths have already gathered the same probe data, so publish
+# from here too — otherwise the console's google/openai rows would only ever
+# refresh on a manual `probe` run.
+publish_usage
 
 if [ "$ACTION" = restore ]; then
   # Undo path for an unattended timer: walk the rotation journal newest-first and
