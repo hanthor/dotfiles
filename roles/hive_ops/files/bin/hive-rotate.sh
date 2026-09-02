@@ -992,7 +992,24 @@ pane_classify() {
   if printf '%s' "$text" | grep -qiE '\[next\]|\[previous\]|terms of service & data use|accent: highlighted|enter toggl|choose your color scheme|do you trust the contents|i trust this folder|welcome to (the )?antigravity'; then
     echo wizard; return
   fi
-  if printf '%s' "$text" | grep -qiE 'login expired|run /login|not logged in|please run /login|please use /login|select login method|sign in to use'; then
+  # The OAuth PASTE-CODE screen is auth too, and omitting it was its own
+  # 43-hour-class bug. Once a pane advances past the login-method picker into
+  # the device flow it stops matching every pattern above, `pane_is_live` says
+  # yes (the CLI genuinely is running), and the agent classifies as READY —
+  # so the watchdog logs "liveness ok" forever at an agent that is doing
+  # nothing but waiting for a human to paste a code that will never come.
+  # Observed on hive-reef/ci-maintainer 2026-09-02.
+  # Patterns stay ANCHORED TO CLI CHROME, never to loose English. Two of these
+  # were tightened after a fixture of a HEALTHY pane — an agent reading an
+  # issue whose body said "sign in to use the dashboard" — classified as auth
+  # and would have been killed mid-work:
+  #   'sign in to use'  -> 'sign in to use copilot'   (Copilot's actual chrome;
+  #                        the generic form is already covered by /login above)
+  #   'oauth/authorize' -> dropped entirely            (a bare URL fragment that
+  #                        appears in any issue discussing OAuth)
+  # The two device-flow phrases kept below are full CLI sentences and do not
+  # occur in prose an agent would be reading.
+  if printf '%s' "$text" | grep -qiE 'login expired|run /login|not logged in|please run /login|please use /login|select login method|sign in to use copilot|paste code here if prompted|browser didn.t open\? use the url below'; then
     echo auth; return
   fi
   # shell prompt = the CLI died and the pane fell back to bash.
@@ -1144,7 +1161,24 @@ if [ "$ACTION" = watchdog ]; then
       fi
     fi
     u=$(as_agent "$a" 'id -u' 2>/dev/null)
-    as_agent "$a" "tmux -S /tmp/tmux-$u/hive-$a send-keys -t hive-$a C-c 2>/dev/null; sleep 1; tmux -S /tmp/tmux-$u/hive-$a send-keys -t hive-$a C-c 2>/dev/null" 2>/dev/null
+    # An AUTH pane is a MENU, and typing into a menu is how you make things
+    # worse. C-c does not reliably dismiss the login-method picker, and the
+    # /api/kick that follows sends prompt text plus Enter — which selects the
+    # highlighted entry ("1. Claude account with subscription") and advances
+    # the CLI into the OAuth device flow, where it waits forever for a human to
+    # paste a code. That converts a recoverable "needs login" into an
+    # unrecoverable one, and the heal then repeats it every cycle.
+    # Observed on hive-reef 2026-09-02 across several agents.
+    #
+    # So for auth panes, kill the session outright and let the manager relaunch
+    # the CLI from scratch — a fresh process re-reads the credential and, when
+    # the credential is valid, comes up logged in. No keystrokes are sent to a
+    # pane that might be a menu.
+    if [ "$state" = auth ]; then
+      as_agent "$a" "tmux -S /tmp/tmux-$u/hive-$a kill-session -t hive-$a 2>/dev/null" 2>/dev/null
+    else
+      as_agent "$a" "tmux -S /tmp/tmux-$u/hive-$a send-keys -t hive-$a C-c 2>/dev/null; sleep 1; tmux -S /tmp/tmux-$u/hive-$a send-keys -t hive-$a C-c 2>/dev/null" 2>/dev/null
+    fi
     sleep 2
     hive_api POST "/api/kick/$a" >/dev/null 2>&1 &
     echo "$(date +%s)" > "$lk"
