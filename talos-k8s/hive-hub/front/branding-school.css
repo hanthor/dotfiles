@@ -1,0 +1,122 @@
+/* TunaOS branding override for the hive dashboard.
+ *
+ * Served at /branding/custom.css by the operator-branding hook
+ * (kubestellar/hive#5690) and linked last in <head>, so these win the cascade
+ * without !important.
+ *
+ * TOKEN NAMES ARE READ FROM THE SHIPPED DOCUMENT, NOT GUESSED. An earlier
+ * version invented plausible names (--text-primary, --surface-1, …) and
+ * changed nothing at all. The dashboard's actual custom properties are --bg,
+ * --bg-soft, --surface, --panel, --panel-strong, --card-bg, --line,
+ * --line-strong, --border, --fg, --text, --muted, --accent plus a named colour
+ * ramp.
+ *
+ * BOTH THEMES ARE OVERRIDDEN, and that is load-bearing. `:root` carries the
+ * DARK palette and `body.light-mode` overrides it for light — so styling only
+ * `:root` is silently discarded whenever the operator is in light mode, which
+ * is exactly how the first attempt failed. Light mode gets its own aquatic
+ * palette rather than a dark one forced into it.
+ *
+ * Scoped to COLOUR TOKENS only. The dashboard is one embedded SPA whose markup
+ * changes between releases; restyling structure here would break on upgrade,
+ * whereas custom properties are the surface intended to be re-pointed.
+ */
+
+/* ── Dark: deep water ─────────────────────────────────────────────────── */
+:root {
+  --bg:            #04161f;
+  --bg-soft:       #07202b;
+  --surface:       #0a2430;
+  --panel:         #0a2430;
+  --panel-strong:  #0d2c3a;
+  --card-bg:       #0a2430;
+  --terminal-bg:   #020d13;
+
+  --line:          #12394a;
+  --line-strong:   #1b4d63;
+  --border:        #12394a;
+
+  --fg:            #e8f6f8;
+  --text:          #e8f6f8;
+  --muted:         #8fb3bd;
+  --terminal-fg:   #e8f6f8;
+  --terminal-muted:#8fb3bd;
+
+  --accent:        #2fb6c4;   /* tuna-fin cyan */
+  --oc-accent:     #2fb6c4;
+  --oc-accent-light:#7fd6df;
+  --cyan:          #2fb6c4;
+  --terminal-cyan: #2fb6c4;
+
+  /* Status stays distinct from the brand hue: a green that matches the accent
+   * stops reading as "healthy" and starts reading as "branded". */
+  --green:         #3fbf8f;
+  --green-bg:      #0c2f26;
+  --green-border:  #1d5a47;
+  --red:           #f2795b;
+  --red-bg:        #33150f;
+  --red-border:    #6b2b1d;
+  --orange:        #e0a33a;
+  --amber:         #e0a33a;
+  --yellow:        #e0c23a;
+  --blue:          #4aa8d8;
+  --indigo:        #6f8fd8;
+  --purple:        #a98fd8;
+}
+
+/* ── Light: shallow water ─────────────────────────────────────────────── */
+body.light-mode {
+  --bg:            #f2f9fa;
+  --bg-soft:       #ffffff;
+  --surface:       #ffffff;
+  --panel:         #ffffff;
+  --panel-strong:  #e7f2f5;
+  --card-bg:       #ffffff;
+
+  --line:          #cbdfe5;
+  --line-strong:   #a8c9d2;
+  --border:        #cbdfe5;
+
+  --fg:            #06232e;
+  --text:          #06232e;
+  --muted:         #4d7683;
+
+  /* Darkened from the dark-mode cyan so it still clears contrast on white:
+   * #2fb6c4 on #ffffff is only ~2.2:1 and fails as text. */
+  --accent:        #10707c;
+  --oc-accent:     #10707c;
+  --oc-accent-light:#2fb6c4;
+  --cyan:          #10707c;
+
+  --green:         #1d7a5c;
+  --green-bg:      #e4f5ee;
+  --green-border:  #a9dcc9;
+  --red:           #c1442a;
+  --red-bg:        #fbe9e4;
+  --red-border:    #edb9a9;
+  --orange:        #a9741a;
+  --amber:         #a9741a;
+  --yellow:        #8a7413;
+  --blue:          #1f6f96;
+}
+
+/* ── school identity ────────────────────────────────────────────────── */
+/* Replaces the upstream bee/HIVE wordmark. See make-branding.py for why this
+   is done with pseudo-elements and what it deliberately cannot reach. */
+.oc-logo-icon { font-size: 0 !important; }
+.oc-logo-icon::after { content: "🐟"; font-size: 26px; line-height: 1; }
+
+.oc-logo-title { font-size: 0 !important; }
+.oc-logo-title::after {
+  content: "SCHOOL";
+  font-size: 20px; font-weight: 800; letter-spacing: .06em; color: var(--accent);
+}
+
+.oc-logo-sub { font-size: 0 !important; }
+.oc-logo-sub::after {
+  content: "OPERATING SYSTEM";
+  font-size: 10px; font-weight: 700; letter-spacing: .11em; color: var(--muted);
+}
+
+h1 .bee { font-size: 0 !important; }
+h1 .bee::after { content: "🐟"; font-size: 1rem; line-height: 1; }
