@@ -64,7 +64,7 @@ PEAK_PROVIDERS="${HIVE_PEAK_PROVIDERS:-deepseek}"
 PEAK_WINDOWS="${HIVE_PEAK_WINDOWS:-01:00-04:00,06:00-10:00}"
 
 ACTION="${1:-plan}"
-case "$ACTION" in probe|plan|apply|restore|watchdog) ;; *) echo "usage: $0 probe|plan|apply|restore|watchdog" >&2; exit 2;; esac
+case "$ACTION" in probe|plan|apply|restore|watchdog|contributors) ;; *) echo "usage: $0 probe|plan|apply|restore|watchdog|contributors" >&2; exit 2;; esac
 [ "${HIVE_ROTATE_DRYRUN:-0}" = 1 ] && [ "$ACTION" = apply ] && ACTION=plan
 
 mkdir -p "$STATE_DIR"
@@ -741,6 +741,74 @@ deepseek_reserve_warning() {
 # any action that reads probes.
 gather
 
+# ── Contributor workers ────────────────────────────────────────────────
+# The k8s contributor Deployments (talos-k8s/hive-contributors) each pin ONE
+# backend via AGENT_BACKEND, and nothing was reconciling them against provider
+# headroom. A worker whose provider is exhausted does not fail quietly: it
+# accepts a task from the hub, cannot run it, and hands it back — burning a hub
+# slot and the task's retry budget on every cycle.
+#
+# Same probe, same thresholds, same decision engine as the agents above — the
+# only difference is the lever. There is no per-worker model to move, so the
+# action is replica count: park at 0 while the provider is dry, restore to 1
+# the moment it is positively measured healthy again. Scaling to 0 keeps the
+# PVC, the credentials and the contributor identity intact, so coming back is
+# just a scale-up, not a re-registration.
+CONTRIB_NS="${HIVE_CONTRIB_NS:-hive-contributors}"
+
+# deployment -> the provider its pinned backend actually resolves to. Read from
+# the live Deployment rather than hardcoded, because the mapping is not obvious:
+# pi-codex-contributor runs AGENT_BACKEND=pi with AGENT_MODEL=openai-codex/...,
+# so it consumes OPENAI quota, not deepseek. provider_of must see BOTH fields
+# or a `pi` shell is misread as deepseek and parked against the wrong pool.
+contrib_provider() {
+  local d="$1" b m
+  b=$(kubectl get deploy -n "$CONTRIB_NS" "$d" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="AGENT_BACKEND")].value}' 2>/dev/null)
+  m=$(kubectl get deploy -n "$CONTRIB_NS" "$d" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="AGENT_MODEL")].value}' 2>/dev/null)
+  [ -z "$b" ] && { echo unknown; return; }
+  provider_of "$b" "$m"
+}
+
+reconcile_contributors() {
+  local ds d p want have
+  ds=$(kubectl get deploy -n "$CONTRIB_NS" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
+  [ -z "$ds" ] && { echo "no contributor deployments in $CONTRIB_NS"; return 0; }
+  for d in $ds; do
+    p=$(contrib_provider "$d")
+    have=$(kubectl get deploy -n "$CONTRIB_NS" "$d" -o jsonpath='{.spec.replicas}' 2>/dev/null)
+    have=${have:-0}
+    if provider_exhausted "$p"; then
+      want=0
+    elif provider_recovered "$p"; then
+      want=1
+    else
+      # Unknown headroom: leave the worker exactly as it is. Scaling up on an
+      # unmeasured provider re-creates the task-thrash this exists to stop, and
+      # scaling down on one would park a worker that may be perfectly fine.
+      printf '%-24s %-9s %s (unmeasured — left at %s)\n' "$d" "$p" "${NOTE[$p]:-}" "$have"
+      continue
+    fi
+    if [ "$have" = "$want" ]; then
+      printf '%-24s %-9s ok (replicas=%s)\n' "$d" "$p" "$have"
+      continue
+    fi
+    if [ "$want" = 0 ]; then
+      printf '%-24s %-9s EXHAUSTED -> parking (replicas %s->0)\n' "$d" "$p" "$have"
+    else
+      printf '%-24s %-9s recovered -> restoring (replicas %s->1)\n' "$d" "$p" "$have"
+    fi
+    [ "$ACTION" = plan ] && continue
+    kubectl scale deploy -n "$CONTRIB_NS" "$d" --replicas="$want" >/dev/null 2>&1 \
+      || printf '    ! scale failed for %s\n' "$d"
+  done
+}
+
+if [ "$ACTION" = contributors ]; then
+  printf '%-24s %-9s %s\n' DEPLOYMENT PROVIDER STATE
+  reconcile_contributors
+  exit 0
+fi
+
 # pane_classify <agent>: ready|auth|shell|empty — the watchdog's liveness
 # probe, a k8s-livenessProbe analog. The dashboard's `state=running` is a
 # config echo, not an observation; the pane is the truth (see RFC #4665).
@@ -994,6 +1062,45 @@ if [ -s "$STATE_DIR/stranded" ]; then
   printf '%s' "$keep" > "$STATE_DIR/stranded"
 fi
 
+# SAFETY NET: resume any agent that is paused while the provider it is sitting
+# on is positively measured HEALTHY.
+#
+# The journal above is the normal recovery path, but it is a local file and the
+# pause lives in the cluster — so the two can desynchronise, and when they do
+# the agent is parked forever with nothing left that knows to free it. Ways
+# that happened here: the journal was truncated during an incident; the pause
+# was applied by a different host or by hand; the pod was rebuilt. The result
+# is identical and silent — a full fleet idle while every provider is healthy,
+# which is exactly the "agents die and never come back" failure this exists to
+# prevent.
+#
+# Deliberately conservative, because it cannot tell an operator's pause from a
+# rotation's:
+#   - requires a POSITIVE below-threshold reading (never an unknown probe),
+#   - requires the agent's current rung to be a legitimate member of its tier,
+#     so a half-placed or mismatched agent is left alone for the repair path,
+#   - skips login-detector pauses, which mean the BACKEND is broken and would
+#     just re-pause on resume.
+# Set HIVE_ROTATE_AUTORESUME=0 to hold paused agents down (e.g. while
+# deliberately keeping the fleet quiet).
+if [ "${HIVE_ROTATE_AUTORESUME:-1}" = 1 ]; then
+  for a in $(agent_names); do
+    [ "$(agent_field "$a" paused)" = true ] || continue
+    [ "$(agent_field "$a" pausedTrigger)" = login-detector ] && continue
+    tier=$(tier_of "$a"); [ -z "$tier" ] && continue
+    curb=$(agent_field "$a" cli); curm=$(agent_field "$a" govModel)
+    curp=$(provider_of "$curb" "$curm")
+    provider_recovered "$curp" || continue
+    rung_in_tier "$tier" "$curb" "$curm" || continue
+    printf '%-14s %-9s paused on a healthy provider -> resuming\n' "$a" "$curp"
+    [ "$ACTION" = plan ] && continue
+    rs=$(hive_api POST "/api/resume/$a" | jq -r '.status // .error')
+    [ "$rs" = "resumed" ] || printf '    ! resume failed: %s\n' "$rs"
+    # Drop any stale journal row so the normal path stops waiting on it too.
+    [ -s "$STATE_DIR/stranded" ] && sed -i "/^$a|/d" "$STATE_DIR/stranded"
+  done
+fi
+
 changed=0
 for a in $(agent_names); do
   tier=$(tier_of "$a"); [ -z "$tier" ] && continue
@@ -1171,6 +1278,13 @@ if [ "${HIVE_ROTATE_CANARIES:-1}" = 1 ]; then
     [ "$md" = "model_set" ] || echo "    ! canary model set failed: $md"
   done
 fi
+
+# Contributors reconcile on the SAME probe as the agents, in the same run, so
+# there is one measurement and one decision per tick rather than two views of
+# headroom that can disagree.
+echo
+echo "contributors:"
+reconcile_contributors
 
 [ "$ACTION" = plan ] && [ "$changed" -gt 0 ] && echo && echo "$changed change(s) — run '$0 apply' to perform them"
 [ "$changed" -eq 0 ] && echo && echo "fleet already on the best available rung"
