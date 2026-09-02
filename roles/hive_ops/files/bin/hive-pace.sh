@@ -426,43 +426,80 @@ publish "$VERDICTS"
 # error this script only partly owns (the contributors are outside its control)
 # is how a pacer turns into an oscillator.
 moved=0
+declare -A MOVED_ON    # provider -> already actuated this tick
+declare -A SEATED      # provider -> agents currently running on it
+declare -A DEMOTABLE   # provider -> agents that still have a cheaper rung
+declare -A RESTORABLE  # provider -> agents this pacer demoted and could restore
+
 while IFS=$'\t' read -r ns agent backend model paused; do
   [ -z "${agent:-}" ] && continue
   [ "$paused" = "true" ] && continue
   prov=$(provider_of_model "$model")
   [ -z "$prov" ] && continue
+  SEATED[$prov]=$(( ${SEATED[$prov]:-0} + 1 ))
+
+  cheap=$(rung_down "$model")
+  [ -n "$cheap" ] && DEMOTABLE[$prov]=$(( ${DEMOTABLE[$prov]:-0} + 1 ))
+  demoted_line=$(grep -F "$ns/$agent|" "$DEMOTED" 2>/dev/null | tail -1)
+  [ -n "$demoted_line" ] && RESTORABLE[$prov]=$(( ${RESTORABLE[$prov]:-0} + 1 ))
+
   verdict=$(printf '%s' "$VERDICTS" | jq -r --arg p "$prov" '.[$p].verdict // "no-data"')
+  # One notch per tick PER PROVIDER. Keep scanning the rest of the fleet so the
+  # counts above stay complete and so a second hot provider still gets its own
+  # notch — an earlier version `break`ed out of the whole loop on the first
+  # change, which silently meant reef was never actuated while school still had
+  # a demotable agent.
+  [ -n "${MOVED_ON[$prov]:-}" ] && continue
 
   case "$verdict" in
     hot)
-      cheap=$(rung_down "$model")
       [ -z "$cheap" ] && continue            # already on the cheap rung
       if set_model "$ns" "$agent" "$backend" "$cheap" >/dev/null; then
         echo "$ns/$agent|$backend|$model" >> "$DEMOTED"
         echo "  demote  $ns/$agent  $model -> $cheap  (${prov} hot)"
-        moved=$((moved+1))
+        MOVED_ON[$prov]=1; moved=$((moved+1))
       fi
       ;;
     cold)
       # Restore ONLY what this script demoted. An agent the operator or the
       # rotator placed on the cheap rung was placed there for a reason the
       # pacer cannot see, and promoting it would silently overrule that.
-      line=$(grep -F "$ns/$agent|" "$DEMOTED" 2>/dev/null | tail -1)
-      [ -z "$line" ] && continue
-      orig_backend=$(printf '%s' "$line" | cut -d'|' -f2)
-      orig_model=$(printf '%s' "$line" | cut -d'|' -f3)
+      [ -z "$demoted_line" ] && continue
+      orig_backend=$(printf '%s' "$demoted_line" | cut -d'|' -f2)
+      orig_model=$(printf '%s' "$demoted_line" | cut -d'|' -f3)
       [ "$orig_model" = "$model" ] && continue
       if set_model "$ns" "$agent" "$orig_backend" "$orig_model" >/dev/null; then
         grep -vF "$ns/$agent|" "$DEMOTED" > "$DEMOTED.tmp" 2>/dev/null && mv "$DEMOTED.tmp" "$DEMOTED"
         echo "  restore $ns/$agent  $model -> $orig_model  (${prov} cold)"
-        moved=$((moved+1))
+        MOVED_ON[$prov]=1; moved=$((moved+1))
       fi
       ;;
   esac
-  # One notch per tick, fleet-wide: stop after the first change on each
-  # provider rather than demoting every agent at once.
-  [ "$moved" -ge 1 ] && break
 done <<< "$FLEET"
+
+# ── Saturation ──────────────────────────────────────────────────────────
+# The control range is FINITE and small: only agents on a provider's expensive
+# rung can be demoted, and there are ~3 per hive. At one notch per tick a
+# sustained overburn exhausts every notch in about two hours, after which the
+# pacer reports `hot` forever while changing nothing — and "hot, 0 changes" is
+# indistinguishable from "hot, nothing needed" unless it is said out loud.
+#
+# This is the line that means INTERVENE: the loop is no longer able to correct,
+# and the remaining levers (cadence, pausing agents, accepting the burn) are
+# outside this script.
+for p in anthropic google openai deepseek; do
+  v=$(printf '%s' "$VERDICTS" | jq -r --arg p "$p" '.[$p].verdict // "no-data"')
+  [ "$v" = hot ] || continue
+  [ -n "${MOVED_ON[$p]:-}" ] && continue
+  # Nothing running on it means nothing to correct: a `hot` verdict with zero
+  # seated agents is a stale rate from before the fleet moved off, not a
+  # saturated actuator. Saying SATURATED there sends the operator after a
+  # problem that no longer exists.
+  [ "${SEATED[$p]:-0}" -gt 0 ] || continue
+  echo "  SATURATED: $p is hot but no notch was available" \
+       "(${DEMOTABLE[$p]:-0} of ${SEATED[$p]:-0} seated agents demotable)" \
+       "— model-rung pacing is exhausted; needs cadence or capacity"
+done
 
 echo
 echo "pace: $moved change(s)"
