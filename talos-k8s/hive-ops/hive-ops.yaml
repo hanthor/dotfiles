@@ -18,6 +18,12 @@
 # also the more correct identity (the App, not somebody's personal keyring
 # token). `git` IS present, so hive-fork-drift.sh moved unchanged.
 #
+# Every job's POD carries the same app.kubernetes.io/{name,component} labels as
+# its CronJob. Labels on a CronJob do NOT propagate to the pods it creates, so
+# without the pod-template copy `kubectl logs -n hive -l
+# app.kubernetes.io/component=rotate` matches nothing — which is exactly what
+# every log command in the docs was silently doing until 2026-09-02.
+#
 # Deploy with talos-k8s/hive-ops/deploy.sh — it publishes the scripts as a
 # ConfigMap from their canonical home in roles/hive_ops/files/bin/ so the code
 # stays lintable in one place rather than being duplicated into YAML.
@@ -174,6 +180,8 @@ spec:
       backoffLimit: 0
       activeDeadlineSeconds: 600
       template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: watchdog}
         spec:
           restartPolicy: Never
           serviceAccountName: hive-ops
@@ -235,6 +243,8 @@ spec:
       # unhurried); give it real headroom rather than killing a healthy run.
       activeDeadlineSeconds: 900
       template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: rotate}
         spec:
           restartPolicy: Never
           serviceAccountName: hive-ops
@@ -306,6 +316,8 @@ spec:
       backoffLimit: 0
       activeDeadlineSeconds: 600
       template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: pace}
         spec:
           restartPolicy: Never
           serviceAccountName: hive-ops
@@ -361,6 +373,8 @@ spec:
       backoffLimit: 0
       activeDeadlineSeconds: 600
       template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: peak-pause}
         spec:
           restartPolicy: Never
           serviceAccountName: hive-ops
@@ -415,6 +429,8 @@ spec:
       backoffLimit: 0
       activeDeadlineSeconds: 600
       template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: peak-resume}
         spec:
           restartPolicy: Never
           serviceAccountName: hive-ops
@@ -469,6 +485,8 @@ spec:
       backoffLimit: 0
       activeDeadlineSeconds: 600
       template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: repo-sync}
         spec:
           restartPolicy: Never
           serviceAccountName: hive-ops
@@ -523,6 +541,8 @@ spec:
       backoffLimit: 0
       activeDeadlineSeconds: 2400
       template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: metrics}
         spec:
           restartPolicy: Never
           serviceAccountName: hive-ops
@@ -577,6 +597,8 @@ spec:
       backoffLimit: 0
       activeDeadlineSeconds: 900
       template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: fork-drift}
         spec:
           restartPolicy: Never
           serviceAccountName: hive-ops
@@ -631,6 +653,8 @@ spec:
       backoffLimit: 0
       activeDeadlineSeconds: 600
       template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: tiers}
         spec:
           restartPolicy: Never
           serviceAccountName: hive-ops
