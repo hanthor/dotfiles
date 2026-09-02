@@ -16,6 +16,7 @@ hive_ops_timers:
   - hive-peak-resume
   - hive-repo-sync
   - hive-fork-drift
+  - hive-metrics
 # pi-peak-start/stop were removed 2026-09-02. They ran
 # `systemctl --user start|stop pi.service` to dodge DeepSeek peak pricing, but
 # the pi contributor moved to Kubernetes (talos-k8s/hive-contributors,

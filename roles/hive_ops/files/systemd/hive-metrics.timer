@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly refresh of the console's PR/issue activity series
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

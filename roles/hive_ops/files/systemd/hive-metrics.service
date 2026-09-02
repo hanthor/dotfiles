@@ -1,0 +1,10 @@
+[Unit]
+Description=Collect the hive bot's daily PR/issue flow for the console chart
+Documentation=https://hive.tunaos.org/console
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/hive-metrics.sh collect
+# 4 GitHub search requests per day of history, paced under the ~30/min search
+# rate limit, so a 14-day collection takes a couple of minutes.
+TimeoutStartSec=900

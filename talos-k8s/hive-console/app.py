@@ -53,6 +53,7 @@ CONTRIB_NS = os.environ.get("CONTRIB_NS", "hive-contributors")
 # Providers whose headroom cannot be read over plain HTTP (their CLI is the
 # only probe) are filled in by hive-rotate.sh publishing this ConfigMap.
 USAGE_CM = os.environ.get("USAGE_CONFIGMAP", "hive-provider-usage")
+SERIES_CM = os.environ.get("SERIES_CONFIGMAP", "hive-activity-series")
 
 SESSIONS = os.path.join(HIVE_DATA, "dashboard-sessions.json")
 CLAUDE_CREDS = os.path.join(HIVE_DATA, "home/.claude/.credentials.json")
@@ -185,6 +186,13 @@ def deepseek_usage():
     return {"available": raw.get("is_available"), "balance": bal}
 
 
+def activity_series():
+    """Daily PR/issue flow, published by hive-metrics.sh (see that script for
+    why the collection is a timer and not a render-time query)."""
+    cm = k8s(f"/api/v1/namespaces/hive/configmaps/{SERIES_CM}")
+    return json.loads((cm.get("data") or {}).get("series.json") or "{}")
+
+
 def published_usage():
     """google/openai headroom, published by hive-rotate.sh (their only probe is
     a CLI pane, which this pod has no way to drive)."""
@@ -242,6 +250,15 @@ select,button{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-r
 button{cursor:pointer}button:hover{border-color:#58a6ff}
 .act{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
 footer{padding:14px 24px;color:#8b949e;font-size:11px;border-top:1px solid #21262d}
+.charts{display:flex;flex-wrap:wrap;gap:8px;padding:14px 16px}
+.chart{margin:0;flex:1 1 380px;min-width:0}
+.chart svg{width:100%;height:auto;display:block}
+figcaption{color:#c9d1d9;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+.key{color:#8b949e;font-size:11px}
+.key i{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 4px 0 10px;vertical-align:middle}
+details{border-top:1px solid #21262d}
+summary{padding:9px 16px;cursor:pointer;color:#8b949e;font-size:12px}
+summary:hover{color:#c9d1d9}
 """
 
 BACKENDS = ["claude", "agy", "codex", "pi", "copilot"]
@@ -349,6 +366,108 @@ def render_usage(ant, deep, pub):
     )
 
 
+# Categorical slots 1 and 3 from the reference palette, dark-mode steps.
+# Validated for this surface rather than eyeballed: adjacent-pair CVD ΔE 19.6
+# (deutan), normal-vision ΔE 20.9, contrast >= 3:1 — all checks pass.
+# The SAME two colours mean the same thing in both charts (opened vs resolved),
+# so identity survives the jump between them.
+C_OPEN = "#3987e5"
+C_DONE = "#199e70"
+
+
+def sparkline(days, opened, done, label_open, label_done, title):
+    """One small multiple: opened vs resolved per day.
+
+    Two charts of two lines rather than one chart of four: PRs and issues are
+    separate flows, and four overlapping lines is where a reader starts
+    guessing. Both share one y-scale per chart because both series are the same
+    unit (items/day) — never a second axis.
+    """
+    if not days or not opened or not done:
+        return f'<div class="err">no data for {e(title)}</div>'
+    n = len(days)
+    hi = max(max(opened), max(done), 1)
+    W, H = 460, 150
+    PADL, PADR, PADT, PADB = 34, 10, 14, 22
+    iw, ih = W - PADL - PADR, H - PADT - PADB
+
+    def pt(i, v):
+        x = PADL + (iw * i / max(n - 1, 1))
+        y = PADT + ih - (ih * v / hi)
+        return x, y
+
+    def path(vals):
+        return " ".join(
+            ("M" if i == 0 else "L") + f"{pt(i, v)[0]:.1f},{pt(i, v)[1]:.1f}"
+            for i, v in enumerate(vals)
+        )
+
+    # Recessive gridlines + a y-axis that shows only 0 and the max: a dense
+    # tick ladder competes with the data at this size.
+    grid = ""
+    for frac in (0, 0.5, 1):
+        y = PADT + ih - ih * frac
+        grid += f'<line x1="{PADL}" y1="{y:.1f}" x2="{W-PADR}" y2="{y:.1f}" stroke="#21262d" stroke-width="1"/>'
+        grid += (f'<text x="{PADL-6}" y="{y+3.5:.1f}" fill="#8b949e" font-size="9" '
+                 f'text-anchor="end">{int(hi*frac)}</text>')
+
+    # Label first and last day only — one date per point would collide.
+    xl = (f'<text x="{PADL}" y="{H-6}" fill="#8b949e" font-size="9">{e(days[0][5:])}</text>'
+          f'<text x="{W-PADR}" y="{H-6}" fill="#8b949e" font-size="9" text-anchor="end">{e(days[-1][5:])}</text>')
+
+    # Direct-label the final value of each line: with two series this replaces
+    # hunting between a legend swatch and a line.
+    ends = ""
+    for vals, col in ((opened, C_OPEN), (done, C_DONE)):
+        x, y = pt(n - 1, vals[-1])
+        ends += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{col}" stroke="#161b22" stroke-width="2"/>'
+
+    return f"""<figure class="chart">
+<figcaption>{e(title)}
+  <span class="key"><i style="background:{C_OPEN}"></i>{e(label_open)}
+        <i style="background:{C_DONE}"></i>{e(label_done)}</span>
+</figcaption>
+<svg viewBox="0 0 {W} {H}" role="img" aria-label="{e(title)}: {e(label_open)} and {e(label_done)} per day">
+{grid}{xl}
+<path d="{path(opened)}" fill="none" stroke="{C_OPEN}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="{path(done)}" fill="none" stroke="{C_DONE}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+{ends}
+</svg></figure>"""
+
+
+def render_activity(series):
+    if not series["ok"]:
+        return sec_err("Activity", series)
+    d = series["data"]
+    days = d.get("days") or []
+    if not days:
+        return ('<section><h2>Activity</h2><div class="err">'
+                'no series published yet — run <code>hive-metrics.sh collect</code>'
+                '</div></section>')
+    charts = (
+        sparkline(days, d.get("pr_opened", []), d.get("pr_merged", []),
+                  "opened", "merged", "Pull requests / day")
+        + sparkline(days, d.get("issues_opened", []), d.get("issues_closed", []),
+                    "opened", "closed", "Issues / day")
+    )
+    tot = (f'<span class="dim">{len(days)}d · PRs {sum(d.get("pr_opened",[]))} opened / '
+           f'{sum(d.get("pr_merged",[]))} merged · issues {sum(d.get("issues_opened",[]))} opened / '
+           f'{sum(d.get("issues_closed",[]))} closed · collected {age(d.get("updated_at"))}</span>')
+    # A table view alongside the charts, so the numbers are readable without
+    # relying on colour or on reading a line by eye.
+    rows = "".join(
+        f'<tr><td class="mono">{e(dd)}</td><td class="mono">{o}</td><td class="mono">{m}</td>'
+        f'<td class="mono">{io}</td><td class="mono">{ic}</td></tr>'
+        for dd, o, m, io, ic in zip(days, d.get("pr_opened", []), d.get("pr_merged", []),
+                                    d.get("issues_opened", []), d.get("issues_closed", []))
+    )
+    return f"""<section><h2>Activity — {e(d.get('org',''))}{tot}</h2>
+<div class="charts">{charts}</div>
+<details><summary>Table view</summary><div class="wrap"><table>
+<tr><th>day</th><th>PRs opened</th><th>PRs merged</th><th>issues opened</th><th>issues closed</th></tr>
+{rows}</table></div></details></section>"""
+
+
 def render_agents(st):
     if not st["ok"]:
         return sec_err("Hive agents", st)
@@ -451,6 +570,7 @@ def page(session, flash=""):
     st = cached("status", 15, lambda: hive_get("/api/status"))
     fleet = cached("fleet", 20, lambda: hive_get("/api/contribute/fleet"))
     pods = cached("pods", 20, contributor_pods)
+    series = cached("series", 300, activity_series)
 
     who = e(session.get("Username") or session.get("User") or "owner")
     fl = f'<div class="err" style="color:#3fb950">{e(flash)}</div>' if flash else ""
@@ -462,6 +582,7 @@ def page(session, flash=""):
 <span class="sub" style="margin-left:auto">{_now().strftime('%Y-%m-%d %H:%M:%S UTC')} · <a href="{PREFIX}/">refresh</a></span>
 </header>{fl}<main>
 {render_usage(ant, deep, pub)}
+{render_activity(series)}
 {render_agents(st)}
 {render_contributors(pods, fleet)}
 </main>
