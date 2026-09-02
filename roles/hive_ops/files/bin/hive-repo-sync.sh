@@ -224,6 +224,20 @@ while IFS= read -r r; do
   printf '%s\n' "$MANAGED_LOWER" | grep -qxF "$rl" && continue
   new="$new$r"$'\n'
 done <<< "$ORG_REPOS"
+
+# SHARED repos are deliberate, not drift. `hive` is managed by BOTH hives so
+# each fleet can file feedback on the tool it runs on — the OS hive and the app
+# hive hit different parts of it and notice different things. The router must
+# not "discover" a shared repo as new for the hive that lacks it and re-route
+# it away.
+#
+# The cost is real and bounded: hive's duplicate-PR claim ledger is persisted
+# PER HIVE, so it cannot dedupe across hives and both fleets can open
+# near-identical PRs. reef sits at ACMM L5, where every PR is held behind a
+# `hold` label, so a duplicate is a review-queue annoyance rather than two
+# competing auto-merges. Adding more shared repos without that asymmetry would
+# not be safe.
+SHARED="${HIVE_REPO_SYNC_SHARED:-hive}"
 new=$(printf '%s' "$new" | grep -v '^$' || true)
 
 if [ -z "$new" ]; then

@@ -391,17 +391,44 @@ probe_anthropic() {
     -1\ no-token) echo "100 no-credential (needs an interactive /login)"; return ;;
     -1*) echo "$out"; return ;;
   esac
-  pct=$(printf '%s' "$out" | jq -r 'try ([.limits[]?.percent // 0] | max) // empty' 2>/dev/null)
-  r=$(printf '%s' "$out" | jq -r 'try ([.limits[]? | select(.percent != null)] | max_by(.percent) | .resets_at) // empty' 2>/dev/null)
+  # Only UNSCOPED limits describe the provider. The usage API returns three
+  # kinds: `session`, `weekly_all`, and `weekly_scoped` — and a weekly_scoped
+  # entry carries `scope.model`, meaning it caps ONE model class, not the
+  # account.
+  #
+  # Taking the max across all three treated an Opus-class cap as total
+  # exhaustion and parked the entire fleet while Sonnet was perfectly usable.
+  # Observed 2026-09-02: weekly_scoped{model:"Fable"} at 100% while weekly_all
+  # was 63% and session 15% — and `claude -p --model claude-sonnet-5` answered
+  # normally throughout.
+  pct=$(printf '%s' "$out" | jq -r 'try ([.limits[]? | select(.scope == null) | .percent // 0] | max) // empty' 2>/dev/null)
+  r=$(printf '%s' "$out" | jq -r 'try ([.limits[]? | select(.scope == null and .percent != null)] | max_by(.percent) | .resets_at) // empty' 2>/dev/null)
+  # Surface any model-scoped exhaustion in the note so an operator can see WHY
+  # a specific rung is failing even though the provider has headroom.
+  capped=$(printf '%s' "$out" | jq -r 'try ([.limits[]? | select(.scope != null and .percent >= 100) | .scope.model.display_name] | join(",")) // empty' 2>/dev/null)
   if [ -z "$pct" ]; then
     echo "-1 unparsed"   # 429 rate-limit or an error body: fail-open, never act
   else
-    printf '%s resets=%s\n' "$pct" "$r"
+    printf '%s resets=%s%s\n' "$pct" "$r" "${capped:+ capped-models=$capped}"
   fi
 }
 
 probe_openai() {
-  local a text; a=$(first_agent_on openai); [ -z "$a" ] && { echo "-1 no-agent"; return; }
+  local a text
+  a=$(first_agent_on openai)
+  # first_agent_on skips PAUSED agents, but a paused agent's CLI is still
+  # running — the governor just stops kicking it. When every codex agent is
+  # parked (because codex is dry) that made codex unmeasurable, "unknown" is
+  # never evidence of exhaustion, stickiness kept the whole fleet on it, and
+  # nothing could move. The pane is readable regardless of pause state, so fall
+  # back to any agent placed on openai with a live pane.
+  if [ -z "$a" ]; then
+    for cand in $(agent_names); do
+      [ "$(provider_of "$(agent_field "$cand" cli)" "$(agent_field "$cand" govModel)")" = openai ] || continue
+      if pane_is_live "$cand"; then a="$cand"; break; fi
+    done
+  fi
+  [ -z "$a" ] && { echo "-1 no-agent"; return; }
   # A HARD account cap is announced in the pane itself, not in /status:
   #   "■ You've hit your usage limit. ... or try again at Sep 6th, 2026 10:35 PM."
   # Read that FIRST. Without it the /status probe returns unparsed -> "unknown",
@@ -496,6 +523,16 @@ probe_google() {
       [ "$(agent_field "$candidate" paused)" = true ] && continue
       if pane_is_live "$candidate"; then a="$candidate"; break; fi
     done
+  fi
+  # LAST RESORT: any agent user at all, paused or not, live pane or not.
+  # `agy --print /usage` is HEADLESS — it never touches the tmux pane, so the
+  # pane checks above are irrelevant to whether it can answer. Requiring an
+  # unpaused agent created a deadlock: once every agent was parked because
+  # google was dry, google became unmeasurable, "unknown" is never treated as
+  # recovery, and nothing could ever unpark. We only need a uid with the shared
+  # $HOME to run the CLI as.
+  if [ -z "$a" ]; then
+    a=$(agent_names | head -1)
   fi
   [ -z "$a" ] && { echo "-1 no-agent"; return; }
   out=$(as_agent "$a" "HOME=/data/home agy --print '/usage' --output-format text")
