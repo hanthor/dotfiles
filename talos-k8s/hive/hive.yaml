@@ -23,6 +23,8 @@ metadata:
   labels:
     app.kubernetes.io/name: hive
     app.kubernetes.io/part-of: hive
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -254,7 +256,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
   storageClassName: local-path
 ---
 apiVersion: apps/v1
@@ -279,65 +281,66 @@ spec:
         app.kubernetes.io/component: controller
     spec:
       nodeSelector:
-        kubernetes.io/hostname: telengana
+        workload-role: hive
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
       imagePullSecrets:
         - name: ghcr-auth
+      securityContext:
+        fsGroup: 1002
       containers:
         - name: hive
-          image: ghcr.io/hanthor/hive:latest
+          image: ghcr.io/kubestellar/hive:stable
           imagePullPolicy: Always
           args:
-            - "-c"
-            - |
-              # Fix goose state directory permissions for agent UIDs.
-              # The PVC mount overrides image permissions, so fix at runtime.
-              #
-              # NOTE: hive-fixed binary override is DISABLED because our fork
-              # now has pi backend built-in (3 custom commits on top of upstream
-              # v2). The old hive-fixed binary on the PVC predates the upstream
-              # rebase and would overwrite new features (bead synth, graph store,
-              # caveman_mode, ACMM eval, etc.).
-              # Re-enable only if pi backend stops working.
-              # cp /data/hive-fixed /usr/local/bin/hive 2>/dev/null && \
-              #   echo "[init] using pi-fixed hive binary" || true
-
-              mkdir -p /data/home/.local/state/goose /data/home/.config/goose
-              chmod -R 777 /data/home/.local /data/home/.config /data/home/.pi
-
-              # Setgid on log dirs so new subdirs inherit node group + group-writable.
-              # Goose agents share group 1000 (node) but create dirs with 0755 by default.
-              chmod g+s /data/home/.local/state/goose/logs/cli 2>/dev/null || true
-
-              # Agents inherit umask 000 from the hive process so files/dirs are world-writable.
-              umask 000
-              exec /usr/local/bin/entrypoint.sh --config /etc/hive/hive.yaml
-          command:
-            - /bin/sh
-          stdin: true
-          tty: true
+            - "--config"
+            - "/etc/hive/hive.yaml"
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_ADMIN
+                - SETUID
+                - SETGID
+                - SETPCAP
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - FSETID
           ports:
             - name: dashboard
-              containerPort: 3001
-              protocol: TCP
-            - name: api
               containerPort: 3002
               protocol: TCP
-            - name: ttyd
-              containerPort: 7681
-              protocol: TCP
           env:
-            # DeepSeek API key for goose
+            # Dashboard token for proxy auth
+            - name: HIVE_DASHBOARD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hive-secrets
+                  key: HIVE_DASHBOARD_TOKEN
+                  optional: true
+            # DeepSeek API key for agents
             - name: DEEPSEEK_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: hive-secrets
                   key: DEEPSEEK_API_KEY
-            # Goose provider (pre-seeded in image, re-export for safety)
-            - name: GOOSE_PROVIDER
-              value: custom_deepseek
-            - name: GOOSE_MODEL
-              value: deepseek-v4-pro
             # GitHub App auth
+            # Point this spoke at the tuna-os hub and authenticate its
+            # heartbeats. Heartbeats to hive.kubestellar.io return 401 by
+            # design (unauthenticated self-host registration was removed
+            # upstream, #1077); with our own hub we ARE the operator that
+            # issues the secret, so registration works.
+            - name: HIVE_HUB_URL
+              value: https://hub.tunaos.org
+            - name: HIVE_HUB_SECRET
+              valueFrom:
+                secretKeyRef: {name: hive-secrets, key: HIVE_HUB_SECRET, optional: true}
             - name: GH_APP_ID
               value: "3942065"
             - name: GH_APP_INSTALLATION_ID
@@ -360,31 +363,26 @@ spec:
             - name: secrets
               mountPath: /secrets
               readOnly: true
-          livenessProbe:
+          startupProbe:
             httpGet:
               path: /api/health
-              port: api
-            initialDelaySeconds: 120
+              port: dashboard
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /api/livez
+              port: dashboard
             periodSeconds: 30
-            timeoutSeconds: 10
+            timeoutSeconds: 5
           readinessProbe:
             httpGet:
               path: /api/health
-              port: api
-            initialDelaySeconds: 30
+              port: dashboard
+            initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
-          # hive shares the control-plane node with etcd and the API server
-          # (its data PVC is local-path and node-bound there, so it cannot move
-          # to the worker). On the old m6i.large (7.7Gi) a 4Gi limit let hive's
-          # agy/codex agents eat the node's headroom until the *scheduler* was
-          # OOM-killed (exit 137) — which deadlocks the cluster, because with no
-          # scheduler nothing can be placed and the scale-down that would
-          # relieve it is the controller-manager's job, and that was dead too.
-          #
-          # The node is now an m6i.xlarge (15.7Gi), so 4Gi leaves real headroom.
-          # Keep a limit set: the kubelet must evict hive, never the control
-          # plane. Do not raise this without checking free memory on the node.
           resources:
             requests:
               cpu: 300m
@@ -403,6 +401,7 @@ spec:
           secret:
             secretName: hive-secrets
             optional: true
+            defaultMode: 0440
 ---
 apiVersion: v1
 kind: Service
@@ -417,16 +416,8 @@ spec:
     app.kubernetes.io/name: hive
   ports:
     - name: dashboard
-      port: 3001
-      targetPort: dashboard
-      protocol: TCP
-    - name: api
       port: 3002
-      targetPort: api
-      protocol: TCP
-    - name: ttyd
-      port: 7681
-      targetPort: ttyd
+      targetPort: dashboard
       protocol: TCP
 ---
 # Tailscale Ingress — hive.manatee-basking.ts.net
@@ -441,7 +432,7 @@ spec:
     service:
       name: hive
       port:
-        number: 3001
+        number: 3002
   tls:
     - hosts:
         - hive

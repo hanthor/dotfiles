@@ -1,0 +1,71 @@
+/* TunaOS branding override for the hive dashboard.
+ *
+ * Deployed to <data>/branding/custom.css and served at /branding/custom.css by
+ * the operator-branding hook (kubestellar/hive#5690). The dashboard links it
+ * last in <head>, so these definitions win the cascade without any !important.
+ *
+ * Deliberately scoped to COLOUR TOKENS rather than layout. The dashboard is a
+ * single embedded SPA whose markup changes between releases; restyling
+ * structure here would break silently on upgrade, whereas custom properties
+ * are the one surface intended to be re-pointed.
+ *
+ * Palette: deep water -> tuna-fin cyan, with reef coral as the warm accent.
+ * Contrast checked against the dark surface: foam #e8f6f8 on abyss #04161f is
+ * ~15.8:1, mist #8fb3bd is ~7.6:1 — both clear AA for body text, and the cyan
+ * accent #2fb6c4 is ~7.0:1, so it stays legible as text and not just as a
+ * decorative rule.
+ */
+
+:root,
+:root[data-theme="dark"],
+.dark {
+  /* Surfaces — deep water, darkening with depth. */
+  --bg:            #04161f;
+  --bg-0:          #04161f;
+  --background:    #04161f;
+  --surface:       #0a2430;
+  --surface-1:     #0a2430;
+  --surface-2:     #07202b;
+  --panel:         #0a2430;
+  --card:          #0a2430;
+  --border:        #12394a;
+  --border-color:  #12394a;
+
+  /* Ink — sea foam on deep water. */
+  --fg:            #e8f6f8;
+  --text:          #e8f6f8;
+  --text-primary:  #e8f6f8;
+  --text-secondary:#8fb3bd;
+  --muted:         #8fb3bd;
+  --text-muted:    #8fb3bd;
+
+  /* Accent — tuna-fin cyan; coral for the warm/secondary role. */
+  --accent:        #2fb6c4;
+  --primary:       #2fb6c4;
+  --link:          #2fb6c4;
+  --accent-2:      #f2795b;
+  --secondary:     #f2795b;
+
+  /* Status. Kept distinct from the accent so "healthy" never reads as
+   * "branded" — a green that matches the brand hue is unreadable as status. */
+  --success:       #3fbf8f;
+  --ok:            #3fbf8f;
+  --warning:       #e0a33a;
+  --warn:          #e0a33a;
+  --danger:        #f2795b;
+  --error:         #f2795b;
+
+  /* Contributor-console tokens use their own cc- prefix. */
+  --cc-accent:     #2fb6c4;
+  --cc-muted:      #8fb3bd;
+  --cc-bg:         #04161f;
+  --cc-surface:    #0a2430;
+  --cc-border:     #12394a;
+}
+
+/* The page background is often painted on body rather than :root, so a token
+ * swap alone can leave the old colour behind. */
+body {
+  background-color: #04161f;
+  color: #e8f6f8;
+}

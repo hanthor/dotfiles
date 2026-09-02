@@ -521,7 +521,30 @@ gather() {
       google)    r=$(probe_google) ;;
     esac
     PCT[$p]=${r%% *}; NOTE[$p]=${r#* }
+    # Remember WHEN an exhausted provider comes back. Every probe already
+    # reports it ("resets=2026-09-02T23:00:00Z", "resets 22:35 on 6 Sep"), and
+    # without recording it the fleet only rediscovers renewal on the next
+    # 20-minute tick — or never, if it is parked and the provider is
+    # unmeasurable while parked. Parsed best-effort: an unparseable stamp is
+    # simply not scheduled, never a failure.
+    if provider_exhausted "$p"; then
+      when=$(printf '%s' "${NOTE[$p]}" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}' | head -1)
+      if [ -n "$when" ]; then
+        epoch=$(date -u -d "$when" +%s 2>/dev/null \
+                || python3 -c "import datetime,sys;print(int(datetime.datetime.fromisoformat(sys.argv[1]).replace(tzinfo=datetime.timezone.utc).timestamp()))" "$when" 2>/dev/null)
+        [ -n "$epoch" ] && echo "$epoch $p" >> "$STATE_DIR/resets.tmp"
+      fi
+    fi
   done
+  # Keep only the SOONEST pending renewal: that is the next moment the fleet's
+  # situation can change, and one marker is all the watchdog needs to check.
+  if [ -s "$STATE_DIR/resets.tmp" ]; then
+    sort -n "$STATE_DIR/resets.tmp" | head -1 > "$STATE_DIR/next-reset"
+  else
+    rm -f "$STATE_DIR/next-reset"
+  fi
+  rm -f "$STATE_DIR/resets.tmp"
+
   # A peak-priced provider is "unavailable" for planning purposes even at 0% used.
   if in_peak_window; then
     for p in $PEAK_PROVIDERS; do
@@ -806,10 +829,19 @@ reconcile_contributors() {
       want=0
     elif provider_recovered "$p"; then
       want=1
+    elif [ "$have" = 0 ]; then
+      # Unmeasured AND already parked is a DEADLOCK, not a steady state: several
+      # providers can only be read through a live consumer, so parking the last
+      # one makes the provider permanently unmeasurable and "leave it alone"
+      # keeps it at zero forever. Observed 2026-09-02: the entire contributor
+      # fleet sat at 0 replicas while its providers were merely unreadable.
+      # Restore ONE worker to make the provider measurable again — the same
+      # "no-agent permits arrival" rule the agent path already uses.
+      want=1
+      printf '%-24s %-9s unmeasurable while parked -> restoring 1 to re-probe\n' "$d" "$p"
     else
-      # Unknown headroom: leave the worker exactly as it is. Scaling up on an
-      # unmeasured provider re-creates the task-thrash this exists to stop, and
-      # scaling down on one would park a worker that may be perfectly fine.
+      # Unmeasured but still running: leave it. Scaling down on a failed
+      # measurement would park a worker that may be perfectly fine.
       printf '%-24s %-9s %s (unmeasured — left at %s)\n' "$d" "$p" "${NOTE[$p]:-}" "$have"
       continue
     fi
@@ -922,6 +954,28 @@ if [ "$ACTION" = watchdog ]; then
       done' 2>/dev/null
   }
   gemini_hygiene
+
+  # 1b) RENEWAL WAKE-UP. gather() records when the soonest exhausted provider
+  # comes back. If that moment has passed, quota exists again — resume anything
+  # parked and kick it, rather than waiting out the rotate timer. This is the
+  # difference between the fleet restarting within 5 minutes of a renewal and
+  # sitting idle for up to 20 (or indefinitely, when being parked is itself
+  # what makes the provider unmeasurable).
+  if [ -s "$STATE_DIR/next-reset" ]; then
+    read -r reset_at reset_p < "$STATE_DIR/next-reset"
+    if [ -n "$reset_at" ] && [ "$(date +%s)" -ge "$reset_at" ] 2>/dev/null; then
+      printf 'renewal reached for %s — resuming parked agents and re-probing\n' "${reset_p:-a provider}"
+      rm -f "$STATE_DIR/next-reset"
+      for a in $(agent_names); do
+        [ "$(agent_field "$a" paused)" = true ] || continue
+        [ "$(agent_field "$a" pausedTrigger)" = login-detector ] && continue
+        rs=$(hive_api POST "/api/resume/$a" | jq -r '.status // .error')
+        printf '  %-14s resume: %s\n' "$a" "$rs"
+        [ -s "$STATE_DIR/stranded" ] && sed -i "/^$a|/d" "$STATE_DIR/stranded"
+      done
+      reconcile_contributors
+    fi
+  fi
 
   # 2) Per-agent liveness: classify the pane and heal broken agents with the
   # kill-then-kick sequence (a direct kick of a wedged TUI hangs the API).

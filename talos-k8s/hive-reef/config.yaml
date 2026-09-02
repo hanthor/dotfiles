@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hive-config
+  namespace: hive-reef
+data:
+  hive.yaml: |
+    # reef — the applications hive. Desktop apps and their distribution.
+    #
+    # Split from the tunaos hive so the two fleets stop competing over
+    # unrelated work: an agent triaging a GTK app should not be ranking bootc
+    # installer issues against it.
+    #
+    # ACMM L5, not L6, and a DELIBERATELY SMALL roster. Two reasons:
+    #   - Quota, not compute, is the binding constraint. deepseek is dry,
+    #     openai is capped, anthropic is near its weekly cap, and google is
+    #     carrying the fleet. A second full 11-agent L6 fleet would halve the
+    #     work each hive gets done, not double it.
+    #   - L5 holds every PR behind a `hold` label. A newly split hive should
+    #     earn auto-merge rather than start with it.
+    # Raise the level once the split has settled and there is quota to spend.
+    acmm_level: 5
+    project:
+      org: tuna-os
+      name: reef
+      repos:
+        - .github
+        - Tavern
+        - bluefin-cli
+        - blueshell
+        - corral
+        - docs
+        - dualcut
+        - flatpak-index
+        - gnome-hive-monitor
+        - gtk-office-suite
+        - hive
+        - letters
+        - mandelbrot
+        - mariner
+        - protota
+        - spindle
+        - suite-common
+        - suite-common-rust
+      ai_author: hanthor
+      primary_repo: gtk-office-suite
+
+    hub:
+      enabled: true
+      url: https://hub.tunaos.org
+
+    agents:
+      supervisor:
+        enabled: true
+        backend: agy
+        model: gemini-3.7-flash-low
+        beads_dir: /data/beads/supervisor
+        clear_on_kick: false
+        caveman_mode: full
+      scanner:
+        enabled: true
+        backend: agy
+        model: gemini-3.7-flash-low
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/scanner
+        caveman_mode: full
+      quality:
+        enabled: true
+        backend: agy
+        model: gemini-3.7-flash-low
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/quality
+        caveman_mode: full
+      guide:
+        enabled: true
+        backend: agy
+        model: gemini-3.7-flash-low
+        beads_dir: /data/beads/guide
+        clear_on_kick: false
+        caveman_mode: full
+
+    governor:
+      eval_interval_s: 300
+      modes:
+        surge:
+          threshold: 70
+          supervisor: 10m
+          scanner: 30m
+          quality: 1h
+          guide: 2h
+        busy:
+          threshold: 10
+          supervisor: 15m
+          scanner: 1h
+          quality: 2h
+          guide: 4h
+        quiet:
+          threshold: 2
+          supervisor: 30m
+          scanner: 2h
+          quality: 4h
+          guide: 6h
+        idle:
+          threshold: 0
+          supervisor: 1h
+          scanner: 4h
+          quality: 6h
+          guide: 8h
+
+    github:
+      app_id: 3942065
+      installation_id: 137498420
+      key_file: /secrets/gh-app-key.pem
+
+    dashboard:
+      port: 3002

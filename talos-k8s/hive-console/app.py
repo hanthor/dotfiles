@@ -224,41 +224,48 @@ def contributor_pods():
 
 
 # ── rendering ─────────────────────────────────────────────────────────────
+# TunaOS palette, matching the hub front door: deep water surfaces, sea-foam
+# ink, tuna-fin cyan accent. Defined as tokens so the two surfaces stay in step
+# — the console and the hub are the same product to whoever is looking at them.
 CSS = """
+:root{
+  --deep:#04161f; --surface:#0a2430; --surface-2:#07202b; --line:#12394a;
+  --foam:#e8f6f8; --mist:#8fb3bd; --tuna:#2fb6c4; --coral:#f2795b; --kelp:#3fbf8f;
+}
 *{box-sizing:border-box}
-body{margin:0;background:#0d1117;color:#c9d1d9;font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
-a{color:#58a6ff}
-header{padding:18px 24px;border-bottom:1px solid #21262d;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+body{margin:0;background:var(--deep);color:var(--foam);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--tuna)}
+header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
 h1{margin:0;font-size:17px;letter-spacing:.2px}
-.sub{color:#8b949e;font-size:12px}
+.sub{color:var(--mist);font-size:12px}
 main{padding:20px 24px;display:grid;gap:20px;max-width:1400px}
-section{border:1px solid #21262d;border-radius:8px;background:#161b22;overflow:hidden}
-h2{margin:0;padding:11px 16px;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:#8b949e;border-bottom:1px solid #21262d;display:flex;justify-content:space-between;gap:12px}
+section{border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+h2{margin:0;padding:11px 16px;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--mist);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px}
 .wrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;min-width:640px}
-th,td{padding:8px 16px;text-align:left;border-bottom:1px solid #21262d;white-space:nowrap;font-size:13px}
-th{color:#8b949e;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+th,td{padding:8px 16px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap;font-size:13px}
+th{color:var(--mist);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 tr:last-child td{border-bottom:none}
-.ok{color:#3fb950}.warn{color:#d29922}.bad{color:#f85149}.dim{color:#8b949e}
+.ok{color:var(--kelp)}.warn{color:#e0a33a}.bad{color:var(--coral)}.dim{color:var(--mist)}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
-.bar{position:relative;height:6px;background:#21262d;border-radius:3px;width:150px;overflow:hidden}
+.bar{position:relative;height:6px;background:var(--surface-2);border-radius:3px;width:150px;overflow:hidden}
 .bar>i{position:absolute;inset:0 auto 0 0;border-radius:3px}
-.pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;border:1px solid #30363d;color:#8b949e}
+.pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;border:1px solid var(--line);color:var(--mist)}
 .err{padding:12px 16px;color:#f85149;font-size:12px}
 form{display:inline}
-select,button{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:3px 7px;font-size:12px}
-button{cursor:pointer}button:hover{border-color:#58a6ff}
+select,button{background:var(--surface-2);color:var(--foam);border:1px solid var(--line);border-radius:6px;padding:3px 7px;font-size:12px}
+button{cursor:pointer}button:hover{border-color:var(--tuna)}
 .act{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
-footer{padding:14px 24px;color:#8b949e;font-size:11px;border-top:1px solid #21262d}
+footer{padding:14px 24px;color:var(--mist);font-size:11px;border-top:1px solid var(--line)}
 .charts{display:flex;flex-wrap:wrap;gap:8px;padding:14px 16px}
 .chart{margin:0;flex:1 1 380px;min-width:0}
 .chart svg{width:100%;height:auto;display:block}
-figcaption{color:#c9d1d9;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap}
-.key{color:#8b949e;font-size:11px}
+figcaption{color:var(--foam);font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+.key{color:var(--mist);font-size:11px}
 .key i{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 4px 0 10px;vertical-align:middle}
-details{border-top:1px solid #21262d}
-summary{padding:9px 16px;cursor:pointer;color:#8b949e;font-size:12px}
-summary:hover{color:#c9d1d9}
+details{border-top:1px solid var(--line)}
+summary{padding:9px 16px;cursor:pointer;color:var(--mist);font-size:12px}
+summary:hover{color:var(--foam)}
 """
 
 BACKENDS = ["claude", "agy", "codex", "pi", "copilot"]
@@ -371,8 +378,8 @@ def render_usage(ant, deep, pub):
 # (deutan), normal-vision ΔE 20.9, contrast >= 3:1 — all checks pass.
 # The SAME two colours mean the same thing in both charts (opened vs resolved),
 # so identity survives the jump between them.
-C_OPEN = "#3987e5"
-C_DONE = "#199e70"
+C_OPEN = "#2fb6c4"   # tuna-fin cyan (brand)
+C_DONE = "#3fbf8f"   # kelp green
 
 
 def sparkline(days, opened, done, label_open, label_done, title):
@@ -407,20 +414,20 @@ def sparkline(days, opened, done, label_open, label_done, title):
     grid = ""
     for frac in (0, 0.5, 1):
         y = PADT + ih - ih * frac
-        grid += f'<line x1="{PADL}" y1="{y:.1f}" x2="{W-PADR}" y2="{y:.1f}" stroke="#21262d" stroke-width="1"/>'
-        grid += (f'<text x="{PADL-6}" y="{y+3.5:.1f}" fill="#8b949e" font-size="9" '
+        grid += f'<line x1="{PADL}" y1="{y:.1f}" x2="{W-PADR}" y2="{y:.1f}" stroke="#12394a" stroke-width="1"/>'
+        grid += (f'<text x="{PADL-6}" y="{y+3.5:.1f}" fill="#8fb3bd" font-size="9" '
                  f'text-anchor="end">{int(hi*frac)}</text>')
 
     # Label first and last day only — one date per point would collide.
-    xl = (f'<text x="{PADL}" y="{H-6}" fill="#8b949e" font-size="9">{e(days[0][5:])}</text>'
-          f'<text x="{W-PADR}" y="{H-6}" fill="#8b949e" font-size="9" text-anchor="end">{e(days[-1][5:])}</text>')
+    xl = (f'<text x="{PADL}" y="{H-6}" fill="#8fb3bd" font-size="9">{e(days[0][5:])}</text>'
+          f'<text x="{W-PADR}" y="{H-6}" fill="#8fb3bd" font-size="9" text-anchor="end">{e(days[-1][5:])}</text>')
 
     # Direct-label the final value of each line: with two series this replaces
     # hunting between a legend swatch and a line.
     ends = ""
     for vals, col in ((opened, C_OPEN), (done, C_DONE)):
         x, y = pt(n - 1, vals[-1])
-        ends += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{col}" stroke="#161b22" stroke-width="2"/>'
+        ends += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{col}" stroke="#0a2430" stroke-width="2"/>'
 
     return f"""<figure class="chart">
 <figcaption>{e(title)}
@@ -613,8 +620,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _deny(self):
         self._send(
             401,
-            "<!doctype html><meta charset=utf-8><style>body{background:#0d1117;color:#c9d1d9;"
-            "font:15px system-ui;padding:60px;text-align:center}a{color:#58a6ff}</style>"
+            "<!doctype html><meta charset=utf-8><style>body{background:#04161f;color:#e8f6f8;"
+            "font:15px system-ui;padding:60px;text-align:center}a{color:#2fb6c4}</style>"
             "<h2>Not signed in</h2><p>This console shares the hive dashboard's session.</p>"
             '<p><a href="/">Sign in at the hive dashboard</a>, then come back.</p>',
         )

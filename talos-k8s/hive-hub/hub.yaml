@@ -1,0 +1,208 @@
+# tuna-os hive hub — a private federation registry for the tuna-os constellation.
+#
+# The same Go binary serves both roles; HIVE_MODE=hub selects the hub server.
+# A hub is a DIRECTORY, not a control plane: every spoke keeps its own
+# credentials, queue, agents, contributor registry and trust policy. The hub
+# holds the registry and the heartbeats.
+#
+# WHY SELF-HOST RATHER THAN USE hive.kubestellar.io
+#   Heartbeats to the public hub return 401 and always will — unauthenticated
+#   self-host registration was deliberately removed upstream (kubestellar/hive
+#   #1077) and needs an operator-issued HIVE_HUB_SECRET we do not have. A
+#   private hub also keeps the tuna-os fleet's topology private.
+#
+# IMAGE: upstream ghcr.io/kubestellar/hive-hub:stable, verified to pull and run
+# in this cluster. No fork build is required — the fork's docker.yml would
+# publish ghcr.io/<owner>/hive-hub, but nothing needs it yet.
+#
+# STORAGE NOTE: upstream recommends ReadWriteMany for HOSTED-SPOKE PVCs, which
+# only matters for the SaaS provisioning flow (surge rolling updates need two
+# pods mounting /data at once). This hub is registry-only — it provisions
+# nothing — so RWO local-path is sufficient. Revisit before enabling
+# provisioning.
+#
+# Prereq (never commit the value):
+#   kubectl create secret generic hive-hub-secrets -n hive-hub \
+#     --from-literal=HIVE_HUB_SECRET="$(openssl rand -hex 32)" \
+#     --from-literal=HIVE_DASHBOARD_TOKEN="$(openssl rand -hex 32)"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hive-hub
+  labels:
+    app.kubernetes.io/name: hive-hub
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hive-hub-config
+  namespace: hive-hub
+data:
+  hive.yaml: |
+    # The hub still reads hive.yaml and still validates the project/github
+    # blocks, so a minimal seed is required even though the hub runs no agents.
+    project:
+      org: tuna-os
+      name: TunaOS
+      repos:
+        - tunaOS
+      primary_repo: tunaOS
+      ai_author: hanthor
+
+    github:
+      app_id: 3942065
+      installation_id: 137498420
+      key_file: /secrets/gh-app-key.pem
+
+    hub:
+      enabled: true
+      url: https://hub.tunaos.org
+
+    dashboard:
+      port: 3001
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hive-hub-data
+  namespace: hive-hub
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-hub
+  namespace: hive-hub
+  labels:
+    app.kubernetes.io/name: hive-hub
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate      # RWO volume: no two-pod surge
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hive-hub
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hive-hub
+    spec:
+      # local-path binds the PVC to one node; pin to the same node the rest of
+      # the hive stack uses so the volume is reachable.
+      nodeSelector:
+        workload-role: hive
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: hub
+          image: ghcr.io/kubestellar/hive-hub:stable
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "/etc/hive/hive.yaml"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: HIVE_MODE
+              value: hub
+            - name: HIVE_HUB_PORT
+              value: "3001"
+            - name: HIVE_HUB_SECRET
+              valueFrom:
+                secretKeyRef: {name: hive-hub-secrets, key: HIVE_HUB_SECRET}
+            - name: HIVE_DASHBOARD_TOKEN
+              valueFrom:
+                secretKeyRef: {name: hive-hub-secrets, key: HIVE_DASHBOARD_TOKEN}
+          ports:
+            - name: http
+              containerPort: 3001
+          volumeMounts:
+            - {name: config, mountPath: /etc/hive, readOnly: true}
+            - {name: data, mountPath: /data}
+            - {name: secrets, mountPath: /secrets, readOnly: true}
+          # NOT /api/health — that is a SPOKE endpoint. In hub mode the binary
+          # registers the registry/SaaS routes instead and /api/health 404s,
+          # which fails the probe and crash-loops an otherwise healthy hub.
+          # `/` is the hub UI and returns 200 once the server is listening.
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          # A registry, not an agent fleet: it holds JSON and answers
+          # heartbeats. Kept small on purpose — the hive node is already at 94%
+          # of CPU LIMITS, and a fat limit here would make that materially worse
+          # for no benefit.
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+      volumes:
+        - {name: config, configMap: {name: hive-hub-config}}
+        - {name: data, persistentVolumeClaim: {claimName: hive-hub-data}}
+        - name: secrets
+          secret:
+            secretName: hive-secrets-hub
+            optional: true
+            defaultMode: 0440
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-hub
+  namespace: hive-hub
+spec:
+  selector:
+    app.kubernetes.io/name: hive-hub
+  ports:
+    - name: http
+      port: 3001
+      targetPort: http
+---
+# Public ingress at hub.tunaos.org, same pattern as the hive spoke: Traefik
+# behind Cloudflare, certificate issued by cert-manager. Unlike the console
+# (which is a PATH on hive.tunaos.org so it inherits that host's session
+# cookie), the hub is a separate application with its own auth, so it gets its
+# own hostname and its own certificate.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hive-hub
+  namespace: hive-hub
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: hub.tunaos.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hive-hub
+                port:
+                  number: 3001
+  tls:
+    - hosts: [hub.tunaos.org]
+      secretName: hub-tunaos-org-tls

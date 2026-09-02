@@ -99,7 +99,7 @@ That means DB durability currently rests on `local-path` on the worker's root
 volume. The separate 50GB gp3 volume (`vol-01ff00a316340f0ad`) is attached at
 the EC2 level but **not mounted by Talos** — unfinished work.
 
-## Access
+## Access & Context Management
 
 `kubectl`/`talosctl` need **`endpoints` = public EIP, `nodes` = private IP** —
 not the same address for both. Talos does a two-hop call (client → endpoint →
@@ -108,15 +108,70 @@ its own Elastic IP from inside the VPC, which AWS's hairpin NAT does not
 support. The symptom is a maximally confusing `dial tcp …: i/o timeout` that
 looks like a raw network fault.
 
+### Unified Fleet Access
+
+The `kube` Ansible role syncs both cluster configurations from Bitwarden and automatically merges them into a unified **`~/.kube/config`** and **`~/.talos/config`** on any desktop in the fleet:
+
+- **Context Names:**
+  - `admin@aws-migration` (AWS Talos cluster — active)
+  - `admin@talos-k8s` (Home metal cluster — offline in storage)
+
 ```bash
-export KUBECONFIG=~/.kube/config-aws-migration
+# Switch to AWS cluster
+kubectl config use-context admin@aws-migration
+talosctl config context aws-migration
+
+# Run commands
 kubectl get nodes -o wide
+kubectl get pods -A
 ```
 
-Configs live in Bitwarden as `kubeconfig-aws-migration` / `talosconfig-aws-migration`
-and are fetched by the [`kube`](../../roles/kube.md) role into
-`~/.kube/config-aws-migration` and `~/.talos/config-aws-migration` — kept
-separate from the home cluster's files so both stay independently usable.
+Standalone files (`~/.kube/config-aws-migration` and `~/.talos/config-aws-migration`) remain available for legacy scripts and explicit environment overrides (`KUBECONFIG=~/.kube/config-aws-migration`).
+
+### Preferred: kubectl over Tailscale (no security-group changes)
+
+The Tailscale **operator** in the `tailscale` namespace runs the built-in
+**Kubernetes API server proxy** (`apiServerProxyConfig.mode: "true"`, enabled
+2026-09-01). It serves the API on the tailnet at
+`https://aws-migration-operator.manatee-basking.ts.net` with a valid tailnet
+TLS cert, so any tailnet device reaches the API with **no `:6443`
+security-group hole**. This is the preferred path.
+
+```bash
+# One-time: add a kubeconfig context that uses the operator auth proxy.
+KUBECONFIG=~/.kube/config-aws-migration \
+  tailscale configure kubeconfig aws-migration-operator
+kubectl config use-context aws-migration-operator.manatee-basking.ts.net
+kubectl get nodes
+```
+
+Auth mode: the proxy authenticates the caller as their **tailnet identity**
+(e.g. `jreilly1821@gmail.com`) and RBAC is enforced in-cluster. A
+`ClusterRoleBinding` (`tailscale-admin-jreilly`) binds that user to
+`cluster-admin`. To grant another tailnet user, bind their identity the same
+way. The operator Helm release carries the proxy setting:
+
+```bash
+helm -n tailscale get values tailscale-operator   # apiServerProxyConfig.mode: "true"
+```
+
+### Fallback: Admin Security Group Authorizations
+
+When Tailscale is unavailable, direct access to the k8s API (`:6443`) and Talos
+API (`:50000`) is protected by EC2 Security Group
+**`migration-admin-bootstrap`** (`sg-052a6292d2dcf728e`) in `eu-north-1`.
+
+When your public IP changes, update the security group using the `james-admin` AWS profile:
+
+```bash
+MY_IP=$(curl -s https://api.ipify.org)
+AWS_PROFILE=james-admin aws ec2 authorize-security-group-ingress \
+  --region eu-north-1 --group-id sg-052a6292d2dcf728e \
+  --protocol tcp --port 6443 --cidr "${MY_IP}/32"
+AWS_PROFILE=james-admin aws ec2 authorize-security-group-ingress \
+  --region eu-north-1 --group-id sg-052a6292d2dcf728e \
+  --protocol tcp --port 50000 --cidr "${MY_IP}/32"
+```
 
 ## Cost
 
@@ -143,3 +198,6 @@ credits zero the bill, so a commitment buys nothing and locks in instance shape.
 
 - [Matrix cutover runbook](../../../matrix-cutover-runbook.md)
 - [`hive_ops` role](../../roles/hive_ops.md)
+- [`kube` role](../../roles/kube.md)
+- [Talos K8s Metal Cluster (offline)](../talos-k8s/cluster.md)
+
