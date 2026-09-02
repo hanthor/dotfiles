@@ -1,0 +1,11 @@
+# Namespace for the persistent Hive contributor fleet.
+# PodSecurity restricted — the contributor pods drop ALL capabilities and run
+# as a non-root numeric UID (matching kubestellar-hive/cluster-fixes-2026-06.md).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hive-contributors
+  labels:
+    app.kubernetes.io/part-of: hive
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

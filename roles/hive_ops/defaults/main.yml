@@ -14,10 +14,16 @@ hive_ops_timers:
   - hive-tiers
   - hive-peak-pause
   - hive-peak-resume
-  - pi-peak-start
-  - pi-peak-stop
   - hive-repo-sync
   - hive-fork-drift
+# pi-peak-start/stop were removed 2026-09-02. They ran
+# `systemctl --user start|stop pi.service` to dodge DeepSeek peak pricing, but
+# the pi contributor moved to Kubernetes (talos-k8s/hive-contributors,
+# pi-codex-contributor) so that local quadlet no longer exists — the units
+# failed with NOTINSTALLED on every fire. The DeepSeek rationale is gone too:
+# that worker now runs openai-codex/gpt-5.6-sol, which DeepSeek's peak pricing
+# does not touch. hive-peak-pause/resume still apply — they gate the in-cluster
+# hive AGENTS, which can still be placed on DeepSeek rungs.
 
 # systemd user units get a minimal PATH that excludes Homebrew, where kubectl
 # and jq live, and ~/.local/bin, where gh lives (hive-fork-drift.sh's PR

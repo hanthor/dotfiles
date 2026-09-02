@@ -1,0 +1,56 @@
+# contributor-watchdog ConfigMap — the in-pod self-heal loop, mounted into the
+# watchdog sidecar of every contributor Deployment. Generated from
+# contributor-watchdog.sh; regenerate with:
+#   kubectl create configmap contributor-watchdog -n hive-contributors \
+#     --from-file=contributor-watchdog.sh=talos-k8s/hive-contributors/contributor-watchdog.sh \
+#     --dry-run=client -o yaml > talos-k8s/hive-contributors/watchdog-configmap.yaml
+#
+# (Kept as a hand-maintained file so the manifest set is self-contained; the
+# script body must stay in sync with contributor-watchdog.sh.)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: contributor-watchdog
+  namespace: hive-contributors
+  labels:
+    app.kubernetes.io/name: hive-contributor
+    app.kubernetes.io/component: watchdog
+data:
+  contributor-watchdog.sh: |
+    #!/usr/bin/env bash
+    # In-pod self-heal loop. See talos-k8s/hive-contributors/contributor-watchdog.sh
+    # for the fully-commented source of truth.
+    set -uo pipefail
+    SESSION="${HIVE_AGENT_SESSION:-contributor}"
+    INTERVAL="${WATCHDOG_INTERVAL_S:-60}"
+    MAX_WEDGED="${WATCHDOG_MAX_WEDGED:-5}"
+    SHELL_PROMPT_RE='[$#][[:space:]]*$|@[^[:space:]]*:[^[:space:]]*[$#]'
+    log() { printf '%s watchdog: %s\n' "$(date -u +%H:%M:%SZ)" "$*"; }
+    capture() { tmux capture-pane -pt "$SESSION" -S -25 2>/dev/null; }
+    relay_alive() { grep -ql contributor-relay /proc/*/cmdline 2>/dev/null; }
+    session_alive() { tmux has-session -t "$SESSION" 2>/dev/null; }
+    prompt_key() {
+      local t="$1"
+      printf '%s' "$t" | grep -q 'Do you trust the contents of this directory' && { echo 1; return; }
+      printf '%s' "$t" | grep -q 'Update available!' && printf '%s' "$t" | grep -q 'Skip until next version' && { echo 3; return; }
+      echo ""
+    }
+    wedged=0
+    log "starting: session=$SESSION interval=${INTERVAL}s max_wedged=$MAX_WEDGED"
+    while :; do
+      sleep "$INTERVAL"
+      if ! relay_alive; then log "relay process gone — liveness probe handles it"; continue; fi
+      if ! session_alive; then log "tmux session '$SESSION' gone — liveness probe handles it"; continue; fi
+      text="$(capture)"
+      [ -z "$text" ] && { log "empty pane capture (transient?)"; continue; }
+      key="$(prompt_key "$text")"
+      if [ -n "$key" ]; then log "dismissing modal prompt with key '$key'"; tmux send-keys -t "$SESSION" "$key" Enter 2>/dev/null; wedged=0; continue; fi
+      last_line="$(printf '%s' "$text" | grep -v '^[[:space:]]*$' | tail -1)"
+      if printf '%s' "$last_line" | grep -Eq "$SHELL_PROMPT_RE"; then
+        wedged=$((wedged + 1))
+        log "pane at a bare shell prompt (CLI down?) — wedged=$wedged/$MAX_WEDGED"
+        if [ "$wedged" -ge "$MAX_WEDGED" ]; then log "giving up after $wedged wedged ticks — exiting non-zero to recycle the pod"; exit 1; fi
+        continue
+      fi
+      wedged=0
+    done

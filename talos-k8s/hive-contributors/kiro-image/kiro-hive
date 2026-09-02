@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# kiro-hive — launch the Kiro CLI as an interactive chat REPL for the Hive relay.
+#
+# The relay launches the resolved backend binary as an interactive session in a
+# tmux PTY, then types the task prompt into it. Kiro's chat REPL is
+# `kiro-cli chat`; bare `kiro-cli` is not. This wrapper bridges that: it forwards
+# whatever permission flags the relay passes (from backend_perm_flag(kiro),
+# e.g. --trust-all-tools) into `kiro-cli chat`.
+#
+# We deliberately do NOT pass --no-interactive: the relay needs a live REPL to
+# send-keys into. Kiro's TUI requires a PTY, which tmux provides; a non-TTY exec
+# crashes with "failed to enable raw mode" (Kiro issue #5250).
+exec kiro-cli chat "$@"

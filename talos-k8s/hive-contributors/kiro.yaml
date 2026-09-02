@@ -1,0 +1,138 @@
+# kiro-contributor — persistent Hive contributor, Kiro CLI backend.
+# Both hubs via comma-separated HIVE_HUB / HIVE_REGISTRATION_TOKEN.
+#
+# Uses the CUSTOM image (kiro-image/) because kiro-cli is not in the upstream
+# image. Build & push that image first (kiro-image/README.md). Headless auth via
+# KIRO_API_KEY; kiro-cli runs as an interactive chat REPL in tmux (kiro-hive
+# wrapper), the same interactive path the other three use.
+#
+# Requires: secret/hive-contrib-kiro
+#             (HIVE_HUB, HIVE_REGISTRATION_TOKEN, GH_TOKEN, KIRO_API_KEY)
+#           secret/ghcr-auth
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kiro-home
+  namespace: hive-contributors
+  labels:
+    app: kiro-contributor
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kiro-contributor
+  namespace: hive-contributors
+  labels:
+    app: kiro-contributor
+    app.kubernetes.io/name: hive-contributor
+    app.kubernetes.io/component: kiro
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kiro-contributor
+  template:
+    metadata:
+      labels:
+        app: kiro-contributor
+        app.kubernetes.io/name: hive-contributor
+        app.kubernetes.io/component: kiro
+    spec:
+      imagePullSecrets:
+        - name: ghcr-auth
+      shareProcessNamespace: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: contributor
+          image: ghcr.io/hanthor/hive-contributor-kiro:latest
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: AGENT_BACKEND
+              value: kiro
+            - name: HOME
+              value: /home/dev
+            - name: HIVE_HUB
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-kiro, key: HIVE_HUB }
+            - name: HIVE_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-kiro, key: HIVE_REGISTRATION_TOKEN }
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-kiro, key: GH_TOKEN }
+            # No KIRO_API_KEY required: kiro-cli uses its logged-in session,
+            # seeded onto the PVC (~/.local/share/kiro-cli + ~/.kiro). Set a
+            # KIRO_API_KEY key on the Secret only for headless API-key auth.
+            - name: KIRO_API_KEY
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-kiro, key: KIRO_API_KEY, optional: true }
+          volumeMounts:
+            - name: home
+              mountPath: /home/dev
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "2", memory: 2Gi }
+          livenessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - |
+                  grep -q contributor-relay /proc/*/cmdline 2>/dev/null &&
+                  tmux has-session -t contributor 2>/dev/null &&
+                  [ "$(grep -l "^State:.*Z" /proc/*/status 2>/dev/null | wc -l)" -lt 50 ]
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            timeoutSeconds: 15
+            failureThreshold: 3
+        - name: watchdog
+          image: ghcr.io/hanthor/hive-contributor-kiro:latest
+          imagePullPolicy: Always
+          command: ["bash", "/etc/hive/contributor-watchdog.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: WATCHDOG_INTERVAL_S
+              value: "60"
+            - name: WATCHDOG_MAX_WEDGED
+              value: "5"
+          volumeMounts:
+            - name: watchdog
+              mountPath: /etc/hive
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: kiro-home
+        - name: tmp
+          emptyDir: {}
+        - name: watchdog
+          configMap:
+            name: contributor-watchdog

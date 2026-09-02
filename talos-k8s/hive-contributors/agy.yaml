@@ -1,0 +1,133 @@
+# agy-contributor — persistent Hive contributor, Antigravity (Google) backend.
+# Both hubs via comma-separated HIVE_HUB / HIVE_REGISTRATION_TOKEN.
+#
+# agy authenticates against a Google AI subscription (interactive OAuth, no
+# API key), so seed ~/.gemini into the PVC once on first run — see README
+# "First-run auth". This is exactly why the upstream headless k8s path REFUSES
+# agy; the interactive tmux path here is what makes it work in-cluster.
+#
+# Requires: secret/hive-contrib-agy (HIVE_HUB, HIVE_REGISTRATION_TOKEN, GH_TOKEN)
+#           secret/ghcr-auth
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agy-home
+  namespace: hive-contributors
+  labels:
+    app: agy-contributor
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agy-contributor
+  namespace: hive-contributors
+  labels:
+    app: agy-contributor
+    app.kubernetes.io/name: hive-contributor
+    app.kubernetes.io/component: agy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: agy-contributor
+  template:
+    metadata:
+      labels:
+        app: agy-contributor
+        app.kubernetes.io/name: hive-contributor
+        app.kubernetes.io/component: agy
+    spec:
+      imagePullSecrets:
+        - name: ghcr-auth
+      shareProcessNamespace: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: contributor
+          image: ghcr.io/kubestellar/hive-contributor:latest
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: AGENT_BACKEND
+              value: agy
+            - name: AGENT_MODEL
+              value: gemini-3.7-flash-high
+            - name: HOME
+              value: /home/dev
+            - name: HIVE_HUB
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-agy, key: HIVE_HUB }
+            - name: HIVE_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-agy, key: HIVE_REGISTRATION_TOKEN }
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-agy, key: GH_TOKEN }
+          volumeMounts:
+            - name: home
+              mountPath: /home/dev
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "2", memory: 2Gi }
+          livenessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - |
+                  grep -q contributor-relay /proc/*/cmdline 2>/dev/null &&
+                  tmux has-session -t contributor 2>/dev/null &&
+                  [ "$(grep -l "^State:.*Z" /proc/*/status 2>/dev/null | wc -l)" -lt 50 ]
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            timeoutSeconds: 15
+            failureThreshold: 3
+        - name: watchdog
+          image: ghcr.io/kubestellar/hive-contributor:latest
+          imagePullPolicy: Always
+          command: ["bash", "/etc/hive/contributor-watchdog.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: WATCHDOG_INTERVAL_S
+              value: "60"
+            - name: WATCHDOG_MAX_WEDGED
+              value: "5"
+          volumeMounts:
+            - name: watchdog
+              mountPath: /etc/hive
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: agy-home
+        - name: tmp
+          emptyDir: {}
+        - name: watchdog
+          configMap:
+            name: contributor-watchdog

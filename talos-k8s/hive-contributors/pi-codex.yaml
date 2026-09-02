@@ -1,0 +1,141 @@
+# pi-codex-contributor — persistent Hive contributor, Pi backend on OpenAI Codex.
+# Both hubs via comma-separated HIVE_HUB / HIVE_REGISTRATION_TOKEN.
+#
+# Pi selects provider/model from AGENT_MODEL=provider/model. The Codex
+# integration is the `openai-codex` provider; its credential env var is
+# OPENAI_API_KEY (pi-backend.js PROVIDER_CREDENTIAL_ENV). Pi REFUSES to launch
+# without a valid provider/model AGENT_MODEL. Not headless-capable upstream, so
+# the interactive tmux path here is what makes it work in-cluster.
+#
+# Requires: secret/hive-contrib-pi-codex
+#             (HIVE_HUB, HIVE_REGISTRATION_TOKEN, GH_TOKEN, OPENAI_API_KEY)
+#           secret/ghcr-auth
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pi-codex-home
+  namespace: hive-contributors
+  labels:
+    app: pi-codex-contributor
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pi-codex-contributor
+  namespace: hive-contributors
+  labels:
+    app: pi-codex-contributor
+    app.kubernetes.io/name: hive-contributor
+    app.kubernetes.io/component: pi-codex
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pi-codex-contributor
+  template:
+    metadata:
+      labels:
+        app: pi-codex-contributor
+        app.kubernetes.io/name: hive-contributor
+        app.kubernetes.io/component: pi-codex
+    spec:
+      imagePullSecrets:
+        - name: ghcr-auth
+      shareProcessNamespace: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: contributor
+          image: ghcr.io/kubestellar/hive-contributor:latest
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: AGENT_BACKEND
+              value: pi
+            - name: AGENT_MODEL
+              value: openai-codex/gpt-5.6-sol
+            - name: HOME
+              value: /home/dev
+            - name: HIVE_HUB
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-pi-codex, key: HIVE_HUB }
+            - name: HIVE_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-pi-codex, key: HIVE_REGISTRATION_TOKEN }
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-pi-codex, key: GH_TOKEN }
+            # No OPENAI_API_KEY: the openai-codex provider uses ChatGPT OAuth,
+            # seeded onto the PVC as ~/.pi/agent/auth.json (README first-run auth).
+            # Set an OPENAI_API_KEY key on the Secret only if you prefer API-key auth.
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef: { name: hive-contrib-pi-codex, key: OPENAI_API_KEY, optional: true }
+          volumeMounts:
+            - name: home
+              mountPath: /home/dev
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "2", memory: 2Gi }
+          livenessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - |
+                  grep -q contributor-relay /proc/*/cmdline 2>/dev/null &&
+                  tmux has-session -t contributor 2>/dev/null &&
+                  [ "$(grep -l "^State:.*Z" /proc/*/status 2>/dev/null | wc -l)" -lt 50 ]
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            timeoutSeconds: 15
+            failureThreshold: 3
+        - name: watchdog
+          image: ghcr.io/kubestellar/hive-contributor:latest
+          imagePullPolicy: Always
+          command: ["bash", "/etc/hive/contributor-watchdog.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: WATCHDOG_INTERVAL_S
+              value: "60"
+            - name: WATCHDOG_MAX_WEDGED
+              value: "5"
+          volumeMounts:
+            - name: watchdog
+              mountPath: /etc/hive
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: pi-codex-home
+        - name: tmp
+          emptyDir: {}
+        - name: watchdog
+          configMap:
+            name: contributor-watchdog
