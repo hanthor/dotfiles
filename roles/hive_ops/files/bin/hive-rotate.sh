@@ -240,6 +240,46 @@ provider_login_blocked() { [ "${LOGIN_BLOCKED[$1]:-0}" = 1 ]; }
 # tmux socket for an agent (hive uses a per-user socket named after the user)
 tmux_sock() { local u="hive-$1"; local uid; uid=$(as_agent "$1" 'id -u'); echo "/tmp/tmux-$uid/$u"; }
 
+# backend_model_mismatch <backend> <model>: 0 when the pair CANNOT launch.
+#
+# Placement is two API calls (/api/switch then /api/model) with no transaction
+# around them. When the second fails — and it does, the dashboard API times out
+# under concurrent mutations — the agent is left on the NEW backend with the
+# OLD model, e.g. `claude --model gemini-3.7-flash-low`. That is a hard startup
+# failure: the pane dies, the watchdog sees a bare shell, and it churns forever.
+# The script already guarded the mirror case (switch fails, model succeeds); it
+# did not guard this one, which is the one that actually kept happening.
+#
+# Only SINGLE-PROVIDER CLIs are judged. pi/goose/litellm are shells over a
+# configurable provider (the contributor legitimately runs pi with
+# openai-codex/gpt-5.6-sol), so a "foreign" model name there is not evidence of
+# anything and must not be touched.
+backend_model_mismatch() {
+  local b="$1" m="$2"
+  [ -z "$b" ] || [ -z "$m" ] && return 1
+  case "$b" in
+    claude) case "$m" in *claude*|*opus*|*sonnet*|*haiku*) return 1 ;; *) return 0 ;; esac ;;
+    agy)    case "$m" in *gemini*) return 1 ;; *) return 0 ;; esac ;;
+    codex)  case "$m" in *gpt-*|*codex*) return 1 ;; *) return 0 ;; esac ;;
+    *)      return 1 ;;
+  esac
+}
+
+# repair_mismatch <agent>: put a mismatched agent back on a model its CURRENT
+# backend can actually run, preferring its own tier's rung for that backend.
+repair_mismatch() {
+  local a="$1" b m tier want
+  b=$(agent_field "$a" cli); m=$(agent_field "$a" govModel)
+  backend_model_mismatch "$b" "$m" || return 1
+  tier=$(tier_of "$a"); [ -z "$tier" ] && return 1
+  want=$(tier_members "$tier" | awk -F'|' -v b="$b" '$3==b{print $4; exit}')
+  [ -z "$want" ] && return 1
+  printf '%-14s MISMATCH %s/%s -> setting model %s\n' "$a" "$b" "$m" "$want"
+  [ "$ACTION" = plan ] && return 0
+  local md; md=$(hive_api POST "/api/model/$a/$want" | jq -r '.status // .error')
+  [ "$md" = "model_set" ] || printf '    ! repair failed: %s\n' "$md"
+}
+
 # ── Probes ──────────────────────────────────────────────────────────────
 # Each returns "<pct_used> <resets>" — pct_used 0-100, or -1 if unknown.
 #
@@ -740,11 +780,25 @@ if [ "$ACTION" = watchdog ]; then
   # Directories are 2770, not 770: the setgid bit makes everything created
   # inside inherit the `node` group, which is what keeps a file written by one
   # agent readable by the next even before this sweep runs again.
+  # The same treatment is needed for codex's per-agent state dirs. Rotation
+  # moves agents across backends, so /data/home/.codex-<agent> ends up holding
+  # sqlite files owned by whichever agent last ran there, at mode 644 — and the
+  # agent that owns the directory then cannot write its own state:
+  #   "attempt to write a readonly database ... state_5.sqlite"
+  # codex dies at launch, the pane falls to a bare shell, and the watchdog
+  # churns on it forever. Observed 2026-09-02 on sec-check and outreach, whose
+  # dirs held files owned by hive-strategist / hive-quality / hive-supervisor.
   gemini_hygiene() {
     kubectl exec -n "$NS" "$POD" -- sh -c '
       find /data/home/.gemini/antigravity-cli -type f -exec chmod 660 {} + 2>/dev/null
       find /data/home/.gemini/antigravity-cli -type d -exec chmod 2770 {} + 2>/dev/null
-      chown -R dev:node /data/home/.gemini/antigravity-cli 2>/dev/null' 2>/dev/null
+      chown -R dev:node /data/home/.gemini/antigravity-cli 2>/dev/null
+      for d in /data/home/.codex-*; do
+        [ -d "$d" ] || continue
+        chown -R dev:node "$d" 2>/dev/null
+        find "$d" -type f -exec chmod 660 {} + 2>/dev/null
+        find "$d" -type d -exec chmod 2770 {} + 2>/dev/null
+      done' 2>/dev/null
   }
   gemini_hygiene
 
@@ -755,6 +809,18 @@ if [ "$ACTION" = watchdog ]; then
   healed=0
   for a in $(agent_names); do
     [ "$(agent_field "$a" paused)" = true ] && continue
+    # Repair an unlaunchable backend/model pair BEFORE judging liveness, and
+    # regardless of what the pane shows. A mismatch is config drift, not a pane
+    # state: the currently-running process may still be happily executing the
+    # OLD model, so the pane reads `ready` and the agent is skipped — right up
+    # until the next kick relaunches it with the foreign model name and it dies.
+    # Catching it here fixes it while it is still cheap, and catches mismatches
+    # from ANY source (a timed-out /api/model, a hand-run curl), not just from
+    # this script's own rotations.
+    if repair_mismatch "$a"; then
+      healed=$((healed+1))
+      continue
+    fi
     state=$(pane_classify "$a")
     [ "$state" = ready ] && { printf '%-14s liveness ok\n' "$a"; continue; }
     lk="$STATE_DIR/watchdog-last-kick-$a"
@@ -786,7 +852,17 @@ if [ "$ACTION" = watchdog ]; then
           sw=$(hive_api POST "/api/switch/$a/$wb" | jq -r '.status // .error')
           if [ "$sw" = "switched" ]; then
             md=$(hive_api POST "/api/model/$a/$wm" | jq -r '.status // .error')
-            printf '%-14s %-8s rotated off -> %s %s (%s / %s)\n' "$a" "$state" "$wb" "$wm" "$sw" "$md"
+            if [ "$md" = "model_set" ]; then
+              printf '%-14s %-8s rotated off -> %s %s\n' "$a" "$state" "$wb" "$wm"
+            else
+              # Roll the backend BACK rather than leave `claude --model
+              # gemini-…`, which cannot start at all. A failed rotation that
+              # leaves the agent where it was is recoverable; one that leaves an
+              # unlaunchable pair is not.
+              rb=$(hive_api POST "/api/switch/$a/$curb" | jq -r '.status // .error')
+              printf '%-14s %-8s ! model set failed (%s) — rolled back to %s (%s)\n' \
+                "$a" "$state" "$md" "$curb" "$rb"
+            fi
           else
             printf '%-14s %-8s ! rotate failed: %s — kicking anyway\n' "$a" "$state" "$sw"
           fi
@@ -963,7 +1039,13 @@ for a in $(agent_names); do
     echo "    ! switch failed: $sw — leaving $a alone"; continue
   fi
   md=$(hive_api POST "/api/model/$a/$wm" | jq -r '.status // .error')
-  [ "$md" = "model_set" ] || echo "    ! model set failed: $md"
+  if [ "$md" != "model_set" ]; then
+    # Same reasoning as the watchdog path: never leave the agent on a new
+    # backend with the previous backend's model — that pair cannot launch.
+    rb=$(hive_api POST "/api/switch/$a/$curb" | jq -r '.status // .error')
+    echo "    ! model set failed: $md — rolled back to $curb ($rb)"
+    continue
+  fi
   # login-detector pauses are provider failures, not operator pauses. Release
   # this safety pause only after both fallback mutations succeeded.
   if [ "$(agent_field "$a" paused)" = true ] &&
