@@ -1174,8 +1174,19 @@ if [ "$ACTION" = watchdog ]; then
     # the CLI from scratch — a fresh process re-reads the credential and, when
     # the credential is valid, comes up logged in. No keystrokes are sent to a
     # pane that might be a menu.
+    #
+    # Killing the session means the follow-up /api/kick CANNOT work — it
+    # answers {"error":"tmux session hive-<agent> not found"} and the agent
+    # stays dead. /api/restart is the endpoint that recreates the session, so
+    # the auth path uses that and skips the kick entirely.
     if [ "$state" = auth ]; then
       as_agent "$a" "tmux -S /tmp/tmux-$u/hive-$a kill-session -t hive-$a 2>/dev/null" 2>/dev/null
+      sleep 2
+      rs=$(hive_api POST "/api/restart/$a" | jq -r '.status // .error')
+      printf '%-14s %-8s auth pane — session killed, restarted (%s)\n' "$a" "$state" "$rs"
+      echo "$(date +%s)" > "$lk"
+      healed=$((healed+1))
+      continue
     else
       as_agent "$a" "tmux -S /tmp/tmux-$u/hive-$a send-keys -t hive-$a C-c 2>/dev/null; sleep 1; tmux -S /tmp/tmux-$u/hive-$a send-keys -t hive-$a C-c 2>/dev/null" 2>/dev/null
     fi
