@@ -1,137 +1,159 @@
-# claude-contributor — persistent Hive contributor, Claude Code backend.
-# Subscribes to BOTH hubs (tunaos + hosted-kubestellar) via a comma-separated
-# HIVE_HUB / HIVE_REGISTRATION_TOKEN (one token per hub, same order).
-#
-# Requires (create out-of-band, see README.md — the `contribute` wrapper does this):
-#   secret/hive-contrib-claude
-#     HIVE_HUB                = wss://hive.tunaos.org/contribute,wss://hosted-kubestellar-hive-ojv6.hive.kubestellar.io/contribute
-#     HIVE_REGISTRATION_TOKEN = <tunaos-token>,<kubestellar-token>
-#     GH_TOKEN                = <gh token>
-#     [ANTHROPIC_API_KEY]     = <optional; else seed ~/.claude OAuth on the PVC>
-#   secret/ghcr-auth  (image pull)
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: claude-home
-  namespace: hive-contributors
-  labels:
-    app: claude-contributor
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: local-path
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: claude-contributor
-  namespace: hive-contributors
   labels:
     app: claude-contributor
-    app.kubernetes.io/name: hive-contributor
     app.kubernetes.io/component: claude
+    app.kubernetes.io/name: hive-contributor
+  name: claude-contributor
+  namespace: hive-contributors
 spec:
+  progressDeadlineSeconds: 600
   replicas: 1
-  strategy:
-    type: Recreate    # RWO PVC — a rolling second pod could not attach.
+  revisionHistoryLimit: 10
   selector:
     matchLabels:
       app: claude-contributor
+  strategy:
+    type: Recreate
   template:
     metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: '2026-09-02T10:23:57+05:30'
       labels:
         app: claude-contributor
-        app.kubernetes.io/name: hive-contributor
         app.kubernetes.io/component: claude
+        app.kubernetes.io/name: hive-contributor
     spec:
+      containers:
+      - env:
+        - name: AGENT_BACKEND
+          value: claude
+        - name: HOME
+          value: /home/dev
+        - name: HIVE_HUB
+          valueFrom:
+            secretKeyRef:
+              key: HIVE_HUB
+              name: hive-contrib-claude
+        - name: HIVE_REGISTRATION_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: HIVE_REGISTRATION_TOKEN
+              name: hive-contrib-claude
+        - name: GH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: GH_TOKEN
+              name: hive-contrib-claude
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: ANTHROPIC_API_KEY
+              name: hive-contrib-claude
+              optional: true
+        image: ghcr.io/kubestellar/hive-contributor:latest
+        imagePullPolicy: Always
+        livenessProbe:
+          exec:
+            command:
+            - bash
+            - -c
+            - 'grep -q contributor-relay /proc/*/cmdline 2>/dev/null &&
+
+              tmux has-session -t contributor 2>/dev/null &&
+
+              [ "$(grep -l "^State:.*Z" /proc/*/status 2>/dev/null | wc -l)" -lt 50 ]
+
+              '
+          failureThreshold: 3
+          initialDelaySeconds: 120
+          periodSeconds: 60
+          successThreshold: 1
+          timeoutSeconds: 15
+        name: contributor
+        resources:
+          limits:
+            cpu: '2'
+            memory: 2Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /home/dev
+          name: home
+        - mountPath: /tmp
+          name: tmp
+        - mountPath: /home/dev/.claude
+          name: sharedclaude
+      - command:
+        - bash
+        - /etc/hive/contributor-watchdog.sh
+        env:
+        - name: WATCHDOG_INTERVAL_S
+          value: '60'
+        - name: WATCHDOG_MAX_WEDGED
+          value: '5'
+        image: ghcr.io/kubestellar/hive-contributor:latest
+        imagePullPolicy: Always
+        name: watchdog
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/hive
+          name: watchdog
+        - mountPath: /tmp
+          name: tmp
+      dnsPolicy: ClusterFirst
       imagePullSecrets:
-        - name: ghcr-auth
-      # The watchdog sidecar must see the relay process and the tmux socket.
-      shareProcessNamespace: true
+      - name: ghcr-auth
+      nodeSelector:
+        workload-role: hive
+      restartPolicy: Always
+      schedulerName: default-scheduler
       securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
         runAsNonRoot: true
         runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
-      containers:
-        - name: contributor
-          image: ghcr.io/kubestellar/hive-contributor:latest
-          imagePullPolicy: Always
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: [ALL]
-          env:
-            - name: AGENT_BACKEND
-              value: claude
-            - name: HOME
-              value: /home/dev
-            - name: HIVE_HUB
-              valueFrom:
-                secretKeyRef: { name: hive-contrib-claude, key: HIVE_HUB }
-            - name: HIVE_REGISTRATION_TOKEN
-              valueFrom:
-                secretKeyRef: { name: hive-contrib-claude, key: HIVE_REGISTRATION_TOKEN }
-            - name: GH_TOKEN
-              valueFrom:
-                secretKeyRef: { name: hive-contrib-claude, key: GH_TOKEN }
-            - name: ANTHROPIC_API_KEY
-              valueFrom:
-                secretKeyRef: { name: hive-contrib-claude, key: ANTHROPIC_API_KEY, optional: true }
-          volumeMounts:
-            - name: home
-              mountPath: /home/dev
-            - name: tmp
-              mountPath: /tmp
-          resources:
-            requests: { cpu: 250m, memory: 512Mi }
-            limits: { cpu: "2", memory: 2Gi }
-          livenessProbe:
-            exec:
-              command:
-                - bash
-                - -c
-                - |
-                  grep -q contributor-relay /proc/*/cmdline 2>/dev/null &&
-                  tmux has-session -t contributor 2>/dev/null &&
-                  [ "$(grep -l "^State:.*Z" /proc/*/status 2>/dev/null | wc -l)" -lt 50 ]
-            initialDelaySeconds: 120
-            periodSeconds: 60
-            timeoutSeconds: 15
-            failureThreshold: 3
-        # ── self-heal sidecar ──
-        - name: watchdog
-          image: ghcr.io/kubestellar/hive-contributor:latest
-          imagePullPolicy: Always
-          command: ["bash", "/etc/hive/contributor-watchdog.sh"]
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: [ALL]
-          env:
-            - name: WATCHDOG_INTERVAL_S
-              value: "60"
-            - name: WATCHDOG_MAX_WEDGED
-              value: "5"
-          volumeMounts:
-            - name: watchdog
-              mountPath: /etc/hive
-            - name: tmp
-              mountPath: /tmp
-          resources:
-            requests: { cpu: 10m, memory: 32Mi }
-            limits: { cpu: 100m, memory: 128Mi }
+      shareProcessNamespace: true
+      terminationGracePeriodSeconds: 30
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
       volumes:
-        - name: home
-          persistentVolumeClaim:
-            claimName: claude-home
-        - name: tmp
-          emptyDir: {}
-        - name: watchdog
-          configMap:
-            name: contributor-watchdog
+      - name: home
+        persistentVolumeClaim:
+          claimName: claude-home
+      - emptyDir: {}
+        name: tmp
+      - configMap:
+          defaultMode: 420
+          name: contributor-watchdog
+        name: watchdog
+      - name: sharedclaude
+        persistentVolumeClaim:
+          claimName: shared-claude
+
