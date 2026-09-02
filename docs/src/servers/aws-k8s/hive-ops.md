@@ -33,6 +33,7 @@ Two failures, both caused purely by the control plane living on a desktop:
 |---|---|---|
 | `hive-watchdog` | `*/5 * * * *` | classify every agent pane; heal wedged/auth-broken ones; repair unlaunchable backend/model pairs; normalise shared-home permissions |
 | `hive-rotate` | `*/20 * * * *` | probe all providers, place agents on the best available rung, un-strand recovered ones, reconcile contributor replicas |
+| `hive-pace` | `5,25,45 * * * *` | burn-rate pacing: spend each pool so it lands empty at its reset, not before |
 | `hive-peak-pause` | `0 1,6 * * 1-5` | pause agents on peak-priced providers |
 | `hive-peak-resume` | `0 4,10 * * 1-5` | resume them |
 | `hive-repo-sync` | `17 3 * * *` | add newly created tuna-os repos to hive's managed list |
@@ -146,6 +147,73 @@ Two rules worth internalising, both learned the hard way:
   not failed measurements. Reporting them as "unknown" let rotation fill a
   codex account that was dead for four days, and keep agents on a Claude
   credential whose every pane read `Login expired`.
+
+## What pacing means (and how it differs from the probe)
+
+`probe` answers **can this provider serve** — a threshold, 85–90% depending on
+the pool. `hive-pace` answers **should we be going this fast** — a rate. They
+are different questions and a threshold cannot answer the second:
+
+- **Overburn.** 22 agents took Anthropic 64% → 69% in ~40 minutes against a cap
+  resetting six hours later. The threshold stays silent until 90%, and then the
+  fleet parks and sits idle for hours holding quota it spent too early.
+- **Underburn.** A cap that resets unused is quota destroyed. The threshold has
+  nothing to say about this at all — it is only ever a brake.
+
+```
+PROVIDER    VERDICT   PRESSURE  OBSERVED    ALLOWED     DETAIL
+anthropic   hot       2.22      12.0 %/hr   5.41 %/hr   69% used, 6.1h left, 2 limit(s), 7 sample(s)
+```
+
+**Headroom is not a scalar, and this is the thing to internalise.** Anthropic
+returns several *unscoped* limits on independent clocks. Measured 16:55Z:
+
+```
+37%  resets 19:30   (5h session)  -> 63 points over 2.6h -> 24.2 %/hr allowed
+67%  resets 23:00   (weekly)      -> 33 points over 6.1h ->  5.4 %/hr allowed
+100% resets 23:00   scope=Fable   -> model-class cap, EXCLUDED
+```
+
+`probe` reports the max, `69% resets 23:00`. Right for availability, useless
+for rate — the binding limit is whichever is closest to blowing *its own*
+deadline, and the two percentages are on different scales so their rates are
+not directly comparable either. Hence `pressure`, a ratio:
+
+    pressure = max over unscoped limits of (observed_rate / allowed_rate)
+
+`>1.25` hot, `<0.75` cold, between is on-pace.
+
+Three behaviours that look like bugs and are not:
+
+- **`learning`** means fewer than 3 samples spanning an hour. It refuses to fit
+  a rate on less, because `percent` is an integer and a two-point delta is
+  mostly quantization — the "12 %/hr" that motivated this was really somewhere
+  in 6–18. After a redeploy it takes ~1h to produce a verdict, and until then
+  the fleet runs on `hive-rotate`'s thresholds exactly as before.
+- **`pace: 0 change(s)` while hot** is fine *only* if no `SATURATED` line
+  follows. That line means the actuator is exhausted — every agent is already
+  on the cheap rung — and the remaining levers (cadence, pausing, more capacity)
+  are outside this script. That is the line that means intervene.
+- **It never promotes an agent it did not demote.** An agent the operator or
+  `hive-rotate` placed on the cheap rung stays there; only entries in
+  `pace-demoted` are restored when a pool goes cold.
+
+It paces **both hives** (`hive` + `hive-reef`), because one Anthropic
+subscription is drained by both. It does *not* control the contributor CLIs,
+which draw on the same pools — so it reports how many consumers it actually
+owns rather than assuming the fleet is all of them.
+
+It makes **no provider calls of its own**. `hive-rotate` probes once and
+publishes the full unscoped limit array to the `hive-provider-usage` ConfigMap
+(`anthropic_limits` key); the pacer reads that. A first version polled the
+Anthropic usage endpoint itself on a 10-minute cycle and immediately earned
+`rate_limit_error`, which degrades the *rotator's* reading too — so the fleet
+would have lost its availability signal to gain a pacing signal.
+
+```bash
+kubectl logs -n hive -l app.kubernetes.io/component=pace --tail=30
+kubectl -n hive get configmap hive-pace -o jsonpath='{.data.pace\.json}' | jq
+```
 
 See also: [cluster handbook](cluster.md), [contributor
 fleet](../../../../talos-k8s/hive-contributors/README.md),
