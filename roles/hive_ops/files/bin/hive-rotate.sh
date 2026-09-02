@@ -401,6 +401,25 @@ probe_anthropic() {
   # Observed 2026-09-02: weekly_scoped{model:"Fable"} at 100% while weekly_all
   # was 63% and session 15% — and `claude -p --model claude-sonnet-5` answered
   # normally throughout.
+  # Stash the FULL unscoped limit set for the pacer. The summary below
+  # deliberately collapses to the max, which is right for "can this provider
+  # serve" and useless for "should we be going this fast" — the limits sit on
+  # independent clocks (a 5h session window and a weekly cap), so the binding
+  # one is whichever is closest to violating its OWN deadline, which the max
+  # cannot express.
+  #
+  # Written to a FILE, not a variable: gather() calls this inside $( ), so any
+  # global set here dies with the subshell.
+  #
+  # This is also why hive-pace.sh does not probe Anthropic itself. Two pollers
+  # against api.anthropic.com/api/oauth/usage earns a `rate_limit_error` and
+  # BOTH readings degrade — observed 2026-09-02 the moment a second 10-minute
+  # poller was added alongside this one. One probe, published once, read by
+  # everyone.
+  printf '%s' "$out" | jq -c 'try ([.limits[]? | select(.scope == null and .percent != null)]
+        | sort_by(.resets_at)
+        | to_entries | map({slot:"slot\(.key)", percent:.value.percent, resets_at:.value.resets_at}))
+        // empty' > "$STATE_DIR/anthropic-limits.json" 2>/dev/null || true
   pct=$(printf '%s' "$out" | jq -r 'try ([.limits[]? | select(.scope == null) | .percent // 0] | max) // empty' 2>/dev/null)
   r=$(printf '%s' "$out" | jq -r 'try ([.limits[]? | select(.scope == null and .percent != null)] | max_by(.percent) | .resets_at) // empty' 2>/dev/null)
   # Surface any model-scoped exhaustion in the note so an operator can see WHY
@@ -1116,6 +1135,12 @@ publish_usage() {
     if [ "$v" = "-1" ]; then v="unknown"; else v="${v}% used"; fi
     args+=("--from-literal=$p=$v ${NOTE[$p]}")
   done
+  # Per-limit Anthropic detail for hive-pace.sh, so it never has to make its own
+  # (rate-limited) call. Absent or unparsed simply means the pacer has one less
+  # provider to reason about, never a failure here.
+  local lim=""
+  [ -s "$STATE_DIR/anthropic-limits.json" ] && lim=$(cat "$STATE_DIR/anthropic-limits.json")
+  [ -n "$lim" ] && args+=("--from-literal=anthropic_limits=$lim")
   kubectl create configmap hive-provider-usage -n "$NS" \
     "${args[@]}" "--from-literal=updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --dry-run=client -o yaml 2>/dev/null | kubectl apply -f - >/dev/null 2>&1 \

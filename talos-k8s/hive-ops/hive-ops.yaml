@@ -66,6 +66,48 @@ roleRef:
   kind: Role
   name: hive-ops
 ---
+# Burn-rate pacing spans BOTH hives, because the thing it paces does too: one
+# Anthropic subscription is drained by school's 11 agents and reef's 11
+# together. A pacer that could only actuate school would shed load, watch reef
+# absorb the slack, observe no improvement, and shed again — so reef access is
+# not an optional extra here, it is what makes the control loop stable.
+#
+# Same verb set as the `hive` Role and no more: read pods, exec into the pod to
+# reach its API, read the dashboard secret, publish the verdict ConfigMap.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-ops-reef
+  namespace: hive-reef
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [hive-secrets]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-ops-reef
+  namespace: hive-reef
+subjects:
+  - kind: ServiceAccount
+    name: hive-ops
+    namespace: hive
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hive-ops-reef
+---
 # Contributor reconciliation scales Deployments in the neighbouring namespace.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -217,6 +259,78 @@ spec:
               env:
                 - {name: KUBECONFIG, value: ""}
                 - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+# Burn-rate pacing. Distinct from hive-rotate on purpose: rotate answers "can
+# this provider serve at all" (a threshold), pace answers "should we be going
+# this fast" (a rate). A threshold cannot see either failure — burning a weekly
+# cap in three hours and then sitting idle, or letting it reset unspent.
+#
+# The fit needs SAMPLES: percent is an integer, so a two-point delta is
+# dominated by quantization, and the whole reason this is a CronJob with a PVC
+# instead of a one-shot calculation is to accumulate enough history to
+# distinguish 6 %/hr from 18 %/hr.
+#
+# Locked to hive-rotate's 20-minute cadence, offset to :05 so it runs just
+# AFTER rotate's :00/:20/:40. It makes NO provider calls of its own — it reads
+# the ConfigMap rotate publishes. A first attempt polled every 10 minutes with
+# its own Anthropic probe and immediately earned `rate_limit_error` from
+# api.anthropic.com, degrading the rotator's availability reading as well.
+# Sampling faster than the upstream measurement refreshes buys nothing anyway:
+# it just records the same number three times and flatters the fit.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-pace
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: pace}
+spec:
+  schedule: "5,25,45 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-pace.sh", "apply"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_PACE_STATE, value: /state/hive-rotate}
+                - {name: HIVE_PACE_NAMESPACES, value: "hive hive-reef"}
                 - {name: HOME, value: /tmp}
               volumeMounts:
                 - {name: scripts, mountPath: /scripts, readOnly: true}
