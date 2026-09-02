@@ -334,9 +334,14 @@ PY
 }
 
 # ── Fleet view ──────────────────────────────────────────────────────────
-# Every agent across every managed hive, with the model it is ACTUALLY running.
-# Read from the live API rather than from config, because config is what was
-# requested and the pane is what is burning quota.
+# Every agent across every managed hive, with its CONFIGURED backend and model.
+#
+# The fields are `cli` and `govModel`, matching hive-rotate.sh. There is no
+# `.backend` on an agent — reading one yields null for every agent, and this
+# script's first version did exactly that and would have PUT an empty backend
+# on the first actuation. `.model` exists but reports what the PANE currently
+# shows; `govModel` is what the governor will launch next, which is the value
+# the models endpoint writes. Read the field you write.
 fleet() {
   local ns pod tok
   for ns in $NAMESPACES; do
@@ -346,7 +351,8 @@ fleet() {
     [ -z "$tok" ] && continue
     kubectl exec -n "$ns" "$pod" -- curl -sS -H "X-Hive-Internal: $tok" \
       "$API/api/status" 2>/dev/null \
-      | jq -r --arg ns "$ns" '.agents[]? | "\($ns)\t\(.name)\t\(.backend // "")\t\(.model // "")\t\(.paused // false)"' 2>/dev/null
+      | jq -r --arg ns "$ns" '.agents[]?
+          | "\($ns)\t\(.name)\t\(.cli // "")\t\(.govModel // .model // "")\t\(.paused // false)"' 2>/dev/null
   done
 }
 
@@ -369,6 +375,13 @@ session_for() {
 # serve the model it was told to run.
 set_model() {
   local ns="$1" agent="$2" backend="$3" model="$4" pod sid
+  # Never write a blank. A missing field here does not fail loudly — it PUTs
+  # an empty backend or model and unseats a working agent, which then looks
+  # like a hive fault rather than a pacer fault.
+  if [ -z "$backend" ] || [ -z "$model" ]; then
+    echo "WARN: refusing to set $ns/$agent with empty backend/model" >&2
+    return 1
+  fi
   pod=$(kubectl get pods -n "$ns" -l "$LABEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
   sid=$(session_for "$ns")
   if [ -z "$pod" ] || [ -z "$sid" ]; then
