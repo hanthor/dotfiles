@@ -2,3 +2,7 @@ target/
 *.retry
 .ansible/
 __pycache__/
+
+# GNOME extension schema build artifact — regenerated on deploy by the
+# gnome role's "Compile GNOME extension schemas" handler.
+roles/gnome/files/extensions/*/schemas/gschemas.compiled

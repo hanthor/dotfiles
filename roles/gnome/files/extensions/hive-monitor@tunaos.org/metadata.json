@@ -1,0 +1,9 @@
+{
+  "uuid": "hive-monitor@tunaos.org",
+  "name": "Hive Monitor",
+  "description": "Watch a kubestellar/hive instance from the top bar — governor mode, queue depth, and agent health — and file an idea as a labelled GitHub issue without leaving the desktop. Point it at any hive; nothing is hardcoded.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "settings-schema": "org.gnome.shell.extensions.hive-monitor",
+  "url": "https://github.com/tuna-os/hive",
+  "version": 1
+}

@@ -1,3 +1,15 @@
 ---
 - name: Load GNOME keybindings
   ansible.builtin.shell: dconf load /org/gnome/settings-daemon/plugins/media-keys/ < {{ ansible_facts['env']['HOME'] }}/.config/dconf/gnome-keybindings.ini
+
+# An extension carrying its own GSettings schema is dead until the schema is
+# compiled: the shell throws "Schema not found" from init and disables it. The
+# repo ships the XML (reviewable) but not gschemas.compiled (a build artifact
+# that would go stale against the XML), so compile on deploy.
+- name: Compile GNOME extension schemas
+  ansible.builtin.command:
+    cmd: glib-compile-schemas schemas/
+    chdir: "{{ ansible_facts['env']['HOME'] }}/.local/share/gnome-shell/extensions/{{ item }}"
+  loop:
+    - hive-monitor@tunaos.org
+  changed_when: true

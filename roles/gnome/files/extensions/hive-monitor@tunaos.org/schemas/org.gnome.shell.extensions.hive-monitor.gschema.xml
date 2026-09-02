@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.hive-monitor"
+          path="/org/gnome/shell/extensions/hive-monitor/">
+
+    <key name="hive-url" type="s">
+      <default>''</default>
+      <summary>Hive base URL</summary>
+      <description>
+        Base URL of the hive dashboard, e.g. https://hive.example.org — no
+        trailing slash. Empty means the extension stays idle rather than
+        polling a guessed host.
+      </description>
+    </key>
+
+    <key name="hive-token" type="s">
+      <default>''</default>
+      <summary>Hive dashboard token</summary>
+      <description>
+        Sent as the X-Hive-Internal header. This is the value of the hive's
+        HIVE_DASHBOARD_TOKEN secret. It is the only credential the hive
+        accepts for server-to-server reads: the Bearer path is disabled on a
+        direct-route spoke, and a browser session cookie is not something an
+        extension can obtain.
+      </description>
+    </key>
+
+    <key name="poll-seconds" type="i">
+      <default>60</default>
+      <range min="15" max="3600"/>
+      <summary>Refresh interval in seconds</summary>
+    </key>
+
+    <key name="github-repo" type="s">
+      <default>''</default>
+      <summary>Repository for new ideas</summary>
+      <description>
+        owner/name of the repository an idea becomes an issue in. It should be
+        one of the hive's managed repos, or the governor will never see it.
+      </description>
+    </key>
+
+    <key name="github-token" type="s">
+      <default>''</default>
+      <summary>GitHub token</summary>
+      <description>
+        Token used to open the issue, needing only issues:write on the target
+        repository. Kept separate from the hive token because they are
+        different credentials for different services.
+      </description>
+    </key>
+
+    <key name="idea-labels" type="s">
+      <default>'ai-fix-requested'</default>
+      <summary>Labels applied to a new idea</summary>
+      <description>
+        Comma-separated. Defaults to the label hive's own ACMM issue creator
+        uses to mean "an agent should pick this up".
+      </description>
+    </key>
+
+    <key name="show-counts" type="b">
+      <default>true</default>
+      <summary>Show queue counts in the top bar</summary>
+      <description>
+        When off, the panel shows only the status dot and governor mode, which
+        is quieter on a narrow top bar.
+      </description>
+    </key>
+  </schema>
+</schemalist>

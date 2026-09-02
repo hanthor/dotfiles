@@ -110,7 +110,9 @@
     - copyous@boerdereinar.dev
     - papershell@lalovene.github.com
     - paperwm@paperwm.github.com
+    - hive-monitor@tunaos.org
   when: is_desktop | bool
+  notify: Compile GNOME extension schemas
 
 - name: Load GNOME extension settings via dconf
   ansible.builtin.shell: |
