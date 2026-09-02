@@ -106,13 +106,16 @@ mkdir -p "$STATE_DIR"
 #
 # Format: tier|provider|backend|model   (order within a tier = preference)
 TIERS='
+T1|google|agy|gemini-3.7-flash-high
 T1|deepseek|pi|deepseek-v4-flash
 T1|openai|codex|gpt-5.6-sol
 T1|anthropic|claude|claude-opus-5
+T2|google|agy|gemini-3.7-flash-low
 T2|deepseek|pi|deepseek-v4-flash
 T2|openai|codex|gpt-5.6-luna
 T2|anthropic|claude|claude-sonnet-5
 T2|google|agy|gemini-3.6-flash
+T3|google|agy|gemini-3.7-flash-low
 T3|deepseek|pi|deepseek-chat
 T3|openai|codex|gpt-5.6-luna
 T3|anthropic|claude|claude-haiku-4-5
@@ -133,7 +136,17 @@ outreach|T2
 sec-check|T1
 architect|T1
 strategist|T1
+operations|T2
+telemetry|T2
 '
+# operations/telemetry are ACMM-pack-injected (not in hive.yaml — the pack
+# "overrides backends to copilot" per the config comment) and were previously
+# absent from this table entirely, so tier_of() returned empty and every
+# rotation/healing path silently skipped them (`[ -z "$tier" ] && continue`).
+# Combined with copilot's device-flow login being unautomatable and unmodeled
+# in TIERS (no github|copilot rung exists — intentionally, see provider_of),
+# that left them permanently stuck the moment copilot needed re-auth: kicked
+# every 5min by the watchdog, never rotated, never producing. 2026-09-02.
 
 tier_of() { printf '%s\n' "$AGENT_TIERS" | awk -F'|' -v a="$1" '$1==a{print $2}'; }
 
@@ -195,10 +208,19 @@ agent_names() { printf '%s' "$STATUS_JSON" | jq -r '.agents[].name'; }
 
 provider_of() {  # backend model -> provider
   local c m; c=$(printf '%s' "$1" | tr 'A-Z' 'a-z'); m=$(printf '%s' "$2" | tr 'A-Z' 'a-z')
+  # cli takes precedence over model-name sniffing for backends whose auth is
+  # tied to the CLI, not the model it happens to be puppeting. copilot can
+  # serve claude/gpt/gemini-named models through a GitHub subscription, and
+  # its device-flow login is a completely different (unautomatable, never
+  # headlessly recoverable) failure domain from an actual anthropic/openai/
+  # google outage. Matching on model name here would let a copilot
+  # login-required pause poison LOGIN_BLOCKED for a real provider and wedge
+  # the whole fleet's rotation off it.
+  case "$c" in copilot) echo github; return;; esac
   case "$m" in *deepseek*) echo deepseek; return;; *claude*|*opus*|*sonnet*|*haiku*) echo anthropic; return;;
                *gpt-*|*codex*) echo openai; return;; *gemini*) echo google; return;; esac
   case "$c" in claude|litellm) echo anthropic;; codex) echo openai;; agy) echo google;;
-               copilot) echo github;; bob) echo ibm;; pi|goose) echo deepseek;; *) echo unknown;; esac
+               bob) echo ibm;; pi|goose) echo deepseek;; *) echo unknown;; esac
 }
 
 # A paused login-detector agent makes its provider unmeasurable: the pane probe
@@ -460,6 +482,16 @@ AGY_MAX_HIGH_VOLUME="${HIVE_ROTATE_AGY_MAX_HIGH_VOLUME:-2}"
 # Watchdog: minimum minutes between auto-heal kicks of the same agent (the
 # k8s CrashLoopBackOff analog; a fresh launch needs ~1min to reach ready).
 WATCHDOG_KICK_INTERVAL_MIN="${HIVE_WATCHDOG_KICK_INTERVAL_MIN:-5}"
+# How long a pool evicted because it measured exhausted stays canary-free.
+# Defined here (not down by the canary section that reads/writes it) because
+# the main rotation loop below also writes this cooldown file the moment it
+# switches an agent off a provider it just found exhausted — under `set -u`
+# that loop crashed mid-run on every first such switch, silently skipping
+# every agent after it (confirmed 2026-09-02: guide switched off exhausted
+# openai, then the run died before outreach/sec-check/strategist could be
+# paused). CANARY_COOLDOWN_MIN stays defined only where it's used, since
+# nothing outside the canary section reads it.
+CANARY_EXHAUSTED_COOLDOWN_MIN="${HIVE_ROTATE_CANARY_EXHAUSTED_COOLDOWN_MIN:-720}"
 
 cadence_s() { printf '%s' "$STATUS_JSON" | jq -r --arg a "$1" '.agents[]|select(.name==$a)|.cadence//""' \
                 | awk '{ s=$0; n=s; sub(/[a-z]$/,"",n);
@@ -642,7 +674,13 @@ pane_classify() {
   # exact CLI chrome only (agy accent/terms picker, claude login prompts) —
   # loose words like "login"/"sign in" appear in issue bodies the agent is
   # reading and caused false-positive kills (§10a lesson, RFC #4665).
-  if printf '%s' "$text" | grep -qiE 'login expired|run /login|not logged in|please run /login|\[next\]|terms of service & data use|accent: highlighted|enter toggl|enter confirm|↑/↓ navigate'; then
+  # 'please use /login to sign in to use copilot' is Copilot CLI's EXACT
+  # chrome (verified against a real stuck pane 2026-09-02) — distinct wording
+  # from claude's "run /login"/"not logged in", so it needs its own pattern or
+  # a copilot pane sits misclassified as ready forever (confirmed: the
+  # watchdog logged "liveness ok" every 5min for 43h straight while /api/status
+  # reported PaneShowsLogin the whole time).
+  if printf '%s' "$text" | grep -qiE 'login expired|run /login|not logged in|please run /login|please use /login|\[next\]|terms of service & data use|accent: highlighted|enter toggl|enter confirm|↑/↓ navigate'; then
     echo auth; return
   fi
   # shell prompt = the CLI died and the pane fell back to bash.
@@ -899,10 +937,10 @@ done
 # a pool that just evicted its canary (because it filled up) from re-spawning
 # one immediately.
 CANARY_COOLDOWN_MIN="${HIVE_ROTATE_CANARY_COOLDOWN_MIN:-120}"
-# How long a pool evicted because it measured exhausted stays canary-free. The
-# 120min default is for transient evictions; an exhausted pool (codex 100%)
-# re-checks at most every 12h so a weekly reset is picked up within a day.
-CANARY_EXHAUSTED_COOLDOWN_MIN="${HIVE_ROTATE_CANARY_EXHAUSTED_COOLDOWN_MIN:-720}"
+# CANARY_EXHAUSTED_COOLDOWN_MIN (120min transient vs. 720min for a positively
+# exhausted pool, so a weekly codex reset is picked up within a day) is
+# defined earlier, alongside the other rotation tunables — see the comment
+# there for why.
 
 # canary_cooled: 0 (true) while <provider> is cooling down. The cooldown file
 # holds an epoch seconds expiry (eviction writes now+cooldown). An empty or
