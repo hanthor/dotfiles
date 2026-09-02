@@ -1,0 +1,555 @@
+# hive-ops — the hive's operational control plane, in the cluster.
+#
+# Stage 1 of talos-os/hive#15: the SAME scripts that ran as systemd user timers
+# on a workstation, running as CronJobs next to the thing they manage. No
+# rewrite — the 545 comment lines in hive-rotate.sh are hard-won policy (see the
+# RFC), and porting them to a new runtime is how they get lost.
+#
+# WHAT THIS FIXES
+#   - The control plane no longer stops when a desktop sleeps. Two agents once
+#     sat in PaneShowsLogin for 43h because nothing was running to heal them.
+#   - Rotation state moves off ~/.local/state and into a PVC beside the cluster
+#     it describes. A truncated `stranded` journal previously left 8 agents
+#     paused on healthy providers with nothing left that knew to free them.
+#
+# ALL EIGHT jobs moved; nothing operational is left on the workstation.
+# `gh` is absent from the stock image, so hive-metrics.sh was converted to mint
+# a GitHub App installation token and call the REST API with curl — which is
+# also the more correct identity (the App, not somebody's personal keyring
+# token). `git` IS present, so hive-fork-drift.sh moved unchanged.
+#
+# Deploy with talos-k8s/hive-ops/deploy.sh — it publishes the scripts as a
+# ConfigMap from their canonical home in roles/hive_ops/files/bin/ so the code
+# stays lintable in one place rather than being duplicated into YAML.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hive-ops
+  namespace: hive
+---
+# The scripts drive the hive through its own API, reached with `kubectl exec`
+# into the hive pod — the same ladder they used from outside. Being in-cluster
+# does not remove that requirement: X-Hive-Internal is read-only for mutations,
+# so writes still need the owner session cookie read from the pod's PVC.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-ops
+  namespace: hive
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [hive-secrets]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, list, create, update, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-ops
+  namespace: hive
+subjects:
+  - kind: ServiceAccount
+    name: hive-ops
+    namespace: hive
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hive-ops
+---
+# Contributor reconciliation scales Deployments in the neighbouring namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-ops-contributors
+  namespace: hive-contributors
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments/scale]
+    verbs: [get, update, patch]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-ops-contributors
+  namespace: hive-contributors
+subjects:
+  - kind: ServiceAccount
+    name: hive-ops
+    namespace: hive
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hive-ops-contributors
+---
+# Rotation state: the stranded journal, rotation history, canary cooldowns and
+# per-agent kick backoff. Small, but it MUST outlive a job pod — losing the
+# stranded journal is precisely what stranded 8 agents indefinitely.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hive-ops-state
+  namespace: hive
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-path
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-watchdog
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: watchdog}
+spec:
+  schedule: "*/5 * * * *"
+  # The script is explicitly not safe to run twice at once: /api/status lags a
+  # mutation by >10s, so a second pass decides on pre-mutation state ("do not
+  # chain apply runs"). Forbid, never Allow.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          # local-path PVCs bind to one node; the hive pod is pinned there too,
+          # so the job must land on the same node to mount the state volume.
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-rotate.sh", "watchdog"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                # In-cluster: no kubeconfig. The scripts default KUBECONFIG to a
+                # workstation path, so point it at nothing and let client-go use
+                # the ServiceAccount.
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-rotate
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: rotate}
+spec:
+  schedule: "*/20 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # `apply` legitimately takes ~2 minutes (the pane probes are deliberately
+      # unhurried); give it real headroom rather than killing a healthy run.
+      activeDeadlineSeconds: 900
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-rotate.sh", "apply"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-peak-pause
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: peak-pause}
+spec:
+  schedule: "0 1,6 * * 1-5"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-peak.sh", "pause"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-peak-resume
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: peak-resume}
+spec:
+  schedule: "0 4,10 * * 1-5"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-peak.sh", "resume"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-repo-sync
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: repo-sync}
+spec:
+  schedule: "17 3 * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-repo-sync.sh", "apply"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-metrics
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: metrics}
+spec:
+  schedule: "23 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 2400
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-metrics.sh", "collect"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-fork-drift
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: fork-drift}
+spec:
+  schedule: "41 4 * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-fork-drift.sh", "check"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-tiers
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: tiers}
+spec:
+  schedule: "30 4 * * 1"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-tiers.sh", "refresh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}

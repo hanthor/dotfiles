@@ -31,6 +31,8 @@
     - [Bihar](servers/talos-k8s/bihar/README.md)
     - [Karnataka](servers/talos-k8s/karnataka/README.md)
   - [AWS Talos Cluster](servers/aws-k8s/cluster.md)
+    - [Hive operations control plane](servers/aws-k8s/hive-ops.md)
+    - [Hive console](servers/aws-k8s/hive-console.md)
 - [VPS]()
   - [lkofoss](vps/lkofoss/README.md)
   - [Matrix](vps/matrix/README.md)

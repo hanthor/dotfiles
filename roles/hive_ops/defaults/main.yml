@@ -8,15 +8,20 @@ hive_ops_enabled: false
 # the systemd units set it explicitly so they don't depend on shell rc files.
 hive_ops_kubeconfig: "{{ ansible_facts['env']['HOME'] }}/.kube/config-aws-migration"
 
-hive_ops_timers:
-  - hive-watchdog
-  - hive-rotate
-  - hive-tiers
-  - hive-peak-pause
-  - hive-peak-resume
-  - hive-repo-sync
-  - hive-fork-drift
-  - hive-metrics
+# ALL hive operations MOVED INTO THE CLUSTER on 2026-09-02 — see
+# talos-k8s/hive-ops/, docs/src/servers/aws-k8s/hive-ops.md, and RFC
+# tuna-os/hive#15. Nothing hive-related runs on a workstation any more.
+#
+# The list is intentionally EMPTY rather than deleted: `hive_ops_enabled` still
+# works, so a host can be opted back in as a rollback path if the cluster jobs
+# ever need to be suspended.
+#
+# Do NOT re-add a timer whose CronJob is active. `concurrencyPolicy: Forbid`
+# stops a CronJob racing ITSELF; it does nothing about a laptop issuing the same
+# mutations at the same time, and two control planes are worse than none.
+# Suspend first:
+#   kubectl patch cronjob -n hive hive-rotate -p '{"spec":{"suspend":true}}'
+hive_ops_timers: []
 # pi-peak-start/stop were removed 2026-09-02. They ran
 # `systemctl --user start|stop pi.service` to dodge DeepSeek peak pricing, but
 # the pi contributor moved to Kubernetes (talos-k8s/hive-contributors,

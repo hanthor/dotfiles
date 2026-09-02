@@ -50,8 +50,18 @@
 
 
 # Hive runs on the AWS Talos cluster; override to point elsewhere.
-: "${KUBECONFIG:=$HOME/.kube/config-aws-migration}"
-export KUBECONFIG
+# Cluster-aware kubeconfig. Running IN the cluster (a CronJob under the
+# hive-ops ServiceAccount) there is no kubeconfig at all — kubectl must use the
+# in-cluster service account. Defaulting KUBECONFIG to a workstation path there
+# makes every kubectl call fail with a missing-file error that reads like the
+# hive is down. Note `${VAR:=default}` fires on EMPTY as well as unset, so
+# passing KUBECONFIG="" from a pod spec is not enough on its own.
+if [ -z "${KUBERNETES_SERVICE_HOST:-}" ]; then
+  : "${KUBECONFIG:=$HOME/.kube/config-aws-migration}"
+  export KUBECONFIG
+else
+  unset KUBECONFIG
+fi
 
 set -u
 
@@ -173,12 +183,27 @@ tier_members() {
 POD=$(kubectl get pods -n "$NS" -l "$LABEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
 [ -n "$POD" ] || { echo "ERROR: no hive pod found" >&2; exit 1; }
 
+# Pick the owner session with the LATEST expiry — do not try to decide locally
+# whether it is expired.
+#
+# The previous filter compared ExpiresAt against `date -Is` as STRINGS, and the
+# two carry different UTC offsets: the store writes the hive pod's offset
+# (…-04:00) while `date -Is` writes the caller's (+05:30 on a workstation,
+# +00:00 in-cluster). Lexicographic comparison across differing offsets is only
+# accidentally right — it happens to work while expiry is weeks away and would
+# silently start discarding live sessions, or keeping dead ones, near the
+# boundary. Moving this script into the cluster changes the offset, so the
+# latent bug would have shipped with the move.
+#
+# The newest session is the best candidate regardless of what any local clock
+# thinks, and the server is the only authority on whether it is still valid —
+# so use it and let a real call decide. hive_api surfaces the auth failure.
 SID=$(kubectl exec -n "$NS" "$POD" -- cat /data/dashboard-sessions.json 2>/dev/null \
-      | jq -r --arg now "$(date -Is)" '
-          to_entries | map(select(.value.Role=="owner" and .value.ExpiresAt > $now))
+      | jq -r '
+          to_entries | map(select(.value.Role=="owner"))
           | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null)
 if [ -z "$SID" ]; then
-  echo "ERROR: no unexpired owner session in the dashboard session store." >&2
+  echo "ERROR: no owner session in the dashboard session store." >&2
   echo "       Log in at https://hive.tunaos.org as an authorized_users member." >&2
   exit 1
 fi

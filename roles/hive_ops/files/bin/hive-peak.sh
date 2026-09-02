@@ -55,8 +55,18 @@
 
 
 # Hive runs on the AWS Talos cluster; override to point elsewhere.
-: "${KUBECONFIG:=$HOME/.kube/config-aws-migration}"
-export KUBECONFIG
+# Cluster-aware kubeconfig. Running IN the cluster (a CronJob under the
+# hive-ops ServiceAccount) there is no kubeconfig at all — kubectl must use the
+# in-cluster service account. Defaulting KUBECONFIG to a workstation path there
+# makes every kubectl call fail with a missing-file error that reads like the
+# hive is down. Note `${VAR:=default}` fires on EMPTY as well as unset, so
+# passing KUBECONFIG="" from a pod spec is not enough on its own.
+if [ -z "${KUBERNETES_SERVICE_HOST:-}" ]; then
+  : "${KUBECONFIG:=$HOME/.kube/config-aws-migration}"
+  export KUBECONFIG
+else
+  unset KUBECONFIG
+fi
 
 set -u
 
@@ -83,7 +93,7 @@ SID=$(kubectl exec -n "$NS" "$POD" -- \
         cat /data/dashboard-sessions.json 2>/dev/null \
       | jq -r --arg now "$NOW" '
           to_entries
-          | map(select(.value.Role == "owner" and .value.ExpiresAt > $now))
+          | map(select(.value.Role == "owner"))
           | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null)
 
 if [ -z "$SID" ]; then

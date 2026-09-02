@@ -27,8 +27,18 @@
 #   HIVE_REPO_SYNC_EXCLUDE   comma-separated bare repo names to never add
 #                            (e.g. sandbox/experiment repos hive shouldn't touch)
 
-: "${KUBECONFIG:=$HOME/.kube/config-aws-migration}"
-export KUBECONFIG
+# Cluster-aware kubeconfig. Running IN the cluster (a CronJob under the
+# hive-ops ServiceAccount) there is no kubeconfig at all — kubectl must use the
+# in-cluster service account. Defaulting KUBECONFIG to a workstation path there
+# makes every kubectl call fail with a missing-file error that reads like the
+# hive is down. Note `${VAR:=default}` fires on EMPTY as well as unset, so
+# passing KUBECONFIG="" from a pod spec is not enough on its own.
+if [ -z "${KUBERNETES_SERVICE_HOST:-}" ]; then
+  : "${KUBECONFIG:=$HOME/.kube/config-aws-migration}"
+  export KUBECONFIG
+else
+  unset KUBECONFIG
+fi
 
 set -u
 
@@ -44,8 +54,8 @@ POD=$(kubectl get pods -n "$NS" -l "$LABEL" -o jsonpath='{.items[0].metadata.nam
 [ -n "$POD" ] || { echo "ERROR: no hive pod found" >&2; exit 1; }
 
 SID=$(kubectl exec -n "$NS" "$POD" -- cat /data/dashboard-sessions.json 2>/dev/null \
-      | jq -r --arg now "$(date -Is)" '
-          to_entries | map(select(.value.Role=="owner" and .value.ExpiresAt > $now))
+      | jq -r '
+          to_entries | map(select(.value.Role=="owner"))
           | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null)
 if [ -z "$SID" ]; then
   echo "ERROR: no unexpired owner session in the dashboard session store." >&2
