@@ -370,9 +370,24 @@ session_for() {
         | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null
 }
 
-# Atomic backend+model. The two-call form (switch, then model) has no
-# transaction: a failure between them leaves an agent on a backend that cannot
-# serve the model it was told to run.
+# Uses POST /api/model/{agent}/{model} — NOT PUT /api/config/agent/{a}/models.
+#
+# The config route returns {"ok":true,"status":"updated"} and does not change
+# what the agent runs. Verified 2026-09-02 on the `hive` spoke: PUT ...
+# /models with claude-opus-5 answered ok, cleared `model_override` in
+# hive-state.json back to null, and left govModel on claude-sonnet-5 — the pack
+# default reasserted. The same call DOES work on `hive-reef`, so this is
+# ACMM-level-dependent (L6 vs L5) and cannot be trusted fleet-wide. An actuator
+# that logs "demote" while changing nothing is worse than no actuator: the
+# pacer would report itself in control while the burn ran on unchecked.
+#
+# hive-rotate has always used /api/model + /api/switch, which is why ITS
+# placements stick. The pacer only ever moves along a rung WITHIN one provider
+# (rung_down maps opus->sonnet, never across backends), so the model call alone
+# is sufficient and there is no switch/model two-call transaction to get wrong.
+#
+# NOTE: /api/status lags a mutation by >10s, so a read-back immediately after
+# this call still shows the OLD model. Do not treat that as failure.
 set_model() {
   local ns="$1" agent="$2" backend="$3" model="$4" pod sid
   # Never write a blank. A missing field here does not fail loudly — it PUTs
@@ -388,10 +403,17 @@ set_model() {
     echo "WARN: $ns has no pod or no unexpired owner session — cannot actuate" >&2
     return 1
   fi
-  kubectl exec -n "$ns" "$pod" -- curl -sS -X PUT --max-time 25 \
-    -H "Cookie: hive_session=$sid" -H 'Content-Type: application/json' \
-    -d "{\"backend\":\"$backend\",\"model\":\"$model\"}" \
-    "$API/api/config/agent/$agent/models" 2>/dev/null
+  local out
+  out=$(kubectl exec -n "$ns" "$pod" -- curl -sS -X POST --max-time 30 \
+          -H "Cookie: hive_session=$sid" \
+          "$API/api/model/$agent/$model" 2>/dev/null)
+  # Judge by the response, not by exit status: a 200 carrying an error body is
+  # a documented failure shape on this API.
+  case "$out" in
+    *'"status":"model_set"'*|*'"ok":true'*) printf '%s' "$out"; return 0 ;;
+    *) echo "WARN: model set for $ns/$agent -> $model did not confirm: ${out:0:160}" >&2
+       return 1 ;;
+  esac
 }
 
 publish() {

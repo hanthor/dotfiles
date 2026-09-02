@@ -114,23 +114,41 @@ mkdir -p "$STATE_DIR"
 # models while costing a fraction, which is exactly what a metered default rung
 # should be.
 #
+# ANTHROPIC RUNG MODELS ARE OVERRIDABLE, and this is a pacing lever, not a
+# convenience. The table's job is to name a CAPABILITY FLOOR per tier; picking
+# Sonnet at T2 is a COST choice on top of that. When the subscription cap is
+# going to reset with quota unspent, that cost choice is backwards — unspent
+# quota is destroyed, so the cheaper model saves nothing and merely produces
+# worse work. Raising T2 to Opus converts an expiring surplus into better
+# output without a single extra GitHub API call, which matters because the
+# shared App installation (7100/hr) is the resource that actually runs out
+# first when you try to spend quota by kicking harder instead.
+#
+# Safe to leave raised: hive-pace.sh demotes opus->sonnet automatically if the
+# burn goes hot, so the failure mode of forgetting to revert this is "the
+# pacer pulls it back", not "the cap is blown".
+T1_ANTHROPIC_MODEL="${HIVE_ROTATE_T1_ANTHROPIC_MODEL:-claude-opus-5}"
+T2_ANTHROPIC_MODEL="${HIVE_ROTATE_T2_ANTHROPIC_MODEL:-claude-sonnet-5}"
+
 # Format: tier|provider|backend|model   (order within a tier = preference)
-TIERS='
+# Double-quoted so the two rung variables above expand; the block contains no
+# other `$`, so nothing else is interpolated.
+TIERS="
 T1|google|agy|gemini-3.7-flash-high
 T1|deepseek|pi|deepseek-v4-flash
 T1|openai|codex|gpt-5.6-sol
-T1|anthropic|claude|claude-opus-5
+T1|anthropic|claude|$T1_ANTHROPIC_MODEL
 T2|google|agy|gemini-3.7-flash-low
 T2|deepseek|pi|deepseek-v4-flash
 T2|openai|codex|gpt-5.6-luna
-T2|anthropic|claude|claude-sonnet-5
+T2|anthropic|claude|$T2_ANTHROPIC_MODEL
 T2|google|agy|gemini-3.6-flash
 T3|google|agy|gemini-3.7-flash-low
 T3|deepseek|pi|deepseek-chat
 T3|openai|codex|gpt-5.6-luna
 T3|anthropic|claude|claude-haiku-4-5
 T3|google|agy|gemini-3.6-flash
-'
+"
 
 # Agent -> required capability tier. Cadence is the cost lever (the governor
 # already fixes it); tier is the competence floor. supervisor+scanner are ~83%
