@@ -57,6 +57,10 @@ rules:
   - apiGroups: [""]
     resources: [configmaps]
     verbs: [get, list, create, update, patch]
+  # fork-switch reads the current image and patches it on swap/rollback
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, patch, update]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -71,6 +75,36 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: hive-ops
+---
+# The fork-switch controller reads node architecture (cluster-scoped) and
+# patches the hive Deployment image in both hives.
+#
+# Without the nodes read it cannot evaluate its platform gate at all, and on its
+# first in-cluster run the missing Deployment read made every hive look
+# unhealthy -- which, in upstream mode, would have rolled back a healthy fleet
+# on a permissions error. The script now treats unreadable state as UNKNOWN
+# rather than unhealthy, but it still needs these to do its job.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hive-ops-nodes
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hive-ops-nodes
+subjects:
+  - kind: ServiceAccount
+    name: hive-ops
+    namespace: hive
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hive-ops-nodes
 ---
 # Burn-rate pacing spans BOTH hives, because the thing it paces does too: one
 # Anthropic subscription is drained by school's 11 agents and reef's 11
@@ -99,6 +133,9 @@ rules:
   - apiGroups: [""]
     resources: [configmaps]
     verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, patch, update]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -372,6 +409,134 @@ spec:
                 - {name: HIVE_NS, value: hive-reef}
                 - {name: HIVE_PRIMARY_NS, value: hive}
                 - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate-reef}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+# Fork switch controller: evaluate the gates weekly, right after the AI capability check, and swap or hold
+#
+# The first MANUAL attempt at this swap took hive-reef down for two minutes.
+# The capability check was correct -- upstream v4 really does ship branding.go
+# -- but ghcr.io/kubestellar/hive:latest publishes linux/arm64 ONLY and these
+# nodes are amd64, and the deployment uses strategy Recreate so the old pod is
+# gone before the new one is proven. Every gate in this script is a thing that
+# has already gone wrong once.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-fork-switch
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: fork-switch}
+spec:
+  schedule: "50 6 * * 1"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: fork-switch}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-fork-switch.sh", "reconcile"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+# Fork switch controller: content-check the deployed image DAILY and revert if branding regresses
+#
+# The first MANUAL attempt at this swap took hive-reef down for two minutes.
+# The capability check was correct -- upstream v4 really does ship branding.go
+# -- but ghcr.io/kubestellar/hive:latest publishes linux/arm64 ONLY and these
+# nodes are amd64, and the deployment uses strategy Recreate so the old pod is
+# gone before the new one is proven. Every gate in this script is a thing that
+# has already gone wrong once.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-fork-verify
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: fork-verify}
+spec:
+  schedule: "10 7 * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: fork-verify}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-fork-switch.sh", "verify"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
                 - {name: HOME, value: /tmp}
               volumeMounts:
                 - {name: scripts, mountPath: /scripts, readOnly: true}
