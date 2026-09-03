@@ -14,7 +14,7 @@ cd "$(dirname "$0")/../.."   # repo root
 BIN=roles/hive_ops/files/bin
 
 for f in hive-rotate.sh hive-peak.sh hive-repo-sync.sh hive-metrics.sh \
-         hive-fork-drift.sh hive-tiers.sh hive-pace.sh; do
+         hive-fork-drift.sh hive-tiers.sh hive-pace.sh hive-inventory.sh; do
   [ -f "$BIN/$f" ] || { echo "missing $BIN/$f" >&2; exit 1; }
   bash -n "$BIN/$f" || { echo "syntax error in $f" >&2; exit 1; }
 done
@@ -28,6 +28,7 @@ kubectl create configmap hive-ops-scripts -n hive \
   --from-file=hive-fork-drift.sh="$BIN/hive-fork-drift.sh" \
   --from-file=hive-tiers.sh="$BIN/hive-tiers.sh" \
   --from-file=hive-pace.sh="$BIN/hive-pace.sh" \
+  --from-file=hive-inventory.sh="$BIN/hive-inventory.sh" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "==> applying manifests"

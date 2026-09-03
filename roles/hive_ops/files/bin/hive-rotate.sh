@@ -152,12 +152,12 @@ T2|google|agy|gemini-3.7-flash-low
 T2|deepseek|pi|deepseek-v4-flash
 T2|openai|codex|gpt-5.6-luna
 T2|anthropic|claude|$T2_ANTHROPIC_MODEL
-T2|google|agy|gemini-3.6-flash
+T2|google|agy|gemini-3.6-flash-low
 T3|google|agy|gemini-3.7-flash-low
-T3|deepseek|pi|deepseek-chat
+T3|deepseek|pi|deepseek-v4-flash
 T3|openai|codex|gpt-5.6-luna
-T3|anthropic|claude|claude-haiku-4-5
-T3|google|agy|gemini-3.6-flash
+T3|anthropic|claude|claude-haiku-4-5-20251001
+T3|google|agy|gemini-3.6-flash-low
 "
 
 # Agent -> required capability tier. Cadence is the cost lever (the governor
@@ -199,12 +199,53 @@ if [ -s "$TIER_CACHE" ] && [ -n "$(find "$TIER_CACHE" -mtime "-$TIER_MAX_AGE_DAY
   TIER_SOURCE=api
 fi
 
+# Live model inventory (hive-inventory.sh). A rung naming a model the backend
+# does not actually offer is not a config typo you find later — it launches an
+# agent that immediately dies, which reads as a dead agent rather than a bad
+# id. Measured 2026-09-03, the built-in table carried three of them:
+# claude-haiku-4-5 (real id claude-haiku-4-5-20251001), deepseek-chat (absent
+# from DeepSeek's list), gemini-3.6-flash (real ids are -high/-medium/-low).
+INVENTORY="$STATE_DIR/inventory.tsv"
+INVENTORY_MAX_AGE_DAYS="${HIVE_INVENTORY_MAX_AGE_DAYS:-3}"
+INVENTORY_OK=0
+if [ -s "$INVENTORY" ] && [ -n "$(find "$INVENTORY" -mtime "-$INVENTORY_MAX_AGE_DAYS" 2>/dev/null)" ]; then
+  INVENTORY_OK=1
+fi
+
+# tier_members <tier>: the rungs for a tier, filtered to models that actually
+# exist.
+#
+# The filter is SCOPED PER PROVIDER, and that is the whole trick. openai has no
+# list endpoint (codex authenticates by subscription), so it contributes zero
+# inventory rows; a naive "drop anything not in the inventory" would delete
+# every codex rung and silently remove a whole provider from the ladder. So a
+# rung is dropped only when its provider WAS successfully inventoried and the
+# model is still absent. A provider we could not measure keeps all its rungs —
+# unmeasured is not evidence of absence, the same rule provider_ok uses.
+#
+# Fails open on a missing or stale inventory: the ladder is better slightly
+# wrong than empty, and an inventory outage must never wedge rotation.
 tier_members() {
+  local raw
   if [ "$TIER_SOURCE" = api ]; then
-    awk -F'\t' -v t="$1" '!/^#/ && $1==t {print $1"|"$2"|"$3"|"$4}' "$TIER_CACHE"
+    raw=$(awk -F'\t' -v t="$1" '!/^#/ && $1==t {print $1"|"$2"|"$3"|"$4}' "$TIER_CACHE")
   else
-    printf '%s\n' "$TIERS" | awk -F'|' -v t="$1" '$1==t{print}'
+    raw=$(printf '%s\n' "$TIERS" | awk -F'|' -v t="$1" '$1==t{print}')
   fi
+  [ "$INVENTORY_OK" = 1 ] || { printf '%s\n' "$raw"; return; }
+  printf '%s\n' "$raw" | awk -F'|' -v inv="$INVENTORY" '
+    BEGIN {
+      while ((getline line < inv) > 0) {
+        if (line ~ /^#/) continue
+        split(line, f, "\t")
+        if (f[1] == "") continue
+        have[f[1] "|" f[3]] = 1      # provider|model_id
+        measured[f[1]] = 1           # provider was inventoried at all
+      }
+    }
+    NF < 4 { next }
+    { if (!measured[$2] || have[$2 "|" $4]) print }
+  '
 }
 
 # ── Pod + owner session ─────────────────────────────────────────────────
