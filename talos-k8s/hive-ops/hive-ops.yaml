@@ -114,6 +114,39 @@ roleRef:
   kind: Role
   name: hive-ops-reef
 ---
+# Discord alerting credentials live in the postgres namespace (fleet-alerts).
+# Without this the fork checkers compute a correct verdict and then cannot
+# deliver it: hive-fork-drift printed "no Discord credentials available — alert
+# logged only" on every run, so its alert reached a CronJob log and nobody else.
+#
+# NOTE `kubectl auth can-i get secret/fleet-alerts -n postgres --as=<sa>`
+# answered "yes" while the pod's own read returned Forbidden. Trust the real
+# operation, not the permission check.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-ops-alerts
+  namespace: postgres
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [fleet-alerts]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-ops-alerts
+  namespace: postgres
+subjects:
+  - kind: ServiceAccount
+    name: hive-ops
+    namespace: hive
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hive-ops-alerts
+---
 # Contributor reconciliation scales Deployments in the neighbouring namespace.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -339,6 +372,75 @@ spec:
                 - {name: HIVE_NS, value: hive-reef}
                 - {name: HIVE_PRIMARY_NS, value: hive}
                 - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate-reef}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+---
+# AI fork check: has upstream grown what our fork carries, IN SOME FORM?
+#
+# hive-fork-drift asks a git question (are we still ahead, are OUR pr numbers
+# merged). That has a blind spot that widens over time: our branding PR #5690
+# was CLOSED, so commit-identity matching would report "still needed" forever
+# even after upstream shipped the same capability by another route -- which is
+# exactly what happened. This asks the capability question instead.
+#
+# WEEKLY. It is a "has the world changed" check, not a control loop, and it
+# spends the same provider quota the agents need.
+#
+# Never auto-acts: a merged verdict posts to Discord and stops there. Retiring
+# a fork is an image swap with a branding regression behind it.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-fork-ai-check
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: fork-ai-check}
+spec:
+  schedule: "20 6 * * 1"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: fork-ai-check}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-fork-ai-check.sh", "check"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
                 - {name: HOME, value: /tmp}
               volumeMounts:
                 - {name: scripts, mountPath: /scripts, readOnly: true}

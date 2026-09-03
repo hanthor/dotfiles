@@ -58,8 +58,28 @@ echo "  fork is $AHEAD_N commit(s) ahead, $BEHIND_N commit(s) behind"
 # GraphQL's rate-limit bucket is shared across every agent/tool on this
 # account (observed exhausted mid-session while REST still had 5000/5000
 # headroom) — REST is both cheaper and the one that actually stayed up.
+# curl + a minted App token, NOT `gh`. The ops image has no gh binary at all,
+# so this printed "could not look up" for BOTH tracked PRs on every in-cluster
+# run since the control plane moved off the workstation -- and since
+# all_tracked_merged is only set when every lookup succeeds, the merged-alert
+# could never fire. Both PRs had in fact been merged for weeks. A checker that
+# fails silently is worse than no checker: it reports "still waiting" forever
+# and you believe it. Same conversion hive-metrics.sh already got.
 pr_status() {
-  gh api "repos/kubestellar/hive/pulls/$1" --jq '{state, merged, title}' 2>/dev/null
+  kubectl exec -n hive "$(kubectl get pods -n hive -l app.kubernetes.io/name=hive \
+      -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)" -- sh -c "
+    PEM=/secrets/gh-app-key.pem
+    B64() { openssl base64 -e -A | tr '+/' '-_' | tr -d '='; }
+    NOW=\$(date +%s)
+    H=\$(printf '%s' '{\"alg\":\"RS256\",\"typ\":\"JWT\"}' | B64)
+    P=\$(printf '%s' \"{\\\"iat\\\":\$((NOW-60)),\\\"exp\\\":\$((NOW+540)),\\\"iss\\\":\\\"\$GH_APP_ID\\\"}\" | B64)
+    S=\$(printf '%s.%s' \"\$H\" \"\$P\" | openssl dgst -sha256 -sign \$PEM | B64)
+    T=\$(curl -s -X POST -H \"Authorization: Bearer \$H.\$P.\$S\" \
+          https://api.github.com/app/installations/\$GH_APP_INSTALLATION_ID/access_tokens | jq -r '.token // empty')
+    [ -z \"\$T\" ] && exit 1
+    curl -s --max-time 30 -H \"Authorization: token \$T\" \
+      https://api.github.com/repos/kubestellar/hive/pulls/$1 \
+      | jq -c '{state, merged, title}'" 2>/dev/null
 }
 pr_lines=""
 all_tracked_merged=1
@@ -70,8 +90,18 @@ for pr in $TRACKED_PRS; do
     all_tracked_merged=0
     continue
   fi
-  merged=$(printf '%s' "$info" | jq -r '.merged')
-  title=$(printf '%s' "$info" | jq -r '.title')
+  merged=$(printf '%s' "$info" | jq -r '.merged // empty')
+  title=$(printf '%s' "$info" | jq -r '.title // empty')
+  # A response that parses but carries no state is an API error object, not a
+  # PR that is open. Rendering it as "open" is a failed lookup wearing the
+  # costume of a definite answer -- observed live: #3456 flipped from MERGED to
+  # "[open]: null" between two runs a minute apart. Unknown must suppress the
+  # alert without ever being mistaken for evidence.
+  if [ -z "$title" ]; then
+    pr_lines="$pr_lines  #$pr [unknown]: lookup returned no state (transient API failure)\n"
+    all_tracked_merged=0
+    continue
+  fi
   label=$([ "$merged" = true ] && echo MERGED || echo open)
   pr_lines="$pr_lines  #$pr [$label]: $title\n"
   [ "$merged" = true ] || all_tracked_merged=0
@@ -89,7 +119,21 @@ fi
 
 echo "$MSG"
 
-export KUBECONFIG="${HIVE_FORK_DRIFT_KUBECONFIG:-$HOME/.kube/config-aws-migration}"
+# Do NOT force KUBECONFIG in-cluster. Unconditionally exporting a workstation
+# path here made every in-cluster kubectl fail, so the Discord credentials read
+# below came back empty and the script reported "no Discord credentials
+# available — alert logged only". There were TWO causes stacked: this
+# KUBECONFIG override, and a genuinely missing RoleBinding for
+# postgres/fleet-alerts (added in hive-ops.yaml).
+#
+# Note `kubectl auth can-i get secret/fleet-alerts -n postgres --as=<sa>`
+# answered "yes" while the pod's own read returned Forbidden. The permission
+# check lied; only the real operation is authoritative. Net effect before both
+# fixes: the fork alert was never delivered to anyone, only printed into a
+# CronJob log nobody reads.
+if [ -z "${KUBERNETES_SERVICE_HOST:-}" ]; then
+  export KUBECONFIG="${HIVE_FORK_DRIFT_KUBECONFIG:-$HOME/.kube/config-aws-migration}"
+fi
 DTOK=$(kubectl get secret -n "$TOKEN_NS" "$TOKEN_SECRET" -o jsonpath='{.data.DISCORD_BOT_TOKEN}' 2>/dev/null | base64 -d)
 DCHAN=$(kubectl get secret -n "$TOKEN_NS" "$TOKEN_SECRET" -o jsonpath='{.data.DISCORD_CHANNEL}' 2>/dev/null | base64 -d)
 if [ -n "$DTOK" ] && [ -n "$DCHAN" ]; then
