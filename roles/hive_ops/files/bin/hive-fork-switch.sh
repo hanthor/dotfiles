@@ -118,6 +118,46 @@ candidate_digest() {
       | tr -d '\r' | awk -F': ' '/[Dd]ocker-[Cc]ontent-[Dd]igest/{print \$2}'" 2>/dev/null
 }
 
+
+# The commit an image was actually built from. Named tags are not git refs, so
+# this is the only exact way to ask "does THIS image carry the capability".
+image_revision() {
+  local pod="$1" tag="$2" arch="$3"
+  kubectl exec -n hive "$pod" -- bash -c "
+    T=\$(curl -s 'https://ghcr.io/token?scope=repository:$UPSTREAM_REPO:pull&service=ghcr.io' | jq -r '.token // empty')
+    IDX=\$(curl -s -H \"Authorization: Bearer \$T\" -H 'Accept: application/vnd.oci.image.index.v1+json' \
+            https://ghcr.io/v2/$UPSTREAM_REPO/manifests/$tag)
+    A=\$(printf '%s' \"\$IDX\" | jq -r '[.manifests[]?|select(.platform.architecture==\"$arch\" and .platform.os==\"linux\")][0].digest')
+    [ -z \"\$A\" ] || [ \"\$A\" = null ] && exit 1
+    M=\$(curl -s -H \"Authorization: Bearer \$T\" -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+          https://ghcr.io/v2/$UPSTREAM_REPO/manifests/\$A)
+    C=\$(printf '%s' \"\$M\" | jq -r '.config.digest')
+    curl -sL -H \"Authorization: Bearer \$T\" https://ghcr.io/v2/$UPSTREAM_REPO/blobs/\$C \
+      | jq -r '.config.Labels[\"org.opencontainers.image.revision\"] // empty'" 2>/dev/null
+}
+
+# Does the commit this image was built from contain the capability?
+capability_at_commit() {
+  local pod="$1" rev="$2"
+  kubectl exec -n hive "$pod" -- bash -c "
+    PEM=/secrets/gh-app-key.pem
+    B64() { openssl base64 -e -A | tr '+/' '-_' | tr -d '='; }
+    NOW=\$(date +%s)
+    H=\$(printf '%s' '{\"alg\":\"RS256\",\"typ\":\"JWT\"}' | B64)
+    P=\$(printf '%s' \"{\\\"iat\\\":\$((NOW-60)),\\\"exp\\\":\$((NOW+540)),\\\"iss\\\":\\\"\$GH_APP_ID\\\"}\" | B64)
+    S=\$(printf '%s.%s' \"\$H\" \"\$P\" | openssl dgst -sha256 -sign \$PEM | B64)
+    T=\$(curl -s -X POST -H \"Authorization: Bearer \$H.\$P.\$S\" https://api.github.com/app/installations/\$GH_APP_INSTALLATION_ID/access_tokens | jq -r '.token // empty')
+    # -L is required: this endpoint answers 301 for this repo (kubestellar/hive
+    # now redirects to hivecommons/hive), and a bare status check reads a
+    # redirect as file-absent -- which made the gate report that v4 HEAD lacks a
+    # capability it demonstrably has. No quote characters in this comment: it
+    # lives inside a double-quoted string passed to bash -c, and an unescaped
+    # quote here silently breaks the whole exec (it returned empty, which the
+    # caller then read as not-200).
+    curl -sL -o /dev/null -w '%{http_code}' -H \"Authorization: token \$T\" \
+      'https://api.github.com/repos/$UPSTREAM_REPO/contents/src/pkg/dashboard/branding.go?ref=$rev'" 2>/dev/null
+}
+
 # ── Gate 3: the config the upstream mechanism reads ─────────────────────
 branding_files_present() {
   local ns="$1" pod; pod=$(pod_of "$ns"); [ -n "$pod" ] || return 1
@@ -172,6 +212,23 @@ healthy() {
            http://127.0.0.1:3002/api/health 2>/dev/null)
   [ -z "$code" ] && return 2
   [ "$code" = 200 ] || return 1
+  # readyReplicas and /api/health prove the SERVER is up; they say nothing about
+  # whether the hive does any work. An image that boots cleanly and then cannot
+  # launch a single agent would pass both and be accepted. Require that some
+  # agents are actually working before calling an image good.
+  #
+  # Agents relaunch on any image change, so this is only meaningful after they
+  # have had time to come up -- callers sleep before the post-swap check, and a
+  # transient zero reads as UNKNOWN (2), never as a failure, so a slow start
+  # cannot trigger a rollback on its own.
+  local tok working
+  tok=$(kubectl get secret -n "$ns" hive-secrets -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' 2>/dev/null | base64 -d)
+  [ -n "$tok" ] || return 2
+  working=$(kubectl exec -n "$ns" "$pod" -- curl -sS -H "X-Hive-Internal: $tok" --max-time 25 \
+              http://127.0.0.1:3002/api/status 2>/dev/null \
+            | jq -r '[.agents[]?|select(.busy=="working")]|length' 2>/dev/null)
+  [ -n "$working" ] || return 2
+  [ "$working" -ge "${HIVE_FORK_SWITCH_MIN_WORKING:-3}" ] || return 2
   return 0
 }
 
@@ -240,30 +297,32 @@ fi
 if capability_ok; then say "gate1 capability : PASS (MERGED_EQUIVALENT twice)"
 else say "gate1 capability : HOLD (need two consecutive MERGED_EQUIVALENT; latest=$(awk -F'\t' '$1=="branding"{print $2}' "$VERDICTS" | tail -1 || echo none))"; fi
 
-# Gate 2 — the one that would have prevented the outage
-CAND=""; CAND_TAG=""
-for tag in $(kubectl exec -n hive "$HPOD" -- sh -c "
-      T=\$(curl -s 'https://ghcr.io/token?scope=repository:$UPSTREAM_REPO:pull&service=ghcr.io' | jq -r '.token // empty')
-      curl -s -H \"Authorization: Bearer \$T\" https://ghcr.io/v2/$UPSTREAM_REPO/tags/list | jq -r '.tags[]?'" 2>/dev/null \
-    | grep -E '^[0-9a-f]{7,40}$' | tail -30); do
+# Gate 2 — the one that would have prevented the outage.
+#
+# CANDIDATE TAGS ARE NAMED FIRST, and getting this wrong cost a wrong
+# conclusion once already. An earlier version scanned only sha-shaped tags
+# (^[0-9a-f]{7,40}$) and concluded "no upstream image is both amd64 and carries
+# the capability" -- while `stable` and `v4-latest` were sitting there,
+# multi-arch, built from v4 HEAD. The upstream docs tell operators to use
+# `stable`, so that is the tag to try first; `latest` is deliberately NOT in
+# this list because it is the one tag currently published arm64-only.
+#
+# Capability is checked against the image's OWN revision label
+# (org.opencontainers.image.revision) rather than the tag name, because
+# `stable` is not a git ref and cannot be passed to the contents API. This also
+# makes the check exact: we ask whether the commit THIS IMAGE WAS BUILT FROM
+# carries the capability, not whether some branch does.
+CAND=""; CAND_TAG=""; CAND_REV=""
+for tag in stable v4-latest; do
   d=$(candidate_digest "$ARCH" "$HPOD" "$tag")
-  [ -n "$d" ] || continue
-  # Must also actually contain the capability, else we would ship an old image
-  # that runs fine and has no branding at all.
-  has=$(kubectl exec -n hive "$HPOD" -- sh -c "
-    PEM=/secrets/gh-app-key.pem
-    B64() { openssl base64 -e -A | tr '+/' '-_' | tr -d '='; }
-    NOW=\$(date +%s)
-    H=\$(printf '%s' '{\"alg\":\"RS256\",\"typ\":\"JWT\"}' | B64)
-    P=\$(printf '%s' \"{\\\"iat\\\":\$((NOW-60)),\\\"exp\\\":\$((NOW+540)),\\\"iss\\\":\\\"\$GH_APP_ID\\\"}\" | B64)
-    S=\$(printf '%s.%s' \"\$H\" \"\$P\" | openssl dgst -sha256 -sign \$PEM | B64)
-    T=\$(curl -s -X POST -H \"Authorization: Bearer \$H.\$P.\$S\" https://api.github.com/app/installations/\$GH_APP_INSTALLATION_ID/access_tokens | jq -r '.token // empty')
-    curl -s -o /dev/null -w '%{http_code}' -H \"Authorization: token \$T\" \
-      'https://api.github.com/repos/$UPSTREAM_REPO/contents/src/pkg/dashboard/branding.go?ref=$tag'" 2>/dev/null)
-  [ "$has" = 200 ] || continue
-  CAND="ghcr.io/$UPSTREAM_REPO@$d"; CAND_TAG="$tag"; break
+  [ -n "$d" ] || { say "  gate2: $tag has no linux/$ARCH image"; continue; }
+  rev=$(image_revision "$HPOD" "$tag" "$ARCH")
+  [ -n "$rev" ] || { say "  gate2: $tag has no revision label"; continue; }
+  has=$(capability_at_commit "$HPOD" "$rev")
+  [ "$has" = 200 ] || { say "  gate2: $tag (rev ${rev:0:8}) does not carry the capability"; continue; }
+  CAND="ghcr.io/$UPSTREAM_REPO@$d"; CAND_TAG="$tag"; CAND_REV="$rev"; break
 done
-if [ -n "$CAND" ]; then say "gate2 candidate  : PASS  $CAND_TAG -> $CAND"
+if [ -n "$CAND" ]; then say "gate2 candidate  : PASS  $CAND_TAG (rev ${CAND_REV:0:8}) -> $CAND"
 else say "gate2 candidate  : HOLD (no upstream image is both linux/$ARCH AND carries the capability)"; fi
 
 # Gate 4
@@ -301,7 +360,13 @@ for ns in $NAMESPACES; do
   if ! kubectl -n "$ns" rollout status deploy/hive --timeout=420s >/dev/null 2>&1; then
     rollback "$ns" "$curdig" "rollout did not become ready"; continue
   fi
-  sleep 45
+  # Agents relaunch on an image change and take minutes, not seconds. Judging
+  # once at 45s would roll back a perfectly good image for being slow.
+  say "     waiting for agents to relaunch before judging the image"
+  for _i in $(seq 1 20); do
+    sleep 30
+    healthy "$ns" && break
+  done
   healthy "$ns"; hs=$?
   if [ $hs -ne 0 ]; then
     rollback "$ns" "$curdig" "$([ $hs -eq 2 ] && echo 'could not confirm health after swap' || echo 'unhealthy after swap')"
