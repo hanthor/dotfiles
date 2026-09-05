@@ -151,6 +151,51 @@ roleRef:
   kind: Role
   name: hive-ops-reef
 ---
+# hive-hanthor was stood up 2026-09-04 but never wired into this control plane.
+# Four of its agents sat at `login required detected` for two days with nothing
+# running to act on it — the exact failure that moved hive ops into the cluster
+# in the first place. Same Role as reef, verbatim.
+#
+# `kubectl auth can-i --as=system:serviceaccount:hive:hive-ops` answers "yes"
+# here even for a namespace that does not exist. It is not a usable check; the
+# RoleBinding list is.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-ops-hanthor
+  namespace: hive-hanthor
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [hive-secrets]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-ops-hanthor
+  namespace: hive-hanthor
+subjects:
+  - kind: ServiceAccount
+    name: hive-ops
+    namespace: hive
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hive-ops-hanthor
+---
 # Discord alerting credentials live in the postgres namespace (fleet-alerts).
 # Without this the fork checkers compute a correct verdict and then cannot
 # deliver it: hive-fork-drift printed "no Discord credentials available — alert
@@ -421,6 +466,77 @@ spec:
             - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
             - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
             - {name: tmp, emptyDir: {}}
+---
+# Watchdog for the THIRD spoke. hive-hanthor was created 2026-09-04 and never
+# wired in: four agents (architect, ci-maintainer, sec-check, strategist) paused
+# themselves with `login required detected` and stayed that way for two days,
+# because no job anywhere ran with HIVE_NS=hive-hanthor. That is the same class
+# of failure that moved hive ops off a workstation in the first place.
+#
+# Own state dir — sharing /state/hive-rotate with the primary hive would stomp
+# its rotation journal, which is how 8 agents once stayed paused on healthy
+# providers.
+#
+# Offset to :04 so hive (*/5), reef (:02) and hanthor never exec into the API on
+# the same minute.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-watchdog-hanthor
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: watchdog-hanthor}
+spec:
+  schedule: "4-59/5 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: watchdog-hanthor}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-rotate.sh", "watchdog"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_NS, value: hive-hanthor}
+                - {name: HIVE_PRIMARY_NS, value: hive}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate-hanthor}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+
 ---
 # Fork switch controller: evaluate the gates weekly, right after the AI capability check, and swap or hold
 #
@@ -748,7 +864,7 @@ spec:
               env:
                 - {name: KUBECONFIG, value: ""}
                 - {name: HIVE_PACE_STATE, value: /state/hive-rotate}
-                - {name: HIVE_PACE_NAMESPACES, value: "hive hive-reef"}
+                - {name: HIVE_PACE_NAMESPACES, value: "hive hive-reef hive-hanthor"}
                 - {name: HOME, value: /tmp}
               volumeMounts:
                 - {name: scripts, mountPath: /scripts, readOnly: true}
@@ -1086,6 +1202,9 @@ spec:
                 - {name: KUBECONFIG, value: ""}
                 - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
                 - {name: HOME, value: /tmp}
+                - name: AA_API_KEY
+                  valueFrom:
+                    secretKeyRef: {name: hive-secrets, key: AA_API_KEY, optional: true}
               volumeMounts:
                 - {name: scripts, mountPath: /scripts, readOnly: true}
                 - {name: state, mountPath: /state}

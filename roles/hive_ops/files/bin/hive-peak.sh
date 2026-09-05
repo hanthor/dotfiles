@@ -86,12 +86,20 @@ POD=$(kubectl get pods -n "$NS" -l "$LABEL" \
       -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
 [ -n "$POD" ] || { echo "ERROR: no hive pod found" >&2; exit 1; }
 
-# Newest non-expired owner session from the dashboard's own store. Expiry is
-# compared as an ISO-8601 string against `date -Is`, which sorts correctly.
-NOW=$(date -Is)
+# Newest owner session from the dashboard's own store — do NOT try to decide
+# locally whether it is expired. The store writes the hive pod's UTC offset
+# (…-04:00) while `date -Is` writes the caller's (+00:00 in-cluster, +05:30 on
+# a workstation), and a lexicographic ISO-8601 comparison across differing
+# offsets is only accidentally right: near the boundary it silently discards
+# live sessions or keeps dead ones. hive-rotate.sh removed exactly this
+# comparison for exactly this reason — see its session block.
+#
+# The newest session is the best candidate regardless of what any local clock
+# thinks, and the server is the only authority on validity, so use it and let a
+# real call decide. hive_api surfaces the auth failure.
 SID=$(kubectl exec -n "$NS" "$POD" -- \
         cat /data/dashboard-sessions.json 2>/dev/null \
-      | jq -r --arg now "$NOW" '
+      | jq -r '
           to_entries
           | map(select(.value.Role == "owner"))
           | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null)
