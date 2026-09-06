@@ -397,6 +397,162 @@ spec:
             - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
             - {name: tmp, emptyDir: {}}
 ---
+# Rotation for the reef spoke. Without this, reef agents are placed once and
+# never moved again: hive-rotate runs with the default HIVE_NS=hive, so only the
+# primary hive was ever re-placed. Observed 2026-09-06 — 10 of reef's 12 agents
+# sat pinned to gemini rungs while Google was capped until 2026-09-10 and
+# Anthropic had 34% headroom, every governor kick failing "CLI did not reach
+# input prompt", and nothing in the fleet able to move them.
+#
+# Own state dir: the stranded journal is per-spoke, and sharing
+# /state/hive-rotate with the primary would cross-contaminate un-strand
+# decisions.
+#
+# HIVE_PRIMARY_NS=hive keeps contributor reconciliation owned by the primary —
+# hive-rotate.sh skips the contributors pass when HIVE_NS != HIVE_PRIMARY_NS, so
+# a second rotate cannot race the first over the fleet-wide pool.
+#
+# Offset off the primary's */20 so the three rotations never probe providers on
+# the same minute.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-rotate-reef
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: rotate-reef}
+spec:
+  schedule: "7-59/20 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # `apply` legitimately takes ~2 minutes (the pane probes are deliberately
+      # unhurried); give it real headroom rather than killing a healthy run.
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: rotate-reef}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-rotate.sh", "apply"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_NS, value: hive-reef}
+                - {name: HIVE_PRIMARY_NS, value: hive}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate-reef}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+
+---
+# Rotation for the hanthor spoke. Without this, hanthor agents are placed once and
+# never moved again: hive-rotate runs with the default HIVE_NS=hive, so only the
+# primary hive was ever re-placed. Observed 2026-09-06 — 10 of reef's 12 agents
+# sat pinned to gemini rungs while Google was capped until 2026-09-10 and
+# Anthropic had 34% headroom, every governor kick failing "CLI did not reach
+# input prompt", and nothing in the fleet able to move them.
+#
+# Own state dir: the stranded journal is per-spoke, and sharing
+# /state/hive-rotate with the primary would cross-contaminate un-strand
+# decisions.
+#
+# HIVE_PRIMARY_NS=hive keeps contributor reconciliation owned by the primary —
+# hive-rotate.sh skips the contributors pass when HIVE_NS != HIVE_PRIMARY_NS, so
+# a second rotate cannot race the first over the fleet-wide pool.
+#
+# Offset off the primary's */20 so the three rotations never probe providers on
+# the same minute.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-rotate-hanthor
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: rotate-hanthor}
+spec:
+  schedule: "14-59/20 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # `apply` legitimately takes ~2 minutes (the pane probes are deliberately
+      # unhurried); give it real headroom rather than killing a healthy run.
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: rotate-hanthor}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-rotate.sh", "apply"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_NS, value: hive-hanthor}
+                - {name: HIVE_PRIMARY_NS, value: hive}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate-hanthor}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+
+---
 # Watchdog for the SECOND hive. reef ran for hours with 7 of its 11 agents
 # parked on the Claude Code login-method picker while /api/status still
 # reported state=running and busy=working for every one of them — the only

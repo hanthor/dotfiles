@@ -530,7 +530,40 @@ probe_anthropic() {
 }
 
 probe_openai() {
-  local a text
+  local a text out primary secondary reset
+  # STRUCTURED READ FIRST. `codex app-server` speaks JSON-RPC over stdio and
+  # account/rateLimits/read returns the real numbers on the agents own
+  # subscription: a 5h window and a weekly window, each with usedPercent and a
+  # reset epoch. No REST endpoint, no API key, no tmux, no live agent needed.
+  #
+  # This replaces pane scraping as the primary path because scraping was
+  # actively wrong in both directions. It reported EXHAUSTED from stale
+  # scrollback long after a limit cleared (2026-09-06: an old "hit your usage
+  # limit" banner still on screen parked the whole fleet while the account had
+  # 84% weekly headroom), and it reported UNKNOWN when no agent was placed,
+  # which provider_ok admits — so rotation moved a spoke ONTO codex at the very
+  # moment its 5h window was exhausting.
+  #
+  # Take the WORSE of the two windows: either one stalls the agent.
+  out=$(kubectl exec -n "$NS" "$POD" -- sh -c '
+    {
+      printf "%s\n" "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"hive-rotate\",\"version\":\"1.0.0\",\"title\":\"hive-rotate\"}}}"
+      sleep 2
+      printf "%s\n" "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"account/rateLimits/read\",\"params\":{}}"
+      sleep 6
+    } | HOME=/data/home timeout 30 codex app-server 2>/dev/null' 2>/dev/null \
+    | jq -r 'select(.id==2) | .result.rateLimits
+             | [ (.primary.usedPercent // empty), (.secondary.usedPercent // empty) ]
+             | if length == 0 then empty else "\(max) \(.[0]) \(.[1])" end' 2>/dev/null | head -1)
+  if [ -n "$out" ]; then
+    set -- $out
+    printf '%s codex-5h=%s%% weekly=%s%%\n' "$1" "$2" "$3"
+    return
+  fi
+
+  # FALLBACK: the pane paths below. Kept because the app-server call needs the
+  # codex binary and a readable ~/.codex in the pod, and an unmeasured provider
+  # is admitted by provider_ok — better a scraped number than none.
   a=$(first_agent_on openai)
   # first_agent_on skips PAUSED agents, but a paused agent's CLI is still
   # running — the governor just stops kicking it. When every codex agent is
