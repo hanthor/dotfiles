@@ -102,6 +102,24 @@ for ns in $NAMESPACES; do
   live=$(kubectl exec -n "$ns" "$pod" -- curl -sS -m 20 -H "X-Hive-Internal: $tok" "$API/api/status" 2>/dev/null)
   [ -n "$live" ] || { printf '%-14s /api/status unreadable — skipped\n' "$ns"; continue; }
 
+  # NEVER nudge a spoke whose token budget is exhausted. The governor suppresses
+  # kicks on purpose when weekly spend passes the limit ("budget exhausted —
+  # suppressing kicks"), and that is a cost control, not a stall. Nudging past it
+  # spends money the operator explicitly capped.
+  #
+  # This is the whole reason this script nearly did harm: school looked like a
+  # governor that had stopped scheduling — `agents_due: null` for 7.9 hours on
+  # 837 open issues — and was in fact a governor correctly refusing to spend at
+  # 190% of a 50M weekly budget. The distinguishing evidence is in /api/status,
+  # not in the eval log line.
+  if [ "$(printf '%s' "$live" | jq -r '.budget.BUDGET_EXHAUSTED // false' 2>/dev/null)" = "true" ]; then
+    printf '%-14s budget exhausted (%s%% of %s) — NOT nudging; this is a cost control, not a stall\n' \
+      "$ns" \
+      "$(printf '%s' "$live" | jq -r '.budget.BUDGET_PCT_USED // 0 | floor' 2>/dev/null)" \
+      "$(printf '%s' "$live" | jq -r '.budget.BUDGET_WEEKLY // 0' 2>/dev/null)"
+    continue
+  fi
+
   sid=""
   if [ "$ACTION" = nudge ]; then
     sid=$(kubectl exec -n "$ns" "$pod" -- cat /data/dashboard-sessions.json 2>/dev/null \
