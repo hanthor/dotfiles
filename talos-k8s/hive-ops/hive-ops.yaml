@@ -1136,6 +1136,82 @@ spec:
             - {name: tmp, emptyDir: {}}
 
 ---
+# Backstop for a governor that stops scheduling. On 2026-09-06 school sat on 837
+# open issues in SURGE mode — supervisor on a 1-minute cadence — and returned
+# `agents_due: null` on every eval for 7.9 hours; hanthor kicked only supervisor
+# while `guide` went 14 hours untouched. Nothing shipped for 7.7 hours and no
+# alarm fired, because every other layer was healthy: pods Running, panes
+# `liveness ok`, providers with headroom, credentials valid. Kicking by hand
+# produced work immediately, so the gap is scheduling alone.
+#
+# It does NOT fix the governor (that logic is in the Go binary). It converts a
+# silent multi-hour stall into a self-correcting one.
+#
+# Threshold is each agent's LONGEST cadence across ALL modes x2 (floor 30m), so
+# it can never pre-empt a governor merely running in a slow mode — only one that
+# has genuinely stopped. Agents paused in every mode (operations, telemetry) are
+# never nudged; that is deliberate config, not a stall.
+#
+# Offset to :13/:43 to stay clear of hive-rotate (*/20) and the watchdogs, and
+# capped at 4 kicks per spoke per run because this API times out under
+# concurrent mutations — observed at 25s and 60s during a manual sweep.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-nudge
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: nudge}
+spec:
+  schedule: "13,43 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: nudge}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-nudge.sh", "nudge"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+
+---
 # Burn-rate pacing. Distinct from hive-rotate on purpose: rotate answers "can
 # this provider serve at all" (a threshold), pace answers "should we be going
 # this fast" (a rate). A threshold cannot see either failure — burning a weekly
