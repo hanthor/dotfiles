@@ -1440,6 +1440,19 @@ fi
 # on-demand agents (pausedTrigger=startup, onDemand=true) are NOT operator
 # pauses — they are paused by design until an inception triggers them, and are
 # skipped here.
+# Agents whose PLACEMENT is fixed by the operator. Comma-separated, declared in
+# talos-k8s/hive-ops/hive-ops.yaml so a pin is reviewable in git for the same
+# reason HIVE_ROTATE_HOLD is.
+#
+# The hive config has a `cli_pinned` field, but THIS script never read it, so a
+# model set by hand through the dashboard was silently reverted at the next
+# rotation. Pinning has to be honoured by whatever does the placing.
+#
+# A pinned agent is still probed, still healed by the watchdog, and still
+# un-stranded — only the rung choice is left alone.
+PIN=",$(printf '%s' "${HIVE_ROTATE_PIN:-}" | tr -d '[:space:]'),"
+pinned() { [ "$PIN" != ",," ] && [ "${PIN#*,$1,}" != "$PIN" ]; }
+
 HOLD=",$(printf '%s' "${HIVE_ROTATE_HOLD:-}" | tr -d '[:space:]'),"
 held() { [ "$HOLD" != ",," ] && [ "${HOLD#*,$1,}" != "$HOLD" ]; }
 
@@ -1490,6 +1503,10 @@ fi
 
 changed=0
 for a in $(agent_names); do
+  if pinned "$a"; then
+    printf '%-14s %-9s pinned by HIVE_ROTATE_PIN — placement left alone\n' "$a" "$(provider_of "$(agent_field "$a" cli)" "$(agent_field "$a" govModel)")"
+    continue
+  fi
   tier=$(tier_of "$a"); [ -z "$tier" ] && continue
   curb=$(agent_field "$a" cli); curm=$(agent_field "$a" govModel)
   curp=$(provider_of "$curb" "$curm")
