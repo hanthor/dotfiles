@@ -385,6 +385,17 @@ spec:
                 - {name: KUBECONFIG, value: ""}
                 - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
                 - {name: HOME, value: /tmp}
+                # THE ONLY PLACE A DURABLE PAUSE MAY BE DECLARED.
+                # Comma-separated agent names that are allowed to STAY paused.
+                # Everything else paused via the dashboard is resumed on the next
+                # rotation pass — keeping the hives unpaused and functional is
+                # what hive-ops is for, and an unrecorded hand pause is how a
+                # spoke goes silently idle (11 school agents, ~19 hours,
+                # 2026-09-06). Declaring a hold here makes it reviewable in git
+                # and survives a pod rebuild.
+                # On-demand agents (brainstorm) are skipped automatically and do
+                # NOT need listing.
+                - {name: HIVE_ROTATE_HOLD, value: ""}
               volumeMounts:
                 - {name: scripts, mountPath: /scripts, readOnly: true}
                 - {name: state, mountPath: /state}
@@ -462,6 +473,17 @@ spec:
                 - {name: HIVE_PRIMARY_NS, value: hive}
                 - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate-reef}
                 - {name: HOME, value: /tmp}
+                # THE ONLY PLACE A DURABLE PAUSE MAY BE DECLARED.
+                # Comma-separated agent names that are allowed to STAY paused.
+                # Everything else paused via the dashboard is resumed on the next
+                # rotation pass — keeping the hives unpaused and functional is
+                # what hive-ops is for, and an unrecorded hand pause is how a
+                # spoke goes silently idle (11 school agents, ~19 hours,
+                # 2026-09-06). Declaring a hold here makes it reviewable in git
+                # and survives a pod rebuild.
+                # On-demand agents (brainstorm) are skipped automatically and do
+                # NOT need listing.
+                - {name: HIVE_ROTATE_HOLD, value: ""}
               volumeMounts:
                 - {name: scripts, mountPath: /scripts, readOnly: true}
                 - {name: state, mountPath: /state}
@@ -540,6 +562,17 @@ spec:
                 - {name: HIVE_PRIMARY_NS, value: hive}
                 - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate-hanthor}
                 - {name: HOME, value: /tmp}
+                # THE ONLY PLACE A DURABLE PAUSE MAY BE DECLARED.
+                # Comma-separated agent names that are allowed to STAY paused.
+                # Everything else paused via the dashboard is resumed on the next
+                # rotation pass — keeping the hives unpaused and functional is
+                # what hive-ops is for, and an unrecorded hand pause is how a
+                # spoke goes silently idle (11 school agents, ~19 hours,
+                # 2026-09-06). Declaring a hold here makes it reviewable in git
+                # and survives a pod rebuild.
+                # On-demand agents (brainstorm) are skipped automatically and do
+                # NOT need listing.
+                - {name: HIVE_ROTATE_HOLD, value: ""}
               volumeMounts:
                 - {name: scripts, mountPath: /scripts, readOnly: true}
                 - {name: state, mountPath: /state}

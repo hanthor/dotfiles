@@ -1414,9 +1414,67 @@ fi
 #     just re-pause on resume.
 # Set HIVE_ROTATE_AUTORESUME=0 to hold paused agents down (e.g. while
 # deliberately keeping the fleet quiet).
+# ── OPERATOR PAUSES ARE NOT STATE, THEY ARE CODE ────────────────────────
+#
+# POLICY (2026-09-06): keeping the hives unpaused and functional is the whole
+# job of hive-ops. A pause applied by hand through the dashboard is therefore
+# NOT durable fleet state — it is an undeclared local edit, and it is exactly
+# how a spoke ends up silently idle. Observed the same day: 11 school agents sat
+# on `manual pause` for ~19 hours, invisible to every dashboard that only shows
+# "running", while the governor burned eval cycles computing them as due and
+# then skipping them.
+#
+# So a `dashboard-api` pause is resumed on the next pass, unconditionally —
+# NOT gated on provider health or rung membership the way the recovery net
+# below is, because an operator pause is not evidence of provider trouble and
+# waiting for a positive probe is what let these persist. If the provider really
+# is dry, placement further down re-strands the agent with a reason that names
+# the provider, which is a far better record than "manual pause".
+#
+# TO KEEP AN AGENT PAUSED, COMMIT IT. HIVE_ROTATE_HOLD is a comma-separated
+# allowlist set per-spoke in talos-k8s/hive-ops/hive-ops.yaml — that manifest is
+# in git, so a deliberate hold is reviewable, greppable, and survives a pod
+# rebuild. Anything not in it gets resumed. There is deliberately no way to
+# express a durable pause outside of code.
+#
+# on-demand agents (pausedTrigger=startup, onDemand=true) are NOT operator
+# pauses — they are paused by design until an inception triggers them, and are
+# skipped here.
+HOLD=",$(printf '%s' "${HIVE_ROTATE_HOLD:-}" | tr -d '[:space:]'),"
+held() { [ "$HOLD" != ",," ] && [ "${HOLD#*,$1,}" != "$HOLD" ]; }
+
 if [ "${HIVE_ROTATE_AUTORESUME:-1}" = 1 ]; then
   for a in $(agent_names); do
     [ "$(agent_field "$a" paused)" = true ] || continue
+    [ "$(agent_field "$a" onDemand)" = true ] && continue
+    if [ "$(agent_field "$a" pausedTrigger)" = dashboard-api ]; then
+      # ROTATION'S OWN PAUSES LOOK IDENTICAL TO AN OPERATOR'S. hive_api
+      # authenticates with the owner session cookie, so when THIS script strands
+      # an agent the dashboard records it exactly as a human pause would:
+      # reason="manual pause", by=<the session owner>, trigger=dashboard-api.
+      # There is no field that separates them. Resuming on the trigger alone
+      # therefore fights the stranding logic — resume, re-strand, every 20
+      # minutes, forever.
+      #
+      # The stranded journal is the discriminator: this script writes a row
+      # there for every agent it parks, and the recovery path above clears the
+      # row when the provider comes back. So an agent in the journal is OURS and
+      # is left to that path; anything else paused through the API is a real
+      # operator pause and is resumed.
+      if [ -s "$STATE_DIR/stranded" ] && grep -q "^$a|" "$STATE_DIR/stranded" 2>/dev/null; then
+        continue
+      fi
+      if held "$a"; then
+        printf '%-14s %-9s held paused by HIVE_ROTATE_HOLD (declared in git)\n' "$a" "operator"
+        continue
+      fi
+      printf '%-14s %-9s operator pause -> resuming (not declared in HIVE_ROTATE_HOLD)\n' "$a" "operator"
+      [ "$ACTION" = plan ] && continue
+      rs=$(hive_api POST "/api/resume/$a" | jq -r '.status // .error')
+      [ "$rs" = "resumed" ] || printf '    ! resume failed: %s\n' "$rs"
+      [ -s "$STATE_DIR/stranded" ] && sed -i "/^$a|/d" "$STATE_DIR/stranded"
+      continue
+    fi
     [ "$(agent_field "$a" pausedTrigger)" = login-detector ] && continue
     tier=$(tier_of "$a"); [ -z "$tier" ] && continue
     curb=$(agent_field "$a" cli); curm=$(agent_field "$a" govModel)
