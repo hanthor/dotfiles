@@ -993,6 +993,80 @@ spec:
             - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
             - {name: tmp, emptyDir: {}}
 ---
+# Keep the agent CLIs current. A stale CLI is not cosmetic: backends gain and
+# drop model ids between releases, hive-inventory.sh reads those lists to gate
+# the rung ladder, so an old CLI makes new models invisible to rotation no matter
+# what the benchmark feed ranks. Found 2026-09-06 with pi pinned at 0.84.1 while
+# 0.85.1 was out, across all three spokes.
+#
+# Runs 30 minutes BEFORE hive-inventory (10:05 vs 05:40) so the inventory of the
+# day reflects the freshly-updated CLIs rather than the previous release.
+#
+# This is a RECONCILER, not an installer. /usr/local/bin is the container overlay,
+# so updates are lost on every pod restart and re-applied on the next pass. The
+# version line it prints is also the drift signal for the image itself.
+#
+# Default target is pi only. codex/claude/agy each ship an updater but are the
+# backends currently carrying the fleet — widen HIVE_CLI_UPDATE_TARGETS
+# deliberately, so one bad third-party release cannot take every provider at
+# once. Set it to "" to disable without deleting this job.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-cli-update
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: cli-update}
+spec:
+  schedule: "10 5 * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: cli-update}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-cli-update.sh", "update"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+
+---
 # Burn-rate pacing. Distinct from hive-rotate on purpose: rotate answers "can
 # this provider serve at all" (a threshold), pace answers "should we be going
 # this fast" (a rate). A threshold cannot see either failure — burning a weekly
