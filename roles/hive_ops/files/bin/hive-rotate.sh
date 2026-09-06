@@ -390,6 +390,12 @@ backend_model_mismatch() {
 # repair_mismatch <agent>: put a mismatched agent back on a model its CURRENT
 # backend can actually run, preferring its own tier's rung for that backend.
 repair_mismatch() {
+  # A pinned agent's pair is the operator's, not the ladder's. Without this the
+  # watchdog "repairs" a deliberate pin back to a tier member within 5 minutes —
+  # supervisor on gpt-5.4-mini (unmetered, deliberately off-ladder) would be
+  # rewritten to the T2 codex rung. Repair only ever picks a TIER member, so it
+  # can never restore a pin; skipping is the only correct answer here.
+  if pinned "$1"; then return 1; fi
   local a="$1" b m tier want
   b=$(agent_field "$a" cli); m=$(agent_field "$a" govModel)
   backend_model_mismatch "$b" "$m" || return 1
