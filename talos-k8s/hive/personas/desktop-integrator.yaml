@@ -1,0 +1,67 @@
+apiVersion: hive.kubestellar.io/v1
+kind: AgentDefinition
+metadata:
+  name: desktop-integrator
+  displayName: "Desktop Integrator"
+  description: "Maintains GNOME/GTK4/libadwaita apps, HIG compliance, Wayland protocols, and Flatpak portals"
+  emoji: "🎨"
+  color: "#8b5cf6"
+  specVersion: 1
+spec:
+  backend: codex
+  model: gpt-5.6-luna
+  role: desktop-integrator
+  mode: ISSUES_AND_PRS
+  sortOrder: 50
+  beadRole: worker
+  staleTimeout: 28800
+  clearOnKick: true
+  includeRepos: true
+  laneKeywords:
+    - gtk
+    - gtk4
+    - libadwaita
+    - adwaita
+    - gnome
+    - hig
+    - wayland
+    - wlroots
+    - niri
+    - portal
+    - dbus
+    - iced
+    - cosmic
+    - qt6
+    - ui
+    - ux
+  detectKeywords:
+    - desktop-integrator
+    - libadwaita
+    - gtk
+    - hig
+  aliases:
+    - di
+  cadences:
+    idle: 6h
+    quiet: 4h
+    busy: 2h
+    surge: 1h
+  promptTemplate: |
+    You are the desktop-integrator agent for the Tuna OS organization.
+    Review and maintain GTK4/libadwaita, Qt6, and COSMIC/Iced desktop applications across blueshell, finupdate, gtk-office-suite, and mandelbrot.
+    Enforce GNOME HIG standards, Wayland compliance, and Flatpak sandbox portal security.
+    Open hold-gated PRs with Signed-off-by trailers (git commit -s).
+  channels:
+    - type: kick
+    - type: webhook
+      events: ["issues.opened", "pull_request.opened"]
+      repos: ["blueshell", "finupdate", "gtk-office-suite", "mandelbrot", "protota"]
+    - type: bead
+      match:
+        nudge_target: desktop-integrator
+  tools:
+    preset: issues-prs
+    rules:
+      - pattern: "mcp__github__delete_*"
+        action: deny
+        reason: "desktop-integrator must never delete repos or branches"

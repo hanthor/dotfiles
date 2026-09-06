@@ -1,0 +1,63 @@
+apiVersion: hive.kubestellar.io/v1
+kind: AgentDefinition
+metadata:
+  name: installer-qa
+  displayName: "Installer QA"
+  description: "Validates multi-frontend installers, bootloader generation, and bare-metal/dual-boot safety"
+  emoji: "💿"
+  color: "#10b981"
+  specVersion: 1
+spec:
+  backend: codex
+  model: gpt-5.6-luna
+  role: installer-qa
+  mode: ISSUES_AND_PRS
+  sortOrder: 60
+  beadRole: worker
+  staleTimeout: 28800
+  clearOnKick: true
+  includeRepos: true
+  laneKeywords:
+    - installer
+    - fisherman
+    - wootc
+    - asahi
+    - efi
+    - systemd-boot
+    - grub
+    - uki
+    - partition
+    - dual-boot
+    - secure-boot
+    - arm64
+    - apple-silicon
+  detectKeywords:
+    - installer-qa
+    - fisherman
+    - wootc
+    - bootloader
+  aliases:
+    - iqa
+  cadences:
+    idle: 12h
+    quiet: 6h
+    busy: 4h
+    surge: 2h
+  promptTemplate: |
+    You are the installer-qa agent for the Tuna OS organization.
+    Audit and maintain multi-frontend installers (COSMIC, KDE, XFCE, Niri), wootc Windows dual-boot installer, and bootc-installer-asahi.
+    Ensure fisherman API contract stability, EFI/bootloader configuration integrity, and non-destructive disk safety.
+    Open hold-gated PRs with Signed-off-by trailers (git commit -s).
+  channels:
+    - type: kick
+    - type: schedule
+      schedule: "0 */6 * * *"
+    - type: bead
+      match:
+        nudge_target: installer-qa
+  tools:
+    preset: issues-prs
+    rules:
+      - pattern: "mcp__github__delete_*"
+        action: deny
+        reason: "installer-qa must never delete repos or releases"

@@ -1,0 +1,57 @@
+apiVersion: hive.kubestellar.io/v1
+kind: AgentDefinition
+metadata:
+  name: upstream-shepherd
+  displayName: "Upstream Shepherd"
+  description: "Manages fork synchronization, upstreamable bugfix extraction, and clean modular rebases"
+  emoji: "🐑"
+  color: "#ec4899"
+  specVersion: 1
+spec:
+  backend: codex
+  model: gpt-5.6-sol
+  role: upstream-shepherd
+  mode: ISSUES_AND_PRS
+  sortOrder: 70
+  beadRole: worker
+  staleTimeout: 28800
+  clearOnKick: true
+  includeRepos: true
+  laneKeywords:
+    - upstream
+    - fork
+    - rebase
+    - sync
+    - cherry-pick
+    - divergence
+    - patch
+  detectKeywords:
+    - upstream-shepherd
+    - shepherd
+    - rebase
+    - fork-sync
+  aliases:
+    - us
+  cadences:
+    idle: 24h
+    quiet: 12h
+    busy: 6h
+    surge: pause
+  promptTemplate: |
+    You are the upstream-shepherd agent for the Tuna OS organization.
+    Audit divergence across all forks (hive, blueshell, mandelbrot, mariner), extract upstreamable bugfixes, and prepare clean rebase PRs.
+    Ensure zero-delta maintenance where possible by proposing upstream modular hooks.
+    Open hold-gated PRs with Signed-off-by trailers (git commit -s).
+  channels:
+    - type: kick
+    - type: schedule
+      schedule: "0 8 * * *"
+    - type: bead
+      match:
+        nudge_target: upstream-shepherd
+  tools:
+    preset: issues-prs
+    rules:
+      - pattern: "mcp__github__delete_*"
+        action: deny
+        reason: "upstream-shepherd must never delete repositories"

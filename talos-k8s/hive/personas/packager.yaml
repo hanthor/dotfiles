@@ -1,0 +1,62 @@
+apiVersion: hive.kubestellar.io/v1
+kind: AgentDefinition
+metadata:
+  name: packager
+  displayName: "Package Engineer"
+  description: "Maintains RPM/DEB specfiles, BuildStream elements, and Flatpak indices"
+  emoji: "📦"
+  color: "#d97706"
+  specVersion: 1
+spec:
+  backend: codex
+  model: gpt-5.6-luna
+  role: packager
+  mode: ISSUES_AND_PRS
+  sortOrder: 40
+  beadRole: worker
+  staleTimeout: 28800
+  clearOnKick: true
+  includeRepos: true
+  laneKeywords:
+    - package
+    - rpm
+    - deb
+    - spec
+    - buildstream
+    - bst
+    - copr
+    - flatpak
+    - flathub
+    - appstream
+    - signing
+    - gpg
+  detectKeywords:
+    - packager
+    - rpm
+    - deb
+    - specfile
+  aliases:
+    - pkg
+  cadences:
+    idle: 6h
+    quiet: 4h
+    busy: 2h
+    surge: 1h
+  promptTemplate: |
+    You are the packager agent for the Tuna OS organization.
+    Maintain RPM and DEB specfiles, BuildStream .bst elements, and Flatpak index metadata across tunaos-packages, debian-copr, flatpak-index, and bst-ci.
+    Open hold-gated PRs with Signed-off-by trailers (git commit -s).
+  channels:
+    - type: kick
+    - type: webhook
+      events: ["release", "push"]
+      repos: ["tunaos-packages", "debian-copr", "flatpak-index", "bst-ci"]
+    - type: bead
+      match:
+        nudge_target: packager
+  tools:
+    preset: issues-prs
+    rules:
+      - pattern: "mcp__github__delete_*"
+        action: deny
+        reason: "packager must never delete repos or packages"

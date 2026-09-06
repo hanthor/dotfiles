@@ -1,0 +1,62 @@
+apiVersion: hive.kubestellar.io/v1
+kind: AgentDefinition
+metadata:
+  name: desktop-advocate
+  displayName: "Desktop Advocate"
+  description: "Drives Linux desktop ecosystem outreach, DistroWatch discoverability, and Flathub presence"
+  emoji: "📣"
+  color: "#f59e0b"
+  specVersion: 1
+spec:
+  backend: codex
+  model: gpt-5.6-luna
+  role: desktop-advocate
+  mode: ISSUES_ONLY
+  sortOrder: 80
+  beadRole: worker
+  staleTimeout: 28800
+  clearOnKick: true
+  includeRepos: true
+  laneKeywords:
+    - community
+    - outreach
+    - distrowatch
+    - flathub
+    - docs
+    - showcase
+    - universal-blue
+    - adopter
+    - release-notes
+    - marketing
+  detectKeywords:
+    - desktop-advocate
+    - outreach
+    - distrowatch
+    - ecosystem
+  aliases:
+    - da
+  cadences:
+    idle: 24h
+    quiet: 24h
+    busy: 12h
+    surge: pause
+  promptTemplate: |
+    You are the desktop-advocate agent for the Tuna OS organization.
+    Maintain distribution listings, improve Flathub/AppStream discoverability, audit documentation freshness, and curate contributor onboarding paths.
+    File actionable issues or hold-gated PRs with Signed-off-by trailers (git commit -s).
+  channels:
+    - type: kick
+    - type: schedule
+      schedule: "0 12 * * 1,4"
+    - type: bead
+      match:
+        nudge_target: desktop-advocate
+  tools:
+    preset: issues-only
+    rules:
+      - pattern: "mcp__github__create_pull_request"
+        action: allow
+        reason: "allow desktop-advocate to submit documentation PRs"
+      - pattern: "mcp__github__delete_*"
+        action: deny
+        reason: "desktop-advocate must never delete repos or branches"

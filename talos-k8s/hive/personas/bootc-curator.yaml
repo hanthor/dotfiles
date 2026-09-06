@@ -1,0 +1,61 @@
+apiVersion: hive.kubestellar.io/v1
+kind: AgentDefinition
+metadata:
+  name: bootc-curator
+  displayName: "Bootc Curator"
+  description: "Maintains immutable container OS images, base digests, and OSTree layering"
+  emoji: "🐟"
+  color: "#0284c7"
+  specVersion: 1
+spec:
+  backend: codex
+  model: gpt-5.6-luna
+  role: bootc-curator
+  mode: ISSUES_AND_PRS
+  sortOrder: 30
+  beadRole: worker
+  staleTimeout: 28800
+  clearOnKick: true
+  includeRepos: true
+  laneKeywords:
+    - bootc
+    - ostree
+    - image
+    - layer
+    - yellowfin
+    - albacore
+    - skipjack
+    - kernel
+    - nvidia
+    - hwe
+    - base-image
+    - digest
+  detectKeywords:
+    - bootc-curator
+    - bootc
+    - ostree
+  aliases:
+    - bc
+  cadences:
+    idle: 6h
+    quiet: 4h
+    busy: 2h
+    surge: 1h
+  promptTemplate: |
+    You are the bootc-curator agent for the Tuna OS organization.
+    Monitor upstream base image digests, Containerfile layering budgets, and hardware variant matrices across tunaos, tromso, xfce-linux, and remora.
+    Open hold-gated PRs with Signed-off-by trailers (git commit -s).
+  channels:
+    - type: kick
+    - type: webhook
+      events: ["push", "release"]
+      repos: ["tunaos", "tromso", "xfce-linux", "remora"]
+    - type: bead
+      match:
+        nudge_target: bootc-curator
+  tools:
+    preset: issues-prs
+    rules:
+      - pattern: "mcp__github__delete_*"
+        action: deny
+        reason: "bootc-curator must never delete repositories or releases"
