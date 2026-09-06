@@ -30,11 +30,14 @@
 #   anthropic  GET /v1/models          — with the SAME OAuth token the usage
 #                                        probe uses; no extra credential.
 #   deepseek   GET /models             — with DEEPSEEK_API_KEY from the pod env.
-#   openai     (none)                  — codex authenticates by subscription and
-#                                        exposes no list; there is no API key in
-#                                        this deployment. Reported as unknown
-#                                        rather than guessed, so a consumer can
-#                                        tell "no models" from "not measured".
+#   openai     codex app-server        — JSON-RPC `model/list` over stdio, which
+#                                        returns exactly what --model accepts,
+#                                        on the agents' own subscription. There
+#                                        is no REST list endpoint and no API key
+#                                        here, so this is the only way to see it.
+#
+# A backend that cannot be read contributes NO rows and is named in the note
+# column, so a consumer can tell "no models" from "not measured".
 #
 # Every lookup is best-effort and independently fallible. A backend that cannot
 # be inventoried contributes NO rows and is recorded in the note column — it
@@ -126,10 +129,41 @@ else
 fi
 
 # ── openai ──────────────────────────────────────────────────────────────
-# Deliberately not guessed. codex authenticates by subscription and offers no
-# list, and there is no OpenAI API key here. "Unknown" is a different state
-# from "empty" and consumers must be able to tell them apart.
-NOTES="$NOTES openai:no-list-endpoint"
+# codex has no REST list endpoint and there is no OpenAI API key here, but it
+# is NOT unmeasurable: `codex app-server` speaks JSON-RPC over stdin/stdout and
+# `model/list` returns exactly what --model accepts, authenticated by the same
+# subscription the agents already use. Verified 2026-09-06 against codex 0.146.
+#
+# This matters more than the other backends. openai is the one provider the
+# rung gate in hive-rotate.sh cannot filter, because an unmeasured provider
+# keeps ALL its rungs by design. The moment hive-tiers.sh started emitting
+# feed-discovered ids, that became a live hazard: Artificial Analysis ranks
+# `gpt-6-astra` near the top of the field, this subscription does not offer it
+# (model/list returns gpt-5.6-sol/terra/luna, gpt-5.5, gpt-5.4-mini), and an
+# ungated rung naming a model codex rejects launches an agent that dies at
+# startup and reads as a dead agent rather than a bad id.
+#
+# Run headless: no tmux, no pane, no live agent required. The initialize
+# handshake is mandatory before any other method, and the sleeps give the
+# server time to answer before stdin closes.
+oa_rows=$(kubectl exec -n "$NS" "$POD" -- sh -c '
+  {
+    printf "%s\n" "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"hive-inventory\",\"version\":\"1.0.0\",\"title\":\"hive-inventory\"}}}"
+    sleep 2
+    printf "%s\n" "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"model/list\",\"params\":{}}"
+    sleep 6
+  } | HOME=/data/home timeout 40 codex app-server 2>/dev/null' 2>/dev/null \
+  | jq -r 'select(.id==1) | .result.data[]? | "\(.id)\t\(.displayName // .id)"' 2>/dev/null)
+if [ -n "$oa_rows" ]; then
+  printf '%s\n' "$oa_rows" | while IFS="$(printf '\t')" read -r id disp; do
+    [ -n "$id" ] || continue
+    printf 'openai\tcodex\t%s\t%s\n' "$id" "$disp" >> "$TMP"
+  done
+else
+  # Same rule as every other backend: contribute no rows and SAY SO, so the
+  # gate treats openai as unmeasured rather than empty.
+  NOTES="$NOTES openai:unreadable"
+fi
 
 rows=$(grep -c . "$TMP" 2>/dev/null || echo 0)
 # An empty collection is NEVER published over a good cache. A consumer that

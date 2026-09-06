@@ -138,8 +138,28 @@ jq -r '
   | sort_by(-.agentic)
   # Tier by ABSOLUTE agentic score, not by rank position: rank-based tiering
   # silently promotes a weak model into T1 whenever the field thins out.
-  | map(. + { tier: (if   .agentic >= 60 then "T1"
-                     elif .agentic >= 40 then "T2"
+  #
+  # BANDS ARE ON THE AA SCALE, NOT THE TERMINAL-BENCH ONE. This is the bug that
+  # made the first live run useless: the 60/40 cut-offs were lifted from the
+  # TB2.1 numbers in the built-in table of hive-rotate.sh, where the field runs
+  # to 89.5. The AA agentic index runs to 58.2, so ">= 60" matched NOTHING and
+  # T1 came back EMPTY -- every T1 agent would have stranded. Both scripts
+  # already warn that the two benchmarks are not comparable; the thresholds
+  # crossed that line anyway.
+  #
+  # NOTE: no apostrophes in this block -- the jq program is a single-quoted
+  # shell string and an apostrophe would terminate it.
+  #
+  # Cuts taken from the measured distribution (n=31, 2026-09-06):
+  #   max 58.2  p75 48.0  median 31.6  p25 10.6  min 0.9
+  # 48 (p75) is a real gap in the data: the frontier cluster runs 58.2..48.0
+  # (fable-5-1, opus-5-xhigh, gpt-6-astra) and the next model down is 44.5. It
+  # also reproduces the intent of the built-in table exactly -- opus-5 lands
+  # T1, sonnet-5 and gpt-5.6-luna land T2, which is where that table puts them.
+  # 30 (~median) keeps the mid cluster (sol-low, terra-medium) in T2 and drops
+  # the genuinely weak tail to T3.
+  | map(. + { tier: (if   .agentic >= 48 then "T1"
+                     elif .agentic >= 30 then "T2"
                      else "T3" end) })
   # Best two rungs per (tier, provider) — enough for a preference order without
   # bloating the table with near-duplicates.

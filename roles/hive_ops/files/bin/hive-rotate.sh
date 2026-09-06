@@ -226,11 +226,39 @@ fi
 # Fails open on a missing or stale inventory: the ladder is better slightly
 # wrong than empty, and an inventory outage must never wedge rotation.
 tier_members() {
-  local raw
+  local raw builtin
+  builtin=$(printf '%s\n' "$TIERS" | awk -F'|' -v t="$1" '$1==t{print}')
   if [ "$TIER_SOURCE" = api ]; then
     raw=$(awk -F'\t' -v t="$1" '!/^#/ && $1==t {print $1"|"$2"|"$3"|"$4}' "$TIER_CACHE")
+    # UNION, not replace. The benchmark feed does not cover every provider this
+    # fleet runs: measured 2026-09-06, Artificial Analysis scored ZERO DeepSeek
+    # models and only two Google ones (both -3.5, neither a rung we use), while
+    # DeepSeek is the DEFAULT rung on both cost and capability per the table
+    # above. Letting the cache REPLACE the table therefore deleted deepseek and
+    # google from the ladder entirely the moment a refresh succeeded — the
+    # cheapest and most-used provider silently disappearing because a
+    # third-party benchmark had not gotten to it.
+    #
+    # So: take every cache row, then add every built-in row whose provider+model
+    # the cache does not already carry. Same rule the inventory gate below uses —
+    # unmeasured is not evidence of absence.
+    #
+    # De-dupe on provider+MODEL, not provider alone. Scoring a provider is not
+    # the same as scoring the rungs we run: the feed scores google
+    # gemini-3-5-flash, while `agy models` offers 3.8/3.7/3.6/3.1 and nothing
+    # else. Dropping the built-in google rungs just because google appeared in
+    # the feed would leave google with one rung naming a model the CLI does not
+    # have — which the inventory gate then filters out, leaving google with NO
+    # rungs at all. Unioning per-model keeps the real rungs and still lets the
+    # feed introduce genuinely new ones.
+    # Cache rows are fed in FIRST, so first-wins on provider|model keeps the
+    # feed-ranked rung and discards only the built-in duplicate of it.
+    raw=$(printf '%s\n%s\n' "$raw" "$builtin" | awk -F'|' '
+      NF < 4 { next }
+      { if (!emitted[$2 "|" $4]++) print }
+    ')
   else
-    raw=$(printf '%s\n' "$TIERS" | awk -F'|' -v t="$1" '$1==t{print}')
+    raw=$builtin
   fi
   [ "$INVENTORY_OK" = 1 ] || { printf '%s\n' "$raw"; return; }
   printf '%s\n' "$raw" | awk -F'|' -v inv="$INVENTORY" '
