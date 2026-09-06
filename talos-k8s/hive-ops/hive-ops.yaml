@@ -1067,6 +1067,75 @@ spec:
             - {name: tmp, emptyDir: {}}
 
 ---
+# Keep the ONE shared credential store actually shared. Assembled from
+# hand-carved hostPath PVs and symlinks, it has failed silently three ways in a
+# week: a mount that resolves to a different filesystem than the shared dir and
+# looks fine to `ls`; a shared dir not group-writable, so token REFRESH fails and
+# presents as an expired subscription; and .claude.json with theme:null, which
+# parks every CLI at the theme picker while hasCompletedOnboarding says true.
+#
+# None of those are visible without a WRITE-THROUGH test — write a marker in one
+# spoke, read it from the others. That is what this does, every 30 minutes, and
+# it repairs the two repairable causes (perms, theme) in place. A spoke that is
+# not actually sharing is reported loudly, because that one needs a mount fix and
+# no script should guess at hostPath surgery.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-shared-auth
+  namespace: hive
+  labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: shared-auth}
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: hive-ops, app.kubernetes.io/component: shared-auth}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hive-ops
+          nodeSelector: {workload-role: hive}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: ops
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-shared-auth.sh", "reconcile"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                - {name: KUBECONFIG, value: ""}
+                - {name: HIVE_ROTATE_STATE, value: /state/hive-rotate}
+                - {name: HOME, value: /tmp}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: state, mountPath: /state}
+                - {name: tmp, mountPath: /tmp}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: "1", memory: 512Mi}
+          volumes:
+            - {name: scripts, configMap: {name: hive-ops-scripts, defaultMode: 0755}}
+            - {name: state, persistentVolumeClaim: {claimName: hive-ops-state}}
+            - {name: tmp, emptyDir: {}}
+
+---
 # Burn-rate pacing. Distinct from hive-rotate on purpose: rotate answers "can
 # this provider serve at all" (a threshold), pace answers "should we be going
 # this fast" (a rate). A threshold cannot see either failure — burning a weekly
