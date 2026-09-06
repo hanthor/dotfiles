@@ -363,6 +363,20 @@ spec:
             - name: secrets
               mountPath: /secrets
               readOnly: true
+            # ONE shared Claude/Gemini credential store for the whole fleet.
+            # /data/home/.claude and /data/home/.gemini are SYMLINKS on the
+            # hive-data PVC pointing here, so a single device-flow login covers
+            # hive, hive-reef, hive-hanthor and hive-contributors instead of one
+            # per spoke. Remove this mount and those symlinks dangle.
+            #
+            # Mounted plainly, NOT via hostPath or subPath. reef/hanthor reach
+            # the same directory through hostPath PVs, but on this node that
+            # path resolves to a different filesystem for a freshly-created
+            # mount (reef sees device 0:66, a new hostPath mount lands on 0:59
+            # and silently gets an empty directory). Verified by write-through
+            # test, 2026-09-06.
+            - name: sharedauth
+              mountPath: /shared-auth
           startupProbe:
             httpGet:
               path: /api/health
@@ -402,6 +416,9 @@ spec:
             secretName: hive-secrets
             optional: true
             defaultMode: 0440
+        - name: sharedauth
+          persistentVolumeClaim:
+            claimName: hive-shared-auth
 ---
 apiVersion: v1
 kind: Service
