@@ -1447,23 +1447,20 @@ if [ "${HIVE_ROTATE_AUTORESUME:-1}" = 1 ]; then
   for a in $(agent_names); do
     [ "$(agent_field "$a" paused)" = true ] || continue
     [ "$(agent_field "$a" onDemand)" = true ] && continue
-    if [ "$(agent_field "$a" pausedTrigger)" = dashboard-api ]; then
-      # ROTATION'S OWN PAUSES LOOK IDENTICAL TO AN OPERATOR'S. hive_api
-      # authenticates with the owner session cookie, so when THIS script strands
-      # an agent the dashboard records it exactly as a human pause would:
-      # reason="manual pause", by=<the session owner>, trigger=dashboard-api.
-      # There is no field that separates them. Resuming on the trigger alone
-      # therefore fights the stranding logic — resume, re-strand, every 20
-      # minutes, forever.
-      #
-      # The stranded journal is the discriminator: this script writes a row
-      # there for every agent it parks, and the recovery path above clears the
-      # row when the provider comes back. So an agent in the journal is OURS and
-      # is left to that path; anything else paused through the API is a real
-      # operator pause and is resumed.
-      if [ -s "$STATE_DIR/stranded" ] && grep -q "^$a|" "$STATE_DIR/stranded" 2>/dev/null; then
-        continue
-      fi
+    # Is this row one of OURS? The journal records the provider as it was at
+    # strand time and placement moves afterwards, so a row can name a provider
+    # the agent is no longer on. Observed 2026-09-06:
+    # `operations|anthropic|codex|claude-sonnet-4-6` while the agent was actually
+    # placed on openai/gpt-5.6-luna. The row still means "we parked this", so we
+    # do not treat it as an operator pause — but it must NOT short-circuit the
+    # recovery net below, which reads the CURRENT rung and is the only thing that
+    # can free an agent whose journal row has gone stale.
+    ours=0
+    if [ -s "$STATE_DIR/stranded" ] && grep -q "^$a|" "$STATE_DIR/stranded" 2>/dev/null; then
+      ours=1
+    fi
+
+    if [ "$(agent_field "$a" pausedTrigger)" = dashboard-api ] && [ "$ours" = 0 ]; then
       if held "$a"; then
         printf '%-14s %-9s held paused by HIVE_ROTATE_HOLD (declared in git)\n' "$a" "operator"
         continue
@@ -1475,6 +1472,7 @@ if [ "${HIVE_ROTATE_AUTORESUME:-1}" = 1 ]; then
       [ -s "$STATE_DIR/stranded" ] && sed -i "/^$a|/d" "$STATE_DIR/stranded"
       continue
     fi
+
     [ "$(agent_field "$a" pausedTrigger)" = login-detector ] && continue
     tier=$(tier_of "$a"); [ -z "$tier" ] && continue
     curb=$(agent_field "$a" cli); curm=$(agent_field "$a" govModel)
