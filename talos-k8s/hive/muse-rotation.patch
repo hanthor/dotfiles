@@ -1,0 +1,213 @@
+diff --git a/roles/hive_ops/files/bin/hive-rotate.sh b/roles/hive_ops/files/bin/hive-rotate.sh
+index 45bf9cb..3b4b59b 100644
+--- a/roles/hive_ops/files/bin/hive-rotate.sh
++++ b/roles/hive_ops/files/bin/hive-rotate.sh
+@@ -140,6 +140,39 @@ mkdir -p "$STATE_DIR"
+ T1_ANTHROPIC_MODEL="${HIVE_ROTATE_T1_ANTHROPIC_MODEL:-claude-opus-5}"
+ T2_ANTHROPIC_MODEL="${HIVE_ROTATE_T2_ANTHROPIC_MODEL:-claude-sonnet-5}"
+ 
++# THE MODEL ID IS 1.2, NOT 1.3, AND THAT IS NOT A TYPO. muse's catalog is
++# CALLER-DEPENDENT: measured 2026-09-08 with one and the same API key,
++# GET https://api.meta.ai/v1/models returned SEVEN ids from a workstation
++# (including muse-spark-1.3-contributor) but only FOUR from inside the hive pod
++# (muse-image-1.0, muse-spark-1.2-contributor, muse-spark-1.2, muse-spark-1.1).
++# Placing the 1.3 rung failed in-cluster with "model
++# `muse-spark-1.3-contributor` does not exist or you lack access", while 1.2
++# ran a real sandboxed task to completion. muse-spark-1.2-contributor is the
++# only CONTRIBUTOR tier present in both catalogs, so it is the only safe rung.
++# Re-check the pod's own catalog before promoting this id — not a laptop's.
++#
++# muse (Muse Code, provider pool `meta`) sits at T2 and T3, and that placement
++# is MEASURED, not guessed. Artificial Analysis scores "Muse Spark 1.2 (xhigh)"
++# (slug muse-spark-1-2) at agentic index 44.2, which on the SAME scale the live
++# tier cache uses puts it between claude-sonnet-5 (44.5) and gpt-5-6-luna
++# (42.9) — i.e. the second-strongest T2 rung, not a T3 one. It was parked at T3
++# only while that number was unknown.
++#
++# TWO CAVEATS, both worth keeping:
++#   - The 44.2 is for the XHIGH reasoning-effort variant. muse's own default is
++#     `high`, so a rung launched without --reasoning-effort xhigh is not the
++#     thing AA measured and should be expected to score somewhat lower. The
++#     TIERS format has no effort column, so this cannot be expressed here yet.
++#   - AA scored the bare `muse-spark-1.2`; hive runs `muse-spark-1.2-contributor`.
++#     They are the same generation, differing in entitlement/billing tier rather
++#     than weights, so the score is taken to carry over — but it is an inference,
++#     not a measurement of the exact id we run.
++#
++# It is placed LAST within T2 on purpose. Order within a tier is preference, so
++# every measured incumbent still wins whenever it has headroom; muse is reached
++# only when they do not. `meta` is its own provider pool so an exhausted or
++# failed Meta account can never wedge rotation off anthropic/openai/google.
++#
+ # Format: tier|provider|backend|model   (order within a tier = preference)
+ # Double-quoted so the two rung variables above expand; the block contains no
+ # other `$`, so nothing else is interpolated.
+@@ -153,11 +186,13 @@ T2|deepseek|pi|deepseek-v4-flash
+ T2|openai|codex|gpt-5.6-luna
+ T2|anthropic|claude|$T2_ANTHROPIC_MODEL
+ T2|google|agy|gemini-3.6-flash-low
++T2|meta|muse|muse-spark-1.2-contributor
+ T3|google|agy|gemini-3.7-flash-low
+ T3|deepseek|pi|deepseek-v4-flash
+ T3|openai|codex|gpt-5.6-luna
+ T3|anthropic|claude|claude-haiku-4-5-20251001
+ T3|google|agy|gemini-3.6-flash-low
++T3|meta|muse|muse-spark-1.2-contributor
+ "
+ 
+ # Agent -> required capability tier. Cadence is the cost lever (the governor
+@@ -260,6 +295,43 @@ tier_members() {
+   else
+     raw=$builtin
+   fi
++
++  # ── ENTITLEMENT GATE: not all of muse's catalog is ours to run ──────────
++  #
++  # GET https://api.meta.ai/v1/models returns seven ids. Only the
++  # `-contributor` tiers are the ones this fleet is entitled to:
++  #
++  #   muse-spark-1.3-contributor, muse-spark-1.2-contributor   <- ours
++  #   muse-spark-1.3, muse-spark-1.2, muse-spark-1.1           <- NOT ours
++  #   muse-voice-transcribe-1.0, muse-image-1.0                <- not coding models
++  #
++  # This must be a GATE rather than just careful authoring of TIERS above,
++  # because the built-in table is only ONE of two sources. tier_members unions
++  # in the Artificial Analysis cache, so the day `meta` is added to
++  # hive-tiers.sh's creator map the feed can introduce bare `muse-spark-*`
++  # rungs that nothing else in this script would reject.
++  #
++  # And muse will NOT stop us. Measured 2026-09-08 against 1.0.3: the
++  # non-contributor ids run perfectly happily (`muse exec --model
++  # muse-spark-1.3` exits 0 and answers), so there is no natural failure to
++  # catch — the only symptom would be billing against a tier we did not mean
++  # to use. Worse, muse does not reliably reject even a WHOLLY INVALID id:
++  # `--model definitely-not-a-model` exited 0 and answered normally for the
++  # prompt "hi" (3/3 trials) while exiting 1 for the prompt "say ok". A bad
++  # rung can therefore pass a trivial smoke test and only fail on real work,
++  # which is precisely the failure this gate has to prevent rather than detect.
++  #
++  # Fails CLOSED for muse specifically — an unrecognised muse model is dropped,
++  # not passed through — which is the opposite of the inventory gate's
++  # fail-open rule below, and deliberately so: fail-open there protects a
++  # provider we could not measure, whereas here the risk is spending on a tier
++  # we are not entitled to. Every other backend is untouched.
++  raw=$(printf '%s\n' "$raw" | awk -F'|' '
++    NF < 4        { next }
++    $3 != "muse"  { print; next }
++    $4 ~ /-contributor$/ { print }
++  ')
++
+   [ "$INVENTORY_OK" = 1 ] || { printf '%s\n' "$raw"; return; }
+   printf '%s\n' "$raw" | awk -F'|' -v inv="$INVENTORY" '
+     BEGIN {
+@@ -338,7 +410,12 @@ provider_of() {  # backend model -> provider
+   # google outage. Matching on model name here would let a copilot
+   # login-required pause poison LOGIN_BLOCKED for a real provider and wedge
+   # the whole fleet's rotation off it.
+-  case "$c" in copilot) echo github; return;; esac
++  # muse: same reasoning as copilot — its auth is tied to the CLI (META_API_KEY
++  # / ~/.config/muse/auth.json), not to the model it serves, and its model ids
++  # (muse-spark-*) match none of the sniff patterns below, so without this arm
++  # provider_of returns "unknown" and muse can never be selected as a rung or
++  # be accounted for in headroom/LOGIN_BLOCKED.
++  case "$c" in copilot) echo github; return;; muse) echo meta; return;; esac
+   case "$m" in *deepseek*) echo deepseek; return;; *claude*|*opus*|*sonnet*|*haiku*) echo anthropic; return;;
+                *gpt-*|*codex*) echo openai; return;; *gemini*) echo google; return;; esac
+   case "$c" in claude|litellm) echo anthropic;; codex) echo openai;; agy) echo google;;
+@@ -429,6 +506,44 @@ probe_deepseek() {
+   awk -v b="${bal:-0}" 'BEGIN{ printf "%d balance=$%s\n", (b+0 < 1 ? 100 : 0), b }'
+ }
+ 
++# The one muse/Meta rung this fleet places. Named once so probe_meta and the
++# TIERS table cannot drift apart — a probe that health-checks a different id
++# than the one rotation places would report green for a rung that fails.
++META_MODEL="${HIVE_META_MODEL:-muse-spark-1.2-contributor}"
++
++# probe_meta: muse has NO usage/quota endpoint to read. Its CLI exposes no
++# `usage` command (`muse --help` lists resume/exec/config/export/trace/skills/
++# sandbox/schema/serve/session-message/auth/login/logout/init and nothing else)
++# and /v1/models returns a catalog carrying no quota fields. Headroom here is
++# therefore genuinely unmeasurable — which is exactly the "no-usage-api" case
++# provider_ok already documents as a defensive fallback. muse is the first
++# backend to actually hit it; before this, `meta` had NO note at all and so
++# fell through provider_ok's catch-all `return 1`, silently making every muse
++# rung unselectable no matter which tier it sat in.
++#
++# What CAN be checked is more useful than nothing: whether the credential works
++# AND whether the exact model rotation would place is offered TO THIS CALLER.
++# muse's catalog is caller-dependent — measured 2026-09-08 with one key, a
++# workstation saw seven ids and this pod saw four — so "does the pod's own
++# catalog contain our rung" is the meaningful health signal. Without it, a rung
++# naming a model the pod cannot see looks perfectly healthy right up until it
++# fails at task time with "model `...` does not exist or you lack access".
++#
++# Reports 100 (exhausted, i.e. stay off) for a dead credential or a missing
++# model, and -1/no-usage-api for "reachable and entitled, quota unknowable".
++probe_meta() {
++  local out
++  out=$(kubectl exec -n "$NS" "$POD" -- sh -c \
++        'curl -sS --max-time 20 -H "Authorization: Bearer $META_API_KEY" https://api.meta.ai/v1/models' 2>/dev/null)
++  printf '%s' "$out" | jq -e '.data' >/dev/null 2>&1 \
++    || { echo "100 unreachable-or-bad-credential"; return; }
++  if printf '%s' "$out" | jq -e --arg m "$META_MODEL" '.data[]|select(.id==$m)' >/dev/null 2>&1; then
++    echo "-1 no-usage-api"
++  else
++    echo "100 ${META_MODEL} not offered to this caller"
++  fi
++}
++
+ # pane_is_live: does this agent's pane hold a running CLI, or has it fallen back
+ # to a bare shell?
+ #
+@@ -703,14 +818,23 @@ probe_google() {
+ 
+ # ── Gather headroom ─────────────────────────────────────────────────────
+ declare -A PCT NOTE
++# The provider pools this fleet measures and places on. Written ONCE: this list
++# was previously hand-copied into four separate loops (gather, the stale-reset
++# sweep, publish_usage, and the probe display), and adding `meta` to only some
++# of them is a silent failure — an unmeasured provider gets NO note, which
++# makes provider_ok's catch-all reject every one of its rungs. That is exactly
++# how muse's rungs were unselectable at any tier before this.
++PROVIDERS="${HIVE_ROTATE_PROVIDERS:-deepseek anthropic openai google meta}"
++
+ gather() {
+   local r
+-  for p in deepseek anthropic openai google; do
++  for p in $PROVIDERS; do
+     case $p in
+       deepseek)  r=$(probe_deepseek) ;;
+       anthropic) r=$(probe_anthropic) ;;
+       openai)    r=$(probe_openai) ;;
+       google)    r=$(probe_google) ;;
++      meta)      r=$(probe_meta) ;;
+     esac
+     PCT[$p]=${r%% *}; NOTE[$p]=${r#* }
+     # Remember WHEN an exhausted provider comes back. Every probe already
+@@ -735,7 +859,7 @@ gather() {
+   # 23:00 and then sleep through codex coming back on the 6th.
+   # A provider that is NO LONGER exhausted has nothing pending: drop its marker
+   # so a stale timestamp cannot re-fire.
+-  for _p in deepseek anthropic openai google; do
++  for _p in $PROVIDERS; do
+     provider_exhausted "$_p" || rm -f "$STATE_DIR/resets.d/$_p" 2>/dev/null
+   done
+ 
+@@ -1319,7 +1443,7 @@ fi
+ # rotation, which is the job that actually matters.
+ publish_usage() {
+   local args=() p v
+-  for p in deepseek anthropic openai google; do
++  for p in $PROVIDERS; do
+     v="${PCT[$p]}"
+     if [ "$v" = "-1" ]; then v="unknown"; else v="${v}% used"; fi
+     args+=("--from-literal=$p=$v ${NOTE[$p]}")
+@@ -1338,7 +1462,7 @@ publish_usage() {
+ 
+ if [ "$ACTION" = probe ]; then
+   printf '%-11s %-9s %s\n' PROVIDER USED NOTE
+-  for p in deepseek anthropic openai google; do
++  for p in $PROVIDERS; do
+     v="${PCT[$p]}"; [ "$v" = "-1" ] && v="unknown" || v="${v}%"
+     printf '%-11s %-9s %s\n' "$p" "$v" "${NOTE[$p]}"
+   done
