@@ -75,8 +75,11 @@ ensure_uv() {
   echo "Installing uv..."
   # Retry up to 3 times — DNS may not be ready immediately on fresh installs
   local attempts=0
+  local tmp_install
+  tmp_install=$(mktemp)
   while [ $attempts -lt 3 ]; do
-    if curl -LsSf https://astral.sh/uv/install.sh | sh; then
+    if curl -LsSf https://astral.sh/uv/install.sh -o "$tmp_install" && [ -s "$tmp_install" ] && sh "$tmp_install"; then
+      rm -f "$tmp_install"
       export PATH="$HOME/.local/bin:$PATH"
       return
     fi
@@ -84,6 +87,7 @@ ensure_uv() {
     echo "uv install attempt $attempts failed, retrying in 5s..."
     sleep 5
   done
+  rm -f "$tmp_install"
   # Fallback: install via pip3
   echo "astral.sh unreachable, falling back to pip3 install uv..."
   pip3 install --user uv
@@ -119,7 +123,12 @@ ensure_tailscale() {
   # Install if missing
   if ! command -v tailscale &>/dev/null; then
     echo "Installing Tailscale..."
-    curl -fsSL https://tailscale.com/install.sh | sh
+    local tmp_ts
+    tmp_ts=$(mktemp)
+    if curl -fsSL https://tailscale.com/install.sh -o "$tmp_ts" && [ -s "$tmp_ts" ]; then
+      sh "$tmp_ts"
+    fi
+    rm -f "$tmp_ts"
   fi
 
   echo ""
@@ -361,6 +370,7 @@ setup_bitwarden() {
   esac
 
   export BW_SESSION
+  rm -f /tmp/bw_session
   (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
   return 0
 }
