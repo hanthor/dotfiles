@@ -21,12 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this repo (for custom Dockerfile + goose config)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: dotfiles
 
       - name: Checkout hanthor/hive v2 (fork with pi binary fix)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: hanthor/hive
           ref: v2
