@@ -8,20 +8,17 @@ export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" +
 # Resolve online fleet hosts: intersect tailscale online peers with inventory (excluding vps + self)
 _online_hosts := ```
 python3 -c "
-import subprocess, json, re, os
+import subprocess, json, sys
+sys.path.insert(0, 'scripts')
+import inventory_parser
 ts = json.loads(subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True).stdout)
 online = set()
 for p in ts.get('Peer', {}).values():
     if p.get('Online'):
         online.add(p.get('DNSName', '').lower().split('.')[0])
         online.add(p.get('HostName', '').lower())
-inv_path = os.path.expanduser('~/.local/share/dotfiles/inventory.yml')
-raw = open(inv_path).read()
-# Parse hosts from inventory.yml without PyYAML — extract 'hostname:' keys under 'hosts:'
-all_hosts = set(re.findall(r'^\s{4}(\w+):\s*$', raw, re.MULTILINE))
-vps = set(re.findall(r'^\s{6}(\w+):\s*$', raw, re.MULTILINE))
-all_hosts -= vps | {os.uname().nodename.lower()}
-print(' '.join(sorted(all_hosts & online)))
+candidates = inventory_parser.get_non_vps_hosts()
+print(' '.join(sorted(set(candidates) & online)))
 "
 ```
 
