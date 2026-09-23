@@ -132,6 +132,8 @@ core_brews:
   - unzip
   - trash-cli
   - yq
+  # atuin is also in bluefin-cli, but the brew copy keeps non-Bluefin glibc hosts (Ubuntu, Debian) covered
+  - atuin
   # bluefin-cli provides: atuin, bat, eza, fd, fzf, starship, carapace, ripgrep, tealdeer, zoxide, colordiff, television, ugrep
 core_taps:
   - ublue-os/experimental-tap

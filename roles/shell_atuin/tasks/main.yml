@@ -51,6 +51,19 @@
   ansible.builtin.set_fact:
     atuin_logged_in: "{{ atuin_status_cmd.rc == 0 and '[Sync]' in atuin_status_cmd.stdout }}"
 
+- name: Check if atuin binary is installed
+  ansible.builtin.shell: command -v atuin
+  register: atuin_binary
+  changed_when: false
+  failed_when: false
+
+- name: Warn if atuin binary is missing
+  ansible.builtin.debug:
+    msg: >-
+      atuin binary not found — skipping atuin login/sync.
+      Install atuin (brew install atuin) and re-run.
+  when: atuin_binary.rc != 0
+
 - name: Check if atuin key exists
   ansible.builtin.stat:
     path: "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin/key"
@@ -105,9 +118,11 @@
 - name: Login to atuin sync
   ansible.builtin.command: >
     atuin login -u "{{ atuin_username }}" -p "{{ atuin_password }}" -k "{{ atuin_key }}"
+  no_log: true
   when: >
     atuin_bw_item.rc == 0 and (atuin_bw_item.stdout | default("")) | length > 0
     and not atuin_logged_in
+    and atuin_binary.rc == 0
   changed_when: true
   environment:
     PATH: "{{ ansible_env_path }}"
