@@ -1,1 +1,3 @@
 is_arm: false
+# Headless agent box: no tailnet Caddy proxy (needs podman quadlets, absent on stock Ubuntu)
+skip_proxy: true
