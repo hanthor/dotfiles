@@ -2,8 +2,8 @@
 all:
   hosts:
     punjab:
-      ansible_host: localhost
-      ansible_connection: local
+      ansible_host: 100.78.73.8
+      ansible_connection: ssh
     # This targets the Debian VM running via Android's Virtualization
     # Framework on the phone (tailnet node name "mumbai"), not the raw
     # Termux/Android layer itself — that's the separate `termux` host below.
