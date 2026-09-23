@@ -104,6 +104,7 @@ machine_pubkeys:
   vm: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIISpsmEf1I6nKchkatNY08OInckBvQCGm0L3rDse6nBy james@Jamess-MacBook-Air.local
   termux: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyFPxxcqd3bA+SPDL5eGlYzS5mDV2gJcp6vuDpx+spR u0_a372@localhost
   mumbai: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN059d8p5GeXivRywaeJwvx+pAcLdsebGaj7ypalFCuO pixel-9a
+  nothing: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIDWQMpTXLLE8z3sxeCFpW7RBURRuNEOdxbe5XBCG2eT u0_a266@localhost
 
 # Machines never probed by the ssh_mesh check: Talos nodes (no user SSH)
 # and port-forwarded test VMs.
