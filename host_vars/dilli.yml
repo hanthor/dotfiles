@@ -1,11 +1,6 @@
 ---
 is_arm: false
 web_services:
-  - name: Cockpit
-    href: https://dilli.manatee-basking.ts.net/cockpit
-    icon: cockpit.png
-    description: System management
-    group: System
   - name: BuildStream Dashboard
     href: https://dilli.manatee-basking.ts.net/bst/
     icon: buildstream.png

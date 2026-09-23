@@ -4,11 +4,6 @@ extra_brews:
 extra_authorized_keys:
   - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBMOW8LcOS2jiQvP0lb172rs0lYyaoUqRd1HZ496HZLp termux"
 web_services:
-  - name: Cockpit
-    href: https://karnataka.manatee-basking.ts.net/cockpit
-    icon: cockpit.png
-    description: System management
-    group: System
   - name: RamaLama
     href: http://karnataka.manatee-basking.ts.net:8174
     icon: ollama.png

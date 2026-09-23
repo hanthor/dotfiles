@@ -2,8 +2,3 @@ is_arm: false
 is_laptop: true
 dotfiles_update_delay_seconds: 90
 web_services:
-  - name: Cockpit
-    href: https://kanpur.manatee-basking.ts.net/cockpit
-    icon: cockpit.png
-    description: System management
-    group: System

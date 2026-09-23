@@ -32,16 +32,6 @@
     }
 
 {% endif %}
-    # /cockpit — Cockpit system management (sub-path proxy)
-    redir /cockpit /cockpit/ 301
-    handle /cockpit/* {
-        reverse_proxy https://10.88.0.1:9095 {
-            transport http {
-                tls_insecure_skip_verify
-            }
-        }
-    }
-
 {% if inventory_hostname == 'bihar' %}
     # /proxmox — Proxmox VE sub-path proxy
     # Entry point strips /proxmox prefix; resource paths (/pve2/, /api2/, etc.)

@@ -18,7 +18,6 @@ Deploys [Caddy](https://caddyserver.com/) as a reverse proxy with automatic TLS 
 Caddy routes traffic for services like:
 - Grafana (monitoring)
 - Homepage dashboards
-- Cockpit (system management)
 - AppFlowy, Authentik, n8n (on bihar)
 - BST Dashboard (on build machines)
 

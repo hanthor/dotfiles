@@ -151,7 +151,7 @@ roles that respect this convention:
 
 `skip_kube`, `skip_flatpak`, `skip_bluefin`, `skip_gnome`, `skip_proxy`,
 `skip_zen_browser`, `skip_monitoring`,
-`skip_syncthing`, `skip_tailscale_cert`, `skip_cockpit`,
+`skip_syncthing`, `skip_tailscale_cert`,
 `skip_server_hardening` (not all may be wired yet — grep `site.yml` to
 confirm).
 

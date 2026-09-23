@@ -14,7 +14,6 @@ Secondary workstation in the hanthor fleet.
 
 ## Services
 
-- [Cockpit](https://cockpit-project.org/) — system management
 - BuildStream Dashboard — build monitor
 - Homepage dashboard
 

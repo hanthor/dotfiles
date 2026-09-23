@@ -19,7 +19,6 @@ Kubernetes worker node with AMD GPU. [Talos Linux](https://www.talos.dev/) node.
 
 | Service | URL |
 |---------|-----|
-| [Cockpit](https://cockpit-project.org/) | `karnataka.manatee-basking.ts.net/cockpit` |
 | RamaLama (LLM) | `karnataka.manatee-basking.ts.net:8174` |
 | BuildStream Dashboard | `karnataka.manatee-basking.ts.net/bst/` |
 

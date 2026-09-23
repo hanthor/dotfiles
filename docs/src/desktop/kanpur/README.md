@@ -14,7 +14,6 @@ Laptop workstation in the hanthor fleet.
 
 ## Services
 
-- [Cockpit](https://cockpit-project.org/) — system management
 - Homepage dashboard
 
 ## Notes

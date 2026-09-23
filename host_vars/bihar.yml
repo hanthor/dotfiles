@@ -11,8 +11,3 @@ web_services:
     group: Infrastructure
     siteMonitor: http://192.168.0.99
 
-  - name: Cockpit
-    href: https://bihar.manatee-basking.ts.net/cockpit
-    icon: cockpit.png
-    description: System management
-    group: System

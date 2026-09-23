@@ -18,7 +18,6 @@ Kubernetes control plane + home server. [Talos Linux](https://www.talos.dev/) no
 
 | Service | URL |
 |---------|-----|
-| [Cockpit](https://cockpit-project.org/) | `bihar.manatee-basking.ts.net/cockpit` |
 | [Grafana](https://grafana.com/) | `bihar.manatee-basking.ts.net/grafana` |
 | [Prometheus](https://prometheus.io/) | `bihar.manatee-basking.ts.net:9091` |
 | Alertmanager | `bihar.manatee-basking.ts.net:9093` |
