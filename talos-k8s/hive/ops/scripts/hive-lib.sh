@@ -230,17 +230,30 @@ hive_open() {
 # ── Pure helpers (unit-tested in tests/test_hive_ops_lib.py) ──────────────
 
 # hive_provider_of <backend> <model>: the ACCOUNT an agent draws on.
-# CLI wins for backends whose auth is tied to the CLI (copilot, muse); then
+# CLI wins for backends whose auth is tied to the CLI (copilot, muse); then a
+# pi provider prefix (`kiro-api-key/claude-sonnet-5` bills the KIRO account,
+# not Anthropic — the prefix must win over sniffing the model family); then
 # model-name sniffing; then the CLI's own default provider.
+#
+# `pi`/`goose` with no recognisable model now map to `unknown`: they used to
+# default to deepseek, which the fleet no longer uses (2026-09-24, the owner is
+# not topping it up). A legacy `deepseek-*` model still sniffs as deepseek so
+# rotation can see it and move the agent off.
 hive_provider_of() {
   local c m
   c=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]'); m=$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')
   case "$c" in copilot) echo github; return;; muse) echo meta; return;; esac
+  case "$m" in kiro-api-key/*|kiro/*) echo kiro; return;; esac
   case "$m" in *deepseek*) echo deepseek; return;; *claude*|*opus*|*sonnet*|*haiku*|*fable*) echo anthropic; return;;
                *gpt-*|*codex*) echo openai; return;; *gemini*) echo google; return;; esac
   case "$c" in claude|litellm) echo anthropic;; codex) echo openai;; agy) echo google;;
-               bob) echo ibm;; pi|goose) echo deepseek;; *) echo unknown;; esac
+               bob) echo ibm;; *) echo unknown;; esac
 }
+
+# hive_model_path <model>: a model id as ONE URL path segment. Kiro ids carry
+# the pi provider prefix (`kiro-api-key/claude-sonnet-5`); v5 routes
+# POST /api/model/{agent}/{model}, so an unescaped `/` would 404.
+hive_model_path() { printf '%s' "$1" | sed 's|/|%2F|g'; }
 
 # agy_effort_of <model>: the --effort an agy model id REQUIRES.
 # v5 launches agy as `--model <m> --effort <agent effort, default low>`, and
@@ -330,6 +343,16 @@ rung_down() {
     gemini-3.8-flash-high)  echo gemini-3.8-flash-low ;;
     gemini-3.7-flash-high)  echo gemini-3.7-flash-low ;;
     gpt-6-astra|gpt-5.6-sol) echo gpt-5.6-luna ;;
+    # Kiro credits scale with the model's rateMultiplier (ListAvailableModels,
+    # 2026-09-24): opus-5 2.2, sonnet-5 1.3, gpt-5.6 sol 4.4 / terra 2.2 /
+    # luna 1.1. Demote to the cheaper model of the same family; the pi
+    # `:<thinking>` suffix (see hive-rotate.sh TIERS) is kept as is.
+    kiro-api-key/claude-opus-5|kiro-api-key/claude-opus-5:*)
+      echo "kiro-api-key/claude-sonnet-5${1#kiro-api-key/claude-opus-5}" ;;
+    kiro-api-key/gpt-5-6-sol|kiro-api-key/gpt-5-6-sol:*)
+      echo "kiro-api-key/gpt-5-6-luna${1#kiro-api-key/gpt-5-6-sol}" ;;
+    kiro-api-key/gpt-5-6-terra|kiro-api-key/gpt-5-6-terra:*)
+      echo "kiro-api-key/gpt-5-6-luna${1#kiro-api-key/gpt-5-6-terra}" ;;
     *)                      echo "" ;;
   esac
 }

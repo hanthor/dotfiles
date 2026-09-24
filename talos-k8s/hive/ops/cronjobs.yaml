@@ -191,6 +191,102 @@ spec:
 ---
 apiVersion: batch/v1
 kind: CronJob
+# Keeps pi-kiro-api (Kiro provider for the pi backend) installed on each
+# hive PVC and registered in every agent's ~/.pi — see scripts/hive-pi-kiro.sh.
+metadata:
+  labels:
+    app.kubernetes.io/component: pi-kiro
+    app.kubernetes.io/name: hive-ops
+  name: hive-pi-kiro
+  namespace: hive
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 600
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/component: pi-kiro
+            app.kubernetes.io/name: hive-ops
+        spec:
+          containers:
+          - command:
+            - bash
+            - /scripts/hive-pi-kiro.sh
+            - reconcile
+            env:
+            - name: KUBECONFIG
+            - name: HIVE_ROTATE_STATE
+              value: /state/hive-rotate
+            - name: HOME
+              value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
+            image: alpine/k8s:1.31.0
+            imagePullPolicy: IfNotPresent
+            name: ops
+            resources:
+              limits:
+                cpu: "1"
+                memory: 512Mi
+              requests:
+                cpu: 25m
+                memory: 64Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              readOnlyRootFilesystem: true
+            terminationMessagePath: /dev/termination-log
+            terminationMessagePolicy: File
+            volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+              readOnly: true
+            - mountPath: /state
+              name: state
+            - mountPath: /tmp
+              name: tmp
+          dnsPolicy: ClusterFirst
+          nodeSelector:
+            workload-role: hive
+          restartPolicy: Never
+          schedulerName: default-scheduler
+          securityContext:
+            fsGroup: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          serviceAccount: hive-ops
+          serviceAccountName: hive-ops
+          terminationGracePeriodSeconds: 30
+          tolerations:
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
+            operator: Exists
+          volumes:
+          - configMap:
+              defaultMode: 493
+              name: hive-ops-scripts
+            name: scripts
+          - name: state
+            persistentVolumeClaim:
+              claimName: hive-ops-state
+          - emptyDir: {}
+            name: tmp
+  schedule: 37 * * * *
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 2
+  suspend: false
+---
+apiVersion: batch/v1
+kind: CronJob
 metadata:
   labels:
     app.kubernetes.io/component: fork-ai-check
@@ -1035,7 +1131,7 @@ spec:
   schedule: 0 1,6 * * 1-5
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 2
-  suspend: false
+  suspend: true  # 2026-09-24: DeepSeek dropped — nothing is peak-priced
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -1129,7 +1225,7 @@ spec:
   schedule: 0 4,10 * * 1-5
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 2
-  suspend: false
+  suspend: true  # 2026-09-24: DeepSeek dropped — nothing is peak-priced
 ---
 apiVersion: batch/v1
 kind: CronJob

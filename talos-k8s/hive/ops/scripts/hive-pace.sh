@@ -55,7 +55,7 @@
 # WHAT IT ACTUATES
 # ----------------
 # Placement (move an agent to another provider) is hive-rotate.sh's job and is
-# only a pacing lever when another pool has room — with DeepSeek dry, OpenAI
+# only a pacing lever when another pool has room — with OpenAI
 # unseated and Google in its own cooldown there are periods with exactly one
 # usable pool and placement has ZERO degrees of freedom. So the actuator here
 # is the one that works even then: MODEL RUNG. Moving an agent from a
@@ -129,9 +129,8 @@ NOW=$(date -u +%s)
 # expensive rung -> cheap rung, per provider. Deliberately NOT read from
 # hive-rotate.sh's TIERS table: this script decides by looking at what an agent
 # is ACTUALLY running, so it cannot drift out of sync with a table it does not
-# consult. deepseek has no pair — v4-flash is already both its T1 and T2 rung
-# (it outscores Sonnet on TB2.1 while costing a fraction), so there is nothing
-# below it to demote to.
+# consult. Kiro rungs demote within the same model family (opus-5 -> sonnet-5,
+# gpt-5.6 sol/terra -> luna), which cuts credits per request by 1.7-4x.
 # rung_down <model> lives in hive-lib.sh. Added 2026-09-24: claude-fable-5-1
 # (the live T1 rung from the tier cache) had no cheaper pair, so anthropic ran
 # `hot` with "SATURATED ... 0 demotable" while two agents sat on it.
@@ -142,9 +141,12 @@ NOW=$(date -u +%s)
 # it (2026-09-24) — copilot bills GitHub, so that changed nothing about the
 # Anthropic burn. Only the four paced pools are returned; anything else
 # (github, meta, unknown) is outside the pacer's control.
+# deepseek was dropped from the paced pools 2026-09-24 (no longer used);
+# kiro (monthly credits, readable via GetUsageLimits) was added.
+PACED_POOLS="anthropic google openai kiro"
 provider_of_agent() {
   local p; p=$(hive_provider_of "$1" "$2")
-  case "$p" in anthropic|google|openai|deepseek) echo "$p" ;; *) echo "" ;; esac
+  case " $PACED_POOLS " in *" $p "*) echo "$p" ;; *) echo "" ;; esac
 }
 
 # ── Reading: per-limit, not collapsed ───────────────────────────────────
@@ -201,6 +203,16 @@ read_limits_from_configmap() {
   [ -z "$raw" ] && return 1
   pct=$(printf '%s' "$raw" | grep -oE '^[0-9]+' | head -1)
   [ -z "$pct" ] && return 1            # "unknown ..." — not a measurement
+  # Kiro publishes the exact credit count (credits=U/L). 1% of its 10000/month
+  # is 100 credits — hours of burn at a sane pace — so the integer percent
+  # would read as flat for most of a fit window. Use the precise value.
+  local cu cl
+  cu=$(printf '%s' "$raw" | sed -n 's/.*credits=\([0-9.]*\)\/\([0-9.]*\).*/\1/p')
+  cl=$(printf '%s' "$raw" | sed -n 's/.*credits=\([0-9.]*\)\/\([0-9.]*\).*/\2/p')
+  if [ -n "$cu" ] && [ -n "$cl" ]; then
+    pct=$(awk -v u="$cu" -v l="$cl" 'BEGIN{ if (l+0 > 0) printf "%.3f", u*100/l; else print "" }')
+    [ -z "$pct" ] && return 1
+  fi
   rst=$(printf '%s' "$raw" | grep -oE 'resets=[^ ]+' | sed 's/^resets=//')
   ep=""
   [ -n "$rst" ] && ep=$(python3 -c "
@@ -215,7 +227,7 @@ except Exception: print('')" "$rst" 2>/dev/null)
 
 record() {
   local p slot pct ep
-  for p in anthropic google openai deepseek; do
+  for p in $PACED_POOLS; do
     if [ "$p" = anthropic ]; then
       read_limits_anthropic
     else
@@ -403,7 +415,7 @@ set_model() {
   fi
   local out
   # 150 s: v5 restarts the agent inside the request.
-  out=$(hive_call "$ns" "$pod" "$sid" POST "/api/model/$agent/$model")
+  out=$(hive_call "$ns" "$pod" "$sid" POST "/api/model/$agent/$(hive_model_path "$model")")
   # Judge by the response, not by exit status: a 200 carrying an error body is
   # a documented failure shape on this API.
   case "$out" in
@@ -439,7 +451,7 @@ VERDICTS=$(compute)
 FLEET=$(fleet)
 
 printf '%-11s %-9s %-9s %-11s %-11s %s\n' PROVIDER VERDICT PRESSURE OBSERVED ALLOWED DETAIL
-for p in anthropic google openai deepseek; do
+for p in $PACED_POOLS; do
   row=$(printf '%s' "$VERDICTS" | jq -r --arg p "$p" '
     if .[$p] then
       .[$p] as $v
@@ -532,7 +544,7 @@ done <<< "$FLEET"
 # This is the line that means INTERVENE: the loop is no longer able to correct,
 # and the remaining levers (cadence, pausing agents, accepting the burn) are
 # outside this script.
-for p in anthropic google openai deepseek; do
+for p in $PACED_POOLS; do
   v=$(printf '%s' "$VERDICTS" | jq -r --arg p "$p" '.[$p].verdict // "no-data"')
   [ "$v" = hot ] || continue
   [ -n "${MOVED_ON[$p]:-}" ] && continue
