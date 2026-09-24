@@ -11,7 +11,7 @@ you, and anything that executes on the fleet still waits for you.
 |---|---|---|
 | **Renovate** | minor/patch/digest bumps (pi npm deps, Go, GitHub Actions, OpenTofu providers), weekly lockfile maintenance | yes, once CI is green |
 | **Renovate** (cluster) | image/chart bumps in `talos-k8s/`, grouped weekly, label `deploy-needed` | **no** — manifests are applied by hand, so a merge would only make git lie about the cluster |
-| **Hive** ([hive.reilly.asia](https://hive.reilly.asia), `hanthor-hive-agent`) | scanner/quality/guide agents open PRs (labelled `hold`) | only if the PR stays inside the carve-outs below |
+| **Hive** ([hive.reilly.asia](https://hive.reilly.asia), `hanthor-hive-agent`, ACMM L5) | its agents open PRs labelled `hold`; the Hive itself only merges PRs labelled `lgtm` | only if the PR stays inside the carve-outs below |
 | **You** | direct pushes, `just onboard`, etc. | admin bypass — unaffected |
 
 ## The gate
@@ -43,3 +43,15 @@ that file on every machine.
 - To let the Hive merge more, carve the path out in CODEOWNERS (and mirror it
   in `agent-automerge.yml`'s comment logic). Only do that for paths that never
   execute on the fleet.
+
+## Hive config lives on its volume
+
+hive.reilly.asia persists its live config to `/data/hive.yaml.runtime` and
+restores it over the ConfigMap seed on every restart. Roster or level changes
+made in its dashboard win. [`talos-k8s/hive-hanthor/hive.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/hive-hanthor/hive.yaml)
+is the seed, re-synced to the runtime state on 2026-09-24. Before trusting it,
+check the runtime file:
+
+```bash
+kubectl -n hive-hanthor exec deploy/hive -- cat /data/hive.yaml.runtime
+```

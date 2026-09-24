@@ -1,0 +1,104 @@
+# hanthor — personal-account apps hive. Split out from reef/tuna-os
+# because the GitHub App (hanthor-hive-agent, owned by tuna-os) only
+# had one installation_id per hive.yaml, and these repos live under
+# the hanthor personal account, not the tuna-os org. The App is now
+# installed on all three accounts (tuna-os, hanthor, indiafoss-community)
+# but each spoke still only points at one.
+#
+# NOTE: this ConfigMap is only the *seed*. The hive persists its live
+# config to /data/hive.yaml.runtime and restores that over the seed on
+# every restart, so changes made in the dashboard/API win. This file was
+# re-synced to the runtime roster + level on 2026-09-24; keep it in step
+# (kubectl -n hive-hanthor exec deploy/hive -- cat /data/hive.yaml.runtime).
+#
+# L5 = the hive merges its own PRs only once labelled `lgtm`; agent PRs
+# open with `hold`. Repo-side guardrails decide the rest.
+acmm_level: 5
+project:
+  org: hanthor
+  name: hanthor
+  repos:
+    - indiafoss-companion
+    - indiafoss-chat-android
+    # dotfiles: auto-merge is gated repo-side (branch protection + deny-by-
+    # default CODEOWNERS + agent-automerge.yml), not by acmm_level.
+    # See docs/src/automation.md.
+    - dotfiles
+    - hummingbird-github
+    - reilly.asia
+    - homebrew-tap
+    - shrimply
+  ai_author: hanthor
+  primary_repo: indiafoss-companion
+
+hub:
+  enabled: true
+  url: https://hub.tunaos.org
+
+agents:
+  supervisor:
+    enabled: true
+    backend: agy
+    model: gemini-3.8-flash-low
+    beads_dir: /data/beads/supervisor
+    clear_on_kick: false
+    caveman_mode: full
+  scanner:
+    enabled: true
+    backend: agy
+    model: gemini-3.8-flash-low
+    mode: ISSUES_AND_PRS
+    beads_dir: /data/beads/scanner
+    caveman_mode: full
+  quality:
+    enabled: true
+    backend: agy
+    model: gemini-3.8-flash-low
+    mode: ISSUES_AND_PRS
+    beads_dir: /data/beads/quality
+    caveman_mode: full
+  guide:
+    enabled: true
+    backend: agy
+    model: gemini-3.8-flash-low
+    beads_dir: /data/beads/guide
+    clear_on_kick: false
+    caveman_mode: full
+
+governor:
+  eval_interval_s: 300
+  modes:
+    surge:
+      threshold: 70
+      supervisor: 10m
+      scanner: 30m
+      quality: 1h
+      guide: 2h
+    busy:
+      threshold: 10
+      supervisor: 15m
+      scanner: 1h
+      quality: 2h
+      guide: 4h
+    quiet:
+      threshold: 2
+      supervisor: 30m
+      scanner: 2h
+      quality: 4h
+      guide: 6h
+    idle:
+      threshold: 0
+      supervisor: 1h
+      scanner: 4h
+      quality: 6h
+      guide: 8h
+
+github:
+  app_id: 3942065
+  installation_id: 158987150
+  key_file: /secrets/gh-app-key.pem
+
+dashboard:
+  port: 3002
+  authorized_users:
+    - hanthor:owner
