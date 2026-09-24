@@ -2,6 +2,8 @@
 
 Ansible-managed dotfiles for every machine I own. One command to go from a fresh install to a fully configured system. No central server — each machine manages itself locally, secrets stay in Bitwarden, and everything stays in sync automatically.
 
+**Overview, live status and architecture: [reilly.asia/infra](https://reilly.asia/infra/)** · handbook: [reilly.asia/infra/handbook](https://reilly.asia/infra/handbook/)
+
 ```bash
 just apply        # full apply with secrets
 dots              # quick pull + apply without secrets
@@ -78,10 +80,10 @@ Repo is public — no secrets in git, ever. All secrets are fetched from Bitward
 
 ## Documentation
 
-Full handbook lives in [`docs/`](docs/) and is published as an mdbook — run `just docs` to serve it locally.
+Full handbook lives in [`docs/`](docs/) and is published at [reilly.asia/infra/handbook](https://reilly.asia/infra/handbook/) — run `just docs` to serve it locally.
 
 - [Talos cluster handbook](docs/src/servers/talos-k8s/cluster.md) — Bihar + Karnataka (home, offline), Lemonade, KubeVirt
-- [AWS cluster handbook](docs/src/servers/aws-k8s/cluster.md) — Matrix/ESS, the Hive, CFP dashboard
+- [TunaOS AWS cluster handbook](docs/src/servers/aws-k8s/cluster.md) — Matrix/ESS, the Hive, CFP dashboard (TunaOS infrastructure)
 - [Adding a new machine](docs/src/onboarding.md)
 - [Roles reference](docs/src/roles/)
 - [Bitwarden vault setup](docs/src/bitwarden.md)
