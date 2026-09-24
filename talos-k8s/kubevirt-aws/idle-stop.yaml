@@ -61,10 +61,19 @@ spec:
         spec:
           serviceAccountName: idle-stop
           restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile: {type: RuntimeDefault}
           containers:
             - name: idle-stop
               image: alpine/k8s:1.36.4
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: {drop: ["ALL"]}
               env:
+                - name: HOME
+                  value: /tmp
                 - name: IDLE_MINUTES
                   value: "30"
                 - name: AWS_DEFAULT_REGION

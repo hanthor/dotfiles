@@ -1,0 +1,27 @@
+# AWS cluster control plane: guaranteed CPU share for the Kubernetes control
+# plane components.
+#
+# Why: the control-plane node also runs the hives (their local-path volumes
+# are pinned there). On 2026-09-24 their agent processes held the node at
+# ~99% CPU pressure. CPU is shared in proportion to requests, and
+# kube-scheduler requested 10m (vs 300m per hive pod), so it starved: 300+
+# crash-loop restarts over 28 h, and no new pod could be scheduled
+# cluster-wide.
+#
+#   talosctl -n 10.20.1.10 patch machineconfig --patch @resources-patch.yaml
+cluster:
+  apiServer:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+  controllerManager:
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+  scheduler:
+    resources:
+      requests:
+        cpu: 250m
+        memory: 64Mi

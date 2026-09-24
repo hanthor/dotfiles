@@ -1,0 +1,40 @@
+# Every KubeVirt VM pod (virt-launcher) tolerates the KubeVirt node's taint.
+#
+# The taint keeps ordinary workloads off the on-demand node (stopping it must
+# never take a production pod with it). KubeVirt's nodePlacement only covers
+# its own components, not VMs, and corral does not set tolerations on the VMs
+# it creates. So the toleration is added at admission, scoped by label to VM
+# pods only. It is built in (MutatingAdmissionPolicy, admissionregistration/v1);
+# no webhook or extra controller is involved.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: kubevirt-vm-toleration
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+    objectSelector:
+      matchLabels:
+        kubevirt.io: virt-launcher
+  failurePolicy: Fail
+  reinvocationPolicy: Never
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >
+          has(object.spec.tolerations)
+            ? [JSONPatch{op: "add", path: "/spec/tolerations/-",
+                value: Object.spec.tolerations{key: "tunaos.org/kubevirt", operator: "Exists", effect: "NoSchedule"}}]
+            : [JSONPatch{op: "add", path: "/spec/tolerations",
+                value: [Object.spec.tolerations{key: "tunaos.org/kubevirt", operator: "Exists", effect: "NoSchedule"}]}]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: kubevirt-vm-toleration
+spec:
+  policyName: kubevirt-vm-toleration
