@@ -20,14 +20,20 @@ spec:
     # staged and applied on the next restart instead of LiveUpdate.
     vmRolloutStrategy: Stage
   imagePullPolicy: IfNotPresent
+  # Infra stays off the control plane: it runs the hive and was measured at
+  # load ~94 on 4 vCPUs (2026-09-24), where virt-operator starved and
+  # crash-looped silently. The KubeVirt node's taint keeps it off there too.
   infra:
     nodePlacement:
       nodeSelector:
         kubernetes.io/os: linux
-      tolerations:
-        - key: node-role.kubernetes.io/control-plane
-          operator: Exists
-          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
   workloads:
     nodePlacement:
       nodeSelector:
@@ -46,6 +52,13 @@ spec:
   infra:
     nodeSelector:
       kubernetes.io/os: linux
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: node-role.kubernetes.io/control-plane
+                  operator: DoesNotExist
   workload:
     nodeSelector:
       tunaos.org/kubevirt: "true"

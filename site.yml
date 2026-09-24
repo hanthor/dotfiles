@@ -143,6 +143,9 @@
     - role: server_hardening
       tags: [system, hardening, security]
       when: inventory_hostname in groups.get('server', []) or inventory_hostname in groups.get('vps', [])
+    # Last, so it reports the state this run left behind.
+    - role: fleet_facts
+      tags: [facts, fleet_facts]
 
   post_tasks:
     - name: Summarise secrets phase

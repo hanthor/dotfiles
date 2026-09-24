@@ -9,7 +9,7 @@ phone_apply_enabled: false
 web_services: []
 mic_hardware_volume_pct: 75
 
-# Drives the tuna-os Hive on the AWS cluster (rotation, watchdog, peak windows).
-# Previously ran as user timers on telengana; moved here when telengana was
-# retired. Exactly one host should have this enabled.
-hive_ops_enabled: true
+# Hive ops (rotation, watchdog, peak windows) now run as CronJobs inside the
+# AWS cluster; himachal no longer drives the Hive. hive_ops removes its old
+# user timers on the next apply.
+hive_ops_enabled: false

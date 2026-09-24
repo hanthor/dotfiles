@@ -59,7 +59,9 @@ standard PATH, Homebrew does not.
   authentication path is subtle (see the `tunaos-hive-checkin` skill).
 - `hive-rotate.sh apply` takes **~2 minutes** — it makes many `kubectl exec`
   round-trips. Don't mistake a short timeout for a failure.
-- Currently enabled on `himachal`, a desktop. That is a **reliability
-  downgrade** from the always-on VPS it came from: if himachal is off or
-  asleep, rotation and peak windows silently don't fire. The robust home for
-  these is Kubernetes `CronJob`s on the cluster itself.
+- **Enabled on no host (2026-09-24).** Rotation, watchdog and peak windows run
+  as `CronJob`s inside the AWS cluster (ns `hive`), which is where they belong —
+  a desktop that sleeps silently skips them. It previously ran on himachal.
+  Setting `hive_ops_enabled: false` now also **removes** the timers, units,
+  drop-ins and scripts from a host on its next apply, so a retired host can't
+  keep fighting the in-cluster jobs.
