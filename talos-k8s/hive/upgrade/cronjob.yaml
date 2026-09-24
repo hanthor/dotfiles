@@ -23,7 +23,9 @@ spec:
       # target that was just proven bad (the blocklist also prevents it).
       backoffLimit: 0
       # 3 × (rollout 420s + verify 180s + soak 600s) + hub ≈ 70 min.
-      activeDeadlineSeconds: 7200
+      # 4 targets × (rollout + 10 min soak) plus preflight; a 2h cap killed the
+      # first real run mid-soak (2026-09-24).
+      activeDeadlineSeconds: 14400
       template:
         metadata:
           labels:
@@ -50,6 +52,8 @@ spec:
               imagePullPolicy: IfNotPresent
               command: ["bash", "/scripts/hive-upgrade.sh", "run"]
               env:
+                - name: HIVE_UPGRADE_TIMESTAMPS
+                  value: "1"
                 - name: TRACK
                   value: release
                 - name: HIVE_UPGRADE_LINE
