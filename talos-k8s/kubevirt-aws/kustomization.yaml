@@ -1,0 +1,72 @@
+# corral-web on the AWS cluster: the home manifest, published on the
+# tailnet as corral-aws (the home cluster already owns "corral"), with:
+#  - tailnet identity required, and only the owner as admin (power, create,
+#    delete); other tailnet users get a read-only view;
+#  - the aws-power plugin (corral's host-power hook), which adds the
+#    "Power on" button for the tagged KubeVirt instance. corral core has no
+#    AWS code; the plugin finds instances by the corral:host-power tag.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../infrastructure/corral-web.yaml
+  - idle-stop.yaml
+patches:
+  - target:
+      kind: Ingress
+      name: corral-web
+    patch: |
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: corral-aws
+  - target:
+      kind: Deployment
+      name: corral-web
+    patch: |
+      - op: add
+        path: /spec/template/spec/volumes
+        value:
+          - name: plugins
+            emptyDir: {}
+      - op: add
+        path: /spec/template/spec/initContainers
+        value:
+          # Until aws-power is published in the corral marketplace, build it
+          # from source at a pinned commit. Replace with
+          # `corral plugin install aws-power` once it is.
+          - name: install-aws-power
+            image: docker.io/library/golang:1.26
+            command: ["go", "install", "github.com/tuna-os/corral/cmd/corral-aws-power@main"]
+            env:
+              - name: GOBIN
+                value: /plugins
+              - name: CGO_ENABLED
+                value: "0"
+            volumeMounts:
+              - name: plugins
+                mountPath: /plugins
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts
+        value:
+          - name: plugins
+            mountPath: /plugins
+            readOnly: true
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: CORRAL_PLUGIN_DIR
+            value: /plugins
+          - name: CORRAL_AUTH_REQUIRED
+            value: "true"
+          - name: CORRAL_ADMINS
+            value: jreilly1821@gmail.com
+          - name: CORRAL_AWS_POWER_REGIONS
+            value: eu-north-1
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom: {secretKeyRef: {name: node-power, key: AWS_ACCESS_KEY_ID}}
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom: {secretKeyRef: {name: node-power, key: AWS_SECRET_ACCESS_KEY}}
+images:
+  # tuna-os/corral main is built by corral's CI; it carries the host-power hook.
+  - name: ghcr.io/hanthor/corral
+    newName: ghcr.io/tuna-os/corral
+    newTag: latest

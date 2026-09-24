@@ -4,7 +4,7 @@
 **Secrets needed:** No (uses the AWS cluster kubeconfig from the `kube` role)
 **Runs on:** Opt-in — exactly one host (`hive_ops_enabled: true`)
 
-Drives the [tuna-os Hive](https://hive.tunaos.org) running on the
+Drives the [tuna-os Hive](https://school.tunaos.org) (all Hives: [hub.tunaos.org](https://hub.tunaos.org)) running on the
 [AWS Talos cluster](../servers/aws-k8s/cluster.md): backend rotation, a
 watchdog, capability tiers, and peak/off-peak scheduling.
 

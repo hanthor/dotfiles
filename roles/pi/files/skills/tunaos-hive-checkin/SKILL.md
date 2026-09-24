@@ -1,12 +1,12 @@
 ---
 name: tunaos-hive-checkin
-description: Check the health of the self-hosted tuna-os Hive at hive.tunaos.org (AWS Talos cluster) — whether the governor and agents are actually producing PRs/issues, whether config changes really took effect, and where its known landmines are. Use when asked to "check on the hive", "is the hive working", "is it opening PRs", or when changing agent models/repos/config on hive.tunaos.org.
+description: Check the health of the self-hosted tuna-os Hive at school.tunaos.org (legacy alias hive.tunaos.org; all Hives on hub.tunaos.org) (AWS Talos cluster) — whether the governor and agents are actually producing PRs/issues, whether config changes really took effect, and where its known landmines are. Use when asked to "check on the hive", "is the hive working", "is it opening PRs", or when changing agent models/repos/config on hive.tunaos.org.
 ---
 
 # tuna-os Hive check-in
 
 The tuna-os Hive is a **self-hosted spoke** (`kubestellar/hive` v4) running on
-the AWS Talos cluster, served publicly at `https://hive.tunaos.org`
+the AWS Talos cluster, served publicly at `https://school.tunaos.org` (legacy alias `hive.tunaos.org`; the hub at `https://hub.tunaos.org` shows every Hive)
 (Cloudflare-proxied to the cluster's Traefik ingress).
 
 It runs its own agents; contributor CLIs are a separate thing
@@ -38,7 +38,7 @@ POD=$(kubectl get pods -n hive -l app.kubernetes.io/name=hive \
 
 kubectl -n hive get pods                       # Running? restarts?
 kubectl logs -n hive $POD --tail=50            # crash loop? panics?
-curl -s -o /dev/null -w '%{http_code}\n' https://hive.tunaos.org/api/health   # 200?
+curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/api/health   # 200?
 # the dashboard / itself returns 401 (login-gated) — that is NORMAL, see below
 ```
 
@@ -70,8 +70,8 @@ don't stop at "pod is Running".
 
 ```bash
 kubectl -n hive get pods
-curl -s -o /dev/null -w '%{http_code}\n' https://hive.tunaos.org/api/health   # 200
-curl -s -o /dev/null -w '%{http_code}\n' https://hive.tunaos.org/             # 401 = login gate, NORMAL
+curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/api/health   # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/             # 401 = login gate, NORMAL
 ```
 
 ### 2. No agent silently paused
@@ -287,7 +287,7 @@ in the binary and looks right, but is not the cookie name and returns
 `unauthorized`. `hive-session` also fails.
 
 Sessions expire (the current one runs to 2026-09-09). When the store has no
-unexpired owner session, someone must log in at https://hive.tunaos.org via
+unexpired owner session, someone must log in at https://school.tunaos.org via
 GitHub device flow as an `authorized_users` member — there is no headless way
 to mint one. Read the session at runtime rather than hardcoding it, so a fresh
 login is picked up automatically.

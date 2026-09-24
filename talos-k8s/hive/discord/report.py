@@ -41,7 +41,7 @@ DISCORD = "https://discord.com/api/v10"
 OWNER = os.environ.get("GITHUB_OWNER", "tuna-os")
 CONFIG = pathlib.Path(os.environ.get("REPORT_CONFIG", "/config/projects.json"))
 STATE = pathlib.Path(os.environ.get("REPORT_STATE", "/data/state.json"))
-HIVE_URL = os.environ.get("HIVE_PUBLIC_URL", "https://hive.tunaos.org/")
+HIVE_URL = os.environ.get("HIVE_PUBLIC_URL", "https://hub.tunaos.org/")
 DRY_RUN = os.environ.get("DRY_RUN", "").lower() in {"1", "true", "yes"}
 
 # Discord hard limits (https://discord.com/developers/docs/resources/message).
@@ -786,7 +786,7 @@ def build_digest(title: str, pairs: list[tuple[str, dict]], *, start: float, end
         description = description[: DIGEST_DESCRIPTION_BUDGET - 1].rsplit("\n", 1)[0] + "\n…"
     tz = report_tz()
     a, b = dt.datetime.fromtimestamp(start, tz), dt.datetime.fromtimestamp(end, tz)
-    window = f"{a:%a %d %b %H:%M} → {b:%a %d %b %H:%M} {b.tzname() or ''}".strip() + " · hive.tunaos.org"
+    window = f"{a:%a %d %b %H:%M} → {b:%a %d %b %H:%M} {b.tzname() or ''}".strip() + " · hub.tunaos.org"
     embed = {"title": title, "description": description, "color": colour, "footer": {"text": window}}
     if url:
         embed["url"] = url

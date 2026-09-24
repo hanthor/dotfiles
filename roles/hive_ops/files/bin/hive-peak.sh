@@ -89,7 +89,7 @@ SID=$(kubectl exec -n "$NS" "$POD" -- \
 
 if [ -z "$SID" ]; then
   echo "ERROR: no unexpired owner session in the hive dashboard session store." >&2
-  echo "       Log in at https://hive.tunaos.org as an authorized_users member" >&2
+  echo "       Log in at https://school.tunaos.org as an authorized_users member" >&2
   echo "       (GitHub device flow), then re-run. Mutations require an owner" >&2
   echo "       session; Bearer and X-Hive-Internal are read-only here." >&2
   exit 1

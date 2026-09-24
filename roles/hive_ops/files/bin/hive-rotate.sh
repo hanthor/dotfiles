@@ -173,7 +173,7 @@ SID=$(kubectl exec -n "$NS" "$POD" -- cat /data/dashboard-sessions.json 2>/dev/n
           | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null)
 if [ -z "$SID" ]; then
   echo "ERROR: no unexpired owner session in the dashboard session store." >&2
-  echo "       Log in at https://hive.tunaos.org as an authorized_users member." >&2
+  echo "       Log in at https://school.tunaos.org as an authorized_users member." >&2
   exit 1
 fi
 

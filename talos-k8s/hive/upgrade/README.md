@@ -19,7 +19,7 @@ In this order. The first target is the canary.
 |---|---|---|---|
 | 1 | `hive-hanthor` (canary: personal, unbranded) | `hive` / `hive` | Ready, no crashloop or restarts, `GET :3002/api/health` = 200, and the owner dashboard serves HTML |
 | 2 | `hive-reef` (branded REEF) | `hive` / `hive` | the same, plus the **owner dashboard contains `product_name` and `mark`** from `/data/branding/branding.json` |
-| 3 | `hive` (branded SCHOOL, hive.tunaos.org / school.tunaos.org) | `hive` / `hive` | the same as reef |
+| 3 | `hive` (branded SCHOOL, school.tunaos.org; legacy alias hive.tunaos.org) | `hive` / `hive` | the same as reef |
 | 4 | `hive-hub` (hub.tunaos.org) | `hive-hub` / `hub` | Ready, and `GET /` through the Service returns 200 with the hub page |
 
 Spokes run `ghcr.io/hivecommons/hive:<tag>@<digest>` and the hub runs `ghcr.io/hivecommons/hive-hub:<tag>@<digest>`. The contributors in `hive-contributors` run `ghcr.io/kubestellar/hive-contributor:latest`. The script only reports on them and never changes them.
