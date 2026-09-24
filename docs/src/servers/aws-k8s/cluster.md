@@ -1,5 +1,9 @@
 # AWS Talos Cluster
 
+> **TunaOS infrastructure.** This runs in the TunaOS AWS account and serves
+> the TunaOS project (Hive, Matrix, CI), not James's personal fleet. See
+> [TunaOS AWS Account & IaC](../aws/README.md).
+
 Two-node Talos Kubernetes cluster in AWS `eu-north-1`, built 2026-08-27 to
 consolidate the two Hetzner VPSes (`matrix` and `telengana`) onto one cluster.
 

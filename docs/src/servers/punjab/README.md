@@ -1,5 +1,9 @@
 # Punjab
 
+> **TunaOS infrastructure.** This runs in the TunaOS AWS account and serves
+> the TunaOS project (Hive, Matrix, CI), not James's personal fleet. See
+> [TunaOS AWS Account & IaC](../aws/README.md).
+
 Headless agent/dev box — the fleet's only AWS-hosted Ansible host. Lives in
 the AWS account alongside the [AWS Talos cluster](../aws-k8s/cluster.md), but
 in a different region and VPC; it is an ordinary fleet member, not a cluster
