@@ -1,3 +1,7 @@
 is_arm: false
 # Headless agent box: no tailnet Caddy proxy (needs podman quadlets, absent on stock Ubuntu)
 skip_proxy: true
+# Runs the OpenTofu config in aws/ (the AWS account's IaC) — see docs/src/servers/aws/README.md
+extra_brews:
+  - awscli
+  - opentofu
