@@ -1316,6 +1316,15 @@ if [ "$ACTION" = watchdog ]; then
   # does at most HIVE_WATCHDOG_MAX_MUTATIONS of them and starts none after
   # HIVE_WATCHDOG_BUDGET_S; the rest wait for the next 5-minute pass.
   healed=0; human=""; mutations=0
+  # v5's /api/status is a periodically rebuilt snapshot that can lag minutes
+  # (observed 2-12 min under load). A frozen snapshot would read as a frozen
+  # pane, so stall judgement is skipped when the snapshot itself is old.
+  snap_age=$(( now_s - $(printf '%s' "$STATUS_JSON" | jq -r '.timestamp // empty | fromdateiso8601? // 0' 2>/dev/null || echo 0) ))
+  stall_ok=1
+  if [ "$snap_age" -gt "${HIVE_WATCHDOG_MAX_SNAPSHOT_AGE_S:-900}" ]; then
+    stall_ok=0
+    echo "status snapshot is ${snap_age}s old — stall detection skipped this pass"
+  fi
   budget_ok() {
     [ "$mutations" -lt "${HIVE_WATCHDOG_MAX_MUTATIONS:-3}" ] &&
     [ $(( $(date +%s) - RUN_START )) -lt "${HIVE_WATCHDOG_BUDGET_S:-170}" ]
@@ -1334,7 +1343,19 @@ if [ "$ACTION" = watchdog ]; then
     lk="$STATE_DIR/watchdog-last-kick-$a"
     pane=$(agent_field "$a" liveSummary)
     state=$(printf '%s' "$pane" | pane_classify_text)
-    if [ "$state" = ready ] && pane_stalled "$STATE_DIR/watchdog-pane-$a" \
+    # CONFIRM ON THE LIVE PANE before judging. /api/status is a snapshot that
+    # lagged 9+ minutes on school (2026-09-24): an agent the previous pass had
+    # already healed still showed its old wizard there, and would have been
+    # restarted again. GET /api/pane is v5's 3-second pane cache. Fetched only
+    # for agents that look unhealthy or are mid-turn (stall candidates).
+    if [ "$state" != ready ] || [ "$(agent_field "$a" busy)" = working ]; then
+      live=$(hive_api GET "/api/pane/$a?lines=60" 30 | jq -r 'if .lines then .lines | join("\n") else empty end' 2>/dev/null)
+      if [ -n "$live" ]; then
+        pane=$live
+        state=$(printf '%s' "$pane" | pane_classify_text)
+      fi
+    fi
+    if [ "$state" = ready ] && [ "$stall_ok" = 1 ] && pane_stalled "$STATE_DIR/watchdog-pane-$a" \
          "$(agent_field "$a" busy)" "$pane" "$now_s"; then
       state=stalled
     fi
