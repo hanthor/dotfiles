@@ -1,6 +1,15 @@
-# Stops the AWS KubeVirt node (aws/kubevirt.tf) after IDLE_MINUTES with no
-# workload pods on it (VM launchers, CDI importers; DaemonSets don't
-# count). Start it again with `scripts/kubevirt-node up` from the tailnet.
+# Stops the AWS KubeVirt node (aws/kubevirt.tf) when nobody has used corral
+# for IDLE_MINUTES (default 3 h). The signal is corral-web's
+# corral_last_activity_timestamp_seconds (tuna-os/corral#355): the last
+# request from a person, with probes and scrapes excluded. An open corral tab
+# counts, because the UI polls. Running VMs do NOT keep the node awake on
+# their own. In-progress work that would be corrupted by a stop does: Jobs
+# and CDI importer/upload pods on the node.
+#
+# Until corral-web exposes the gauge, the fallback is the older rule: no
+# workload pods on the node for IDLE_MINUTES.
+#
+# Start it again with the corral-web power button or `scripts/kubevirt-node up`.
 #
 # Credentials: secret kubevirt-aws/node-power holds an access key for IAM
 # user kubevirt-node-power, which can only start/stop/describe this one
@@ -75,7 +84,9 @@ spec:
                 - name: HOME
                   value: /tmp
                 - name: IDLE_MINUTES
-                  value: "30"
+                  value: "180"
+                - name: CORRAL_METRICS_URL
+                  value: http://corral-web.tailvm.svc/metrics
                 - name: AWS_DEFAULT_REGION
                   value: eu-north-1
               envFrom:
@@ -89,12 +100,36 @@ spec:
                   [ "$state" = running ] || { echo "instance $state"; exit 0; }
                   node=$(kubectl get nodes -l tunaos.org/kubevirt=true -o jsonpath='{.items[0].metadata.name}')
                   [ -n "$node" ] || { echo "node not registered yet"; exit 0; }
-                  busy=$(kubectl get pods -A --field-selector "spec.nodeName=$node" -o json | jq '[.items[]
+                  now=$(date +%s)
+                  pods=$(kubectl get pods -A --field-selector "spec.nodeName=$node" -o json)
+                  # Work a stop would corrupt: Jobs (ISO builds, bootc disk
+                  # builds) and CDI importer/upload pods.
+                  critical=$(echo "$pods" | jq '[.items[]
+                    | select(.status.phase == "Running" or .status.phase == "Pending")
+                    | select(((.metadata.ownerReferences // [])[0].kind == "Job")
+                             or ((.metadata.labels // {})["app"] // "" | test("containerized-data-importer"))
+                             or ((.metadata.name) | test("^(importer|cdi-upload)-")))] | length')
+                  if [ "$critical" -gt 0 ]; then
+                    echo "$critical build/import pod(s) on $node; not idle"
+                    exit 0
+                  fi
+                  last=$(curl -fsS -m 10 "$CORRAL_METRICS_URL" 2>/dev/null \
+                    | awk '/^corral_last_activity_timestamp_seconds /{printf "%d", $2}')
+                  if [ -n "$last" ]; then
+                    idle=$(( (now - last) / 60 ))
+                    echo "corral last used ${idle}m ago (threshold ${IDLE_MINUTES}m)"
+                    if [ "$idle" -ge "$IDLE_MINUTES" ]; then
+                      aws ec2 stop-instances --instance-ids "$INSTANCE_ID"
+                      echo "stopped $INSTANCE_ID: corral idle ${idle}m"
+                    fi
+                    exit 0
+                  fi
+                  # Fallback while corral-web lacks the activity gauge.
+                  busy=$(echo "$pods" | jq '[.items[]
                     | select((.metadata.ownerReferences // [])[0].kind != "DaemonSet")
                     | select(.status.phase == "Running" or .status.phase == "Pending")] | length')
-                  now=$(date +%s)
                   if [ "$busy" -gt 0 ]; then
-                    echo "$busy workload pod(s) on $node"
+                    echo "$busy workload pod(s) on $node (no corral activity gauge yet)"
                     kubectl annotate node "$node" tunaos.org/idle-since- >/dev/null 2>&1 || true
                     exit 0
                   fi

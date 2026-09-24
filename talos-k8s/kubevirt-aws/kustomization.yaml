@@ -66,6 +66,14 @@ patches:
             valueFrom: {secretKeyRef: {name: node-power, key: AWS_ACCESS_KEY_ID}}
           - name: AWS_SECRET_ACCESS_KEY
             valueFrom: {secretKeyRef: {name: node-power, key: AWS_SECRET_ACCESS_KEY}}
+  - target:
+      kind: Deployment
+      name: corral-web
+    patch: |
+      # Probe /readyz, not "/": probes must never look like user activity.
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /readyz
 images:
   # tuna-os/corral main is built by corral's CI; it carries the host-power hook.
   - name: ghcr.io/hanthor/corral
