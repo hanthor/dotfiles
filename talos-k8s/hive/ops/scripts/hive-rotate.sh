@@ -38,6 +38,8 @@
 #   hive-rotate.sh plan                  # what it would do, no changes
 #   hive-rotate.sh apply                 # do it
 #   hive-rotate.sh restore               # return every agent to its home rung
+#   hive-rotate.sh watchdog              # liveness heal pass (CronJob every 5 min)
+#   hive-rotate.sh contributors          # contributor replica reconcile only
 #
 # Env:
 #   HIVE_ROTATE_THRESHOLD  rotate off a provider at/above this % used (default 85)
@@ -46,22 +48,17 @@
 #                          (weekdays only since DeepSeek's 2026-08-23 policy
 #                          change: weekends are all-day off-peak)
 #   HIVE_ROTATE_METERED_FAILOVER=0  retain the old high-volume strand-on-exhaustion policy
-#   HIVE_ROTATE_DRYRUN=1   force plan-only
+#   HIVE_ROTATE_DRYRUN=1   force plan-only (apply -> plan; watchdog reports only)
+#   HIVE_USAGE_MAX_AGE_S   reuse a published measurement younger than this
+#                          (default: primary apply 0, spoke apply 1200,
+#                          watchdog 1800; `probe` always measures)
 
 
-# Hive runs on the AWS Talos cluster; override to point elsewhere.
-# Cluster-aware kubeconfig. Running IN the cluster (a CronJob under the
-# hive-ops ServiceAccount) there is no kubeconfig at all — kubectl must use the
-# in-cluster service account. Defaulting KUBECONFIG to a workstation path there
-# makes every kubectl call fail with a missing-file error that reads like the
-# hive is down. Note `${VAR:=default}` fires on EMPTY as well as unset, so
-# passing KUBECONFIG="" from a pod spec is not enough on its own.
-if [ -z "${KUBERNETES_SERVICE_HOST:-}" ]; then
-  : "${KUBECONFIG:=$HOME/.kube/config-aws-migration}"
-  export KUBECONFIG
-else
-  unset KUBECONFIG
-fi
+# Shared plumbing (kubeconfig, API over the hive Service, slim /api/status,
+# pure decision helpers). See hive-lib.sh for why each piece exists.
+# shellcheck source=hive-lib.sh
+. "${HIVE_LIB:-$(dirname "$0")/hive-lib.sh}"
+hive_kube_env
 
 set -u
 
@@ -76,13 +73,11 @@ set -u
 # contributor deployments are a single fleet-wide pool, so only the run that
 # manages the primary hive should touch them.
 NS="${HIVE_NS:-hive}"
-LABEL=app.kubernetes.io/name=hive
-API=http://127.0.0.1:3002
 STATE_DIR="${HIVE_ROTATE_STATE:-$HOME/.local/state/hive-rotate}"
-THRESHOLD="${HIVE_ROTATE_THRESHOLD:-85}"
 PEAK_PROVIDERS="${HIVE_PEAK_PROVIDERS:-deepseek}"
 PEAK_WINDOWS="${HIVE_PEAK_WINDOWS:-01:00-04:00,06:00-10:00}"
 
+RUN_START=$(date +%s)
 ACTION="${1:-plan}"
 case "$ACTION" in probe|plan|apply|restore|watchdog|contributors) ;; *) echo "usage: $0 probe|plan|apply|restore|watchdog|contributors" >&2; exit 2;; esac
 [ "${HIVE_ROTATE_DRYRUN:-0}" = 1 ] && [ "$ACTION" = apply ] && ACTION=plan
@@ -365,84 +360,49 @@ tier_members() {
   '
 }
 
-# ── Pod + owner session ─────────────────────────────────────────────────
-POD=$(kubectl get pods -n "$NS" -l "$LABEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-[ -n "$POD" ] || { echo "ERROR: no hive pod found" >&2; exit 1; }
-
-# Pick the owner session with the LATEST expiry — do not try to decide locally
-# whether it is expired.
-#
-# The previous filter compared ExpiresAt against `date -Is` as STRINGS, and the
-# two carry different UTC offsets: the store writes the hive pod's offset
-# (…-04:00) while `date -Is` writes the caller's (+05:30 on a workstation,
-# +00:00 in-cluster). Lexicographic comparison across differing offsets is only
-# accidentally right — it happens to work while expiry is weeks away and would
-# silently start discarding live sessions, or keeping dead ones, near the
-# boundary. Moving this script into the cluster changes the offset, so the
-# latent bug would have shipped with the move.
-#
-# The newest session is the best candidate regardless of what any local clock
-# thinks, and the server is the only authority on whether it is still valid —
-# so use it and let a real call decide. hive_api surfaces the auth failure.
-SID=$(kubectl exec -n "$NS" "$POD" -- cat /data/dashboard-sessions.json 2>/dev/null \
-      | jq -r '
-          to_entries | map(select(.value.Role=="owner"))
-          | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null)
-if [ -z "$SID" ]; then
-  echo "ERROR: no owner session in the dashboard session store." >&2
-  echo "       Log in at https://hive.tunaos.org as an authorized_users member." >&2
-  exit 1
-fi
-
-hive_api() {
-  kubectl exec -n "$NS" "$POD" -- \
-    curl -sS -X "$1" --max-time 25 -H "Cookie: hive_session=$SID" "$API$2" 2>&1
-}
-# Run a command inside the pod as a given agent's unix user.
-as_agent() { kubectl exec -n "$NS" "$POD" -- su -s /bin/sh "hive-$1" -c "$2" 2>/dev/null; }
-
-# Snapshot taken ONCE per run; every decision below reads from it.
+# ── Pod + owner session + status snapshot ───────────────────────────────
+# hive_open (hive-lib.sh) sets POD, SID and STATUS_JSON: the owner session
+# cookie comes from the pod's own store (cached; a refused cookie is re-read),
+# and STATUS_JSON is the SLIM /api/status (v5's full one is ~3 MB). Taken ONCE
+# per run; every decision below reads from it.
 #
 # STALENESS: /api/status lags a mutation by more than 10s — a switch/model_set
-# applied immediately before this fetch may still report the OLD rung. Running
-# two mutating passes back to back therefore makes the second one decide on
-# pre-mutation state. On the intended cadence (a timer every N minutes) this is
-# a non-issue, and the failure mode is benign either way: a stale read causes a
-# MISSED correction on this tick, never a wrong mutation, because a change is
-# only made when the observed rung is unusable. Do not chain apply runs.
-STATUS_JSON=$(hive_api GET /api/status)
-printf '%s' "$STATUS_JSON" | jq -e '.agents' >/dev/null 2>&1 \
-  || { echo "ERROR: could not read /api/status -> ${STATUS_JSON:0:200}" >&2; exit 1; }
+# applied immediately before this fetch may still report the OLD rung. On the
+# intended cadence this is a non-issue, and the failure mode is benign: a
+# stale read causes a MISSED correction on this tick, never a wrong mutation.
+# Do not chain apply runs.
+hive_open "$NS" || { echo "ERROR: could not read /api/status from $NS" >&2; exit 1; }
 
-agent_field() { printf '%s' "$STATUS_JSON" | jq -r --arg a "$1" --arg f "$2" '.agents[]|select(.name==$a)|.[$f]//""'; }
-agent_names() { printf '%s' "$STATUS_JSON" | jq -r '.agents[].name'; }
+# hive_api <METHOD> <path> [max_time] — via the hive Service in-cluster, via
+# exec from a workstation. Always prints JSON (transport failures are wrapped
+# as {"ok":false,"error":...}), so `jq -r '.status // .error'` is always safe.
+hive_api() { hive_call "$NS" "$POD" "$SID" "$1" "$2" "${3:-}"; }
+
+# Field lookups come from an associative array filled by ONE jq pass. Each
+# jq/fork costs ~1 s at the hive node's load (~85 on 4 vCPU), and the old
+# per-call `jq` ran ~130 times per watchdog pass. Semantics are unchanged:
+# `.[f] // ""` (so false/null read as ""). Multi-line fields (liveSummary,
+# statusEvidence) are still read with jq on demand.
+declare -A AF
+while IFS=$'\t' read -r _n _k _v; do AF["$_n|$_k"]=$_v; done < <(
+  printf '%s' "$STATUS_JSON" | jq -r '.agents[] | .name as $n | to_entries[]
+    | select(.key != "liveSummary" and .key != "statusEvidence")
+    | select((.value | type) != "object" and (.value | type) != "array")
+    | [$n, .key, (.value // "" | tostring)] | @tsv')
+AGENT_NAMES=$(printf '%s' "$STATUS_JSON" | jq -r '.agents[].name')
+agent_field() {
+  if [ -n "${AF["$1|$2"]+x}" ]; then printf '%s' "${AF["$1|$2"]}"
+  else printf '%s' "$STATUS_JSON" | jq -r --arg a "$1" --arg f "$2" '.agents[]|select(.name==$a)|.[$f]//""'; fi
+}
+agent_names() { printf '%s\n' "$AGENT_NAMES"; }
 
 # Placement pins must be available to both the watchdog and the apply path.
 # The watchdog exits before the apply-only declarations near the bottom.
 PIN=",$(printf '%s' "${HIVE_ROTATE_PIN:-}" | tr -d '[:space:]'),"
 pinned() { [ "$PIN" != ",," ] && [ "${PIN#*,$1,}" != "$PIN" ]; }
 
-provider_of() {  # backend model -> provider
-  local c m; c=$(printf '%s' "$1" | tr 'A-Z' 'a-z'); m=$(printf '%s' "$2" | tr 'A-Z' 'a-z')
-  # cli takes precedence over model-name sniffing for backends whose auth is
-  # tied to the CLI, not the model it happens to be puppeting. copilot can
-  # serve claude/gpt/gemini-named models through a GitHub subscription, and
-  # its device-flow login is a completely different (unautomatable, never
-  # headlessly recoverable) failure domain from an actual anthropic/openai/
-  # google outage. Matching on model name here would let a copilot
-  # login-required pause poison LOGIN_BLOCKED for a real provider and wedge
-  # the whole fleet's rotation off it.
-  # muse: same reasoning as copilot — its auth is tied to the CLI (META_API_KEY
-  # / ~/.config/muse/auth.json), not to the model it serves, and its model ids
-  # (muse-spark-*) match none of the sniff patterns below, so without this arm
-  # provider_of returns "unknown" and muse can never be selected as a rung or
-  # be accounted for in headroom/LOGIN_BLOCKED.
-  case "$c" in copilot) echo github; return;; muse) echo meta; return;; esac
-  case "$m" in *deepseek*) echo deepseek; return;; *claude*|*opus*|*sonnet*|*haiku*) echo anthropic; return;;
-               *gpt-*|*codex*) echo openai; return;; *gemini*) echo google; return;; esac
-  case "$c" in claude|litellm) echo anthropic;; codex) echo openai;; agy) echo google;;
-               bob) echo ibm;; pi|goose) echo deepseek;; *) echo unknown;; esac
-}
+# provider_of <backend> <model> -> the account an agent draws on (hive-lib.sh).
+provider_of() { hive_provider_of "$1" "$2"; }
 
 # A paused login-detector agent makes its provider unmeasurable: the pane probe
 # skips paused agents and returns "no-agent". That is positive evidence of a
@@ -457,9 +417,6 @@ for a in $(agent_names); do
 done
 
 provider_login_blocked() { [ "${LOGIN_BLOCKED[$1]:-0}" = 1 ]; }
-
-# tmux socket for an agent (hive uses a per-user socket named after the user)
-tmux_sock() { local u="hive-$1"; local uid; uid=$(as_agent "$1" 'id -u'); echo "/tmp/tmux-$uid/$u"; }
 
 # backend_model_mismatch <backend> <model>: 0 when the pair CANNOT launch.
 #
@@ -502,57 +459,149 @@ repair_mismatch() {
   want=$(tier_members "$tier" | awk -F'|' -v b="$b" '$3==b{print $4; exit}')
   [ -z "$want" ] && return 1
   printf '%-14s MISMATCH %s/%s -> setting model %s\n' "$a" "$b" "$m" "$want"
-  [ "$ACTION" = plan ] && return 0
+  dry && return 0
   local md; md=$(hive_api POST "/api/model/$a/$want" | jq -r '.status // .error')
-  [ "$md" = "model_set" ] || printf '    ! repair failed: %s\n' "$md"
+  if [ "$md" = "model_set" ]; then sync_effort "$a" "$b" "$want"
+  else printf '    ! repair failed: %s\n' "$md"; fi
 }
 
-# ── Probes ──────────────────────────────────────────────────────────────
-# Each returns "<pct_used> <resets>" — pct_used 0-100, or -1 if unknown.
-#
-# The slash-command probes render a FULL-SCREEN OVERLAY that must be dismissed
-# with Escape, or the pane classifier reads the agent as not-ready afterwards.
+# dry: true when this run must not mutate anything (plan, or a dry-run watchdog).
+dry() { [ "$ACTION" = plan ] || [ "${HIVE_ROTATE_DRYRUN:-0}" = 1 ]; }
 
-probe_deepseek() {
+# ── Reasoning effort (v5) ───────────────────────────────────────────────
+# v5 launches agy with `--effort <agent effort>` (default low), and agy drops a
+# suffixed model whose suffix disagrees — "--model gemini-3.8-flash-high
+# conflicts with --effort=low. Using Gemini 3.6 Flash (Low) instead." Every
+# placement on an agy rung therefore also sets the matching effort via
+# POST /api/effort/{agent}/{effort}. The effort is not exposed in /api/status,
+# so what we last set is recorded per agent; "" means never set = v5 default.
+EFFORT_DIR="${HIVE_EFFORT_DIR:-$STATE_DIR/effort}"
+effort_recorded() { cat "$EFFORT_DIR/$1" 2>/dev/null; }
+
+# sync_effort <agent> <backend> <model>: set the effort the model needs, if any.
+sync_effort() {
+  local a="$1" b="$2" m="$3" want rs
+  want=$(effort_change "$b" "$m" "$(effort_recorded "$a")")
+  [ -n "$want" ] || return 0
+  printf '%-14s EFFORT %s needs --effort %s -> setting\n' "$a" "$m" "$want"
+  dry && return 0
+  rs=$(hive_api POST "/api/effort/$a/$want" | jq -r '.status // .error')
+  if [ "$rs" = effort_set ]; then
+    mkdir -p "$EFFORT_DIR" && echo "$want" > "$EFFORT_DIR/$a"
+  else
+    printf '    ! effort set failed: %s\n' "$rs"
+  fi
+}
+
+# place_agent <agent> <backend> <model>: switch (only if the backend changes),
+# set the model, then the effort. Returns 0 only when the agent ended on the
+# requested pair. Never leaves a new backend with the old backend's model —
+# `claude --model gemini-...` cannot launch — so a failed model set rolls the
+# backend back.
+place_agent() {
+  local a="$1" wb="$2" wm="$3" curb sw md rb
+  curb=$(agent_field "$a" cli)
+  if [ "$wb" != "$curb" ]; then
+    sw=$(hive_api POST "/api/switch/$a/$wb" | jq -r '.status // .error')
+    if [ "$sw" != switched ]; then echo "    ! switch failed: $sw — leaving $a alone"; return 1; fi
+  fi
+  md=$(hive_api POST "/api/model/$a/$wm" | jq -r '.status // .error')
+  if [ "$md" != model_set ]; then
+    if [ "$wb" != "$curb" ]; then
+      rb=$(hive_api POST "/api/switch/$a/$curb" | jq -r '.status // .error')
+      echo "    ! model set failed: $md — rolled back to $curb ($rb)"
+    else
+      echo "    ! model set failed: $md"
+    fi
+    return 1
+  fi
+  sync_effort "$a" "$wb" "$wm"
+  return 0
+}
+
+
+# ── Probes ──────────────────────────────────────────────────────────────
+# Each provider reduces to "<pct_used> <note>" — pct_used 0-100, or -1 if
+# unknown.
+#
+# ONE EXEC, ALL PROVIDERS, IN PARALLEL (2026-09-24). The old probes were one
+# `kubectl exec` each (the google one several: pick an agent, check its pane,
+# look up its uid...), run serially, and the openai fallback TYPED `/status`
+# into a live agent's TUI and slept 16 s. Each exec cost 2-4.5 s before any
+# work, so gather() alone blew a 600 s deadline once a couple of probes
+# stalled. Now a single in-pod script runs every probe concurrently, each under
+# its own `timeout`, and returns the raw bodies; all parsing happens here, in
+# pure functions (parse_probe_*) that are unit-tested.
+#
+# Credentials never cross the exec boundary: the in-pod script reads the API
+# keys / OAuth token itself and only response bodies come back.
+#
+# The pane-typing /status fallback for openai is GONE: it was the slowest and
+# riskiest step (keystrokes into a working agent), and `codex app-server`'s
+# account/rateLimits/read is the structured source. A stale "hit your usage
+# limit" banner is still honoured, read from /api/status liveSummary.
+
+# probe_all <agent-to-run-agy-as>: raw bodies, one "=====HIVE-PROBE <p>"
+# section per provider.
+probe_all() {
+  # shellcheck disable=SC2016
+  timeout "${HIVE_PROBE_TIMEOUT:-150}" kubectl exec -n "$NS" "$POD" -- sh -c '
+    A="$1"; T=$(mktemp -d /tmp/hive-probe.XXXXXX)
+    u=$(id -u "hive-$A" 2>/dev/null || getent passwd | awk -F: "/^hive-/{print \$3; exit}")
+    ( timeout 25 curl -sS --max-time 20 -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+        https://api.deepseek.com/user/balance > "$T/deepseek" 2>&1 ) &
+    ( timeout 25 curl -sS --max-time 20 -H "Authorization: Bearer $META_API_KEY" \
+        https://api.meta.ai/v1/models > "$T/meta" 2>&1 ) &
+    ( timeout 25 su-exec "$u" sh -c "
+        TOK=\$(jq -r \".claudeAiOauth.accessToken // empty\" /data/home/.claude/.credentials.json 2>/dev/null)
+        [ -z \"\$TOK\" ] && { echo \"-1 no-token\"; exit 0; }
+        curl -s --max-time 15 -H \"Authorization: Bearer \$TOK\" \
+             -H \"anthropic-beta: oauth-2025-04-20\" https://api.anthropic.com/api/oauth/usage" \
+        > "$T/anthropic" 2>/dev/null ) &
+    ( { printf "%s\n" "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"hive-rotate\",\"version\":\"1.0.0\",\"title\":\"hive-rotate\"}}}"
+        sleep 4
+        printf "%s\n" "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\"}"
+        printf "%s\n" "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"account/rateLimits/read\",\"params\":{}}"
+        sleep 14
+      } | HOME=/data/home timeout 40 codex app-server > "$T/openai" 2>/dev/null ) &
+    ( if command -v agy >/dev/null 2>&1; then
+        timeout 90 su -s /bin/sh "hive-$A" -c "HOME=/data/home agy --print /usage --output-format text" \
+          > "$T/google" 2>/dev/null
+      else echo AGY-BINARY-MISSING > "$T/google"; fi ) &
+    wait
+    for p in deepseek meta anthropic openai google; do
+      echo "=====HIVE-PROBE $p"; cat "$T/$p" 2>/dev/null; echo
+    done
+    rm -rf "$T"' sh "$1" 2>/dev/null
+}
+
+# probe_section <all-output> <provider>: that provider's raw body.
+probe_section() {
+  printf '%s\n' "$1" | awk -v p="$2" '
+    /^=====HIVE-PROBE / { on = ($2 == p); next }
+    on { print }'
+}
+
+parse_probe_deepseek() {  # stdin: /user/balance body
   local out avail bal
-  out=$(kubectl exec -n "$NS" "$POD" -- sh -c \
-        'curl -sS --max-time 20 -H "Authorization: Bearer $DEEPSEEK_API_KEY" https://api.deepseek.com/user/balance' 2>/dev/null)
+  out=$(cat)
   # jq's `//` treats false as empty, which turned DeepSeek's explicit
-  # {"is_available":false} exhaustion response into an "unknown" probe.
-  # Test key presence instead so false survives as the string "false".
+  # {"is_available":false} into "unknown". Test key presence instead.
   avail=$(printf '%s' "$out" | jq -r 'if has("is_available") then .is_available else empty end' 2>/dev/null)
   bal=$(printf '%s' "$out"  | jq -r '.balance_infos[0].total_balance // empty' 2>/dev/null)
   [ -z "$avail" ] && { echo "-1 unknown"; return; }
-  # Prepaid credit, not a percentage: treat "unavailable" or <$1 as exhausted.
+  # Prepaid credit, not a percentage: "unavailable" or <$1 is exhausted.
   if [ "$avail" != "true" ]; then echo "100 balance=${bal:-0}"; return; fi
   awk -v b="${bal:-0}" 'BEGIN{ printf "%d balance=$%s\n", (b+0 < 1 ? 100 : 0), b }'
 }
 
-# META_MODEL is assigned up with the other rung variables (above TIERS).
-# probe_meta: muse has NO usage/quota endpoint to read. Its CLI exposes no
-# `usage` command (`muse --help` lists resume/exec/config/export/trace/skills/
-# sandbox/schema/serve/session-message/auth/login/logout/init and nothing else)
-# and /v1/models returns a catalog carrying no quota fields. Headroom here is
-# therefore genuinely unmeasurable — which is exactly the "no-usage-api" case
-# provider_ok already documents as a defensive fallback. muse is the first
-# backend to actually hit it; before this, `meta` had NO note at all and so
-# fell through provider_ok's catch-all `return 1`, silently making every muse
-# rung unselectable no matter which tier it sat in.
-#
-# What CAN be checked is more useful than nothing: whether the credential works
-# AND whether the exact model rotation would place is offered TO THIS CALLER.
-# muse's catalog is caller-dependent — measured 2026-09-08 with one key, a
-# workstation saw seven ids and this pod saw four — so "does the pod's own
-# catalog contain our rung" is the meaningful health signal. Without it, a rung
-# naming a model the pod cannot see looks perfectly healthy right up until it
-# fails at task time with "model `...` does not exist or you lack access".
-#
-# Reports 100 (exhausted, i.e. stay off) for a dead credential or a missing
-# model, and -1/no-usage-api for "reachable and entitled, quota unknowable".
-probe_meta() {
+# muse has NO usage/quota endpoint. What can be checked: the credential works
+# AND the exact rung rotation would place is in THIS CALLER's catalog (muse's
+# catalog is caller-dependent). 100 = stay off; -1/no-usage-api = reachable,
+# entitled, quota unknowable.
+parse_probe_meta() {  # stdin: /v1/models body
   local out
-  out=$(kubectl exec -n "$NS" "$POD" -- sh -c \
-        'curl -sS --max-time 20 -H "Authorization: Bearer $META_API_KEY" https://api.meta.ai/v1/models' 2>/dev/null)
+  out=$(cat)
   printf '%s' "$out" | jq -e '.data' >/dev/null 2>&1 \
     || { echo "100 unreachable-or-bad-credential"; return; }
   if printf '%s' "$out" | jq -e --arg m "$META_MODEL" '.data[]|select(.id==$m)' >/dev/null 2>&1; then
@@ -562,183 +611,91 @@ probe_meta() {
   fi
 }
 
-# pane_is_live: does this agent's pane hold a running CLI, or has it fallen back
-# to a bare shell?
-#
-# The probes below type slash commands into the pane. If the CLI has died, those
-# keystrokes go to BASH — observed live, filling a dead agent's shell with
-# "/status: No such file or directory". Never type into a pane that is sitting at
-# a shell prompt.
-pane_is_live() {
-  local a="$1" last
-  last=$(as_agent "$a" "tmux -S $(tmux_sock "$a") capture-pane -pt hive-$a -S -8" \
-         | grep -v '^[[:space:]]*$' | tail -1)
-  [ -z "$last" ] && return 1
-  # A shell prompt ends in $ or # (optionally with trailing whitespace), and
-  # these agents' prompts carry the user@host:path form.
-  case "$last" in
-    *'$'|*'$ '|*'#'|*'# ') return 1 ;;
-    *"@"*":"*"$"*)         return 1 ;;
-  esac
-  return 0
-}
-
-probe_pane() {  # <agent> <slash-cmd> <awk-parser>
-  local a="$1" cmd="$2" parser="$3" sock text
-  if ! pane_is_live "$a"; then
-    echo "-1 cli-not-running"
-    return
-  fi
-  sock=$(tmux_sock "$a")
-  as_agent "$a" "tmux -S $sock send-keys -t hive-$a '$cmd'" >/dev/null 2>&1
-  sleep 2
-  as_agent "$a" "tmux -S $sock send-keys -t hive-$a Enter" >/dev/null 2>&1
-  sleep 14
-  text=$(as_agent "$a" "tmux -S $sock capture-pane -pt hive-$a -S -45")
-  # ALWAYS dismiss, even on parse failure, or the agent is left on an overlay.
-  as_agent "$a" "tmux -S $sock send-keys -t hive-$a Escape" >/dev/null 2>&1
-  printf '%s' "$text" | awk "$parser"
-}
-
-probe_anthropic() {
-  # Direct OAuth usage API — the /usage pane in this claude build renders
-  # session stats only and headless /status is unavailable, but Claude Code's
-  # own HUD polls api.anthropic.com/api/oauth/usage with the access token from
-  # ~/.claude/.credentials.json. The response carries a `limits` array
-  # (session / weekly_all / weekly_scoped) with explicit percent + resets_at;
-  # the binding one is the max. Requires the anthropic-beta header or it 401s.
-  # The token stays inside the pod; only the summary crosses the exec boundary.
-  local out pct r
-  out=$(kubectl exec -n "$NS" "$POD" -- su-exec 2010 sh -c '
-    TOK=$(jq -r ".claudeAiOauth.accessToken // empty" /data/home/.claude/.credentials.json 2>/dev/null)
-    [ -z "$TOK" ] && { echo "-1 no-token"; exit 0; }
-    curl -s --max-time 15 -H "Authorization: Bearer $TOK" \
-         -H "anthropic-beta: oauth-2025-04-20" \
-         https://api.anthropic.com/api/oauth/usage' 2>/dev/null)
-  # An EMPTY or missing credential is not an unreadable measurement — it is
-  # positive evidence the provider cannot serve. Claude Code zeroes this file
-  # when a refresh fails (observed 2026-09-02: accessToken, refreshToken and
-  # expiresAt all emptied after a refresh race), and reporting that as "-1
-  # unknown" let provider_ok's unmeasured-so-allow rule keep placing agents on
-  # a backend whose every pane said "Login expired · Please run /login".
-  # 100 routes agents away and, unlike a quota cap, only a human /login clears
-  # it — so say so in the note rather than implying it will reset on its own.
+# Anthropic OAuth usage API. Only UNSCOPED limits describe the provider — a
+# weekly_scoped{model:"Fable"} at 100% caps one model class, not the account
+# (taking the max across all three parked the fleet on 2026-09-02 while Sonnet
+# answered). The full unscoped limit set is written to $2 for the pacer.
+# An EMPTY credential is positive evidence the provider cannot serve (Claude
+# Code zeroes the file when a refresh fails) — 100, "needs /login".
+parse_probe_anthropic() {  # stdin: usage body; $1: limits file to write
+  local out pct r capped
+  out=$(cat)
   case "$out" in
-    -1\ no-token) echo "100 no-credential (needs an interactive /login)"; return ;;
-    -1*) echo "$out"; return ;;
+    -1\ no-token*) echo "100 no-credential (needs an interactive /login)"; return ;;
   esac
-  # Only UNSCOPED limits describe the provider. The usage API returns three
-  # kinds: `session`, `weekly_all`, and `weekly_scoped` — and a weekly_scoped
-  # entry carries `scope.model`, meaning it caps ONE model class, not the
-  # account.
-  #
-  # Taking the max across all three treated an Opus-class cap as total
-  # exhaustion and parked the entire fleet while Sonnet was perfectly usable.
-  # Observed 2026-09-02: weekly_scoped{model:"Fable"} at 100% while weekly_all
-  # was 63% and session 15% — and `claude -p --model claude-sonnet-5` answered
-  # normally throughout.
-  # Stash the FULL unscoped limit set for the pacer. The summary below
-  # deliberately collapses to the max, which is right for "can this provider
-  # serve" and useless for "should we be going this fast" — the limits sit on
-  # independent clocks (a 5h session window and a weekly cap), so the binding
-  # one is whichever is closest to violating its OWN deadline, which the max
-  # cannot express.
-  #
-  # Written to a FILE, not a variable: gather() calls this inside $( ), so any
-  # global set here dies with the subshell.
-  #
-  # This is also why hive-pace.sh does not probe Anthropic itself. Two pollers
-  # against api.anthropic.com/api/oauth/usage earns a `rate_limit_error` and
-  # BOTH readings degrade — observed 2026-09-02 the moment a second 10-minute
-  # poller was added alongside this one. One probe, published once, read by
-  # everyone.
-  printf '%s' "$out" | jq -c 'try ([.limits[]? | select(.scope == null and .percent != null)]
-        | sort_by(.resets_at)
-        | to_entries | map({slot:"slot\(.key)", percent:.value.percent, resets_at:.value.resets_at}))
-        // empty' > "$STATE_DIR/anthropic-limits.json" 2>/dev/null || true
+  if [ -n "${1:-}" ]; then
+    printf '%s' "$out" | jq -c 'try ([.limits[]? | select(.scope == null and .percent != null)]
+          | sort_by(.resets_at)
+          | to_entries | map({slot:"slot\(.key)", percent:.value.percent, resets_at:.value.resets_at}))
+          // empty' > "$1.tmp" 2>/dev/null
+    # Never overwrite a good limit set with an empty one (a 429 body parses to
+    # [] and blinded the pacer).
+    if [ -s "$1.tmp" ] && [ "$(cat "$1.tmp")" != "[]" ]; then mv "$1.tmp" "$1"; else rm -f "$1.tmp"; fi
+  fi
   pct=$(printf '%s' "$out" | jq -r 'try ([.limits[]? | select(.scope == null) | .percent // 0] | max) // empty' 2>/dev/null)
   r=$(printf '%s' "$out" | jq -r 'try ([.limits[]? | select(.scope == null and .percent != null)] | max_by(.percent) | .resets_at) // empty' 2>/dev/null)
-  # Surface any model-scoped exhaustion in the note so an operator can see WHY
-  # a specific rung is failing even though the provider has headroom.
   capped=$(printf '%s' "$out" | jq -r 'try ([.limits[]? | select(.scope != null and .percent >= 100) | .scope.model.display_name] | join(",")) // empty' 2>/dev/null)
-  if [ -z "$pct" ]; then
-    echo "-1 unparsed"   # 429 rate-limit or an error body: fail-open, never act
+  if [ -z "$pct" ] || [ "$pct" = null ]; then
+    if printf '%s' "$out" | grep -q 'rate_limit'; then echo "-1 rate-limited"
+    else echo "-1 unparsed"; fi   # fail-open, never act on it
   else
     printf '%s resets=%s%s\n' "$pct" "$r" "${capped:+ capped-models=$capped}"
   fi
 }
 
-probe_openai() {
-  local a text out primary secondary reset
-  # STRUCTURED READ FIRST. `codex app-server` speaks JSON-RPC over stdio and
-  # account/rateLimits/read returns the real numbers on the agents own
-  # subscription: a 5h window and a weekly window, each with usedPercent and a
-  # reset epoch. No REST endpoint, no API key, no tmux, no live agent needed.
-  #
-  # This replaces pane scraping as the primary path because scraping was
-  # actively wrong in both directions. It reported EXHAUSTED from stale
-  # scrollback long after a limit cleared (2026-09-06: an old "hit your usage
-  # limit" banner still on screen parked the whole fleet while the account had
-  # 84% weekly headroom), and it reported UNKNOWN when no agent was placed,
-  # which provider_ok admits — so rotation moved a spoke ONTO codex at the very
-  # moment its 5h window was exhausting.
-  #
-  # Take the WORSE of the two windows: either one stalls the agent.
-  out=$(kubectl exec -n "$NS" "$POD" -- sh -c '
-    {
-      printf "%s\n" "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"hive-rotate\",\"version\":\"1.0.0\",\"title\":\"hive-rotate\"}}}"
-      sleep 2
-      printf "%s\n" "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"account/rateLimits/read\",\"params\":{}}"
-      sleep 6
-    } | HOME=/data/home timeout 30 codex app-server 2>/dev/null' 2>/dev/null \
-    | jq -r 'select(.id==2) | .result.rateLimits
-             | [ (.primary.usedPercent // empty), (.secondary.usedPercent // empty) ]
-             | if length == 0 then empty else "\(max) \(.[0]) \(.[1])" end' 2>/dev/null | head -1)
-  if [ -n "$out" ]; then
-    set -- $out
-    printf '%s codex-5h=%s%% weekly=%s%%\n' "$1" "$2" "$3"
-    return
-  fi
+# codex app-server account/rateLimits/read: up to two windows (primary /
+# secondary), each {usedPercent, windowDurationMins, resetsAt}. Take the WORSE
+# one — either stalls the agent — and carry its reset so the watchdog can wake
+# the fleet at renewal. Label windows by their real duration: on this account
+# `primary` is the WEEKLY window (10080 min), which the old "codex-5h=" label
+# misreported. The handshake needs the `initialized` notification and ~15 s;
+# with 8 s and no notification it answered only some of the time.
+parse_probe_openai() {  # stdin: app-server JSON-RPC lines
+  local out
+  out=$(jq -r 'select(.id==2) | .result.rateLimits
+         | [.primary, .secondary] | map(select(. != null and .usedPercent != null))
+         | if length == 0 then empty else
+             (max_by(.usedPercent)) as $b
+             | "\($b.usedPercent) "
+               + (map((if (.windowDurationMins // 0) >= 1440 then "weekly"
+                       elif .windowDurationMins then "\(.windowDurationMins / 60 | floor)h"
+                       else "window" end) + "=\(.usedPercent)%") | join(" "))
+               + (if $b.resetsAt then " resets=\($b.resetsAt | todate)" else "" end)
+           end' 2>/dev/null | head -1)
+  [ -n "$out" ] && { echo "$out"; return; }
+  echo "-1 unparsed"
+}
 
-  # FALLBACK: the pane paths below. Kept because the app-server call needs the
-  # codex binary and a readable ~/.codex in the pod, and an unmeasured provider
-  # is admitted by provider_ok — better a scraped number than none.
-  a=$(first_agent_on openai)
-  # first_agent_on skips PAUSED agents, but a paused agent's CLI is still
-  # running — the governor just stops kicking it. When every codex agent is
-  # parked (because codex is dry) that made codex unmeasurable, "unknown" is
-  # never evidence of exhaustion, stickiness kept the whole fleet on it, and
-  # nothing could move. The pane is readable regardless of pause state, so fall
-  # back to any agent placed on openai with a live pane.
-  if [ -z "$a" ]; then
-    for cand in $(agent_names); do
-      [ "$(provider_of "$(agent_field "$cand" cli)" "$(agent_field "$cand" govModel)")" = openai ] || continue
-      if pane_is_live "$cand"; then a="$cand"; break; fi
-    done
-  fi
-  [ -z "$a" ] && { echo "-1 no-agent"; return; }
-  # A HARD account cap is announced in the pane itself, not in /status:
-  #   "■ You've hit your usage limit. ... or try again at Sep 6th, 2026 10:35 PM."
-  # Read that FIRST. Without it the /status probe returns unparsed -> "unknown",
-  # and provider_ok() deliberately admits an unmeasured provider so the ladder
-  # always has a way back in — which meant rotation kept filling a pool that was
-  # dead for four days. Observed 2026-09-02: 8 of 11 agents parked on an
-  # exhausted codex while the free pool sat empty. An exhaustion notice is
-  # POSITIVE evidence and must outrank the unmeasured-so-allow rule.
-  if pane_is_live "$a"; then
-    text=$(as_agent "$a" "tmux -S $(tmux_sock "$a") capture-pane -pt hive-$a -S -60")
+# agy `--print /usage` rows. Only "Gemini Models" rows bind this backend; take
+# the lower of weekly / five-hour remaining.
+parse_probe_google() {  # stdin: agy /usage text
+  local out
+  out=$(cat)
+  case "$out" in AGY-BINARY-MISSING*) echo "-1 agy-binary-missing"; return ;; esac
+  printf '%s\n' "$out" | awk '
+    /^Gemini Models/ {
+      if (match($0, /[0-9]+%/)) { pct = substr($0, RSTART, RLENGTH-1) }
+      if (match($0, /[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z/)) { r = substr($0, RSTART, RLENGTH) }
+      if (pct != "" && (best == "" || pct+0 < best+0)) { best = pct; bestr = r }
+      pct = ""; r = ""
+    }
+    END { if (best == "") print "-1 unparsed"; else print (100-best)" resets="bestr }'
+}
+
+# openai fallback: a HARD account cap is announced in the pane itself
+# ("You've hit your usage limit ... try again at ..."). Positive evidence, read
+# from the hive's own pane capture instead of typing into the TUI.
+openai_pane_cap() {
+  local a text when
+  for a in $(agent_names); do
+    [ "$(provider_of "$(agent_field "$a" cli)" "$(agent_field "$a" govModel)")" = openai ] || continue
+    text=$(agent_field "$a" liveSummary)
     if printf '%s' "$text" | grep -qiE "hit your usage limit|usage limit reached|out of credits"; then
-      local when
       when=$(printf '%s' "$text" | grep -oiE 'try again at [^.]*' | head -1)
       echo "100 ${when:-account limit reached}"
       return
     fi
-  fi
-  # codex /status -> "Weekly limit: [####....] NN% left  (resets HH:MM on DD Mon)"
-  probe_pane "$a" /status '
-    /Weekly limit/ {for(i=1;i<=NF;i++) if($i ~ /%$/){gsub(/%/,"",$i); left=$i}}
-    /resets/       {r=$0; sub(/.*resets/,"resets",r); gsub(/[|╰╯│]/,"",r)}
-    END{ if(left=="") print "-1 unparsed"; else {gsub(/ +/," ",r); print (100-left)" "r} }'
+  done
 }
 
 first_agent_on() {  # provider -> name of a RUNNING agent currently on it
@@ -770,115 +727,121 @@ in_peak_window() {
   return 1
 }
 
-# probe_google: Antigravity CLI (agy) against a Google AI Pro SUBSCRIPTION, not
-# metered Gemini API credits.
-#
-# WRONG UNTIL 2026-08-18: this used to say "agy exposes no usage/quota command"
-# and always returned unknown. It does: `agy --print "/usage"` is a structured,
-# off-pane probe (no tmux, no live agent pane involved — safe to run even when
-# no agent is currently placed on google) that prints stable tab-free rows:
-#   Gemini Models          Weekly Limit Remaining     18%   2026-08-18T18:54:53Z
-#   Gemini Models          Five Hour Limit Remaining  64%   2026-08-18T03:59:30Z
-#   Claude and GPT models  Weekly Limit Remaining     100%  2026-08-25T01:15:02Z
-#   Claude and GPT models  Five Hour Limit Remaining  100%  2026-08-18T06:15:02Z
-# An Antigravity subscription bundles TWO independent pools — this backend only
-# runs Gemini models (PR #3910), so only "Gemini Models" rows are binding; the
-# "Claude and GPT models" pool is a different account's business. Take the
-# lower of the weekly/five-hour remaining %, since either one stalls the agent.
-#
-# Requires an already-placed, already-authenticated agent to run as (agy reads
-# credentials from that agent's home) — same constraint probe_anthropic and
-# probe_openai have via first_agent_on. If google has zero placed agents, this
-# still reports unknown; that gap is the same one open in RFC #3958 §7.1.
-#
-# Still verifies the BINARY EXISTS first. agy is installed into the image layer
-# at /usr/local/bin, which does not survive a pod restart, and the hub accepts
-# the `agy` backend regardless (PR #3910). Without this check a rotation could
-# move an agent onto a backend whose binary is missing, which fails at launch —
-# that happened once already.
-probe_google() {
-  local pod_has a out candidate
-  pod_has=$(kubectl exec -n "$NS" "$POD" -- sh -c 'command -v agy >/dev/null && echo yes' 2>/dev/null)
-  [ "$pod_has" = yes ] || { echo "-1 agy-binary-missing"; return; }
-
-  # Prefer an existing Agy agent, but bootstrap the first Google rung through
-  # any live agent when the operator has seeded the shared $HOME/.gemini OAuth
-  # state. Requiring an already-placed Agy agent made a healthy Google pool
-  # permanently unmeasurable and therefore a last-choice no-agent fallback.
-  a=$(first_agent_on google)
-  if [ -z "$a" ]; then
-    for candidate in $(agent_names); do
-      [ "$(agent_field "$candidate" paused)" = true ] && continue
-      if pane_is_live "$candidate"; then a="$candidate"; break; fi
-    done
-  fi
-  # LAST RESORT: any agent user at all, paused or not, live pane or not.
-  # `agy --print /usage` is HEADLESS — it never touches the tmux pane, so the
-  # pane checks above are irrelevant to whether it can answer. Requiring an
-  # unpaused agent created a deadlock: once every agent was parked because
-  # google was dry, google became unmeasurable, "unknown" is never treated as
-  # recovery, and nothing could ever unpark. We only need a uid with the shared
-  # $HOME to run the CLI as.
-  if [ -z "$a" ]; then
-    a=$(agent_names | head -1)
-  fi
-  [ -z "$a" ] && { echo "-1 no-agent"; return; }
-  out=$(as_agent "$a" "HOME=/data/home agy --print '/usage' --output-format text")
-  printf '%s' "$out" | awk '
-    /^Gemini Models/ {
-      if (match($0, /[0-9]+%/)) { pct = substr($0, RSTART, RLENGTH-1) }
-      if (match($0, /[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z/)) { r = substr($0, RSTART, RLENGTH) }
-      if (pct != "" && (best == "" || pct+0 < best+0)) { best = pct; bestr = r }
-      pct = ""; r = ""
-    }
-    END { if (best == "") print "-1 unparsed"; else print (100-best)" resets="bestr }'
-}
 
 # ── Gather headroom ─────────────────────────────────────────────────────
 declare -A PCT NOTE
-# The provider pools this fleet measures and places on. Written ONCE: this list
-# was previously hand-copied into four separate loops (gather, the stale-reset
-# sweep, publish_usage, and the probe display), and adding `meta` to only some
-# of them is a silent failure — an unmeasured provider gets NO note, which
-# makes provider_ok's catch-all reject every one of its rungs. That is exactly
-# how muse's rungs were unselectable at any tier before this.
+# The provider pools this fleet measures and places on. Written ONCE (adding a
+# provider to only some loops left it with no note, which provider_ok rejects).
 PROVIDERS="${HIVE_ROTATE_PROVIDERS:-deepseek anthropic openai google meta}"
 
-gather() {
-  local r
+# Where the measurement is published. ALWAYS the primary hive's namespace:
+# every spoke draws on the SAME accounts (the .claude/.gemini/.codex homes are
+# one hostPath and the API keys hash identically across hive, hive-reef and
+# hive-hanthor, verified 2026-09-24), and the spoke Roles cannot write
+# ConfigMaps in their own namespaces anyway ("WARN: could not publish").
+USAGE_NS="${HIVE_PRIMARY_NS:-hive}"
+USAGE_CM=hive-provider-usage
+
+# USAGE REUSE. Three rotates (every 20 min) and three watchdogs (every 5 min)
+# each probed every provider — ~40 hits/hour on api.anthropic.com's OAuth usage
+# endpoint, which rate-limits a second poller within minutes and then reports
+# `unparsed` for EVERYONE (observed again 2026-09-24: anthropic "unknown
+# unparsed" fleet-wide). Since the accounts are shared, one fresh measurement
+# serves every spoke:
+#   - primary-hive apply/plan/probe: always measure, then publish;
+#   - spoke apply/plan: reuse a publication younger than 20 min, else measure;
+#   - watchdog (any hive): reuse anything younger than 30 min, else measure.
+# HIVE_USAGE_MAX_AGE_S overrides (0 = always measure).
+if [ -n "${HIVE_USAGE_MAX_AGE_S:-}" ]; then USAGE_MAX_AGE="$HIVE_USAGE_MAX_AGE_S"
+elif [ "$ACTION" = probe ]; then USAGE_MAX_AGE=0
+elif [ "$ACTION" = watchdog ]; then USAGE_MAX_AGE=1800
+elif [ "$NS" = "$USAGE_NS" ]; then USAGE_MAX_AGE=0
+else USAGE_MAX_AGE=1200
+fi
+MEASURED=0
+
+load_published_usage() {
+  local cm upd age p v
+  [ "$USAGE_MAX_AGE" -gt 0 ] 2>/dev/null || return 1
+  cm=$(k8s_get "/api/v1/namespaces/$USAGE_NS/configmaps/$USAGE_CM") || return 1
+  upd=$(printf '%s' "$cm" | jq -r '.data.updated_at // empty')
+  [ -n "$upd" ] || return 1
+  age=$(( $(date -u +%s) - $(date -u -d "$upd" +%s 2>/dev/null || echo 0) ))
+  [ "$age" -le "$USAGE_MAX_AGE" ] || return 1
+  for p in $PROVIDERS; do
+    v=$(printf '%s' "$cm" | jq -r --arg p "$p" '.data[$p] // "unknown unpublished"')
+    r=$(published_to_probe "$v")
+    PCT[$p]=${r%% *}; NOTE[$p]=${r#* }
+  done
+  echo "usage: reusing $USAGE_NS/$USAGE_CM published ${age}s ago"
+  return 0
+}
+
+measure_usage() {
+  local a raw p r
+  # agy is headless; it only needs a uid with the shared $HOME. Prefer an agent
+  # already on google, else any agent (paused or not — requiring an unpaused
+  # one deadlocked the pool once everything was parked).
+  a=$(first_agent_on google); [ -z "$a" ] && a=$(agent_names | head -1)
+  raw=$(probe_all "$a")
   for p in $PROVIDERS; do
     case $p in
-      deepseek)  r=$(probe_deepseek) ;;
-      anthropic) r=$(probe_anthropic) ;;
-      openai)    r=$(probe_openai) ;;
-      google)    r=$(probe_google) ;;
-      meta)      r=$(probe_meta) ;;
+      deepseek)  r=$(probe_section "$raw" deepseek  | parse_probe_deepseek) ;;
+      meta)      r=$(probe_section "$raw" meta      | parse_probe_meta) ;;
+      anthropic) r=$(probe_section "$raw" anthropic | parse_probe_anthropic "$STATE_DIR/anthropic-limits.json") ;;
+      openai)    r=$(probe_section "$raw" openai    | parse_probe_openai)
+                 if [ "${r%% *}" = -1 ]; then c=$(openai_pane_cap); [ -n "$c" ] && r=$c; fi ;;
+      google)    r=$(probe_section "$raw" google    | parse_probe_google) ;;
+      *)         r="-1 no-probe" ;;
     esac
     PCT[$p]=${r%% *}; NOTE[$p]=${r#* }
-    # Remember WHEN an exhausted provider comes back. Every probe already
-    # reports it ("resets=2026-09-02T23:00:00Z", "resets 22:35 on 6 Sep"), and
-    # without recording it the fleet only rediscovers renewal on the next
-    # 20-minute tick — or never, if it is parked and the provider is
-    # unmeasurable while parked. Parsed best-effort: an unparseable stamp is
-    # simply not scheduled, never a failure.
+  done
+  MEASURED=1
+}
+
+# publish_usage: mirror a FRESH measurement into $USAGE_NS/hive-provider-usage.
+# Read by hive-pace, hive-console, and every other rotate/watchdog run (see
+# USAGE REUSE above). Carries updated_at so a stale reading is visibly stale.
+# Best-effort: a publish failure never affects rotation.
+publish_usage() {
+  local data p v lim=""
+  [ "$MEASURED" = 1 ] || return 0
+  dry && [ "$ACTION" != probe ] && return 0
+  data='{}'
+  for p in $PROVIDERS; do
+    v="${PCT[$p]}"
+    if [ "$v" = "-1" ]; then v="unknown"; else v="${v}% used"; fi
+    data=$(printf '%s' "$data" | jq -c --arg k "$p" --arg v "$v ${NOTE[$p]}" '.[$k]=$v')
+  done
+  # Per-limit Anthropic detail for hive-pace.sh (which must never poll the
+  # rate-limited usage API itself). Only a limit set measured in the last 30
+  # min; a stale one would feed the pacer yesterday's deadlines.
+  if [ -n "$(find "$STATE_DIR/anthropic-limits.json" -mmin -30 2>/dev/null)" ]; then
+    lim=$(cat "$STATE_DIR/anthropic-limits.json")
+  else
+    lim=$(k8s_get "/api/v1/namespaces/$USAGE_NS/configmaps/$USAGE_CM" | jq -r '.data.anthropic_limits // empty' 2>/dev/null)
+  fi
+  data=$(printf '%s' "$data" | jq -c --arg lim "$lim" --arg u "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg by "$NS" \
+           '. + {updated_at:$u, measured_by:$by} + (if $lim != "" then {anthropic_limits:$lim} else {} end)')
+  k8s_put_cm "$USAGE_NS" "$USAGE_CM" "$data" || echo "WARN: could not publish $USAGE_NS/$USAGE_CM" >&2
+}
+
+gather() {
+  local p when epoch
+  load_published_usage || { measure_usage; publish_usage; }
+  for p in $PROVIDERS; do
+    # Remember WHEN an exhausted provider comes back, so the watchdog can wake
+    # the fleet at renewal instead of on the next 20-minute tick. Best-effort.
     if provider_exhausted "$p"; then
       when=$(printf '%s' "${NOTE[$p]}" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}' | head -1)
       if [ -n "$when" ]; then
-        epoch=$(date -u -d "$when" +%s 2>/dev/null \
-                || python3 -c "import datetime,sys;print(int(datetime.datetime.fromisoformat(sys.argv[1]).replace(tzinfo=datetime.timezone.utc).timestamp()))" "$when" 2>/dev/null)
+        epoch=$(date -u -d "$when" +%s 2>/dev/null)
         [ -n "$epoch" ] && { mkdir -p "$STATE_DIR/resets.d"; echo "$epoch" > "$STATE_DIR/resets.d/$p"; }
       fi
+    else
+      # No longer exhausted: nothing pending, so a stale stamp cannot re-fire.
+      rm -f "$STATE_DIR/resets.d/$p" 2>/dev/null
     fi
-  done
-  # One marker PER PROVIDER, not just the soonest. deepseek, anthropic, openai
-  # and google renew on independent clocks (a 5-hour window, a weekly cap, a
-  # 4-day account cap, a prepaid balance), so collapsing them to one "next"
-  # loses every renewal after the first — the fleet would wake for Anthropic at
-  # 23:00 and then sleep through codex coming back on the 6th.
-  # A provider that is NO LONGER exhausted has nothing pending: drop its marker
-  # so a stale timestamp cannot re-fire.
-  for _p in $PROVIDERS; do
-    provider_exhausted "$_p" || rm -f "$STATE_DIR/resets.d/$_p" 2>/dev/null
   done
 
   # A peak-priced provider is "unavailable" for planning purposes even at 0% used.
@@ -943,7 +906,9 @@ METERED_EXHAUSTION_FAILOVER="${HIVE_ROTATE_METERED_FAILOVER:-1}"
 AGY_MAX_HIGH_VOLUME="${HIVE_ROTATE_AGY_MAX_HIGH_VOLUME:-5}"
 # Watchdog: minimum minutes between auto-heal kicks of the same agent (the
 # k8s CrashLoopBackOff analog; a fresh launch needs ~1min to reach ready).
-WATCHDOG_KICK_INTERVAL_MIN="${HIVE_WATCHDOG_KICK_INTERVAL_MIN:-5}"
+# (Base of the exponential backoff in hive-lib.sh's watchdog_backoff_s; the
+# old fixed-interval knob is honoured as the base.)
+export HIVE_WATCHDOG_BASE_MIN="${HIVE_WATCHDOG_BASE_MIN:-${HIVE_WATCHDOG_KICK_INTERVAL_MIN:-5}}"
 # How long a pool evicted because it measured exhausted stays canary-free.
 # Defined here (not down by the canary section that reads/writes it) because
 # the main rotation loop below also writes this cooldown file the moment it
@@ -955,7 +920,7 @@ WATCHDOG_KICK_INTERVAL_MIN="${HIVE_WATCHDOG_KICK_INTERVAL_MIN:-5}"
 # nothing outside the canary section reads it.
 CANARY_EXHAUSTED_COOLDOWN_MIN="${HIVE_ROTATE_CANARY_EXHAUSTED_COOLDOWN_MIN:-720}"
 
-cadence_s() { printf '%s' "$STATUS_JSON" | jq -r --arg a "$1" '.agents[]|select(.name==$a)|.cadence//""' \
+cadence_s() { agent_field "$1" cadence \
                 | awk '{ s=$0; n=s; sub(/[a-z]$/,"",n);
                          if (s ~ /h$/) print n*3600; else if (s ~ /m$/) print n*60;
                          else if (s ~ /s$/) print n+0; else print 999999 }'; }
@@ -1145,10 +1110,15 @@ CONTRIB_NS="${HIVE_CONTRIB_NS:-hive-contributors}"
 # pi-codex-contributor runs AGENT_BACKEND=pi with AGENT_MODEL=openai-codex/...,
 # so it consumes OPENAI quota, not deepseek. provider_of must see BOTH fields
 # or a `pi` shell is misread as deepseek and parked against the wrong pool.
+# All fields come from ONE list call (DEPLOYS), not three kubectl calls per
+# deployment.
+contrib_field() {  # <deployment> <jq expr on the deployment>
+  printf '%s' "$DEPLOYS" | jq -r --arg d "$1" ".items[] | select(.metadata.name==\$d) | $2 // empty" 2>/dev/null
+}
 contrib_provider() {
   local d="$1" b m
-  b=$(kubectl get deploy -n "$CONTRIB_NS" "$d" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="AGENT_BACKEND")].value}' 2>/dev/null)
-  m=$(kubectl get deploy -n "$CONTRIB_NS" "$d" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="AGENT_MODEL")].value}' 2>/dev/null)
+  b=$(contrib_field "$d" '(.spec.template.spec.containers[0].env // [] | map(select(.name=="AGENT_BACKEND"))[0].value)')
+  m=$(contrib_field "$d" '(.spec.template.spec.containers[0].env // [] | map(select(.name=="AGENT_MODEL"))[0].value)')
   [ -z "$b" ] && { echo unknown; return; }
   provider_of "$b" "$m"
 }
@@ -1163,11 +1133,12 @@ reconcile_contributors() {
     echo "contributors: skipped — pool is managed by the primary hive (${HIVE_PRIMARY_NS:-hive}), not $NS"
     return 0
   fi
-  ds=$(kubectl get deploy -n "$CONTRIB_NS" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
+  DEPLOYS=$(k8s_get "/apis/apps/v1/namespaces/$CONTRIB_NS/deployments")
+  ds=$(printf '%s' "$DEPLOYS" | jq -r '.items[]?.metadata.name' 2>/dev/null)
   [ -z "$ds" ] && { echo "no contributor deployments in $CONTRIB_NS"; return 0; }
   for d in $ds; do
     p=$(contrib_provider "$d")
-    have=$(kubectl get deploy -n "$CONTRIB_NS" "$d" -o jsonpath='{.spec.replicas}' 2>/dev/null)
+    have=$(contrib_field "$d" '.spec.replicas')
     have=${have:-0}
     if provider_exhausted "$p"; then
       want=0
@@ -1199,7 +1170,7 @@ reconcile_contributors() {
       printf '%-24s %-9s recovered -> restoring (replicas %s->1)\n' "$d" "$p" "$have"
     fi
     [ "$ACTION" = plan ] && continue
-    kubectl scale deploy -n "$CONTRIB_NS" "$d" --replicas="$want" >/dev/null 2>&1 \
+    k8s_scale "$CONTRIB_NS" "$d" "$want" \
       || printf '    ! scale failed for %s\n' "$d"
   done
 }
@@ -1214,57 +1185,11 @@ fi
 # probe, a k8s-livenessProbe analog. The dashboard's `state=running` is a
 # config echo, not an observation; the pane is the truth (see RFC #4665).
 pane_classify() {
-  local a="$1" text last
-  text=$(as_agent "$a" "tmux -S $(tmux_sock "$a") capture-pane -pt hive-$a" 2>/dev/null)
-  [ -z "$(printf '%s' "$text" | grep -v '^[[:space:]]*$')" ] && { echo empty; return; }
-  # auth/onboarding screens: the CLI is up but cannot work. Patterns are the
-  # exact CLI chrome only (agy accent/terms picker, claude login prompts) —
-  # loose words like "login"/"sign in" appear in issue bodies the agent is
-  # reading and caused false-positive kills (§10a lesson, RFC #4665).
-  # 'please use /login to sign in to use copilot' is Copilot CLI's EXACT
-  # chrome (verified against a real stuck pane 2026-09-02) — distinct wording
-  # from claude's "run /login"/"not logged in", so it needs its own pattern or
-  # a copilot pane sits misclassified as ready forever (confirmed: the
-  # watchdog logged "liveness ok" every 5min for 43h straight while /api/status
-  # reported PaneShowsLogin the whole time).
-  #
-  # A dismissible FIRST-RUN WIZARD is classified separately from a login, and
-  # deliberately so. Every agent's ~/.gemini is a SYMLINK to the shared
-  # /data/home/.gemini, so when one agent writes
-  # antigravity-cli/cache/onboarding.json mode 600, every OTHER agent gets
-  # EACCES and re-enters agy's theme/ToS/trust wizard. Lumping that in with
-  # `auth` made the watchdog rotate the agent OFF google onto a metered
-  # provider. Observed 2026-09-02: agents placed on the FREE pool were
-  # evacuated to Anthropic within minutes, repeatedly, which is how a weekly
-  # subscription cap burned at ~10%/hour while agy sat at 29% used. The right
-  # response is to repair the shared-home permissions and relaunch on the SAME
-  # rung — never to abandon a healthy provider over a dialog box.
-  if printf '%s' "$text" | grep -qiE '\[next\]|\[previous\]|terms of service & data use|accent: highlighted|enter toggl|choose your color scheme|do you trust the contents|i trust this folder|welcome to (the )?antigravity'; then
-    echo wizard; return
-  fi
-  # The OAuth PASTE-CODE screen is auth too, and omitting it was its own
-  # 43-hour-class bug. Once a pane advances past the login-method picker into
-  # the device flow it stops matching every pattern above, `pane_is_live` says
-  # yes (the CLI genuinely is running), and the agent classifies as READY —
-  # so the watchdog logs "liveness ok" forever at an agent that is doing
-  # nothing but waiting for a human to paste a code that will never come.
-  # Observed on hive-reef/ci-maintainer 2026-09-02.
-  # Patterns stay ANCHORED TO CLI CHROME, never to loose English. Two of these
-  # were tightened after a fixture of a HEALTHY pane — an agent reading an
-  # issue whose body said "sign in to use the dashboard" — classified as auth
-  # and would have been killed mid-work:
-  #   'sign in to use'  -> 'sign in to use copilot'   (Copilot's actual chrome;
-  #                        the generic form is already covered by /login above)
-  #   'oauth/authorize' -> dropped entirely            (a bare URL fragment that
-  #                        appears in any issue discussing OAuth)
-  # The two device-flow phrases kept below are full CLI sentences and do not
-  # occur in prose an agent would be reading.
-  if printf '%s' "$text" | grep -qiE 'login expired|run /login|not logged in|please run /login|please use /login|select login method|sign in to use copilot|paste code here if prompted|browser didn.t open\? use the url below'; then
-    echo auth; return
-  fi
-  # shell prompt = the CLI died and the pane fell back to bash.
-  if ! pane_is_live "$a"; then echo shell; return; fi
-  echo ready
+  # v5 publishes each agent's last pane capture as `liveSummary` in
+  # /api/status, so classification needs NO tmux exec (previously 2-3 execs per
+  # agent per pass, x13 agents, every 5 minutes). Patterns live in hive-lib.sh
+  # (pane_classify_text) and are unit-tested against real captured panes.
+  agent_field "$1" liveSummary | pane_classify_text
 }
 
 # choose_rung_healthy <tier> <agent>: like choose_rung but ONLY rungs whose
@@ -1287,41 +1212,78 @@ choose_rung_healthy() {
 }
 
 if [ "$ACTION" = watchdog ]; then
-  # 1) Shared-state hygiene: agents share $HOME, and agy rewrites its
-  # settings/onboarding files as mode 600 owned by the writing agent, so the
-  # next launch hits EACCES and falls into the onboarding trap. Normalize the
-  # shared tree each pass (the durable fix is umask 007 at launch, RFC #4665).
-  # Directories are 2770, not 770: the setgid bit makes everything created
-  # inside inherit the `node` group, which is what keeps a file written by one
-  # agent readable by the next even before this sweep runs again.
-  # The same treatment is needed for codex's per-agent state dirs. Rotation
-  # moves agents across backends, so /data/home/.codex-<agent> ends up holding
-  # sqlite files owned by whichever agent last ran there, at mode 644 — and the
-  # agent that owns the directory then cannot write its own state:
-  #   "attempt to write a readonly database ... state_5.sqlite"
-  # codex dies at launch, the pane falls to a bare shell, and the watchdog
-  # churns on it forever. Observed 2026-09-02 on sec-check and outreach, whose
-  # dirs held files owned by hive-strategist / hive-quality / hive-supervisor.
+  # 1) Shared-state hygiene, ONE exec. Agents share $HOME subtrees and the CLIs
+  # rewrite their state files mode 600 owned by whichever agent wrote last, so
+  # the next agent hits EACCES and lands in a first-run wizard:
+  #   - agy: ~/.gemini/antigravity-cli onboarding/settings (theme/ToS picker)
+  #   - codex: /data/home/.codex-<agent> sqlite ("attempt to write a readonly
+  #     database"), because rotation moves agents across backends
+  #   - muse (v5): ~/.config/muse/trust.json — every agent's ~/.config is a
+  #     symlink to the shared /data/home/.config, and one agent's 600 trust
+  #     store parks the others on "Do you trust this workspace? ... Permission
+  #     denied (os error 13)" (reef/outreach, 2026-09-24).
+  # Directories 2770 (setgid keeps the `node` group), files 660.
+  # Runs when a wizard is seen, and otherwise at most hourly: it is an exec,
+  # and v5's own entrypoint already repairs ~/.gemini ("perm guard").
   gemini_hygiene() {
-    kubectl exec -n "$NS" "$POD" -- sh -c '
-      find /data/home/.gemini/antigravity-cli -type f -exec chmod 660 {} + 2>/dev/null
-      find /data/home/.gemini/antigravity-cli -type d -exec chmod 2770 {} + 2>/dev/null
-      chown -R dev:node /data/home/.gemini/antigravity-cli 2>/dev/null
-      for d in /data/home/.codex-*; do
+    dry && return 0
+    echo "$now_s" > "$STATE_DIR/hygiene-last" 2>/dev/null
+    # agy: only the top-level settings/onboarding json and cache/ — the
+    # files whose mode-600 rewrite causes the wizard. A recursive sweep of
+    # antigravity-cli (thousands of logs/conversations) blew the exec's 90 s
+    # timeout on the loaded node, and v5's entrypoint "perm guard" already
+    # maintains the rest of ~/.gemini.
+    timeout 90 kubectl exec -n "$NS" "$POD" -- sh -c '
+      g=/data/home/.gemini/antigravity-cli
+      if [ -d "$g" ]; then
+        chown dev:node "$g" "$g"/*.json "$g/cache" "$g"/cache/* 2>/dev/null
+        chmod 660 "$g"/*.json "$g"/cache/* 2>/dev/null
+        chmod 2770 "$g" "$g/cache" 2>/dev/null
+      fi
+      for d in /data/home/.config/muse /data/home/.codex-*; do
         [ -d "$d" ] || continue
         chown -R dev:node "$d" 2>/dev/null
-        find "$d" -type f -exec chmod 660 {} + 2>/dev/null
-        find "$d" -type d -exec chmod 2770 {} + 2>/dev/null
-      done' 2>/dev/null
+        find "$d" -type f ! -perm -660 -exec chmod 660 {} + 2>/dev/null
+        find "$d" -type d ! -perm -2770 -exec chmod 2770 {} + 2>/dev/null
+      done' >/dev/null 2>&1
   }
-  gemini_hygiene
+  # heal_restart <agent>: POST /api/restart; for agy/muse agents, from INSIDE
+  # the pod in the same exec that first reopens the shared first-run state.
+  #
+  # Why (2026-09-24): every agy launch rewrites the SHARED
+  # ~/.gemini/antigravity-cli/cache/onboarding.json mode 0600 under its own
+  # uid, so the NEXT agy agent to launch gets EACCES ("failed to load
+  # onboarding status ... permission denied") and sits on the theme wizard.
+  # v5's entrypoint perm guard does not cover that file and runs as `dev`,
+  # which cannot chmod a file an agent uid owns; only a root exec can. Doing
+  # the repair and the restart in one exec guarantees the relaunching CLI
+  # reads a group-readable file. muse's trust.json has the same shape.
+  heal_restart() {
+    local a="$1" cli; cli=$(agent_field "$a" cli)
+    case "$cli" in
+      agy|muse)
+        # shellcheck disable=SC2016
+        timeout 200 kubectl exec -n "$NS" "$POD" -- sh -c '
+          for f in /data/home/.gemini/antigravity-cli/cache/*.json /data/home/.gemini/antigravity-cli/*.json \
+                   /data/home/.config/muse/*.json; do
+            [ -f "$f" ] || continue
+            chown dev:node "$f" 2>/dev/null; chmod 660 "$f" 2>/dev/null
+          done
+          curl -sS -X POST --max-time 150 -H "Cookie: hive_session=$2" "http://127.0.0.1:3002/api/restart/$1"' \
+          sh "$a" "$SID" 2>/dev/null \
+          || hive_api POST "/api/restart/$a"
+        ;;
+      *) hive_api POST "/api/restart/$a" ;;
+    esac
+  }
 
-  # 1b) RENEWAL WAKE-UP. gather() records when the soonest exhausted provider
-  # comes back. If that moment has passed, quota exists again — resume anything
-  # parked and kick it, rather than waiting out the rotate timer. This is the
-  # difference between the fleet restarting within 5 minutes of a renewal and
-  # sitting idle for up to 20 (or indefinitely, when being parked is itself
-  # what makes the provider unmeasurable).
+  now_s=$(date +%s)
+  hl=$(cat "$STATE_DIR/hygiene-last" 2>/dev/null || echo 0)
+  [ $(( now_s - ${hl:-0} )) -ge 3600 ] && gemini_hygiene
+
+  # 1b) RENEWAL WAKE-UP. gather() records when an exhausted provider comes
+  # back. Once that moment passes, re-derive placement from scratch (apply
+  # re-probes, re-places, un-strands, reconciles contributors).
   renewed=""
   now_s=$(date +%s)
   for f in "$STATE_DIR"/resets.d/*; do
@@ -1329,155 +1291,132 @@ if [ "$ACTION" = watchdog ]; then
     due=$(cat "$f" 2>/dev/null)
     [ -n "$due" ] && [ "$now_s" -ge "$due" ] 2>/dev/null || continue
     renewed="$renewed $(basename "$f")"
-    rm -f "$f"
+    dry || rm -f "$f"
   done
   if [ -n "$renewed" ]; then
-    # Renewal means the CREDIT PICTURE CHANGED, so re-derive placement from
-    # scratch rather than only unpausing: an agent parked onto a worse rung
-    # while its provider was dry should move back now that it is not, and a
-    # contributor parked at 0 replicas should come back. `apply` re-probes,
-    # re-places every agent on the best available rung, un-strands, and
-    # reconciles contributors — which is exactly the decision that is now stale.
     printf 'renewal reached for:%s — re-deciding placement from current credits\n' "$renewed"
-    "$0" apply || echo "  ! re-decision failed" >&2
+    dry || { HIVE_USAGE_MAX_AGE_S=0 "$0" apply || echo "  ! re-decision failed" >&2; }
     exit 0
   fi
 
-  # 2) Per-agent liveness: classify the pane and heal broken agents with the
-  # kill-then-kick sequence (a direct kick of a wedged TUI hangs the API).
-  # Exponential backoff is the k8s CrashLoopBackOff analog: skip agents we
-  # kicked recently so a heal loop doesn't become a restart storm.
-  healed=0
+  # 2) Per-agent liveness. Heal = POST /api/restart, which in v5 kills and
+  # relaunches the CLI session. The old C-c + kick sequence typed into panes
+  # (dangerous on a login MENU: the kick's Enter selected "Claude account with
+  # subscription" and advanced into a device flow no one would ever finish),
+  # and v5's kick is async and refuses a dead session anyway.
+  #
+  # BACKOFF is exponential per agent (5, 10, 20 ... 120 min; see
+  # watchdog_backoff_s) and resets the first time the agent is seen ready. A
+  # fixed 5-minute interval restarted permanently-broken agents ~288x/day, and
+  # v5 counts every one into its crash-loop breaker (`BLOCKED: crash-looping`).
+  #
+  # MUTATION BUDGET. Every heal, repair and effort set restarts an agent
+  # INSIDE the API request (v5), 30-60 s each on the loaded node. A pass
+  # with three effort fixes took 249 s of its 280 s deadline, so each pass
+  # does at most HIVE_WATCHDOG_MAX_MUTATIONS of them and starts none after
+  # HIVE_WATCHDOG_BUDGET_S; the rest wait for the next 5-minute pass.
+  healed=0; human=""; mutations=0
+  # v5's /api/status is a periodically rebuilt snapshot that can lag minutes
+  # (observed 2-12 min under load). A frozen snapshot would read as a frozen
+  # pane, so stall judgement is skipped when the snapshot itself is old.
+  snap_age=$(( now_s - $(printf '%s' "$STATUS_JSON" | jq -r '.timestamp // empty | fromdateiso8601? // 0' 2>/dev/null || echo 0) ))
+  stall_ok=1
+  if [ "$snap_age" -gt "${HIVE_WATCHDOG_MAX_SNAPSHOT_AGE_S:-900}" ]; then
+    stall_ok=0
+    echo "status snapshot is ${snap_age}s old — stall detection skipped this pass"
+  fi
+  budget_ok() {
+    [ "$mutations" -lt "${HIVE_WATCHDOG_MAX_MUTATIONS:-3}" ] &&
+    [ $(( $(date +%s) - RUN_START )) -lt "${HIVE_WATCHDOG_BUDGET_S:-170}" ]
+  }
   for a in $(agent_names); do
     [ "$(agent_field "$a" paused)" = true ] && continue
-    # Repair an unlaunchable backend/model pair BEFORE judging liveness, and
-    # regardless of what the pane shows. A mismatch is config drift, not a pane
-    # state: the currently-running process may still be happily executing the
-    # OLD model, so the pane reads `ready` and the agent is skipped — right up
-    # until the next kick relaunches it with the foreign model name and it dies.
-    # Catching it here fixes it while it is still cheap, and catches mismatches
-    # from ANY source (a timed-out /api/model, a hand-run curl), not just from
-    # this script's own rotations.
-    if repair_mismatch "$a"; then
-      healed=$((healed+1))
-      continue
+    if budget_ok && repair_mismatch "$a"; then healed=$((healed+1)); mutations=$((mutations+1)); continue; fi
+    # agy effort drift (a model set by hand/pace/older rotate without effort).
+    if [ -n "$(effort_change "$(agent_field "$a" cli)" "$(agent_field "$a" govModel)" "$(effort_recorded "$a")")" ]; then
+      if budget_ok; then
+        sync_effort "$a" "$(agent_field "$a" cli)" "$(agent_field "$a" govModel)"; mutations=$((mutations+1))
+      else
+        printf '%-14s effort fix deferred to the next pass (budget)\n' "$a"
+      fi
     fi
-    state=$(pane_classify "$a")
-    [ "$state" = ready ] && { printf '%-14s liveness ok\n' "$a"; continue; }
     lk="$STATE_DIR/watchdog-last-kick-$a"
-    if [ -f "$lk" ] && [ $(( $(date +%s) - $(cat "$lk") )) -lt $(( WATCHDOG_KICK_INTERVAL_MIN * 60 )) ]; then
-      printf '%-14s %-8s (recently healed, backing off)\n' "$a" "$state"
+    pane=$(agent_field "$a" liveSummary)
+    state=$(printf '%s' "$pane" | pane_classify_text)
+    # CONFIRM ON THE LIVE PANE before judging. /api/status is a snapshot that
+    # lagged 9+ minutes on school (2026-09-24): an agent the previous pass had
+    # already healed still showed its old wizard there, and would have been
+    # restarted again. GET /api/pane is v5's 3-second pane cache. Fetched only
+    # for agents that look unhealthy or are mid-turn (stall candidates).
+    if [ "$state" != ready ] || [ "$(agent_field "$a" busy)" = working ]; then
+      live=$(hive_api GET "/api/pane/$a?lines=60" 30 | jq -r 'if .lines then .lines | join("\n") else empty end' 2>/dev/null)
+      if [ -n "$live" ]; then
+        pane=$live
+        state=$(printf '%s' "$pane" | pane_classify_text)
+      fi
+    fi
+    if [ "$state" = ready ] && [ "$stall_ok" = 1 ] && pane_stalled "$STATE_DIR/watchdog-pane-$a" \
+         "$(agent_field "$a" busy)" "$pane" "$now_s"; then
+      state=stalled
+    fi
+    if [ "$state" = ready ]; then
+      printf '%-14s liveness ok\n' "$a"
+      dry || rm -f "$lk"
       continue
     fi
-    printf '%-14s %-8s -> healing (kill + kick)\n' "$a" "$state"
-    # A wizard is a DIALOG, not a dead backend: repair the shared-home
-    # permissions that put the agent there and relaunch on the SAME rung.
-    # Rotating here is what evacuated agents off the free pool onto a metered
-    # one (see pane_classify). Re-running hygiene immediately before the kick
-    # matters — the sweep at the top of this pass may predate the launch that
-    # re-created onboarding.json mode 600.
-    if [ "$state" = wizard ]; then
-      gemini_hygiene
-      printf '%-14s %-8s shared-home perms repaired; relaunching in place\n' "$a" "$state"
+    # A login only a human can complete. Copilot's device flow is never
+    # headlessly recoverable, and v5 flags needsLogin itself. Restarting just
+    # burns the crash-loop budget: report it and move on.
+    if [ "$(agent_field "$a" cli)" = copilot ] && { [ "$state" = auth ] || [ "$(agent_field "$a" needsLogin)" = true ] ||
+         { [ "$(agent_field "$a" authKnown)" = true ] && [ "$(agent_field "$a" authAvailable)" != true ]; }; }; then
+      printf '%-14s %-8s NEEDS HUMAN LOGIN (copilot device flow) — not restarting\n' "$a" "$state"
+      human="$human $a"
+      continue
     fi
-    # If the failure is backend-level (auth chrome, or a CLI that repeatedly
-    # exits to a bare shell),
-    # restarting on the same backend just re-breaks the agent. Rotate onto a
-    # positively-measured-healthy rung first, then kick.
+    last=0; n=0
+    # Pre-2026-09-24 files hold a bare epoch: count that as one prior heal.
+    [ -f "$lk" ] && { read -r last n < "$lk"; n=${n:-1}; }
+    wait_s=$(watchdog_backoff_s "${n:-0}")
+    if [ $(( now_s - ${last:-0} )) -lt "$wait_s" ]; then
+      printf '%-14s %-8s (healed %sx, backing off %sm)\n' "$a" "$state" "${n:-0}" $(( wait_s / 60 ))
+      continue
+    fi
+    if ! budget_ok; then
+      printf '%-14s %-8s heal deferred to the next pass (budget)\n' "$a" "$state"
+      continue
+    fi
+    mutations=$((mutations+1))
+    printf '%-14s %-8s -> healing (restart #%s)\n' "$a" "$state" $(( ${n:-0} + 1 ))
+    if [ "$state" = wizard ]; then gemini_hygiene; fi
+    # Backend-level failure (auth chrome, or a CLI that dies to a bare shell):
+    # restarting on the same rung just re-breaks it — rotate onto a
+    # positively-measured-healthy rung first (place_agent restarts it).
+    rotated=0
     if [ "$state" = auth ] || [ "$state" = shell ]; then
-      tier=$(tier_of "$a")
-      want=$(choose_rung_healthy "$tier" "$a")
-      if [ -n "$want" ]; then
-        IFS='|' read -r wp wb wm <<< "$want"
-        curb=$(agent_field "$a" cli); curm=$(agent_field "$a" govModel)
-        if [ "$wb" != "$curb" ] || [ "$wm" != "$curm" ]; then
-          sw=$(hive_api POST "/api/switch/$a/$wb" | jq -r '.status // .error')
-          if [ "$sw" = "switched" ]; then
-            md=$(hive_api POST "/api/model/$a/$wm" | jq -r '.status // .error')
-            if [ "$md" = "model_set" ]; then
-              printf '%-14s %-8s rotated off -> %s %s\n' "$a" "$state" "$wb" "$wm"
-            else
-              # Roll the backend BACK rather than leave `claude --model
-              # gemini-…`, which cannot start at all. A failed rotation that
-              # leaves the agent where it was is recoverable; one that leaves an
-              # unlaunchable pair is not.
-              rb=$(hive_api POST "/api/switch/$a/$curb" | jq -r '.status // .error')
-              printf '%-14s %-8s ! model set failed (%s) — rolled back to %s (%s)\n' \
-                "$a" "$state" "$md" "$curb" "$rb"
-            fi
-          else
-            printf '%-14s %-8s ! rotate failed: %s — kicking anyway\n' "$a" "$state" "$sw"
+      if ! pinned "$a"; then
+        want=$(choose_rung_healthy "$(tier_of "$a")" "$a")
+        if [ -n "$want" ]; then
+          IFS='|' read -r _wp wb wm <<< "$want"
+          if [ "$wb" != "$(agent_field "$a" cli)" ] || [ "$wm" != "$(agent_field "$a" govModel)" ]; then
+            printf '%-14s %-8s rotating off -> %s %s\n' "$a" "$state" "$wb" "$wm"
+            dry || { place_agent "$a" "$wb" "$wm" && rotated=1; }
           fi
         fi
       fi
     fi
-    u=$(as_agent "$a" 'id -u' 2>/dev/null)
-    # An AUTH pane is a MENU, and typing into a menu is how you make things
-    # worse. C-c does not reliably dismiss the login-method picker, and the
-    # /api/kick that follows sends prompt text plus Enter — which selects the
-    # highlighted entry ("1. Claude account with subscription") and advances
-    # the CLI into the OAuth device flow, where it waits forever for a human to
-    # paste a code. That converts a recoverable "needs login" into an
-    # unrecoverable one, and the heal then repeats it every cycle.
-    # Observed on hive-reef 2026-09-02 across several agents.
-    #
-    # So for auth panes, kill the session outright and let the manager relaunch
-    # the CLI from scratch — a fresh process re-reads the credential and, when
-    # the credential is valid, comes up logged in. No keystrokes are sent to a
-    # pane that might be a menu.
-    #
-    # Killing the session means the follow-up /api/kick CANNOT work — it
-    # answers {"error":"tmux session hive-<agent> not found"} and the agent
-    # stays dead. /api/restart is the endpoint that recreates the session, so
-    # the auth path uses that and skips the kick entirely.
-    if [ "$state" = auth ]; then
-      as_agent "$a" "tmux -S /tmp/tmux-$u/hive-$a kill-session -t hive-$a 2>/dev/null" 2>/dev/null
-      sleep 2
-      rs=$(hive_api POST "/api/restart/$a" | jq -r '.status // .error')
-      printf '%-14s %-8s auth pane — session killed, restarted (%s)\n' "$a" "$state" "$rs"
-      echo "$(date +%s)" > "$lk"
-      healed=$((healed+1))
-      continue
-    else
-      as_agent "$a" "tmux -S /tmp/tmux-$u/hive-$a send-keys -t hive-$a C-c 2>/dev/null; sleep 1; tmux -S /tmp/tmux-$u/hive-$a send-keys -t hive-$a C-c 2>/dev/null" 2>/dev/null
+    if [ "$rotated" = 0 ] && ! dry; then
+      rs=$(heal_restart "$a" | jq -r '.status // .error' 2>/dev/null)
+      printf '%-14s %-8s restarted (%s)\n' "$a" "$state" "$rs"
+      rm -f "$STATE_DIR/watchdog-pane-$a"
     fi
-    sleep 2
-    hive_api POST "/api/kick/$a" >/dev/null 2>&1 &
-    echo "$(date +%s)" > "$lk"
+    dry || echo "$now_s $(( ${n:-0} + 1 ))" > "$lk"
     healed=$((healed+1))
-    # Serialize: the dashboard API wedges when several agents heal at once
-    # (observed: empty switch/model responses). Give each heal room to settle.
-    sleep 10
   done
   echo "watchdog: $healed agent(s) healed"
+  [ -n "$human" ] && echo "watchdog: needs a human login:$human"
   exit 0
 fi
 
-# publish_usage: mirror the probe results into a ConfigMap the in-cluster
-# hive-console reads. openai and google headroom is ONLY readable by typing a
-# slash command into a live CLI pane (probe_openai / probe_google), which a
-# plain HTTP service has no way to do — so the console shows what this timer
-# last measured, alongside updated_at so a stale reading is visibly stale
-# rather than quietly wrong. Best-effort: never let a publish failure affect
-# rotation, which is the job that actually matters.
-publish_usage() {
-  local args=() p v
-  for p in $PROVIDERS; do
-    v="${PCT[$p]}"
-    if [ "$v" = "-1" ]; then v="unknown"; else v="${v}% used"; fi
-    args+=("--from-literal=$p=$v ${NOTE[$p]}")
-  done
-  # Per-limit Anthropic detail for hive-pace.sh, so it never has to make its own
-  # (rate-limited) call. Absent or unparsed simply means the pacer has one less
-  # provider to reason about, never a failure here.
-  local lim=""
-  [ -s "$STATE_DIR/anthropic-limits.json" ] && lim=$(cat "$STATE_DIR/anthropic-limits.json")
-  [ -n "$lim" ] && args+=("--from-literal=anthropic_limits=$lim")
-  kubectl create configmap hive-provider-usage -n "$NS" \
-    "${args[@]}" "--from-literal=updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    --dry-run=client -o yaml 2>/dev/null | kubectl apply -f - >/dev/null 2>&1 \
-    || echo "WARN: could not publish provider usage ConfigMap" >&2
-}
 
 if [ "$ACTION" = probe ]; then
   printf '%-11s %-9s %s\n' PROVIDER USED NOTE
@@ -1487,14 +1426,8 @@ if [ "$ACTION" = probe ]; then
   done
   in_peak_window && echo && echo "peak window ACTIVE (UTC $(date -u +%H:%M)); avoiding: $PEAK_PROVIDERS"
   deepseek_reserve_warning
-  publish_usage
   exit 0
 fi
-
-# The apply/plan paths have already gathered the same probe data, so publish
-# from here too — otherwise the console's google/openai rows would only ever
-# refresh on a manual `probe` run.
-publish_usage
 
 if [ "$ACTION" = restore ]; then
   # Undo path for an unattended timer: walk the rotation journal newest-first and
@@ -1603,6 +1536,13 @@ fi
 
 HOLD=",$(printf '%s' "${HIVE_ROTATE_HOLD:-}" | tr -d '[:space:]'),"
 held() { [ "$HOLD" != ",," ] && [ "${HOLD#*,$1,}" != "$HOLD" ]; }
+# Agents hive-peak.sh paused for a DeepSeek peak window are a declared,
+# scheduled pause (peak-resume restores them), not an operator's stray one.
+# Without this the auto-resume below undid every peak pause on the next tick.
+PEAK_PAUSED_FILE="${HIVE_PEAK_STATE:-$(dirname "$STATE_DIR")/hive-rotate/peak-paused}"
+peak_held() {
+  [ "$NS" = "${HIVE_PRIMARY_NS:-hive}" ] && [ -s "$PEAK_PAUSED_FILE" ] && grep -qx "$1" "$PEAK_PAUSED_FILE"
+}
 
 if [ "${HIVE_ROTATE_AUTORESUME:-1}" = 1 ]; then
   for a in $(agent_names); do
@@ -1624,6 +1564,10 @@ if [ "${HIVE_ROTATE_AUTORESUME:-1}" = 1 ]; then
     if [ "$(agent_field "$a" pausedTrigger)" = dashboard-api ] && [ "$ours" = 0 ]; then
       if held "$a"; then
         printf '%-14s %-9s held paused by HIVE_ROTATE_HOLD (declared in git)\n' "$a" "operator"
+        continue
+      fi
+      if peak_held "$a"; then
+        printf '%-14s %-9s held paused by the peak window (hive-peak-resume restores it)\n' "$a" "peak"
         continue
       fi
       printf '%-14s %-9s operator pause -> resuming (not declared in HIVE_ROTATE_HOLD)\n' "$a" "operator"
@@ -1648,6 +1592,10 @@ if [ "${HIVE_ROTATE_AUTORESUME:-1}" = 1 ]; then
     [ -s "$STATE_DIR/stranded" ] && sed -i "/^$a|/d" "$STATE_DIR/stranded"
   done
 fi
+
+# The pacer's demotion journal. hive-pace runs once for every hive and keeps
+# it in the PRIMARY state dir, keyed "<ns>/<agent>".
+PACE_DEMOTED="${HIVE_PACE_DEMOTED:-$(dirname "$STATE_DIR")/hive-rotate/pace-demoted}"
 
 changed=0
 for a in $(agent_names); do
@@ -1674,10 +1622,20 @@ for a in $(agent_names); do
   # last one made the provider permanently unmeasurable and therefore
   # permanently unusable. The fleet drained onto one provider overnight that
   # way. Not being able to measure is not a reason to move anyone.
+  #
+  # A rung the PACER demoted this agent onto (opus -> sonnet, -high -> -low)
+  # counts as in-tier. Without this the two controllers fought every tick:
+  # pace demoted a T1 agent to sonnet, rotate saw sonnet as off-tier and put it
+  # back, pace demoted it again — ~25 round trips for reef sec-check/strategist
+  # in pace-demoted, each one an agent restart that v5 then scored as
+  # crash-looping. Pace owns the rung WITHIN a provider; rotate owns the
+  # provider.
+  demoted_from=$(pace_demoted_from "$PACE_DEMOTED" "$NS" "$a" "$curm")
   if ! provider_exhausted "$curp" && ! provider_login_blocked "$curp" &&
-     rung_in_tier "$tier" "$curb" "$curm"; then
+     { rung_in_tier "$tier" "$curb" "$curm" ||
+       { [ -n "$demoted_from" ] && rung_in_tier "$tier" "${demoted_from%%|*}" "${demoted_from#*|}"; }; }; then
     note_placement "$curp" "$a"
-    printf '%-14s %-9s %s ok\n' "$a" "$curp" "$curm"
+    printf '%-14s %-9s %s ok%s\n' "$a" "$curp" "$curm" "${demoted_from:+ (pace-demoted from ${demoted_from#*|})}"
     continue
   fi
 
@@ -1718,21 +1676,9 @@ for a in $(agent_names); do
   changed=$((changed+1))
   [ "$ACTION" = plan ] && continue
 
-  # Switch FIRST, and check it: a switch that fails while the model succeeds
-  # leaves the agent on the old backend with a foreign model name, which is a
-  # hard startup failure (e.g. `pi --model gemini-3.6-flash`).
-  sw=$(hive_api POST "/api/switch/$a/$wb" | jq -r '.status // .error')
-  if [ "$sw" != "switched" ]; then
-    echo "    ! switch failed: $sw — leaving $a alone"; continue
-  fi
-  md=$(hive_api POST "/api/model/$a/$wm" | jq -r '.status // .error')
-  if [ "$md" != "model_set" ]; then
-    # Same reasoning as the watchdog path: never leave the agent on a new
-    # backend with the previous backend's model — that pair cannot launch.
-    rb=$(hive_api POST "/api/switch/$a/$curb" | jq -r '.status // .error')
-    echo "    ! model set failed: $md — rolled back to $curb ($rb)"
-    continue
-  fi
+  # switch -> model -> effort, with rollback (see place_agent).
+  place_agent "$a" "$wb" "$wm" || continue
+  md=model_set
   # login-detector pauses are provider failures, not operator pauses. Release
   # this safety pause only after both fallback mutations succeeded.
   if [ "$(agent_field "$a" paused)" = true ] &&
@@ -1772,7 +1718,6 @@ done
 # positively exhausted, so the probe always has a pane. A cooldown file stops
 # a pool that just evicted its canary (because it filled up) from re-spawning
 # one immediately.
-CANARY_COOLDOWN_MIN="${HIVE_ROTATE_CANARY_COOLDOWN_MIN:-120}"
 # CANARY_EXHAUSTED_COOLDOWN_MIN (120min transient vs. 720min for a positively
 # exhausted pool, so a weekly codex reset is picked up within a day) is
 # defined earlier, alongside the other rotation tunables — see the comment
@@ -1811,6 +1756,7 @@ if [ "${HIVE_ROTATE_CANARIES:-1}" = 1 ]; then
   # Only codex needs a canary now: claude's probe reads the OAuth usage API
   # directly (agent-independent) and agy's reads the CLI headlessly — but the
   # codex /status screen is readable only through a live pane.
+  # shellcheck disable=SC2043  # one pool today; the loop is the extension point
   for p in openai; do
     [ -n "$(first_agent_on "$p")" ] && continue          # probe already has a pane
     provider_exhausted "$p" && continue                   # positively full: useless canary
@@ -1822,12 +1768,7 @@ if [ "${HIVE_ROTATE_CANARIES:-1}" = 1 ]; then
     printf '%-14s %-9s canary -> %-9s %s (probe visibility)\n' "$a" "$(provider_of "$wb" "$wm")" "$wb" "$wm"
     changed=$((changed+1))
     [ "$ACTION" = plan ] && continue
-    sw=$(hive_api POST "/api/switch/$a/$wb" | jq -r '.status // .error')
-    if [ "$sw" != "switched" ]; then
-      echo "    ! canary switch failed: $sw"; continue
-    fi
-    md=$(hive_api POST "/api/model/$a/$wm" | jq -r '.status // .error')
-    [ "$md" = "model_set" ] || echo "    ! canary model set failed: $md"
+    place_agent "$a" "$wb" "$wm" || echo "    ! canary placement failed"
   done
 fi
 

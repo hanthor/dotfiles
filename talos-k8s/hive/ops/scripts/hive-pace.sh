@@ -93,20 +93,18 @@
 
 set -u
 
-if [ -z "${KUBERNETES_SERVICE_HOST:-}" ]; then
-  : "${KUBECONFIG:=$HOME/.kube/config-aws-migration}"
-  export KUBECONFIG
-else
-  unset KUBECONFIG
-fi
+# Shared plumbing (hive-lib.sh): kubeconfig, API over the hive Service, slim
+# /api/status, cached owner session, curl-based ConfigMap reads/writes, and
+# rung_down (shared with hive-rotate so the two agree on what a demoted rung is).
+# shellcheck source=hive-lib.sh
+. "${HIVE_LIB:-$(dirname "$0")/hive-lib.sh}"
+hive_kube_env
 
 STATE_DIR="${HIVE_PACE_STATE:-${HIVE_ROTATE_STATE:-$HOME/.local/state/hive-rotate}}"
 NAMESPACES="${HIVE_PACE_NAMESPACES:-hive hive-reef}"
 DEADBAND="${HIVE_PACE_DEADBAND:-0.25}"
 MIN_SAMPLES="${HIVE_PACE_MIN_SAMPLES:-3}"
 MIN_SPAN_S="${HIVE_PACE_MIN_SPAN_S:-3600}"
-LABEL=app.kubernetes.io/name=hive
-API=http://127.0.0.1:3002
 
 HISTORY="$STATE_DIR/pace-history.jsonl"
 DEMOTED="$STATE_DIR/pace-demoted"
@@ -115,6 +113,11 @@ mkdir -p "$STATE_DIR"
 # demoted; emptying it each run would make every demotion permanent, since the
 # cold branch restores only what it can find here.
 touch "$DEMOTED" 2>/dev/null || true
+# Compact to the latest row per agent (re-demotions used to append; 68 rows
+# for one agent accumulated while rotate and pace fought).
+if [ -s "$DEMOTED" ]; then
+  tac "$DEMOTED" | awk -F'|' '!seen[$1]++' | tac > "$DEMOTED.tmp" 2>/dev/null && mv "$DEMOTED.tmp" "$DEMOTED"
+fi
 
 ACTION="${1:-status}"
 case "$ACTION" in record|status|apply) ;; *) echo "usage: $0 record|status|apply" >&2; exit 2 ;; esac
@@ -129,23 +132,19 @@ NOW=$(date -u +%s)
 # consult. deepseek has no pair — v4-flash is already both its T1 and T2 rung
 # (it outscores Sonnet on TB2.1 while costing a fraction), so there is nothing
 # below it to demote to.
-rung_down() {
-  case "$1" in
-    claude-opus-5)          echo claude-sonnet-5 ;;
-    gemini-3.7-flash-high)  echo gemini-3.7-flash-low ;;
-    gpt-5.6-sol)            echo gpt-5.6-luna ;;
-    *)                      echo "" ;;
-  esac
-}
+# rung_down <model> lives in hive-lib.sh. Added 2026-09-24: claude-fable-5-1
+# (the live T1 rung from the tier cache) had no cheaper pair, so anthropic ran
+# `hot` with "SATURATED ... 0 demotable" while two agents sat on it.
 
-provider_of_model() {
-  case "$1" in
-    claude-*)   echo anthropic ;;
-    gemini-*)   echo google ;;
-    gpt-*)      echo openai ;;
-    deepseek-*) echo deepseek ;;
-    *)          echo "" ;;
-  esac
+# The ACCOUNT an agent burns, from backend + model (hive_provider_of in
+# hive-lib.sh, shared with hive-rotate). Model-name-only classification
+# counted a copilot agent running claude-fable-5 as Anthropic and "demoted"
+# it (2026-09-24) — copilot bills GitHub, so that changed nothing about the
+# Anthropic burn. Only the four paced pools are returned; anything else
+# (github, meta, unknown) is outside the pacer's control.
+provider_of_agent() {
+  local p; p=$(hive_provider_of "$1" "$2")
+  case "$p" in anthropic|google|openai|deepseek) echo "$p" ;; *) echo "" ;; esac
 }
 
 # ── Reading: per-limit, not collapsed ───────────────────────────────────
@@ -173,9 +172,15 @@ provider_of_model() {
 # percent dropping instead (see the fit), which works for both.
 #
 # Emits TSV: slot <TAB> percent <TAB> reset_epoch
+USAGE_DATA=""
+usage_data() {  # the published hive-provider-usage .data, fetched once per run
+  [ -n "$USAGE_DATA" ] || USAGE_DATA=$(k8s_get /api/v1/namespaces/hive/configmaps/hive-provider-usage | jq -c '.data // {}' 2>/dev/null)
+  printf '%s' "${USAGE_DATA:-{\}}"
+}
+
 read_limits_anthropic() {
   local raw
-  raw=$(kubectl get configmap hive-provider-usage -n hive -o jsonpath='{.data.anthropic_limits}' 2>/dev/null)
+  raw=$(usage_data | jq -r '.anthropic_limits // empty')
   # Fall back to the collapsed single-limit view if the rotator has not yet
   # published the detailed key (first run after this change, or an old script).
   # Coarser, but it keeps the pacer working instead of silently blind.
@@ -192,7 +197,7 @@ except Exception: print('')" "$rst" 2>/dev/null)
 
 read_limits_from_configmap() {
   local p="$1" raw pct rst ep
-  raw=$(kubectl get configmap hive-provider-usage -n hive -o jsonpath="{.data.$p}" 2>/dev/null)
+  raw=$(usage_data | jq -r --arg p "$p" '.[$p] // empty')
   [ -z "$raw" ] && return 1
   pct=$(printf '%s' "$raw" | grep -oE '^[0-9]+' | head -1)
   [ -z "$pct" ] && return 1            # "unknown ..." — not a measurement
@@ -343,16 +348,13 @@ PY
 # shows; `govModel` is what the governor will launch next, which is the value
 # the models endpoint writes. Read the field you write.
 fleet() {
-  local ns pod tok
+  local ns
   for ns in $NAMESPACES; do
-    pod=$(kubectl get pods -n "$ns" -l "$LABEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-    [ -z "$pod" ] && continue
-    tok=$(kubectl get secret -n "$ns" hive-secrets -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' 2>/dev/null | base64 -d 2>/dev/null)
-    [ -z "$tok" ] && continue
-    kubectl exec -n "$ns" "$pod" -- curl -sS -H "X-Hive-Internal: $tok" \
-      "$API/api/status" 2>/dev/null \
-      | jq -r --arg ns "$ns" '.agents[]?
-          | "\($ns)\t\(.name)\t\(.cli // "")\t\(.govModel // .model // "")\t\(.paused // false)"' 2>/dev/null
+    # hive_open: slim status via the Service (the old per-namespace 3 MB exec
+    # read silently dropped two of three hives — "controls 12 agents").
+    hive_open "$ns" 2>/dev/null || { echo "WARN: $ns unreadable — not paced this tick" >&2; continue; }
+    printf '%s' "$STATUS_JSON" | jq -r --arg ns "$ns" '.agents[]?
+        | "\($ns)\t\(.name)\t\(.cli // "")\t\(.govModel // .model // "")\t\(.paused // false)"' 2>/dev/null
   done
 }
 
@@ -361,13 +363,9 @@ fleet() {
 # the dashboard's own store. Read live so a fresh browser login is picked up
 # with no edit here.
 session_for() {
-  local ns="$1" pod
-  pod=$(kubectl get pods -n "$ns" -l "$LABEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-  [ -z "$pod" ] && return 1
-  kubectl exec -n "$ns" "$pod" -- cat /data/dashboard-sessions.json 2>/dev/null \
-    | jq -r --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
-        to_entries | map(select(.value.Role=="owner" and .value.ExpiresAt > $now))
-        | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null
+  local pod
+  pod=$(hive_pod "$1"); [ -n "$pod" ] || return 1
+  hive_session "$1" "$pod"
 }
 
 # Uses POST /api/model/{agent}/{model} — NOT PUT /api/config/agent/{a}/models.
@@ -397,20 +395,29 @@ set_model() {
     echo "WARN: refusing to set $ns/$agent with empty backend/model" >&2
     return 1
   fi
-  pod=$(kubectl get pods -n "$ns" -l "$LABEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+  pod=$(hive_pod "$ns")
   sid=$(session_for "$ns")
   if [ -z "$pod" ] || [ -z "$sid" ]; then
     echo "WARN: $ns has no pod or no unexpired owner session — cannot actuate" >&2
     return 1
   fi
   local out
-  out=$(kubectl exec -n "$ns" "$pod" -- curl -sS -X POST --max-time 30 \
-          -H "Cookie: hive_session=$sid" \
-          "$API/api/model/$agent/$model" 2>/dev/null)
+  # 150 s: v5 restarts the agent inside the request.
+  out=$(hive_call "$ns" "$pod" "$sid" POST "/api/model/$agent/$model")
   # Judge by the response, not by exit status: a 200 carrying an error body is
   # a documented failure shape on this API.
   case "$out" in
-    *'"status":"model_set"'*|*'"ok":true'*) printf '%s' "$out"; return 0 ;;
+    *'"status":"model_set"'*|*'"ok":true'*)
+      # agy suffixes must match --effort or agy silently runs 3.6 Flash Low
+      # (see hive-lib.sh agy_effort_of). The recorded effort lives with
+      # hive-rotate's per-hive state so both scripts agree.
+      local want edir
+      edir="$(dirname "$STATE_DIR")/$( [ "$ns" = hive ] && echo hive-rotate || echo "hive-rotate-${ns#hive-}")/effort"
+      want=$(effort_change "$backend" "$model" "$(cat "$edir/$agent" 2>/dev/null)")
+      if [ -n "$want" ] && hive_call "$ns" "$pod" "$sid" POST "/api/effort/$agent/$want" | grep -q effort_set; then
+        mkdir -p "$edir" && echo "$want" > "$edir/$agent"
+      fi
+      printf '%s' "$out"; return 0 ;;
     *) echo "WARN: model set for $ns/$agent -> $model did not confirm: ${out:0:160}" >&2
        return 1 ;;
   esac
@@ -418,11 +425,9 @@ set_model() {
 
 publish() {
   local json="$1"
-  kubectl create configmap hive-pace -n hive \
-    --from-literal=pace.json="$json" \
-    --from-literal=updated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    --from-literal=controls="$(printf '%s' "$FLEET" | grep -c . || echo 0) agents in: $NAMESPACES" \
-    --dry-run=client -o yaml 2>/dev/null | kubectl apply -f - >/dev/null 2>&1 \
+  k8s_put_cm hive hive-pace "$(jq -cn --arg j "$json" --arg u "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      --arg c "$(printf '%s' "$FLEET" | grep -c . || echo 0) agents in: $NAMESPACES" \
+      '{"pace.json":$j, updated_at:$u, controls:$c}')" \
     || echo "WARN: could not publish hive-pace ConfigMap" >&2
 }
 
@@ -469,14 +474,17 @@ declare -A RESTORABLE  # provider -> agents this pacer demoted and could restore
 while IFS=$'\t' read -r ns agent backend model paused; do
   [ -z "${agent:-}" ] && continue
   [ "$paused" = "true" ] && continue
-  prov=$(provider_of_model "$model")
+  prov=$(provider_of_agent "$backend" "$model")
   [ -z "$prov" ] && continue
   SEATED[$prov]=$(( ${SEATED[$prov]:-0} + 1 ))
 
   cheap=$(rung_down "$model")
   [ -n "$cheap" ] && DEMOTABLE[$prov]=$(( ${DEMOTABLE[$prov]:-0} + 1 ))
-  demoted_line=$(grep -F "$ns/$agent|" "$DEMOTED" 2>/dev/null | tail -1)
-  [ -n "$demoted_line" ] && RESTORABLE[$prov]=$(( ${RESTORABLE[$prov]:-0} + 1 ))
+  # Only a row whose demotion is still IN EFFECT (the agent sits on exactly
+  # rung_down(original)) counts — the same rule hive-rotate uses. A stale row
+  # must never "restore" an agent onto a rung the pacer did not take it from.
+  demoted_from=$(pace_demoted_from "$DEMOTED" "$ns" "$agent" "$model")
+  [ -n "$demoted_from" ] && RESTORABLE[$prov]=$(( ${RESTORABLE[$prov]:-0} + 1 ))
 
   verdict=$(printf '%s' "$VERDICTS" | jq -r --arg p "$prov" '.[$p].verdict // "no-data"')
   # One notch per tick PER PROVIDER. Keep scanning the rest of the fleet so the
@@ -490,6 +498,9 @@ while IFS=$'\t' read -r ns agent backend model paused; do
     hot)
       [ -z "$cheap" ] && continue            # already on the cheap rung
       if set_model "$ns" "$agent" "$backend" "$cheap" >/dev/null; then
+        # One line per agent: re-demotions used to append duplicates (~25 for
+        # reef/sec-check while rotate and pace fought over it).
+        grep -vF "$ns/$agent|" "$DEMOTED" > "$DEMOTED.tmp" 2>/dev/null; mv "$DEMOTED.tmp" "$DEMOTED"
         echo "$ns/$agent|$backend|$model" >> "$DEMOTED"
         echo "  demote  $ns/$agent  $model -> $cheap  (${prov} hot)"
         MOVED_ON[$prov]=1; moved=$((moved+1))
@@ -499,10 +510,9 @@ while IFS=$'\t' read -r ns agent backend model paused; do
       # Restore ONLY what this script demoted. An agent the operator or the
       # rotator placed on the cheap rung was placed there for a reason the
       # pacer cannot see, and promoting it would silently overrule that.
-      [ -z "$demoted_line" ] && continue
-      orig_backend=$(printf '%s' "$demoted_line" | cut -d'|' -f2)
-      orig_model=$(printf '%s' "$demoted_line" | cut -d'|' -f3)
-      [ "$orig_model" = "$model" ] && continue
+      [ -z "$demoted_from" ] && continue
+      orig_backend=${demoted_from%%|*}
+      orig_model=${demoted_from#*|}
       if set_model "$ns" "$agent" "$orig_backend" "$orig_model" >/dev/null; then
         grep -vF "$ns/$agent|" "$DEMOTED" > "$DEMOTED.tmp" 2>/dev/null && mv "$DEMOTED.tmp" "$DEMOTED"
         echo "  restore $ns/$agent  $model -> $orig_model  (${prov} cold)"

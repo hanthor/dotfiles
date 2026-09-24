@@ -24,12 +24,9 @@
 # Env:
 #   HIVE_ACTIVITY_BEAD_HOURS  bead window in hours (default 72)
 
-if [ -z "${KUBERNETES_SERVICE_HOST:-}" ]; then
-  : "${KUBECONFIG:=$HOME/.kube/config-aws-migration}"
-  export KUBECONFIG
-else
-  unset KUBECONFIG
-fi
+# shellcheck source=hive-lib.sh
+. "${HIVE_LIB:-$(dirname "$0")/hive-lib.sh}"
+hive_kube_env
 
 set -u
 
@@ -53,21 +50,16 @@ SPOKES="hive:school hive-reef:reef hive-hanthor:hanthor"
 
 for pair in $SPOKES; do
   ns="${pair%%:*}"; spoke="${pair##*:}"
-  pod=$(kubectl get pods -n "$ns" -l app.kubernetes.io/name=hive \
-          -o jsonpath='{.items[0].metadata.name}' 2>/dev/null) || continue
-  [ -n "$pod" ] || continue
-
-  token=$(kubectl get secret -n "$ns" hive-secrets \
-            -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' 2>/dev/null | base64 -d)
-  [ -n "$token" ] || continue
-
-  kubectl exec -n "$ns" "$pod" -- curl -sS --max-time 25 \
-    -H "X-Hive-Internal: $token" http://127.0.0.1:3002/api/status 2>/dev/null \
-    | jq --arg spoke "$spoke" '{
-        spoke: $spoke, hiveId: (.hiveId // .hiveID // null), acmmLevel,
-        governorMode: (.governor.mode // .hiveAdvice.epoch.mode // null),
-        agents: [.agents[] | {name, cli, model, paused, busy, state}]
-      }' 2>/dev/null >> "$TMP/spokes.jsonl" || true
+  # Slim status via the hive Service (hive-lib.sh). The old exec read of the
+  # 3 MB v5 /api/status with --max-time 25 truncated, and `|| true` then
+  # silently dropped the spoke from the feed.
+  hive_open "$ns" 2>/dev/null || { echo "WARN: $spoke status unreadable — omitted" >&2; continue; }
+  pod=$POD
+  printf '%s' "$STATUS_JSON" | jq --arg spoke "$spoke" '{
+      spoke: $spoke, hiveId: (.hiveId // null), acmmLevel,
+      governorMode: .governorMode,
+      agents: [.agents[] | {name, cli, model, paused, busy, state}]
+    }' 2>/dev/null >> "$TMP/spokes.jsonl" || true
 
   # Beads: filter + trim INSIDE the pod (the store is ~7MB per spoke).
   # GNU date first, python3 fallback — the image has at least one.

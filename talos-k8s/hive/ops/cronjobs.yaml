@@ -1,5 +1,6 @@
-# hive-ops CronJobs (ns hive). Exported from the AWS cluster and cleaned of
-# status/managed fields. Apply with: kubectl apply -f cronjobs.yaml
+# hive-ops CronJobs (ns hive), exported from the AWS cluster and cleaned of
+# status/managed fields. See README.md for what each job does.
+# Apply: kubectl apply -f cronjobs.yaml
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -32,6 +33,8 @@ spec:
               value: /state/hive-activity
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -40,7 +43,7 @@ spec:
                 cpu: "1"
                 memory: 512Mi
               requests:
-                cpu: 25m
+                cpu: 100m
                 memory: 64Mi
             securityContext:
               allowPrivilegeEscalation: false
@@ -124,6 +127,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -216,6 +221,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -308,6 +315,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -400,6 +409,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -492,6 +503,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -584,6 +597,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -676,6 +691,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -768,6 +785,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -776,7 +795,7 @@ spec:
                 cpu: "1"
                 memory: 512Mi
               requests:
-                cpu: 25m
+                cpu: 100m
                 memory: 64Mi
             securityContext:
               allowPrivilegeEscalation: false
@@ -862,6 +881,8 @@ spec:
               value: hive hive-reef hive-hanthor
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -870,7 +891,7 @@ spec:
                 cpu: "1"
                 memory: 512Mi
               requests:
-                cpu: 25m
+                cpu: 100m
                 memory: 64Mi
             securityContext:
               allowPrivilegeEscalation: false
@@ -954,6 +975,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1046,6 +1069,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1138,6 +1163,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1231,8 +1258,11 @@ spec:
             - name: HOME
               value: /tmp
             - name: HIVE_ROTATE_HOLD
+              value: reviewer
             - name: HIVE_ROTATE_PIN
               value: supervisor
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1241,7 +1271,7 @@ spec:
                 cpu: "1"
                 memory: 512Mi
               requests:
-                cpu: 25m
+                cpu: 100m
                 memory: 64Mi
             securityContext:
               allowPrivilegeEscalation: false
@@ -1330,7 +1360,10 @@ spec:
             - name: HOME
               value: /tmp
             - name: HIVE_ROTATE_HOLD
+              value: reviewer
             - name: HIVE_ROTATE_PIN
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1339,7 +1372,7 @@ spec:
                 cpu: "1"
                 memory: 512Mi
               requests:
-                cpu: 25m
+                cpu: 100m
                 memory: 64Mi
             securityContext:
               allowPrivilegeEscalation: false
@@ -1429,6 +1462,8 @@ spec:
               value: /tmp
             - name: HIVE_ROTATE_HOLD
             - name: HIVE_ROTATE_PIN
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1437,7 +1472,7 @@ spec:
                 cpu: "1"
                 memory: 512Mi
               requests:
-                cpu: 25m
+                cpu: 100m
                 memory: 64Mi
             securityContext:
               allowPrivilegeEscalation: false
@@ -1521,6 +1556,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1529,7 +1566,7 @@ spec:
                 cpu: "1"
                 memory: 512Mi
               requests:
-                cpu: 25m
+                cpu: 100m
                 memory: 64Mi
             securityContext:
               allowPrivilegeEscalation: false
@@ -1619,6 +1656,8 @@ spec:
                   key: AA_API_KEY
                   name: hive-secrets
                   optional: true
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1692,7 +1731,7 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      activeDeadlineSeconds: 600
+      activeDeadlineSeconds: 280
       backoffLimit: 0
       template:
         metadata:
@@ -1711,6 +1750,8 @@ spec:
               value: /state/hive-rotate
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1719,7 +1760,7 @@ spec:
                 cpu: "1"
                 memory: 512Mi
               requests:
-                cpu: 25m
+                cpu: 100m
                 memory: 64Mi
             securityContext:
               allowPrivilegeEscalation: false
@@ -1784,7 +1825,7 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      activeDeadlineSeconds: 600
+      activeDeadlineSeconds: 280
       backoffLimit: 0
       template:
         metadata:
@@ -1807,6 +1848,8 @@ spec:
               value: /state/hive-rotate-hanthor
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1815,7 +1858,7 @@ spec:
                 cpu: "1"
                 memory: 512Mi
               requests:
-                cpu: 25m
+                cpu: 100m
                 memory: 64Mi
             securityContext:
               allowPrivilegeEscalation: false
@@ -1880,7 +1923,7 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      activeDeadlineSeconds: 600
+      activeDeadlineSeconds: 280
       backoffLimit: 0
       template:
         metadata:
@@ -1903,6 +1946,8 @@ spec:
               value: /state/hive-rotate-reef
             - name: HOME
               value: /tmp
+            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+              value: "false"
             image: alpine/k8s:1.31.0
             imagePullPolicy: IfNotPresent
             name: ops
@@ -1911,7 +1956,7 @@ spec:
                 cpu: "1"
                 memory: 512Mi
               requests:
-                cpu: 25m
+                cpu: 100m
                 memory: 64Mi
             securityContext:
               allowPrivilegeEscalation: false
