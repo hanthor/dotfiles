@@ -62,6 +62,13 @@ STATE_DIR="${HIVE_ROTATE_STATE:-$HOME/.local/state/hive-rotate}"
 THRESHOLD="${HIVE_ROTATE_THRESHOLD:-85}"
 PEAK_PROVIDERS="${HIVE_PEAK_PROVIDERS:-deepseek}"
 PEAK_WINDOWS="${HIVE_PEAK_WINDOWS:-01:00-04:00,06:00-10:00}"
+# Canary cooldowns — defined up here because the rotation loop (not just the
+# canary section) reads CANARY_EXHAUSTED_COOLDOWN_MIN under set -u.
+CANARY_COOLDOWN_MIN="${HIVE_ROTATE_CANARY_COOLDOWN_MIN:-120}"
+# How long a pool evicted because it measured exhausted stays canary-free. The
+# 120min default is for transient evictions; an exhausted pool (codex 100%)
+# re-checks at most every 12h so a weekly reset is picked up within a day.
+CANARY_EXHAUSTED_COOLDOWN_MIN="${HIVE_ROTATE_CANARY_EXHAUSTED_COOLDOWN_MIN:-720}"
 
 ACTION="${1:-plan}"
 case "$ACTION" in probe|plan|apply|restore|watchdog) ;; *) echo "usage: $0 probe|plan|apply|restore|watchdog" >&2; exit 2;; esac
@@ -161,7 +168,7 @@ POD=$(kubectl get pods -n "$NS" -l "$LABEL" -o jsonpath='{.items[0].metadata.nam
 [ -n "$POD" ] || { echo "ERROR: no hive pod found" >&2; exit 1; }
 
 SID=$(kubectl exec -n "$NS" "$POD" -- cat /data/dashboard-sessions.json 2>/dev/null \
-      | jq -r --arg now "$(date -Is)" '
+      | jq -r --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
           to_entries | map(select(.value.Role=="owner" and .value.ExpiresAt > $now))
           | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null)
 if [ -z "$SID" ]; then
@@ -898,11 +905,6 @@ done
 # positively exhausted, so the probe always has a pane. A cooldown file stops
 # a pool that just evicted its canary (because it filled up) from re-spawning
 # one immediately.
-CANARY_COOLDOWN_MIN="${HIVE_ROTATE_CANARY_COOLDOWN_MIN:-120}"
-# How long a pool evicted because it measured exhausted stays canary-free. The
-# 120min default is for transient evictions; an exhausted pool (codex 100%)
-# re-checks at most every 12h so a weekly reset is picked up within a day.
-CANARY_EXHAUSTED_COOLDOWN_MIN="${HIVE_ROTATE_CANARY_EXHAUSTED_COOLDOWN_MIN:-720}"
 
 # canary_cooled: 0 (true) while <provider> is cooling down. The cooldown file
 # holds an epoch seconds expiry (eviction writes now+cooldown). An empty or

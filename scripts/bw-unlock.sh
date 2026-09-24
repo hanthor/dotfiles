@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Resolve a usable BW_SESSION on the local machine and print it on stdout.
 #
-# Tier order: BW_SESSION env → /tmp/bw_session → interactive `bw unlock`.
+# Tier order: BW_SESSION env → /tmp/bw_session (if still valid) → interactive
+# `bw unlock`.
 # Successful unlock is cached to /tmp/bw_session (0600) for reuse within and
 # across runs.
 #
@@ -23,14 +24,19 @@ if [ -n "${BW_SESSION:-}" ]; then
   exit 0
 fi
 
-if [ -s "$cache" ]; then
-  cat "$cache"
-  exit 0
-fi
-
 if ! command -v bw >/dev/null 2>&1; then
   echo "bw CLI not installed on $(hostname)" >&2
   exit 2
+fi
+
+# Only trust the cache if it still unlocks this vault — a stale or foreign
+# session would otherwise make every later apply silently skip secrets.
+if [ -s "$cache" ]; then
+  if BW_SESSION=$(cat "$cache") bw unlock --check >/dev/null 2>&1; then
+    cat "$cache"
+    exit 0
+  fi
+  rm -f "$cache"
 fi
 
 status=$(bw status 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo unknown)

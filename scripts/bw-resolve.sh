@@ -24,8 +24,9 @@ mode="${1:-local}"
 
 # ── local mode ──────────────────────────────────────────────────────────
 if [ "$mode" = "local" ]; then
-  if session=$("$SCRIPT_DIR/bw-unlock.sh" 2>/dev/null); then
-    printf 'export BW_SESSION=%s\n' "$session"
+  # stderr stays attached: bw-unlock.sh may need to prompt for the password.
+  if session=$("$SCRIPT_DIR/bw-unlock.sh"); then
+    printf 'export BW_SESSION=%q\n' "$session"
     exit 0
   fi
   exit 1
@@ -49,12 +50,15 @@ if [ "$mode" = "remote" ]; then
       BW_CLIENTID=$(bw get username bw-api-key --session "$local_session" 2>/dev/null || true)
       BW_CLIENTSECRET=$(bw get password bw-api-key --session "$local_session" 2>/dev/null || true)
       if [ -n "$BW_CLIENTID" ] && [ -n "$BW_CLIENTSECRET" ]; then
-        ssh "$host" "
-          export PATH='/home/linuxbrew/.linuxbrew/bin:\$PATH'
-          export BW_CLIENTID='${BW_CLIENTID}'
-          export BW_CLIENTSECRET='${BW_CLIENTSECRET}'
-          bw login --apikey 2>&1 || true
-        "
+        # Credentials go over stdin (never on either side's command line), and
+        # bw's chatter goes to stderr so it can't pollute the session that
+        # callers capture from our stdout.
+        ssh "$host" '
+          export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+          IFS= read -r BW_CLIENTID; IFS= read -r BW_CLIENTSECRET
+          export BW_CLIENTID BW_CLIENTSECRET
+          bw login --apikey || true
+        ' <<< "$BW_CLIENTID"$'\n'"$BW_CLIENTSECRET" >&2
         echo "BW login done on $host." >&2
       else
         echo "WARNING: No 'bw-api-key' item in vault. Run 'bw login' on $host manually." >&2
