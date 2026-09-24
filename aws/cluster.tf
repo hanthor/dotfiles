@@ -127,9 +127,22 @@ resource "aws_security_group" "admin_bootstrap" {
     }
   }
 
+  # punjab's Elastic IP — the AWS admin box.
+  dynamic "ingress" {
+    for_each = [6443, 50000]
+    content {
+      description = "punjab EIP"
+      from_port   = ingress.value
+      to_port     = ingress.value
+      protocol    = "tcp"
+      cidr_blocks = ["${aws_eip.punjab.public_ip}/32"]
+    }
+  }
+
   dynamic "ingress" {
     for_each = length(var.cluster_admin_pmtu_cidrs) > 0 ? [1] : []
     content {
+      description = ""
       from_port   = 3
       to_port     = 4
       protocol    = "icmp"

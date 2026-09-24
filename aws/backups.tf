@@ -125,3 +125,26 @@ resource "aws_s3_bucket_lifecycle_configuration" "fleet_backups" {
     }
   }
 }
+
+# Writer for the in-cluster Postgres dump job (talos-k8s/backup/). Put + Get
+# (for size verification) under postgres/ only — no delete, so with versioning
+# a leaked key can't destroy existing dumps. Its access key is created out of
+# band (never in state) and lives in the k8s Secret postgres/postgres-backup-s3
+# and the Bitwarden note `postgres-backup-s3`.
+resource "aws_iam_user" "postgres_backup" {
+  name = "postgres-backup-writer"
+}
+
+resource "aws_iam_user_policy" "postgres_backup" {
+  name = "fleet-backups-postgres-write"
+  user = aws_iam_user.postgres_backup.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "PostgresDumps"
+      Effect   = "Allow"
+      Action   = ["s3:PutObject", "s3:GetObject"]
+      Resource = "${aws_s3_bucket.fleet_backups.arn}/postgres/*"
+    }]
+  })
+}

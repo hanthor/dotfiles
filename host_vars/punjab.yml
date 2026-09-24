@@ -4,4 +4,9 @@ skip_proxy: true
 # Runs the OpenTofu config in aws/ (the AWS account's IaC) — see docs/src/servers/aws/README.md
 extra_brews:
   - awscli
+  - session-manager-plugin
   - opentofu
+# Internet-facing EC2 box: stricter sshd drop-in (sshd role)
+sshd_harden: true
+# Kiro Crew gateway (kirocrew role)
+kirocrew_enabled: true

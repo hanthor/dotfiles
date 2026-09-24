@@ -21,6 +21,11 @@ resource "aws_iam_policy" "james_admin_migration_scope" {
         Condition = { StringEquals = { "iam:PassedToService" = "ec2.amazonaws.com" } }
       },
       { Sid = "SelfIdentity", Effect = "Allow", Action = ["sts:GetCallerIdentity", "iam:GetUser", "iam:ListAccessKeys"], Resource = "*" },
+      # Read-only IAM so `just aws-plan` works as james-admin; IAM *changes*
+      # still need root.
+      { Sid = "IamRead", Effect = "Allow", Action = ["iam:Get*", "iam:List*"], Resource = "*" },
+      # Session Manager break-glass into punjab.
+      { Sid = "SsmSessions", Effect = "Allow", Action = ["ssm:StartSession", "ssm:TerminateSession", "ssm:ResumeSession", "ssm:DescribeSessions", "ssm:DescribeInstanceInformation", "ssm:GetConnectionStatus"], Resource = "*" },
     ]
   })
 }

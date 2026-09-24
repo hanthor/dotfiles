@@ -74,6 +74,8 @@ Production workloads: Lemonade (AMD-optimized local AI), KubeVirt v1.8.2 + KubeV
 - **punjab** (this repo's only AWS-hosted Ansible host) is an EC2 `t3.large` in `us-east-1`; the Talos cluster is in `eu-north-1`; `runs-on` (us-east-2) is its own CloudFormation stack — don't import it.
 - `just aws-plan` / `just aws-apply`. A plan against the live account must read "No changes"; console edits are drift — codify or revert them.
 - State is in S3 (`hanthor-fleet-backups-*/tofu/aws/`) and contains Talos PKI via node `user_data`. `aws/terraform.tfvars` (admin IPs, alert email) is gitignored and lives in Bitwarden note `aws-tofu-tfvars` (`just aws-tfvars` / `just aws-seed-tfvars`).
+- punjab has **no public inbound** (SG empty): Tailscale for access, SSM Session Manager for break-glass. Its EIP is allowlisted on the cluster admin SG, so kubectl/talosctl work from it.
+- Postgres dumps go off-cluster to `s3://hanthor-fleet-backups-*/postgres/` via IAM user `postgres-backup-writer` (no delete; key in BW `postgres-backup-s3` + k8s Secret, never in tofu state).
 - Never put Talos `user_data` in the config — nodes `ignore_changes` it. `prevent_destroy` guards nodes, punjab, the worker EIP (DNS), pgdata and the bucket.
 
 ## Don'ts

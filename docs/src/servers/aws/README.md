@@ -11,7 +11,8 @@ is `runs-on`, which is its own CloudFormation stack.
 | `eu-north-1` | Backups — DLM snapshot policy, `hanthor-fleet-backups-*` bucket | `aws/backups.tf` |
 | `us-east-1` | [punjab](../punjab/README.md) — `t3.large` agent box, default VPC | `aws/punjab.tf` |
 | `us-east-2` | `runs-on` — self-hosted GitHub Actions runners ([runs-on.com](https://runs-on.com)) | CloudFormation stack `runs-on` |
-| global | IAM user `james-admin` + policies, DLM role | `aws/iam.tf`, `aws/backups.tf` |
+| global | IAM user `james-admin` + policies, DLM role, `postgres-backup-writer`, `punjab-ssm` role | `aws/iam.tf`, `aws/backups.tf`, `aws/punjab.tf` |
+| both | EBS encryption by default | `aws/account.tf` |
 | global | Budgets (spend alarms) | `aws/budgets.tf` |
 
 Default VPCs in each region are untouched and unmanaged.
@@ -23,7 +24,8 @@ aws/
 ├── versions.tf     # provider (eu-north-1 default, us_east_1 alias) + S3 backend
 ├── cluster.tf      # VPC/subnet/IGW/routes, 3 SGs, 2 Talos nodes, EIPs, pgdata
 ├── backups.tf      # DLM role + policy, fleet-backups bucket (+ versioning/SSE/lifecycle)
-├── punjab.tf       # key pair, SG, instance
+├── punjab.tf       # key pair, SG (no inbound), instance, EIP, SSM role, DLM
+├── account.tf      # EBS encryption by default (both regions)
 ├── iam.tf          # james-admin + its policies
 ├── budgets.tf      # 5 budgets, one for_each
 ├── imports.tf      # one-time adoption record (no-op once imported)
@@ -66,11 +68,16 @@ Common edits:
 
 ## IAM & access
 
-- **Root** is what `aws login` on punjab currently uses. Root has MFA enabled
-  and no access keys. Use it for account-level work only.
+- **Root** has MFA and no access keys. Use `aws login` as root only for IAM
+  changes, then let the session lapse — punjab is internet-facing.
 - **`james-admin`** is the scoped day-to-day user. It has `ec2:*`, `s3:*`,
-  budgets/CE, `iam:PassRole` to EC2 and `dlm:*` + `PassRole` for the DLM role.
-  It **cannot manage IAM itself**, so `aws/iam.tf` changes need root.
+  budgets/CE, `iam:PassRole` to EC2, `dlm:*`, **read-only IAM** (so it can run
+  `just aws-plan`) and SSM Session Manager. It **cannot change IAM**, so
+  applies that touch IAM need root. Keys: Bitwarden `aws-james-admin`.
+- **`postgres-backup-writer`**: put/get under `postgres/` in the backup bucket,
+  **no delete**. Key in Bitwarden `postgres-backup-s3` and k8s Secret
+  `postgres/postgres-backup-s3` — created out of band, never in tofu state.
+- **`punjab-ssm`** instance role: `AmazonSSMManagedInstanceCore` only.
 - No CloudTrail trail, GuardDuty or Route 53 zones exist. DNS is on
   Cloudflare.
 
@@ -81,12 +88,11 @@ Common edits:
   keep 7. Weekly on Sunday at 03:45 UTC, keep 4. These are crash-consistent
   node images, so they cover node loss, including hive-data and synapse
   media, which have no other backup.
-- **S3 `hanthor-fleet-backups-*`**: `postgres/` moves to IA at 30 days and
-  Glacier IR at 90 days, and expires at 1 year. The bucket is **currently
-  empty**. The in-cluster Postgres dump job still writes to a local PVC and
-  doesn't upload yet.
-- punjab's volume is not in the snapshot policy. Tag its root volume
-  `Backup=fleet-daily` in `punjab.tf` if you want it covered.
+- **S3 `hanthor-fleet-backups-*`**: the nightly Postgres job uploads each
+  verified dump to `postgres/<date>/` and checks the uploaded size (first
+  upload 2026-09-24: synapse 2.9 GB, mas 852 KB). `postgres/` moves to IA at
+  30 days, Glacier IR at 90, expires at 1 year.
+- **punjab**: its own DLM policy in us-east-1 (DLM is regional), same schedule.
 
 ## Cost
 
