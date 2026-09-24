@@ -163,11 +163,12 @@ locals {
   talos_ami = "ami-082ff045afa7ed0b3" # Talos Image Factory AMI the nodes were built from
 }
 
-# Control plane also runs hive (its PVC is node-bound local-path), so it must
-# stay m6i.xlarge — see the 2026-08-27 OOM incident in the handbook.
+# Control plane also runs the Hives (their PVCs are node-bound local-path), so
+# it must be sized for them: m6i.large OOM-killed the scheduler (2026-08-27),
+# m6i.xlarge ran at load ~85 on 4 vCPU (2026-09-24). Now m6i.2xlarge.
 resource "aws_instance" "controlplane" {
   ami           = local.talos_ami
-  instance_type = "m6i.xlarge"
+  instance_type = "m6i.2xlarge"
   subnet_id     = aws_subnet.public_a.id
   private_ip    = "10.20.1.10"
   vpc_security_group_ids = [

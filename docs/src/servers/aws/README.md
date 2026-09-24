@@ -12,7 +12,7 @@ is `runs-on`, which is its own CloudFormation stack.
 
 | Region | What | Managed by |
 |---|---|---|
-| `eu-north-1` | [AWS Talos cluster](../aws-k8s/cluster.md) — VPC, 2 × `m6i.xlarge` nodes, Elastic IPs, security groups, pgdata volume | `aws/cluster.tf` |
+| `eu-north-1` | [AWS Talos cluster](../aws-k8s/cluster.md) — VPC, control plane `m6i.2xlarge` + worker `m6i.xlarge`, Elastic IPs, security groups, pgdata volume | `aws/cluster.tf` |
 | `eu-north-1` | Backups — DLM snapshot policy, the fleet-backups bucket | `aws/backups.tf` |
 | `us-east-1` | [punjab](../punjab/README.md) — `t3.large` agent box, default VPC | `aws/punjab.tf` |
 | `us-east-2` | `runs-on` — self-hosted GitHub Actions runners ([runs-on.com](https://runs-on.com)) | CloudFormation stack `runs-on` |
@@ -68,7 +68,7 @@ Common edits:
   `just aws-apply` → `just aws-seed-tfvars`. Prune stale entries; the list only
   ever grows otherwise.
 - **Resize a node**: change `instance_type` in `cluster.tf`. EC2 stops the
-  instance for the resize. The control plane must stay ≥ `m6i.xlarge` (see the
+  instance for the resize. The control plane must stay ≥ `m6i.2xlarge` (see the
   OOM incident in the cluster handbook).
 
 ## IAM & access

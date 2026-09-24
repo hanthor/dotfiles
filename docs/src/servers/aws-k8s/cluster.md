@@ -20,7 +20,7 @@ has no SSH, no package manager, and an immutable root. They are deliberately
 
 | Role | Instance | Labels |
 |------|----------|--------|
-| control-plane | `m6i.xlarge` | `workload-role=hive` |
+| control-plane | `m6i.2xlarge` (8 vCPU / 32 GiB) | `workload-role=hive` |
 | worker | `m6i.xlarge` | `workload-role=matrix` |
 
 Each node has a private VPC address and an Elastic IP; the addresses live in
@@ -89,6 +89,12 @@ force-deleting the hive pods so the kubelet released memory.
 Fixed properly by resizing the control-plane to `m6i.xlarge` (15.7Gi) — free
 memory went from ~650Mi to ~12Gi — and keeping an explicit memory limit on hive
 so the kubelet evicts *hive*, never the control plane.
+
+**2026-09-24: resized again to `m6i.2xlarge`.** Three Hives on the control
+plane pushed `m6i.xlarge` to a load of about 85 on 4 vCPU. Every `kubectl
+exec` took 10–35 s, the ops CronJobs hung until their deadlines, and agents
+were slow to reach a ready prompt. The in-place resize through OpenTofu took
+about 3 minutes of Hive downtime; Matrix on the worker stayed up.
 
 Lesson: hive cannot move to the worker (its PVC is `local-path` and node-bound),
 so the control-plane must be sized for it. Ingress HA on both nodes only becomes
