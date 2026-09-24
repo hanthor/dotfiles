@@ -171,7 +171,7 @@ line tells you which hosts have an old or failed convergence — those are
 the ones that need attention.
 
 To roll a single change out manually instead of waiting for the timer
-(skip `matrix` and `telengana` — retired, nothing on them may be restarted):
+(skip `matrix` and `telengana` — retired; see the cutover runbook):
 
 ```bash
 for h in $(scripts/nmap-inventory.sh | awk '/ON / {print $3}'); do

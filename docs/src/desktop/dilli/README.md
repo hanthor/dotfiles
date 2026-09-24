@@ -5,8 +5,8 @@ Secondary workstation in the hanthor fleet.
 ## Hardware
 
 - Arch: x86_64
-- LAN IP: `192.168.0.216` (WiFi)
-- Tailscale IP: `100.76.126.90`
+- WiFi on the home LAN (DHCP)
+- Tailscale: `dilli` (MagicDNS)
 
 ## OS
 

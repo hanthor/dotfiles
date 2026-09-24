@@ -162,8 +162,8 @@ talos-k8s/hive/
 ```bash
 kubectl create secret generic hive-secrets -n hive \
   --from-literal=DEEPSEEK_API_KEY=sk-... \
-  --from-literal=GH_APP_ID=3942065 \
-  --from-literal=GH_APP_INSTALLATION_ID=137498420 \
+  --from-literal=GH_APP_ID=<app-id> \
+  --from-literal=GH_APP_INSTALLATION_ID=<installation-id> \
   --from-file=gh-app-key.pem=/path/to/key.pem
 ```
 
@@ -496,7 +496,7 @@ kubectl rollout restart deploy/hive -n hive
 
 | Symptom | Check |
 |---------|-------|
-| ImagePullBackOff | IPv6 timeouts on ghcr.io. Verify `/etc/hosts` on bihar has `20.207.73.86 ghcr.io` |
+| ImagePullBackOff | IPv6 timeouts on ghcr.io. Verify `/etc/hosts` on bihar has a pinned IPv4 entry for `ghcr.io` (`<ghcr-ipv4> ghcr.io`, from `dig +short A ghcr.io`) |
 | Agent CLI crashed | Check `ps aux \| grep pi` — should see 9 pi processes |
 | Agent stuck in ADVISORY mode | Check ACMM level in state file. May need state nuke |
 | Dashboard shows old backend/model | Stale overrides in `/data/agent-configs/*.yaml`. Fix with sed + state nuke |
@@ -527,7 +527,7 @@ kubectl rollout restart deploy/hive -n hive
 
 ## 12. GitHub App
 
-Hive authenticates to GitHub via a GitHub App (ID **3942065**) installed on `tuna-os`.
+Hive authenticates to GitHub via a GitHub App installed on `tuna-os` (App and installation IDs are in the `hive-secrets` Secret).
 
 ### Token generation
 

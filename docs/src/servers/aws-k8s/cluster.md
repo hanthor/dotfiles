@@ -7,7 +7,7 @@
 Two-node Talos Kubernetes cluster in AWS `eu-north-1`, built 2026-08-27 to
 consolidate the two Hetzner VPSes (`matrix` and `telengana`) onto one cluster.
 
-All AWS resources here (VPC, SGs, nodes, EIPs, volumes, snapshot policy) are
+All AWS resources here (VPC, security groups, nodes, Elastic IPs, volumes, snapshot policy) are
 codified in OpenTofu under [`aws/`](https://github.com/hanthor/dotfiles/tree/master/aws).
 See [AWS Account](../aws/README.md). Node *configuration* is not; that is
 `talosctl`'s job.
@@ -18,10 +18,13 @@ has no SSH, no package manager, and an immutable root. They are deliberately
 
 ## Nodes
 
-| Role | Instance | Private | Elastic IP | Labels |
-|------|----------|---------|------------|--------|
-| control-plane | `m6i.xlarge` | `10.20.1.10` | `13.63.243.56` | `workload-role=hive` |
-| worker | `m6i.xlarge` | `10.20.1.11` | `13.62.161.5` | `workload-role=matrix` |
+| Role | Instance | Labels |
+|------|----------|--------|
+| control-plane | `m6i.xlarge` | `workload-role=hive` |
+| worker | `m6i.xlarge` | `workload-role=matrix` |
+
+Each node has a private VPC address and an Elastic IP; the addresses live in
+the OpenTofu state and the talosconfig, not here.
 
 Talos `v1.13.9`, Kubernetes `v1.36.2`, flannel CNI, `local-path` storage.
 
@@ -33,19 +36,21 @@ The control-plane taint is removed so it schedules workloads too. `m6a` (AMD) is
 Dedicated VPC `10.20.0.0/16`, single AZ `eu-north-1a`, public subnet + IGW, no
 NAT gateway (unnecessary, and ~$32/mo).
 
-| Security group | Rules |
+Three security groups:
+
+| Security group | Purpose |
 |---|---|
-| `migration-intracluster` | self-referencing, all traffic |
-| `migration-matrix-public` | 80, 443, 8448/tcp · 30001/tcp · 30002/udp · 32700-32767/udp |
-| `migration-admin-bootstrap` | Talos API 50000 + k8s API 6443, admin IP only |
+| intra-cluster | self-referencing, node-to-node traffic |
+| public | web ingress, Matrix federation, and the MatrixRTC media ports |
+| admin | Talos and Kubernetes APIs, admin allowlist only |
 
-Both nodes carry `migration-matrix-public`, so either public IP serves 80/443.
-The RTC ports match what the ESS chart's MatrixRTC SFU exposes as NodePorts.
+Both nodes carry the public group, so either node can serve web traffic. The
+RTC ports match what the ESS chart's MatrixRTC SFU exposes as NodePorts.
 
-> The admin IP allowlist **will go stale**. It lives in `cluster_admin_ingress`
-> in `aws/terraform.tfvars` (Bitwarden `aws-tofu-tfvars`). Update it with
-> `just aws-apply`, not in the console. The long-term fix is a Tailscale
-> subnet router in-cluster rather than widening the CIDR.
+> The admin allowlist **will go stale**. It lives in `aws/terraform.tfvars`
+> (Bitwarden `aws-tofu-tfvars`). Update it with `just aws-apply`, not in the
+> console. The long-term fix is a Tailscale subnet router in-cluster rather
+> than widening the CIDR.
 
 ## Ingress — the important gotcha
 
@@ -65,7 +70,7 @@ Three non-obvious settings, all load-bearing:
 - **`nodeSelector: workload-role=matrix`.** Running Traefik on *every* node was
   tried and reverted — see the incident note below.
 
-DNS points only at the worker EIP `13.62.161.5`.
+DNS points only at the worker's Elastic IP.
 
 ### Incident 2026-08-27: don't put workloads on an undersized control-plane
 
@@ -107,7 +112,7 @@ is no host to install packages on. The k8s-deployed Postgres in the `postgres`
 namespace **is** production.
 
 That means DB durability currently rests on `local-path` on the worker's root
-volume. The separate 50GB gp3 volume (`vol-01ff00a316340f0ad`) is attached at
+volume. The separate 50GB gp3 pgdata volume is attached at
 the EC2 level but **not mounted by Talos** — unfinished work.
 
 ## Access
@@ -122,6 +127,10 @@ looks like a raw network fault.
 ```bash
 export KUBECONFIG=~/.kube/config-aws-migration
 kubectl get nodes -o wide
+
+# talosctl: endpoint = public EIP, node = private IP
+talosctl --talosconfig ~/.talos/config-aws-migration \
+  -e <node-eip> -n <node-private-ip> version
 ```
 
 Configs live in Bitwarden as `kubeconfig-aws-migration` / `talosconfig-aws-migration`
@@ -139,7 +148,7 @@ credits zero the bill, so a commitment buys nothing and locks in instance shape.
 
 - 50GB Postgres volume unmounted (above).
 - ~~Backups partial~~ — done 2026-09-24: nightly Postgres dumps are copied to
-  S3 (`hanthor-fleet-backups-*/postgres/`) and size-verified, and DLM
+  S3 (the fleet-backups bucket, `postgres/`) and size-verified, and DLM
   snapshots both root volumes. See [`talos-k8s/backup/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s/backup).
 - API-server OIDC + finer-grained RBAC still deferred; access is a single admin
   client cert.

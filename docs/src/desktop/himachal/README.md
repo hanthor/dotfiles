@@ -6,7 +6,7 @@ Laptop workstation in the hanthor fleet.
 
 - Arch: x86_64
 - Laptop (runs on login, not periodic timer)
-- Tailscale IP: `100.73.3.51`
+- Tailscale: `himachal` (MagicDNS)
 
 ## OS
 

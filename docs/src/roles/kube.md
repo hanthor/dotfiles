@@ -13,7 +13,7 @@ When `bw_unlocked` is true:
 1. Ensures `~/.kube/` and `~/.talos/` exist (mode 0700).
 2. `bw get notes kubeconfig` → writes to `~/.kube/config` (0600). Skipped if BW returns empty.
 3. `bw get notes talosconfig` → writes to `~/.talos/config` (0600). Skipped if BW returns empty.
-4. Pins `tls-server-name` on every cluster in `~/.kube/config` to `kube_tls_server_name` (default `192.168.0.5`) — the home API-server cert lacks the tailnet IP in its SANs.
+4. Pins `tls-server-name` on every cluster in `~/.kube/config` to `kube_tls_server_name` (default: bihar's LAN address) — the home API-server cert lacks the tailnet address in its SANs.
 5. Emits a one-line warning if either home-cluster note is missing in BW.
 6. `bw get notes kubeconfig-aws-migration` → `~/.kube/config-aws-migration` and `bw get notes talosconfig-aws-migration` → `~/.talos/config-aws-migration` (0600, each skipped if empty). Kept as separate files so both clusters stay independently usable.
 

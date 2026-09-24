@@ -7,10 +7,10 @@ Kubernetes control plane. [Talos Linux](https://www.talos.dev/) node — not in 
 ## Hardware
 
 - Arch: x86_64 (Intel)
-- Motherboard: ASRock (MAC `A8:A1:59:E1:6D:84`)
-- LAN IP: `192.168.0.5`
+- Motherboard: ASRock
+- LAN: reserved address on the home /24
 - Role: Control plane (Talos K8s)
-- Tailscale IP: `100.85.9.86`
+- Tailscale: `bihar` (MagicDNS)
 
 ## OS
 
@@ -28,7 +28,7 @@ Cluster services are reached through the Tailscale Operator; see the
 Tailscale runs as a Talos system extension, configured by
 [`talos-k8s/networking/tailscale-bihar.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/networking/tailscale-bihar.yaml):
 
-- Advertises subnet routes: `192.168.0.0/24`
+- Advertises the home LAN /24 as a subnet route
 - Tailscale DNS: disabled (`TS_ACCEPT_DNS=false`)
 
 ## See also

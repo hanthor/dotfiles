@@ -34,14 +34,15 @@ Server roles: `server_hardening`, plus the service roles.
 
 ### `vps`
 Hetzner VPSes — **both retired** (migrated to the
-[AWS Talos cluster](servers/aws-k8s/cluster.md)) but powered on for burn-in.
-Nothing on them may be restarted.
+[AWS Talos cluster](servers/aws-k8s/cluster.md)). Follow the
+[Matrix cutover runbook](https://github.com/hanthor/dotfiles/blob/master/docs/matrix-cutover-runbook.md)
+before touching either.
 
 ```yaml
 vps:
   hosts:
     matrix:     # Retired — former Matrix homeserver
-    telengana:  # Retired — formerly lkofoss; hosted the Hive on k3s
+    telengana:  # Retired — hosted the Hive on k3s
 ```
 
 `vps` members skip `syncthing`, `proxy` and `tailscale_cert`, and get

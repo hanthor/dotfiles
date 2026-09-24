@@ -37,7 +37,6 @@
 │                                                               │
 │   ┌────────────────────────┐   ┌────────────────────────┐    │
 │   │  bihar  (control plane)│   │ karnataka  (worker)    │    │
-│   │  192.168.0.5           │   │ 192.168.0.6            │    │
 │   │  Intel CPU             │   │ AMD Ryzen AI MAX+ 395  │    │
 │   │  /dev/nvme0n1          │   │ AMD Radeon 8060S iGPU  │    │
 │   │                        │   │ /dev/nvme0n1           │    │
@@ -74,44 +73,45 @@ The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on
 | CPU             | AMD Ryzen AI MAX+ 395 (Strix Halo) — 16 cores / 32 threads, 5.18 GHz boost |
 | RAM             | 62 GB unified memory (CPU + GPU share via UMA) |
 | GPU             | AMD Radeon 8060S — RDNA 3.5 (`gfx1151`), integrated |
-| NIC             | Realtek RTL8126 5GbE (`enp191s0`) — MAC `9C:BF:0D:00:E5:0F` |
+| NIC             | Realtek RTL8126 5GbE (`enp191s0`) |
 | WiFi            | [MediaTek MT7925](https://www.mediatek.com/products/broadband-wifi/mediatek-filogic-380) Wi-Fi 7 |
-| Boot disk       | Crucial P3 1TB (`/dev/nvme0n1`, serial `24394B495110`) |
-| Secondary       | WD Black SN850X 1TB (`/dev/nvme1n1`, serial `251623804191`) — **FAILING** (I/O errors). Do not use. Replace with new drive. |
+| Boot disk       | Crucial P3 1TB (`/dev/nvme0n1`) |
+| Secondary       | WD Black SN850X 1TB (`/dev/nvme1n1`) — **FAILING** (I/O errors). Do not use. Replace with new drive. |
 
 ### Bihar (control plane)
 
 | Component       | Detail |
 |-----------------|--------|
 | CPU             | Intel x86_64 |
-| NIC             | MAC `A8:A1:59:E1:6D:84` |
 | Boot disk       | `/dev/nvme0n1` |
 
 ---
 
 ## 3. Network
 
-### LAN — `192.168.0.0/24`
+### LAN — flat home /24
 
-DHCP/DNS are served by the TP-Link router at `.1` (pool `.2`–`.253`, with an address-reservation table) — see [Gateway](../../network/gateway/README.md). Older revisions of this page said dnsmasq on bihar; that predates Talos, which can't run it on the host.
+DHCP/DNS are served by the home router, which hands out fixed addresses from its address-reservation table — see [Gateway](../../network/gateway/README.md). Older revisions of this page said dnsmasq on bihar; that predates Talos, which can't run it on the host.
 
-| Host        | IP             | MAC                  | Role                       |
-|-------------|----------------|----------------------|----------------------------|
-| bihar       | `192.168.0.5`  | `A8:A1:59:E1:6D:84`  | K8s control plane, home services |
-| karnataka   | `192.168.0.6`  | `9C:BF:0D:00:E5:0F`  | K8s worker, LLM host |
-| raspberrypi | `192.168.0.10` | `D8:3A:DD:E9:C7:1D`  | Pi |
-| kvm         | `192.168.0.99` | `48:DA:35:6F:A9:20`  | NanoKVM (plugged into karnataka) |
+| Host        | Address  | Role                       |
+|-------------|----------|----------------------------|
+| bihar       | reserved | K8s control plane, home services |
+| karnataka   | reserved | K8s worker, LLM host |
+| goa         | reserved | Raspberry Pi, fleet control |
+| kvm         | reserved | NanoKVM (plugged into karnataka) |
 
-Run `just inventory` to rescan with nmap.
+The commands below use `<bihar-ip>` / `<karnataka-ip>` for the nodes' LAN
+addresses. Run `just inventory` to rescan with nmap and get the current values
+(they are also the endpoints in the talosconfig).
 
-### Internet — Airtel India / capped
+### Internet — data-capped
 
-Airtel India home internet with a **3,333 GB/month** data cap. Exceeding the cap throttles
-to **1.5 Mbps** until the next billing cycle.
+The home connection has a monthly data cap; exceeding it throttles to a crawl
+until the next billing cycle.
 
-> **May 31, 2026:** Cap hit at ~3,333 GB. Throttled to 1.5 Mbps until **June 8, 2026**.
-> No large model downloads, image pulls, or bulk data transfers until then.
-> Local LAN (192.168.0.0/24) is unaffected.
+> **May 2026:** The cap was hit (largely model downloads and image pulls) and
+> the link was throttled for about a week. Lesson: budget large model
+> downloads and bulk image pulls against the cap. LAN traffic is unaffected.
 
 ### Tailscale — `manatee-basking.ts.net`
 
@@ -173,14 +173,14 @@ user volume on the Crucial P3's EPHEMERAL partition:
 
 ```bash
 # Apply the user volume config (idempotent):
-talosctl -n 192.168.0.6 patch mc --patch @storage-volume.yaml
+talosctl -n <karnataka-ip> patch mc --patch @storage-volume.yaml
 ```
 
 The patch is stored at [`talos-k8s/longhorn/storage-volume.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/longhorn/storage-volume.yaml).
 It creates `/var/mnt/storage` as a directory on the EPHEMERAL partition.
 The mount is automatically propagated into the kubelet namespace.
 
-> **WD Black failure (2026-05-30):** The WD Black SN850X (`/dev/nvme1n1`, serial `251623804191`)
+> **WD Black failure (2026-05-30):** The WD Black SN850X (`/dev/nvme1n1`)
 > developed I/O errors on its META partition during the 35B model download stress test.
 > Error: `error writing config to file: input/output error`. The drive should be
 > physically replaced. In the meantime, do not configure it as a Talos install disk
@@ -196,7 +196,7 @@ Configs are generated once with `talosctl gen config`, edited, and applied to ea
 
 ```bash
 cd talos-k8s
-talosctl gen config talos-k8s https://192.168.0.5:6443
+talosctl gen config talos-k8s https://<bihar-ip>:6443
 # Produces: controlplane.yaml, worker.yaml, talosconfig
 ```
 
@@ -205,13 +205,13 @@ Then patch `machine.install.image` and `machine.install.disk` on each (see `talo
 ### Apply configs
 
 ```bash
-talosctl apply-config --insecure --nodes 192.168.0.5 --file controlplane.yaml
-talosctl apply-config --insecure --nodes 192.168.0.6 --file worker.yaml
+talosctl apply-config --insecure --nodes <bihar-ip> --file controlplane.yaml
+talosctl apply-config --insecure --nodes <karnataka-ip> --file worker.yaml
 
-talosctl config endpoint 192.168.0.5
-talosctl config node 192.168.0.5
+talosctl config endpoint <bihar-ip>
+talosctl config node <bihar-ip>
 
-talosctl bootstrap --nodes 192.168.0.5
+talosctl bootstrap --nodes <bihar-ip>
 talosctl kubeconfig                  # writes ~/.kube/config
 ```
 
@@ -295,12 +295,12 @@ Key env overrides (RDNA 3.5 needs special handling):
 | `HSA_FORCE_FINE_GRAIN_PCIE` | `1` | Fine-grained VM access |
 
 **Access:**
-- LAN: `http://192.168.0.6:31305/v1` (NodePort)
+- LAN: `http://<karnataka-ip>:31305/v1` (NodePort)
 - Tailscale: `https://lemonade.manatee-basking.ts.net/v1`
 
 Model weights cached on `karnataka:/var/tmp/lemonade-cache` (HuggingFace) and `/var/tmp/lemonade-models` (llama models) via local-storage PersistentVolumes.
 
-**Web UI:** Point a browser at `http://192.168.0.6:31305` for the built-in control panel to download models, configure endpoints, and test chat/vision/image generation.
+**Web UI:** Point a browser at `http://<karnataka-ip>:31305` for the built-in control panel to download models, configure endpoints, and test chat/vision/image generation.
 
 ### KubeVirt v1.8.2
 
@@ -390,8 +390,8 @@ The `kube` role syncs `~/.kube/config` and `~/.talos/config` from Bitwarden, so 
 
 ```bash
 kubectl get pods -A
-talosctl -n 192.168.0.5 health
-talosctl -n 192.168.0.6 dmesg | grep -i amdgpu
+talosctl -n <bihar-ip> health
+talosctl -n <karnataka-ip> dmesg | grep -i amdgpu
 ```
 
 ### Common kubectl
@@ -406,11 +406,11 @@ kubectl describe pod -l app=lemonade    # check GPU scheduling / events
 ### Common talosctl
 
 ```bash
-talosctl -n 192.168.0.6 list /dev/dri/   # confirm GPU devices visible to host
-talosctl -n 192.168.0.6 services         # systemd-equivalent services
-talosctl -n 192.168.0.5 etcd status      # control-plane etcd health
-talosctl -n 192.168.0.5 logs kubelet
-talosctl -n 192.168.0.5 reboot           # graceful reboot
+talosctl -n <karnataka-ip> list /dev/dri/   # confirm GPU devices visible to host
+talosctl -n <karnataka-ip> services         # systemd-equivalent services
+talosctl -n <bihar-ip> etcd status      # control-plane etcd health
+talosctl -n <bihar-ip> logs kubelet
+talosctl -n <bihar-ip> reboot           # graceful reboot
 ```
 
 ---
@@ -426,16 +426,16 @@ If a node is wiped or replaced:
    ```
 3. **Bootstrap etcd** (control plane only, first time):
    ```bash
-   talosctl bootstrap --nodes 192.168.0.5
+   talosctl bootstrap --nodes <bihar-ip>
    ```
 4. **Verify**:
    ```bash
-   talosctl -n 192.168.0.5 health
+   talosctl -n <bihar-ip> health
    kubectl get nodes
    ```
 5. **Create user volume** (karnataka/worker only):
    ```bash
-   talosctl -n 192.168.0.6 patch mc --patch @talos-k8s/longhorn/storage-volume.yaml
+   talosctl -n <karnataka-ip> patch mc --patch @talos-k8s/longhorn/storage-volume.yaml
    ```
 6. **Create host directories** for local PVs (if re-creating from scratch):
    ```bash
@@ -470,8 +470,8 @@ Check the device plugin actually scheduled and started:
 ```bash
 kubectl -n kube-system get pods -l name=amdgpu-device-plugin-ds
 kubectl -n kube-system logs -l name=amdgpu-device-plugin-ds --tail=50
-talosctl -n 192.168.0.6 dmesg | grep -i amdgpu   # confirm driver loaded
-talosctl -n 192.168.0.6 list /dev/dri/           # confirm devices exist
+talosctl -n <karnataka-ip> dmesg | grep -i amdgpu   # confirm driver loaded
+talosctl -n <karnataka-ip> list /dev/dri/           # confirm devices exist
 ```
 
 ### Lemonade pod stuck in `ContainerCreating`
@@ -505,7 +505,7 @@ talosctl -n <ip> reset                   # nuclear: wipes node, requires re-appl
 - `kubectl get nodes` shows karnataka `NotReady`
 - `kubectl describe node karnataka` shows `Ready: False` with `container runtime is down`
 - All pods on karnataka stuck in `Terminating`/`Pending`
-- Ping to `192.168.0.6` still works (node is up, just CRI is dead)
+- Ping to karnataka still works (node is up, just CRI is dead)
 
 **Root cause:** Memory pressure from simultaneous large container builds exhausts
 karnataka's 62GB unified memory. The node runs Lemonade (48-56Gi), Argo Workflow image
@@ -515,9 +515,9 @@ multiple 4GB image builds run concurrently, containerd OOMs and crashes.
 **Recovery:**
 ```bash
 # Option 1: Graceful reboot via Talos
-talosctl -n 192.168.0.6 reboot
+talosctl -n <karnataka-ip> reboot
 
-# Option 2: Hard reboot via NanoKVM at 192.168.0.99
+# Option 2: Hard reboot via the NanoKVM (see network/kvm)
 ```
 
 After reboot (~2 min), all pods recover automatically. PVC-backed services

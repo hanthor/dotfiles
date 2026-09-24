@@ -6,7 +6,7 @@
 
 - Arch: aarch64 (ARM)
 - Mobile device (laptop power profile)
-- Tailscale IP: `100.67.142.116`
+- Tailscale: `kerala` (MagicDNS)
 
 ## OS
 
