@@ -553,3 +553,35 @@ The App gives Hive its own rate limit pool, separate from personal API usage.
 2. Add the needed permissions
 3. Re-accept on the installation page
 4. Restart hive: `kubectl rollout restart deploy/hive -n hive`
+
+## Images and upgrades
+
+As of 2026-09-24 every Hive runs **stock upstream images**
+(`ghcr.io/hivecommons/hive`, `hive-hub`), not the `tuna-os/hive` fork. The fork's
+remaining delta was CI/registry plumbing plus two ACMM tweaks nothing here uses,
+and it had fallen a major version behind (v4 vs upstream's v5).
+
+| Hive | Namespace | Branding |
+|---|---|---|
+| hive.reilly.asia (canary) | `hive-hanthor` | none |
+| reef.tunaos.org | `hive-reef` | REEF |
+| hive.tunaos.org / school.tunaos.org | `hive` | SCHOOL |
+| hub.tunaos.org | `hive-hub` | — |
+
+**`hive-upgrade`** (CronJob in ns `hive`, daily 04:30 America/New_York) keeps
+them on upstream's newest `v5.x.y` release. It resolves the release to a
+digest, checks the amd64 image exists, and upgrades one Hive at a time, in the
+order in the table above. Each target soaks for 10 minutes. A health, branding
+or crash failure rolls that target back to its recorded digest, blocklists the
+version and stops the run. "Could not measure" (an RBAC or API error) aborts
+without rolling back. Results go to Discord. Details, dry-run, pin/block:
+[`talos-k8s/hive/upgrade/README.md`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/hive/upgrade/README.md).
+
+It checks once a day, not on every release: upstream cuts several releases an
+hour, and each Hive restart costs a boot-time GitHub rescan against a shared
+App rate limit. Restarting `hive` and `hive-reef` back-to-back exhausted it on
+2026-09-24.
+
+The old `hive-fork-{switch,verify,drift,ai-check}` CronJobs are **suspended**
+(annotated with the reason). They targeted the fork and never had the RBAC to
+act.

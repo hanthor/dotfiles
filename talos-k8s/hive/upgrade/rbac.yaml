@@ -1,0 +1,206 @@
+# RBAC for the hive-upgrade CronJob (see README.md). Least privilege:
+#   - deployments: read + patch, and only the named Deployments can be patched
+#   - pods: read; pods/exec only in the three spoke namespaces, used for the
+#     in-pod GET /api/health, owner-dashboard fetch, and cat of
+#     /data/dashboard-sessions.json + /data/branding/branding.json
+#   - hub: GET through the Service proxy (no exec in hive-hub)
+#   - configmaps: only hive/hive-upgrade-state (create cannot be name-scoped)
+#   - nodes: get/list, cluster-wide, for the architecture gate
+#   - hive-contributors: read-only, for the status report
+# Nothing here grants secrets access.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hive-upgrade
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hive-upgrade-nodes
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hive-upgrade-nodes
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hive-upgrade-nodes
+subjects:
+  - kind: ServiceAccount
+    name: hive-upgrade
+    namespace: hive
+---
+# ── spokes: hive-hanthor, hive-reef, hive ───────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-upgrade
+  namespace: hive-hanthor
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["hive"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["list", "watch"]   # kubectl rollout status
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-upgrade
+  namespace: hive-reef
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["hive"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["list", "watch"]   # kubectl rollout status
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-upgrade
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["hive"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  # State: blocklist, pin, last attempt/result, run lock.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["hive-upgrade-state"]
+    verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]   # first run only; create cannot be restricted by name
+---
+# ── hub ─────────────────────────────────────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-upgrade
+  namespace: hive-hub
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["hive-hub"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  # Health: GET /api/v1/namespaces/hive-hub/services/hive-hub:3001/proxy/
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    resourceNames: ["hive-hub", "hive-hub:3001"]
+    verbs: ["get"]
+---
+# ── contributors: report only ───────────────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-upgrade-read
+  namespace: hive-contributors
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-upgrade
+  namespace: hive-hanthor
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: hive-upgrade}
+subjects: [{kind: ServiceAccount, name: hive-upgrade, namespace: hive}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-upgrade
+  namespace: hive-reef
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: hive-upgrade}
+subjects: [{kind: ServiceAccount, name: hive-upgrade, namespace: hive}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-upgrade
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: hive-upgrade}
+subjects: [{kind: ServiceAccount, name: hive-upgrade, namespace: hive}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-upgrade
+  namespace: hive-hub
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: hive-upgrade}
+subjects: [{kind: ServiceAccount, name: hive-upgrade, namespace: hive}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-upgrade-read
+  namespace: hive-contributors
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: hive-upgrade-read}
+subjects: [{kind: ServiceAccount, name: hive-upgrade, namespace: hive}]
