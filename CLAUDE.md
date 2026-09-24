@@ -9,7 +9,7 @@ Ansible-driven dotfiles + infra for a personal fleet (desktops, servers, VPS). E
 Three distinct concerns live here:
 1. **Workstation config** (`roles/`, `site.yml`, `host_vars/`, `group_vars/`) — shells, packages, browser, SSH, Tailscale, kubeconfig, etc.
 2. **Talos K8s cluster IaC** (`talos-k8s/`) — manifests for the Bihar + Karnataka cluster. Detailed handbook in [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md).
-3. **AWS account IaC** (`aws/`, OpenTofu) — the AWS Talos cluster's VPC/nodes/EIPs, punjab's instance, backups (DLM + S3), IAM, budgets. Handbook: [`docs/src/servers/aws/README.md`](docs/src/servers/aws/README.md).
+3. **TunaOS AWS account IaC** (`aws/`, OpenTofu) — the account is **TunaOS infrastructure**, not the personal fleet: the AWS Talos cluster's VPC/nodes/EIPs, punjab's instance, backups (DLM + S3), IAM, budgets. Handbook: [`docs/src/servers/aws/README.md`](docs/src/servers/aws/README.md).
 
 ### Two Talos clusters, not one
 
@@ -69,7 +69,7 @@ Production workloads: Lemonade (AMD-optimized local AI), KubeVirt v1.8.2 + KubeV
 
 **The cluster handbook is [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md)** — hardware, network, reinstall, troubleshooting.
 
-## AWS account (`aws/`)
+## TunaOS AWS account (`aws/`)
 
 - **punjab** (this repo's only AWS-hosted Ansible host) is an EC2 `t3.large` in `us-east-1`; the Talos cluster is in `eu-north-1`; `runs-on` (us-east-2) is its own CloudFormation stack — don't import it.
 - `just aws-plan` / `just aws-apply`. A plan against the live account must read "No changes"; console edits are drift — codify or revert them.

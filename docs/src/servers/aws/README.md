@@ -1,4 +1,9 @@
-# AWS Account
+# TunaOS AWS Account
+
+> **TunaOS infrastructure.** This AWS account belongs to the TunaOS project.
+> It hosts the Hive agent fleet, Matrix/ESS and the CFP dashboard, plus punjab,
+> the box they're administered from. James's personal fleet (desktops, goa,
+> the home Talos cluster) lives elsewhere in this handbook.
 
 One AWS account (credits-funded) hosts three unrelated things. Everything
 created by hand has been adopted into **OpenTofu** in

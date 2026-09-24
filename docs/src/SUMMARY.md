@@ -28,15 +28,19 @@
   - [Kerala](desktop/kerala/README.md)
 - [Servers]()
   - [Goa](servers/goa/README.md)
-  - [Punjab (AWS)](servers/punjab/README.md)
   - [Talos K8s Cluster (offline)](servers/talos-k8s/cluster.md)
     - [Bihar](servers/talos-k8s/bihar/README.md)
     - [Karnataka](servers/talos-k8s/karnataka/README.md)
-  - [AWS Account & IaC](servers/aws/README.md)
-  - [AWS Talos Cluster](servers/aws-k8s/cluster.md)
 - [VPS]()
   - [Matrix (retired)](vps/matrix/README.md)
   - [Telengana (retired)](vps/telengana/README.md)
+
+# TunaOS Infrastructure
+
+- [TunaOS AWS Account & IaC](servers/aws/README.md)
+  - [Talos Cluster (eu-north-1)](servers/aws-k8s/cluster.md)
+  - [Hive Agent Fleet](cluster/hive.md)
+  - [Punjab (agent box)](servers/punjab/README.md)
 
 # Roles Reference
 
@@ -100,4 +104,3 @@
 # Cluster
 
 - [Talos Kubernetes](talos-k8s.md)
-- [Hive Agent Supervisor](cluster/hive.md)

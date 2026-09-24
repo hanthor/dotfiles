@@ -1,13 +1,16 @@
 [book]
-title = "Dotfiles Fleet Handbook"
+title = "Infrastructure Handbook"
 authors = ["James Reilly"]
 language = "en"
-description = "Ansible-driven dotfiles and infrastructure for a personal fleet of desktops, servers, and VPS"
+description = "James Reilly's personal fleet (Ansible dotfiles) and the TunaOS infrastructure it administers"
 
 [build]
 build-dir = "book"
 
 [output.html]
+# Canonical home is https://reilly.asia/infra/ (the reilly.asia Worker proxies
+# /infra/* to this repo's GitHub Pages build).
+site-url = "/infra/"
 no-section-label = true
 git-repository-url = "https://github.com/hanthor/dotfiles"
 git-repository-icon = "fa-github"

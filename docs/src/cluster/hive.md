@@ -1,5 +1,9 @@
 # Hive — 24/7 AI Agent Supervisor
 
+> **TunaOS infrastructure.** This runs in the TunaOS AWS account and serves
+> the TunaOS project (Hive, Matrix, CI), not James's personal fleet. See
+> [TunaOS AWS Account & IaC](../servers/aws/README.md).
+
 > **Now runs on the [AWS Talos cluster](../servers/aws-k8s/cluster.md)** at
 > **https://hive.tunaos.org** (namespace `hive`, Cloudflare-proxied, on the
 > control-plane node). Point `kubectl` at it with
