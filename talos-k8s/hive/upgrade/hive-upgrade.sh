@@ -87,7 +87,9 @@ VERIFY_INTERVAL="${VERIFY_INTERVAL:-30}"
 ROLLOUT_TIMEOUT="${ROLLOUT_TIMEOUT:-420}"
 COOLDOWN_HOURS="${COOLDOWN_HOURS:-20}"
 KUBECTL_TIMEOUT="${KUBECTL_TIMEOUT:-90}"
-LOCK_TTL_SECONDS="${LOCK_TTL_SECONDS:-10800}"
+# Must exceed the CronJob's activeDeadlineSeconds (14400), or a slow live run
+# could be mistaken for a stale lock.
+LOCK_TTL_SECONDS="${LOCK_TTL_SECONDS:-18000}"
 
 A_PREV=hive.tunaos.org/previous-image
 A_PVER=hive.tunaos.org/previous-version
@@ -98,13 +100,23 @@ A_RBAT=hive.tunaos.org/rolled-back-at
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/hive-upgrade.XXXXXX") || exit 2
 LOCKED=0
+# The job's pod (and its logs) are deleted when activeDeadlineSeconds kills it,
+# so a run keeps its own log and leaves the tail in the state ConfigMap.
+RUN_LOG="$TMP/run.log"
 cleanup() {
   if [ "$LOCKED" = 1 ]; then state_set running_since "" >/dev/null 2>&1 || true; fi
+  if [ -s "$RUN_LOG" ] && [ "$DRY" != 1 ]; then
+    state_set last_log "$(tail -c 3500 "$RUN_LOG")" >/dev/null 2>&1 || true
+  fi
   rm -rf "$TMP"
 }
 trap cleanup EXIT
+# Deadline kills arrive as SIGTERM; exit so the EXIT trap still runs.
+trap 'warn "terminated (job deadline?)"; exit 143' TERM INT
 
-say()  { printf '%s\n' "$*"; }
+say()  {
+  if [ "${HIVE_UPGRADE_TIMESTAMPS:-0}" = 1 ]; then printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*"; else printf '%s\n' "$*"; fi
+}
 warn() { printf 'WARN: %s\n' "$*" >&2; }
 now_iso()   { date -u +%Y-%m-%dT%H:%M:%SZ; }
 now_epoch() { date +%s; }
@@ -705,7 +717,7 @@ cmd_state_edit() {  # block|unblock|pin|unpin [version]
 
 case "${1:-status}" in
   status) cmd_status ;;
-  run)    cmd_run ;;
+  run)    exec > >(tee -a "$RUN_LOG") 2>&1; cmd_run ;;
   block|unblock|pin|unpin) cmd_state_edit "$@" ;;
   *) say "usage: $0 status|run|block VERSION|unblock VERSION|pin VERSION|unpin"; exit 2 ;;
 esac

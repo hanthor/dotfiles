@@ -5,6 +5,7 @@ every invocation, so tests can assert exactly which calls mutated what. The
 fake curl serves GitHub releases, GHCR tokens/manifests and records Discord
 posts. Nothing here talks to a network.
 """
+import re
 import hashlib
 import json
 import subprocess
@@ -583,3 +584,19 @@ def test_target_left_on_blocklisted_version_is_moved_off_it(cluster):
     assert cluster.patched() == ORDER
     assert cluster.image("hive-hanthor/hive") == spoke(cluster, "v5.35.9")
     assert cluster.image("hive-reef/hive") == spoke(cluster, "v5.35.9")
+
+
+def test_run_log_tail_is_kept_in_state(cluster):
+    # A deadline kill deletes the job's pod and its logs; the state ConfigMap
+    # must still say what the run did.
+    r = cluster.run("run", HIVE_UPGRADE_TIMESTAMPS="1")
+    assert r.returncode == 0, cluster.out
+    log = cluster.state().get("last_log", "")
+    assert "hive-upgrade run" in log
+    assert re.search(r"^\d\d:\d\d:\d\d ", log, re.M), "timestamps missing"
+    assert len(log) <= 3500
+
+
+def test_dry_run_does_not_write_last_log(cluster):
+    cluster.run("run", DRY_RUN="1")
+    assert "last_log" not in cluster.state()
