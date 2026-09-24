@@ -1,0 +1,7 @@
+---
+# Publish this machine's public device facts (OS, model, CPU, RAM, …) for
+# https://reilly.asia/infra/. Opt a host out with fleet_facts_publish: false.
+fleet_facts_publish: true
+fleet_facts_repo: hanthor/dotfiles
+# A side branch nobody merges: one small JSON per host, rewritten on apply.
+fleet_facts_branch: fleet-facts

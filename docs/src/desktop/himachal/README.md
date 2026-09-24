@@ -14,7 +14,7 @@ Laptop workstation in the hanthor fleet.
 
 ## Services
 
-- `hive_ops` timers — drives the tuna-os Hive on the AWS cluster (`hive_ops_enabled: true`)
+- ~~`hive_ops` timers~~ — retired 2026-09-24; the Hive's ops jobs run in-cluster. The next apply removes the old timers.
 
 ## Notes
 
