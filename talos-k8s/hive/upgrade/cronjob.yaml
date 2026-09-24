@@ -1,0 +1,111 @@
+# Daily Hive upgrade: canary → reef → hive → hub, soak between, rollback +
+# blocklist on failure. Script: ConfigMap hive-upgrade-script (from
+# hive-upgrade.sh, see README.md). RBAC: rbac.yaml.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hive-upgrade
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive-upgrade
+spec:
+  # 04:30 New York: low traffic, after the 04:10 fork-drift slot, before the
+  # 05:10 hive-cli-update and 06:00 peak-pause jobs.
+  schedule: "30 4 * * *"
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      # Never retry automatically: a retry after a rollback would re-roll a
+      # target that was just proven bad (the blocklist also prevents it).
+      backoffLimit: 0
+      # 3 × (rollout 420s + verify 180s + soak 600s) + hub ≈ 70 min.
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: hive-upgrade
+        spec:
+          serviceAccountName: hive-upgrade
+          restartPolicy: Never
+          nodeSelector:
+            workload-role: hive
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: upgrade
+              image: alpine/k8s:1.31.0
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/scripts/hive-upgrade.sh", "run"]
+              env:
+                - name: TRACK
+                  value: release
+                - name: HIVE_UPGRADE_LINE
+                  value: '^v5\.'
+                - name: SOAK_SECONDS
+                  value: "600"
+                - name: HOME
+                  value: /tmp
+                - name: TMPDIR
+                  value: /tmp
+                # #hive-ops channel id is read from hive_ops_channel_id here.
+                - name: DISCORD_CONFIG
+                  value: /config/projects.json
+                - name: DISCORD_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: discord-report-secrets
+                      key: DISCORD_BOT_TOKEN
+                      optional: true
+                # Optional. The cluster's egress IP usually has no anonymous
+                # GitHub API budget left; without a token the script falls back
+                # to the github.com/…/releases/latest redirect.
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: hive-upgrade-github
+                      key: token
+                      optional: true
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: "1"
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: discord-config
+                  mountPath: /config
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: hive-upgrade-script
+                defaultMode: 0555
+            - name: discord-config
+              configMap:
+                name: discord-report-config
+            - name: tmp
+              emptyDir: {}
