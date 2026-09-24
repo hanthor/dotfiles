@@ -42,12 +42,14 @@ kubectl apply -f https://github.com/kubevirt/containerized-data-importer/release
 kubectl apply -f talos-k8s/kubevirt-aws/kubevirt-cr.yaml
 kubectl -n kubevirt wait kv kubevirt --for condition=Available --timeout=15m
 
-# 4. Idle-stop credentials (scoped IAM user from aws/kubevirt.tf), then corral-web + CronJob
-aws iam create-access-key --user-name kubevirt-node-power     # copy the key pair
-kubectl create namespace kubevirt-aws
-kubectl -n kubevirt-aws create secret generic node-power \
+# 4. Idle-stop credentials (scoped IAM user from aws/kubevirt.tf), then corral-web + CronJob.
+#    The key already exists: Bitwarden secure note `kubevirt-node-power`
+#    (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / INSTANCE_ID / AWS_DEFAULT_REGION).
+#    Only if it is lost: aws iam create-access-key --user-name kubevirt-node-power
+for ns in kubevirt-aws tailvm; do kubectl create namespace $ns --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n $ns create secret generic node-power \
   --from-literal=AWS_ACCESS_KEY_ID=... --from-literal=AWS_SECRET_ACCESS_KEY=... \
-  --from-literal=INSTANCE_ID="$(cd aws && tofu output -raw kubevirt_instance_id)"
+  --from-literal=INSTANCE_ID="$(cd aws && tofu output -raw kubevirt_instance_id)"; done
 kubectl kustomize --load-restrictor LoadRestrictionsNone talos-k8s/kubevirt-aws | kubectl apply -f -
 ```
 
