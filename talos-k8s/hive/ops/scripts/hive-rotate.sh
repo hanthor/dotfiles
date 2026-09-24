@@ -1247,6 +1247,36 @@ if [ "$ACTION" = watchdog ]; then
         find "$d" -type d ! -perm -2770 -exec chmod 2770 {} + 2>/dev/null
       done' >/dev/null 2>&1
   }
+  # heal_restart <agent>: POST /api/restart; for agy/muse agents, from INSIDE
+  # the pod in the same exec that first reopens the shared first-run state.
+  #
+  # Why (2026-09-24): every agy launch rewrites the SHARED
+  # ~/.gemini/antigravity-cli/cache/onboarding.json mode 0600 under its own
+  # uid, so the NEXT agy agent to launch gets EACCES ("failed to load
+  # onboarding status ... permission denied") and sits on the theme wizard.
+  # v5's entrypoint perm guard does not cover that file and runs as `dev`,
+  # which cannot chmod a file an agent uid owns; only a root exec can. Doing
+  # the repair and the restart in one exec guarantees the relaunching CLI
+  # reads a group-readable file. muse's trust.json has the same shape.
+  heal_restart() {
+    local a="$1" cli; cli=$(agent_field "$a" cli)
+    case "$cli" in
+      agy|muse)
+        # shellcheck disable=SC2016
+        timeout 200 kubectl exec -n "$NS" "$POD" -- sh -c '
+          for f in /data/home/.gemini/antigravity-cli/cache/*.json /data/home/.gemini/antigravity-cli/*.json \
+                   /data/home/.config/muse/*.json; do
+            [ -f "$f" ] || continue
+            chown dev:node "$f" 2>/dev/null; chmod 660 "$f" 2>/dev/null
+          done
+          curl -sS -X POST --max-time 150 -H "Cookie: hive_session=$2" "http://127.0.0.1:3002/api/restart/$1"' \
+          sh "$a" "$SID" 2>/dev/null \
+          || hive_api POST "/api/restart/$a"
+        ;;
+      *) hive_api POST "/api/restart/$a" ;;
+    esac
+  }
+
   now_s=$(date +%s)
   hl=$(cat "$STATE_DIR/hygiene-last" 2>/dev/null || echo 0)
   [ $(( now_s - ${hl:-0} )) -ge 3600 ] && gemini_hygiene
@@ -1354,7 +1384,7 @@ if [ "$ACTION" = watchdog ]; then
       fi
     fi
     if [ "$rotated" = 0 ] && ! dry; then
-      rs=$(hive_api POST "/api/restart/$a" | jq -r '.status // .error')
+      rs=$(heal_restart "$a" | jq -r '.status // .error' 2>/dev/null)
       printf '%-14s %-8s restarted (%s)\n' "$a" "$state" "$rs"
       rm -f "$STATE_DIR/watchdog-pane-$a"
     fi
