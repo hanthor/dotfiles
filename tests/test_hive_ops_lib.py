@@ -340,3 +340,47 @@ def test_tier_members_inventory_gate_ignores_pi_thinking_suffix(tmp_path):
     assert r.stdout.split() == ["T1|kiro|pi|kiro-api-key/claude-opus-5:high",
                                 "T1|google|agy|gemini-3.8-flash-high",
                                 "T1|openai|codex|gpt-5.6-sol"]
+
+
+@pytest.mark.parametrize("backend,model,want", [
+    ("agy", "gemini-3.8-flash-high",
+     {"backend": "agy", "model": "gemini-3.8-flash-high", "reasoning_effort": "high"}),
+    ("agy", "gemini-3.1-pro", {"backend": "agy", "model": "gemini-3.1-pro"}),
+    ("pi", "kiro-api-key/claude-opus-5:high",
+     {"backend": "pi", "model": "kiro-api-key/claude-opus-5:high"}),   # no effort key off agy
+    ("muse", "muse-spark-1.3-contributor",
+     {"backend": "muse", "model": "muse-spark-1.3-contributor"}),
+])
+def test_placement_body(backend, model, want):
+    assert json.loads(out(f"hive_placement_body {backend} {model}")) == want
+
+
+@pytest.mark.parametrize("resp,ok", [
+    ('{"ok":true,"status":"updated","agent":"a","applied":true,"restarted":true}', True),
+    ('{"ok":true,"status":"updated","agent":"a","applied":true,"restarted":false}', True),
+    ('{"ok":true,"status":"updated; applied to the launch configuration but the restart failed"}', True),
+    ('{"ok":false,"error":"transport rc=28: timeout"}', False),
+    ('{"error":"agent not found"}', False),
+    ('{"ok":true,"status":"updated","applied":false}', False),
+])
+def test_placement_ok(resp, ok):
+    assert (lib(f"hive_placement_ok '{resp}'").returncode == 0) == ok
+
+
+MUSE_APPROVAL_PANE = """\
+◆ Ran command · Inspect workspace and hive env · ✗ · 0.3s · ctrl+o
+◇ Calling tools (38m 13s · esc to interrupt)
+  └ last event 38m 00s ago
+Would you like to run the following command?
+  $ pwd; ls -la /data/agents/guide 2>&1 | head -n 50
+› 1. Yes, proceed (y)
+  2. No, and tell Muse Code what to do differently (esc)
+  muse-spark-1.3-contributor · high · /data/agents/guide · Auto-review
+"""
+
+
+def test_pane_muse_approval_prompt():
+    assert out("pane_classify_text", stdin=MUSE_APPROVAL_PANE) == "approval"
+    # the question alone (e.g. quoted in an issue body) is not the menu
+    assert out("pane_classify_text",
+               stdin="Would you like to run the following command?\nsome text\n") == "ready"

@@ -153,21 +153,46 @@ _hive_json_or_error() {
   fi
 }
 
-# hive_call <ns> <pod> <sid> <METHOD> <path> [max_time]
+# hive_call <ns> <pod> <sid> <METHOD> <path> [max_time] [json_body]
 # Mutations default to 150 s: v5 restarts the agent inside switch/model/
-# effort/restart requests.
+# effort/restart requests. A json_body is sent as application/json (it is
+# never a secret: backend/model/effort).
 hive_call() {
-  local ns="$1" pod="$2" sid="$3" method="$4" upath="$5" mt="${6:-}" body rc
+  local ns="$1" pod="$2" sid="$3" method="$4" upath="$5" mt="${6:-}" data="${7:-}" body rc
+  local -a extra=()
   [ -z "$mt" ] && { [ "$method" = GET ] && mt=60 || mt=150; }
+  [ -n "$data" ] && extra=(-H "Content-Type: application/json" --data "$data")
   if [ "$(hive_via)" = svc ]; then
-    body=$(curl -sS -X "$method" --max-time "$mt" -H "Cookie: hive_session=$sid" \
+    body=$(curl -sS -X "$method" --max-time "$mt" -H "Cookie: hive_session=$sid" "${extra[@]}" \
              "http://hive.$ns.svc:$HIVE_API_PORT$upath" 2>&1); rc=$?
   else
     body=$(timeout $((mt + 30)) kubectl exec -n "$ns" "$pod" -- \
-             curl -sS -X "$method" --max-time "$mt" -H "Cookie: hive_session=$sid" \
+             curl -sS -X "$method" --max-time "$mt" -H "Cookie: hive_session=$sid" "${extra[@]}" \
              "http://127.0.0.1:$HIVE_API_PORT$upath" 2>&1); rc=$?
   fi
   _hive_json_or_error "$body" "$rc"
+}
+
+# hive_placement_body <backend> <model>: the JSON for the ATOMIC placement
+# endpoint PUT /api/config/agent/{name}/models (v5.35, hivecommons/hive#7374):
+# backend, model and — for agy only — the reasoning effort its suffixed model
+# REQUIRES, all applied to the live launch config with ONE restart. The old
+# /api/switch then /api/model pair restarted twice and, when the second call
+# failed, left an unlaunchable pair (codex with a claude model; pi launched
+# with a gemini id). agy needs the effort in the same request or v5 launches
+# a -high model with `--effort low` (hivecommons/hive#8714). Other backends
+# get no effort key: the field is validated per backend and "absent" means
+# "leave unchanged".
+hive_placement_body() {
+  local b="$1" m="$2" e=""
+  [ "$b" = agy ] && e=$(agy_effort_of "$m")
+  jq -cn --arg b "$b" --arg m "$m" --arg e "$e" \
+    '{backend: $b, model: $m} + (if $e != "" then {reasoning_effort: $e} else {} end)'
+}
+
+# hive_placement_ok <response>: 0 when the atomic endpoint confirmed it.
+hive_placement_ok() {
+  printf '%s' "$1" | jq -e '.ok == true and (if has("applied") then .applied == true else true end) and ((.status // "") | startswith("updated"))' >/dev/null 2>&1
 }
 
 # The fields any ops script reads. `liveSummary` is the hive's own last pane
@@ -297,7 +322,7 @@ watchdog_backoff_s() {
 }
 
 # pane_classify_text: classify a captured pane (stdin) as
-# ready|wizard|auth|shell|empty. Patterns are anchored to CLI CHROME, never
+# ready|wizard|auth|approval|shell|empty. Patterns are anchored to CLI CHROME, never
 # loose English an agent might be reading in an issue body.
 pane_classify_text() {
   local text last
@@ -311,6 +336,17 @@ pane_classify_text() {
   fi
   if printf '%s' "$text" | grep -qiE 'login expired|run /login|not logged in|please run /login|please use /login|select login method|sign in to use copilot|paste code here if prompted|browser didn.t open\? use the url below'; then
     echo auth; return
+  fi
+  # muse parked on a tool-approval prompt. v5.35 launches hosted muse with NO
+  # flags (manager_launch has no muse case), i.e. --approval-mode on-request
+  # plus the LLM approval judge, and the judge escalates commands that read
+  # the environment (`env | grep GH_…`) to a human who never comes. Observed
+  # 2026-09-24: reef/outreach and hanthor/guide sat 38-53 min on it. Restarting
+  # re-asks the same question, so the watchdog treats it like `auth`: rotate
+  # the agent off the backend. Anchored to muse's own menu chrome.
+  if printf '%s' "$text" | grep -qE 'Would you like to run the following command\?' &&
+     printf '%s' "$text" | grep -qE 'Yes, proceed \(y\)'; then
+    echo approval; return
   fi
   last=$(printf '%s\n' "$text" | grep -v '^[[:space:]]*$' | tail -1 | sed 's/[[:space:]]*$//')
   # A shell prompt as the LAST line = the CLI exited to bash. The agents'

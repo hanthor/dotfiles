@@ -394,7 +394,7 @@ hive_open "$NS" || { echo "ERROR: could not read /api/status from $NS" >&2; exit
 # hive_api <METHOD> <path> [max_time] — via the hive Service in-cluster, via
 # exec from a workstation. Always prints JSON (transport failures are wrapped
 # as {"ok":false,"error":...}), so `jq -r '.status // .error'` is always safe.
-hive_api() { hive_call "$NS" "$POD" "$SID" "$1" "$2" "${3:-}"; }
+hive_api() { hive_call "$NS" "$POD" "$SID" "$1" "$2" "${3:-}" "${4:-}"; }
 
 # Field lookups come from an associative array filled by ONE jq pass. Each
 # jq/fork costs ~1 s at the hive node's load (~85 on 4 vCPU), and the old
@@ -438,7 +438,10 @@ provider_login_blocked() { [ "${LOGIN_BLOCKED[$1]:-0}" = 1 ]; }
 
 # backend_model_mismatch <backend> <model>: 0 when the pair CANNOT launch.
 #
-# Placement is two API calls (/api/switch then /api/model) with no transaction
+# (History: placement was two API calls — /api/switch then /api/model — with no
+# transaction; place_agent now uses the atomic endpoint, but a pair left by an
+# older run, a human, or another tool is still repaired here.)
+# Placement WAS two API calls (/api/switch then /api/model) with no transaction
 # around them. When the second fails — and it does, the dashboard API times out
 # under concurrent mutations — the agent is left on the NEW backend with the
 # OLD model, e.g. `claude --model gemini-3.8-flash-low`. That is a hard startup
@@ -483,9 +486,7 @@ repair_mismatch() {
   [ -z "$want" ] && return 1
   printf '%-14s MISMATCH %s/%s -> setting model %s\n' "$a" "$b" "$m" "$want"
   dry && return 0
-  local md; md=$(hive_api POST "/api/model/$a/$(hive_model_path "$want")" | jq -r '.status // .error')
-  if [ "$md" = "model_set" ]; then sync_effort "$a" "$b" "$want"
-  else printf '    ! repair failed: %s\n' "$md"; fi
+  place_agent "$a" "$b" "$want" || printf '    ! repair failed\n'
 }
 
 # dry: true when this run must not mutate anything (plan, or a dry-run watchdog).
@@ -516,29 +517,23 @@ sync_effort() {
   fi
 }
 
-# place_agent <agent> <backend> <model>: switch (only if the backend changes),
-# set the model, then the effort. Returns 0 only when the agent ended on the
-# requested pair. Never leaves a new backend with the old backend's model —
-# `claude --model gemini-...` cannot launch — so a failed model set rolls the
-# backend back.
+# place_agent <agent> <backend> <model>: ONE atomic call,
+# PUT /api/config/agent/{name}/models with backend + model (+ the effort an agy
+# model requires), which v5 applies to the live launch config and follows with
+# a single restart (see hive_placement_body in hive-lib.sh). Returns 0 only when
+# the hive confirmed it. There is no half-placed state to roll back: the old
+# /api/switch + /api/model pair could leave a new backend with the old model.
 place_agent() {
-  local a="$1" wb="$2" wm="$3" curb sw md rb
-  curb=$(agent_field "$a" cli)
-  if [ "$wb" != "$curb" ]; then
-    sw=$(hive_api POST "/api/switch/$a/$wb" | jq -r '.status // .error')
-    if [ "$sw" != switched ]; then echo "    ! switch failed: $sw — leaving $a alone"; return 1; fi
-  fi
-  md=$(hive_api POST "/api/model/$a/$(hive_model_path "$wm")" | jq -r '.status // .error')
-  if [ "$md" != model_set ]; then
-    if [ "$wb" != "$curb" ]; then
-      rb=$(hive_api POST "/api/switch/$a/$curb" | jq -r '.status // .error')
-      echo "    ! model set failed: $md — rolled back to $curb ($rb)"
-    else
-      echo "    ! model set failed: $md"
-    fi
+  local a="$1" wb="$2" wm="$3" out e
+  out=$(hive_api PUT "/api/config/agent/$a/models" "" "$(hive_placement_body "$wb" "$wm")")
+  if ! hive_placement_ok "$out"; then
+    echo "    ! placement failed: $(printf '%s' "$out" | jq -r '.status // .error // .' 2>/dev/null | head -c 200)"
     return 1
   fi
-  sync_effort "$a" "$wb" "$wm"
+  if [ "$wb" = agy ]; then
+    e=$(agy_effort_of "$wm")
+    [ -n "$e" ] && ! dry && mkdir -p "$EFFORT_DIR" && echo "$e" > "$EFFORT_DIR/$a"
+  fi
   return 0
 }
 
@@ -946,6 +941,15 @@ METERED_EXHAUSTION_FAILOVER="${HIVE_ROTATE_METERED_FAILOVER:-1}"
 # catch the fleet. A cap below the fleet size is a cap on failover capacity,
 # not just on cost.
 AGY_MAX_HIGH_VOLUME="${HIVE_ROTATE_AGY_MAX_HIGH_VOLUME:-5}"
+# Kiro credit stewardship. MEASURED 2026-09-24, first hour on Kiro: 16 agents
+# burned ~470 credits/hour against a pace allowance of ~65/hour (10000/month,
+# 9635 left over 149 h) — the plan would have been empty in ~20 h. pi sends
+# the whole context on every step (one pass read 0.5-6 M input tokens), so a
+# credit is spent per STEP, and a 5-10 minute driver pays for dozens of steps
+# per hour. Agents kicked more often than this are therefore never placed on
+# kiro and are moved off it (stickiness does not protect them), unless their
+# current provider is positively exhausted (the same escape hatch as codex).
+KIRO_MIN_CADENCE_S="${HIVE_ROTATE_KIRO_MIN_CADENCE_S:-900}"
 # Watchdog: minimum minutes between auto-heal kicks of the same agent (the
 # k8s CrashLoopBackOff analog; a fresh launch needs ~1min to reach ready).
 # (Base of the exponential backoff in hive-lib.sh's watchdog_backoff_s; the
@@ -1036,6 +1040,9 @@ provider_ok() {
     # protect it unless the agent's current provider is positively exhausted
     # (the escape hatch choose_rung passes down as allow_subscription).
     if [ "$p" = openai ] && [ "${c:-999999}" -le "$HIGH_VOLUME_CADENCE_S" ] && [ "$allow_subscription" != 1 ]; then
+      return 1
+    fi
+    if [ "$p" = kiro ] && [ "${c:-999999}" -lt "$KIRO_MIN_CADENCE_S" ] && [ "$allow_subscription" != 1 ]; then
       return 1
     fi
     # agy 5h-window stewardship: a high-cadence agent on the free pool burns
@@ -1430,7 +1437,7 @@ if [ "$ACTION" = watchdog ]; then
     # restarting on the same rung just re-breaks it — rotate onto a
     # positively-measured-healthy rung first (place_agent restarts it).
     rotated=0
-    if [ "$state" = auth ] || [ "$state" = shell ]; then
+    if [ "$state" = auth ] || [ "$state" = shell ] || [ "$state" = approval ]; then
       if ! pinned "$a"; then
         want=$(choose_rung_healthy "$(tier_of "$a")" "$a")
         if [ -n "$want" ]; then
@@ -1482,10 +1489,8 @@ if [ "$ACTION" = restore ]; then
     if [ "$curb" = "$b" ] && [ "$curm" = "$m" ]; then
       printf '%-14s already on %s %s\n' "$a" "$b" "$m"; continue
     fi
-    sw=$(hive_api POST "/api/switch/$a/$b" | jq -r '.status // .error')
-    if [ "$sw" != switched ]; then printf '%-14s ! switch failed: %s\n' "$a" "$sw"; continue; fi
-    md=$(hive_api POST "/api/model/$a/$(hive_model_path "$m")" | jq -r '.status // .error')
-    printf '%-14s restored -> %s %s (%s)\n' "$a" "$b" "$m" "$md"
+    if ! place_agent "$a" "$b" "$m"; then printf '%-14s ! restore failed\n' "$a"; continue; fi
+    printf '%-14s restored -> %s %s\n' "$a" "$b" "$m"
     n=$((n+1))
   done <<< "$(tac "$STATE_DIR/rotated")"
   mv "$STATE_DIR/rotated" "$STATE_DIR/rotated.$(date +%s).done"
@@ -1669,7 +1674,13 @@ for a in $(agent_names); do
   # crash-looping. Pace owns the rung WITHIN a provider; rotate owns the
   # provider.
   demoted_from=$(pace_demoted_from "$PACE_DEMOTED" "$NS" "$a" "$curm")
-  if ! provider_exhausted "$curp" && ! provider_login_blocked "$curp" &&
+  # A high-cadence agent sitting on kiro is NOT sticky (KIRO_MIN_CADENCE_S).
+  kiro_evict=0
+  if [ "$curp" = kiro ]; then
+    kc=$(cadence_s "$a")
+    [ "${kc:-999999}" -lt "$KIRO_MIN_CADENCE_S" ] && kiro_evict=1
+  fi
+  if [ "$kiro_evict" = 0 ] && ! provider_exhausted "$curp" && ! provider_login_blocked "$curp" &&
      { rung_in_tier "$tier" "$curb" "$curm" ||
        { [ -n "$demoted_from" ] && rung_in_tier "$tier" "${demoted_from%%|*}" "${demoted_from#*|}"; }; }; then
     note_placement "$curp" "$a"
@@ -1714,7 +1725,7 @@ for a in $(agent_names); do
   changed=$((changed+1))
   [ "$ACTION" = plan ] && continue
 
-  # switch -> model -> effort, with rollback (see place_agent).
+  # backend + model + agy effort in ONE atomic call (see place_agent).
   place_agent "$a" "$wb" "$wm" || continue
   md=model_set
   # login-detector pauses are provider failures, not operator pauses. Release

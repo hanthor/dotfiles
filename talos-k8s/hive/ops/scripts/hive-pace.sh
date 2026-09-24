@@ -380,21 +380,15 @@ session_for() {
   hive_session "$1" "$pod"
 }
 
-# Uses POST /api/model/{agent}/{model} — NOT PUT /api/config/agent/{a}/models.
+# Uses the ATOMIC PUT /api/config/agent/{agent}/models (hive_placement_body):
+# backend + model + (for agy) the effort the model requires, one restart.
 #
-# The config route returns {"ok":true,"status":"updated"} and does not change
-# what the agent runs. Verified 2026-09-02 on the `hive` spoke: PUT ...
-# /models with claude-opus-5 answered ok, cleared `model_override` in
-# hive-state.json back to null, and left govModel on claude-sonnet-5 — the pack
-# default reasserted. The same call DOES work on `hive-reef`, so this is
-# ACMM-level-dependent (L6 vs L5) and cannot be trusted fleet-wide. An actuator
-# that logs "demote" while changing nothing is worse than no actuator: the
-# pacer would report itself in control while the burn ran on unchecked.
-#
-# hive-rotate has always used /api/model + /api/switch, which is why ITS
-# placements stick. The pacer only ever moves along a rung WITHIN one provider
-# (rung_down maps opus->sonnet, never across backends), so the model call alone
-# is sufficient and there is no switch/model two-call transaction to get wrong.
+# History: on 2026-09-02 (the v4 fork) this route answered ok and changed
+# nothing on the L6 `hive` spoke — a stale ModelOverride won at launch — so
+# the pacer used POST /api/model + a separate /api/effort (two restarts). v5.35
+# applies the override itself (hivecommons/hive#7374); re-verified on `hive`
+# 2026-09-24: overrides, hive.yaml.runtime and the launched CLI all changed
+# from one PUT.
 #
 # NOTE: /api/status lags a mutation by >10s, so a read-back immediately after
 # this call still shows the OLD model. Do not treat that as failure.
@@ -413,26 +407,23 @@ set_model() {
     echo "WARN: $ns has no pod or no unexpired owner session — cannot actuate" >&2
     return 1
   fi
-  local out
+  local out want edir
   # 150 s: v5 restarts the agent inside the request.
-  out=$(hive_call "$ns" "$pod" "$sid" POST "/api/model/$agent/$(hive_model_path "$model")")
+  out=$(hive_call "$ns" "$pod" "$sid" PUT "/api/config/agent/$agent/models" "" \
+          "$(hive_placement_body "$backend" "$model")")
   # Judge by the response, not by exit status: a 200 carrying an error body is
   # a documented failure shape on this API.
-  case "$out" in
-    *'"status":"model_set"'*|*'"ok":true'*)
-      # agy suffixes must match --effort or agy silently runs 3.6 Flash Low
-      # (see hive-lib.sh agy_effort_of). The recorded effort lives with
-      # hive-rotate's per-hive state so both scripts agree.
-      local want edir
+  if hive_placement_ok "$out"; then
+    # Record the agy effort where hive-rotate keeps it, so both scripts agree.
+    want=$( [ "$backend" = agy ] && agy_effort_of "$model")
+    if [ -n "$want" ]; then
       edir="$(dirname "$STATE_DIR")/$( [ "$ns" = hive ] && echo hive-rotate || echo "hive-rotate-${ns#hive-}")/effort"
-      want=$(effort_change "$backend" "$model" "$(cat "$edir/$agent" 2>/dev/null)")
-      if [ -n "$want" ] && hive_call "$ns" "$pod" "$sid" POST "/api/effort/$agent/$want" | grep -q effort_set; then
-        mkdir -p "$edir" && echo "$want" > "$edir/$agent"
-      fi
-      printf '%s' "$out"; return 0 ;;
-    *) echo "WARN: model set for $ns/$agent -> $model did not confirm: ${out:0:160}" >&2
-       return 1 ;;
-  esac
+      mkdir -p "$edir" && echo "$want" > "$edir/$agent"
+    fi
+    printf '%s' "$out"; return 0
+  fi
+  echo "WARN: model set for $ns/$agent -> $model did not confirm: ${out:0:160}" >&2
+  return 1
 }
 
 publish() {

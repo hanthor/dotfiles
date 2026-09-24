@@ -104,7 +104,7 @@ to `env`.
 
   A rung the pacer demoted the agent to also counts as in-tier. Before that rule, rotate and pace undid each other every tick.
 - **Tiers** combine the built-in `TIERS` table in `hive-rotate.sh` with `tiers.tsv`, filtered by `inventory.tsv`. Only `-contributor` models are allowed for muse.
-- **agy effort (v5)**: v5 starts agy with `--effort <agent effort>`, which defaults to `low`. agy ignores a `-high` or `-medium` model id when the effort doesn't match and runs Gemini 3.6 Flash (Low) instead. Every agy placement therefore also calls `POST /api/effort/{agent}/{effort}`.
+- **agy effort (v5)**: v5 starts agy with `--effort <agent effort>`, which defaults to `low`. agy ignores a `-high` or `-medium` model id when the effort doesn't match and runs Gemini 3.6 Flash (Low) instead. Every agy placement therefore sends the matching `reasoning_effort` in the same atomic `PUT /api/config/agent/{name}/models` (hivecommons/hive#8714).
 
 ## Plumbing notes (why the scripts look the way they do)
 
@@ -116,7 +116,14 @@ See the header of `scripts/hive-lib.sh`. In short:
   `kubectl exec` is used only where nothing else works.
 - `KUBECTL_REMOTE_COMMAND_WEBSOCKETS=false`: the `hive-ops` Role grants `create` on
   `pods/exec` but not `get`, so kubectl's WebSocket attempt always fails with 403 before falling back to SPDY.
-- Mutations (`/api/switch|model|effort|restart`) restart the agent while the request is open, so the client timeout is 150 s.
+- Mutations restart the agent while the request is open, so the client timeout is 150 s.
+- **Placement is one atomic call**: `PUT /api/config/agent/{name}/models` with
+  `{"backend","model"}`, plus `"reasoning_effort"` for agy. `hive_placement_body`
+  builds the body and `hive_placement_ok` checks the answer. v5.35 applies it to
+  the live launch config and restarts once (hivecommons/hive#7374). This was
+  re-verified on `hive` on 2026-09-24. The old `/api/switch` + `/api/model` pair
+  restarted twice and could leave an unlaunchable pair (#8714/#8723).
+  `/api/effort` is still used for an effort-only drift fix.
 
 Tests: `uvx --with pyyaml pytest -q tests/test_hive_ops_lib.py`, and `shellcheck -S warning -x scripts/*.sh`.
 
@@ -193,7 +200,12 @@ Credits per request scale with the model's `rateMultiplier` from `ListAvailableM
 | gpt-5.6 terra | 2.2 |
 | gpt-5.6 luna | 1.1 |
 
-Rotate publishes it as `kiro: N% used credits=U/L resets=…`. Pace fits the exact
+**Measured burn (2026-09-24).** 16 agents on Kiro burned ~470 credits/hour against
+a pace allowance of ~65/hour. pi re-sends the whole context on every step, and one
+pass read 0.5–6 M input tokens. So rotate never places an agent kicked more often
+than every 15 min (`HIVE_ROTATE_KIRO_MIN_CADENCE_S`, default 900) on Kiro, and
+moves such an agent off it. Rotate publishes the reading as
+`kiro: N% used credits=U/L resets=…`. Pace fits the exact
 credit count, because 1% is 100 credits. The pace rungs are
 `opus-5 → sonnet-5` and `gpt-5.6 sol/terra → luna`.
 
@@ -205,4 +217,16 @@ kubectl -n hive-hanthor exec deploy/hive -c hive -- su-exec hive-architect \
   NODE_EXTRA_CA_CERTS=/data/proxy-ca.pem pi --model kiro-api-key/claude-sonnet-5 \
   --no-session --mode json -p 'Use bash to run: echo ok' | jq -c 'select(.type=="message_end")'
 ```
+
+## Muse (meta) caveat
+
+v5.35 has no muse case in its hosted launcher, so agents run bare `muse`. That
+means `--approval-mode on-request` and the LLM approval judge. The
+`--approval-mode never` in backends.conf applies only to the contributor path.
+The judge sometimes escalates a command to a human prompt ("Would you like to run
+the following command? … Yes, proceed (y)"), typically one that reads the env.
+On 2026-09-24, 2 of 4 muse agents parked there for 38–53 min. The watchdog
+classifies that pane as `approval` and rotates the agent off muse, as it does for
+`auth`. Restarting would only ask again. Muse stays a last-resort T2/T3 rung until
+upstream launches it unattended.
 
