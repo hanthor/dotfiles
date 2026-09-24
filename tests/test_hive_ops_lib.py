@@ -46,7 +46,10 @@ def rotate_fn(names, snippet, stdin=None):
     ("agy", "gpt-5.6-luna", "openai"),          # model sniffing wins over the CLI
     ("copilot", "claude-fable-5", "github"),     # CLI-tied auth wins over the model
     ("muse", "muse-spark-1.3-contributor", "meta"),
-    ("pi", "", "deepseek"),
+    ("pi", "", "unknown"),                       # deepseek default dropped
+    ("pi", "kiro-api-key/claude-sonnet-5", "kiro"),  # prefix beats model sniffing
+    ("pi", "kiro-api-key/gpt-5-6-sol", "kiro"),
+    ("pi", "deepseek-v4-flash", "deepseek"),     # legacy, still recognised
     ("weird", "", "unknown"),
 ])
 def test_provider_of(backend, model, want):
@@ -73,6 +76,12 @@ def test_effort_change(backend, model, recorded, want):
     ("gpt-5.6-sol", "gpt-5.6-luna"),
     ("claude-sonnet-5", ""),
     ("gemini-3.6-flash-low", ""),
+    ("kiro-api-key/claude-opus-5", "kiro-api-key/claude-sonnet-5"),
+    ("kiro-api-key/gpt-5-6-sol", "kiro-api-key/gpt-5-6-luna"),
+    ("kiro-api-key/claude-sonnet-5", ""),
+    ("kiro-api-key/claude-opus-5:high", "kiro-api-key/claude-sonnet-5:high"),
+    ("kiro-api-key/gpt-5-6-sol:high", "kiro-api-key/gpt-5-6-luna:high"),
+    ("kiro-api-key/claude-sonnet-5:medium", ""),
 ])
 def test_rung_down(model, want):
     assert out(f"rung_down {model}") == want
@@ -223,14 +232,36 @@ def test_parse_anthropic_missing_token_is_exhaustion():
     assert got.startswith("100 no-credential")
 
 
+KIRO_USAGE = {
+    "daysUntilReset": 0, "limits": [], "nextDateReset": 1.7908128E9,
+    "overageConfiguration": {"overageStatus": "DISABLED"},
+    "usageBreakdownList": [{"resourceType": "CREDIT", "currentUsageWithPrecision": 6.34,
+                            "usageLimitWithPrecision": 10000.0, "nextDateReset": 1.7908128E9}]}
+
+
 @pytest.mark.parametrize("body,want", [
-    ('{"is_available":false,"balance_infos":[{"total_balance":"-1.23"}]}', "100 balance=-1.23"),
-    ('{"is_available":true,"balance_infos":[{"total_balance":"0.50"}]}', "100 balance=$0.50"),
-    ('{"is_available":true,"balance_infos":[{"total_balance":"12.00"}]}', "0 balance=$12.00"),
-    ("curl: (28) timeout", "-1 unknown"),
+    (json.dumps(KIRO_USAGE), "0 credits=6.34/10000 resets=2026-10-01T00:00:00Z"),
+    (json.dumps({**KIRO_USAGE, "usageBreakdownList": [
+        {**KIRO_USAGE["usageBreakdownList"][0], "currentUsageWithPrecision": 9612.5}]}),
+     "96 credits=9612.5/10000 resets=2026-10-01T00:00:00Z"),
+    (json.dumps({**KIRO_USAGE, "overageConfiguration": {"overageStatus": "ENABLED"}, "usageBreakdownList": [
+        {**KIRO_USAGE["usageBreakdownList"][0], "currentUsageWithPrecision": 10400}]}),
+     "100 credits=10400/10000 resets=2026-10-01T00:00:00Z overage=ENABLED"),
+    ('{"__type":"com.amazon.kiro.runtimeservice#AccessDeniedException","message":"The bearer token included in the request is invalid."}',
+     "100 key-rejected"),
+    ("KIRO-KEY-MISSING\n", "-1 no-key (KIRO_API_KEY not in the hive pod env)"),
+    ("curl: (28) timeout", "-1 unparsed"),
 ])
-def test_parse_deepseek(body, want):
-    assert rotate_fn(["parse_probe_deepseek"], "parse_probe_deepseek", stdin=body) == want
+def test_parse_kiro(body, want):
+    assert rotate_fn(["parse_probe_kiro"], "parse_probe_kiro", stdin=body) == want
+
+
+@pytest.mark.parametrize("model,want", [
+    ("kiro-api-key/claude-sonnet-5:medium", "kiro-api-key%2Fclaude-sonnet-5:medium"),
+    ("gemini-3.8-flash-low", "gemini-3.8-flash-low"),
+])
+def test_model_path(model, want):
+    assert out(f"hive_model_path {model}") == want
 
 
 def test_parse_google_uses_lowest_gemini_remaining():
@@ -244,8 +275,8 @@ def test_parse_google_uses_lowest_gemini_remaining():
 
 
 def test_probe_section():
-    raw = "=====HIVE-PROBE deepseek\n{\"a\":1}\n\n=====HIVE-PROBE meta\nM\n"
-    assert rotate_fn(["probe_section"], f"probe_section '{raw}' deepseek") == '{"a":1}'
+    raw = "=====HIVE-PROBE kiro\n{\"a\":1}\n\n=====HIVE-PROBE meta\nM\n"
+    assert rotate_fn(["probe_section"], f"probe_section '{raw}' kiro") == '{"a":1}'
     assert rotate_fn(["probe_section"], f"probe_section '{raw}' meta") == "M"
 
 
@@ -290,3 +321,66 @@ def test_hive_open_refreshes_a_refused_cached_session(stub_env, tmp_path):
     assert "statsConfig" not in slim["agents"][0]
     assert (tmp_path / "sids").read_text().split() == ["stale", "good"]
     assert (cache / "hive.sid").read_text() == "good"
+
+
+def test_tier_members_inventory_gate_ignores_pi_thinking_suffix(tmp_path):
+    """A kiro rung `kiro-api-key/<id>:high` must survive the inventory gate,
+    which lists bare ids; a rung whose bare id is absent must not."""
+    inv = tmp_path / "inventory.tsv"
+    inv.write_text("kiro\tpi\tkiro-api-key/claude-opus-5\tOpus\n"
+                   "google\tagy\tgemini-3.8-flash-high\tG\n")
+    tiers = ("T1|kiro|pi|kiro-api-key/claude-opus-5:high\n"
+             "T1|kiro|pi|kiro-api-key/gpt-5-6-sol:high\n"
+             "T1|google|agy|gemini-3.8-flash-high\n"
+             "T1|openai|codex|gpt-5.6-sol\n")
+    r = subprocess.run(["bash", "-c",
+        f'. "{LIB}"; source <(sed -n "/^tier_members() {{/,/^}}/p" "{ROTATE}"); '
+        f'TIER_SOURCE=builtin INVENTORY_OK=1 INVENTORY="{inv}" TIERS="{tiers}" tier_members T1'],
+        capture_output=True, text=True, timeout=30)
+    assert r.stdout.split() == ["T1|kiro|pi|kiro-api-key/claude-opus-5:high",
+                                "T1|google|agy|gemini-3.8-flash-high",
+                                "T1|openai|codex|gpt-5.6-sol"]
+
+
+@pytest.mark.parametrize("backend,model,want", [
+    ("agy", "gemini-3.8-flash-high",
+     {"backend": "agy", "model": "gemini-3.8-flash-high", "reasoning_effort": "high"}),
+    ("agy", "gemini-3.1-pro", {"backend": "agy", "model": "gemini-3.1-pro"}),
+    ("pi", "kiro-api-key/claude-opus-5:high",
+     {"backend": "pi", "model": "kiro-api-key/claude-opus-5:high"}),   # no effort key off agy
+    ("muse", "muse-spark-1.3-contributor",
+     {"backend": "muse", "model": "muse-spark-1.3-contributor"}),
+])
+def test_placement_body(backend, model, want):
+    assert json.loads(out(f"hive_placement_body {backend} {model}")) == want
+
+
+@pytest.mark.parametrize("resp,ok", [
+    ('{"ok":true,"status":"updated","agent":"a","applied":true,"restarted":true}', True),
+    ('{"ok":true,"status":"updated","agent":"a","applied":true,"restarted":false}', True),
+    ('{"ok":true,"status":"updated; applied to the launch configuration but the restart failed"}', True),
+    ('{"ok":false,"error":"transport rc=28: timeout"}', False),
+    ('{"error":"agent not found"}', False),
+    ('{"ok":true,"status":"updated","applied":false}', False),
+])
+def test_placement_ok(resp, ok):
+    assert (lib(f"hive_placement_ok '{resp}'").returncode == 0) == ok
+
+
+MUSE_APPROVAL_PANE = """\
+◆ Ran command · Inspect workspace and hive env · ✗ · 0.3s · ctrl+o
+◇ Calling tools (38m 13s · esc to interrupt)
+  └ last event 38m 00s ago
+Would you like to run the following command?
+  $ pwd; ls -la /data/agents/guide 2>&1 | head -n 50
+› 1. Yes, proceed (y)
+  2. No, and tell Muse Code what to do differently (esc)
+  muse-spark-1.3-contributor · high · /data/agents/guide · Auto-review
+"""
+
+
+def test_pane_muse_approval_prompt():
+    assert out("pane_classify_text", stdin=MUSE_APPROVAL_PANE) == "approval"
+    # the question alone (e.g. quoted in an issue body) is not the menu
+    assert out("pane_classify_text",
+               stdin="Would you like to run the following command?\nsome text\n") == "ready"

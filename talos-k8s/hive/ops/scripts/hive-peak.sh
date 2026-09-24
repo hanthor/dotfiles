@@ -103,11 +103,18 @@ hive_api() { hive_call "$NS" "$POD" "$SID" "$1" "$2"; }
 # pod), while `claude` and `litellm` can share one Anthropic pool. The model
 # name is the strongest signal, so it is tested first; the CLI name is only a
 # fallback for when the model is unset.
+#
+# 2026-09-24: DeepSeek is no longer used and the peak CronJobs are suspended.
+# `pi` now runs the owner's Kiro subscription (`kiro-api-key/<model>`), which has
+# no peak pricing: the provider prefix is tested FIRST (its model names contain
+# "claude"/"gpt-"), and a bare `pi`/`goose` no longer defaults to deepseek, so
+# a re-enabled window can never pause a Kiro agent.
 PROVIDER_JQ='
 def provider:
   ((.govModel // "") | ascii_downcase) as $m |
   ((.cli // "")      | ascii_downcase) as $c |
-  if   ($m | test("deepseek"))                    then "deepseek"
+  if   ($m | test("^kiro(-api-key)?/"))           then "kiro"
+  elif ($m | test("deepseek"))                    then "deepseek"
   elif ($m | test("claude|opus|sonnet|haiku"))    then "anthropic"
   elif ($m | test("gpt-|^o[0-9]|codex"))          then "openai"
   elif ($m | test("gemini"))                      then "google"
@@ -116,7 +123,6 @@ def provider:
   elif $c == "agy"                                then "google"
   elif $c == "copilot"                            then "github"
   elif $c == "bob"                                then "ibm"
-  elif $c == "pi" or $c == "goose"                then "deepseek"
   else "unknown" end;'
 
 # Providers this window applies to. Override to retune without editing code.

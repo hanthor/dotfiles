@@ -5,8 +5,13 @@
 # ---------------
 # Hive's `governor.budget` counts tokens against a number YOU configure. It has
 # no idea about the Claude Max weekly limit, the ChatGPT Plus weekly limit, or
-# the DeepSeek credit balance — and those are what actually stop work. They are
-# per-ACCOUNT, and only each client knows its own headroom.
+# the Kiro Power monthly credits — and those are what actually stop work. They
+# are per-ACCOUNT, and only each client knows its own headroom.
+#
+# DEEPSEEK IS GONE (2026-09-24): the owner is not topping the balance up again.
+# Its rungs, probe and peak-window avoidance were removed; KIRO (the owner's
+# Kiro Power subscription, run through `pi` + the pi-kiro-api provider — see
+# hive-pi-kiro.sh) took its place as the subscription pool with the most room.
 #
 # This script closes that gap:
 #   1. probe    — ask each provider how much headroom is left
@@ -74,7 +79,9 @@ set -u
 # manages the primary hive should touch them.
 NS="${HIVE_NS:-hive}"
 STATE_DIR="${HIVE_ROTATE_STATE:-$HOME/.local/state/hive-rotate}"
-PEAK_PROVIDERS="${HIVE_PEAK_PROVIDERS:-deepseek}"
+# No provider is peak-priced any more (DeepSeek was the only one). The knob is
+# kept so a future metered pool can opt back in.
+PEAK_PROVIDERS="${HIVE_PEAK_PROVIDERS:-}"
 PEAK_WINDOWS="${HIVE_PEAK_WINDOWS:-01:00-04:00,06:00-10:00}"
 
 RUN_START=$(date +%s)
@@ -99,25 +106,11 @@ mkdir -p "$STATE_DIR"
 # (Terminus 2) vs 65.8 (Gemini CLI) on harness alone — so harness-paired numbers
 # are the ones that predict THIS fleet, since hive runs these CLIs specifically.
 #
-# The headline consequence: deepseek-flash (82.7) OUTSCORES Sonnet 5 under
-# Claude Code (74.6) and GPT-5.6 Luna under Codex (75.7) while being by far the
-# cheapest. DeepSeek is therefore the DEFAULT rung on both cost and capability;
-# Anthropic/OpenAI are FAILOVER rungs, not premium upgrades.
-#
-# DO NOT put deepseek-v4-pro above v4-flash. "Pro" is the bigger, pricier model
-# and the intuitive frontier pick, but on AGENT benchmarks it loses to Flash and
-# costs 3.1x more:
-#     V4-Flash  TB2.1 82.7   $0.14 in / $0.28 out per 1M
-#     V4-Pro    TB2.1 72.1   $0.435 in / $0.87 out per 1M   (V4-Pro-Preview)
-# DeepSeek's own release notes state it plainly: "Do not switch to V4-Pro for
-# agent work on price grounds alone — Flash now leads on the published agent
-# suites." A third-party list did report a later "V4 Pro 0813" at 87.9, but that
-# is unconfirmed by a second source and it is unclear which build the
-# `deepseek-v4-pro` API id resolves to — so the vendor's explicit agentic
-# guidance wins until that is settled. Flash is therefore the DeepSeek rung at
-# BOTH T1 and T2: at 82.7 it is competitive with the frontier subscription
-# models while costing a fraction, which is exactly what a metered default rung
-# should be.
+# History: deepseek-flash (82.7) used to be the DEFAULT rung at T1-T3 on cost
+# and capability. It was removed 2026-09-24 when the owner stopped topping up
+# the DeepSeek balance; the Kiro rungs (same frontier Claude/GPT models, on a
+# subscription nobody else draws on) took over its role. See `git log` for the
+# DeepSeek rung rationale (V4-Flash over V4-Pro) if it ever comes back.
 #
 # ANTHROPIC RUNG MODELS ARE OVERRIDABLE, and this is a pacing lever, not a
 # convenience. The table's job is to name a CAPABILITY FLOOR per tier; picking
@@ -188,19 +181,42 @@ META_MODEL="${HIVE_META_MODEL:-muse-spark-1.3-contributor}"
 # Format: tier|provider|backend|model   (order within a tier = preference)
 # Double-quoted so the two rung variables above expand; the block contains no
 # other `$`, so nothing else is interpolated.
+# KIRO RUNGS (2026-09-24). The owner's Kiro Power plan: 10000 credits per
+# calendar month, overage DISABLED (a hard stop at 100%), usage readable via
+# GetUsageLimits (see probe_all). Reached through the `pi` backend, so the model
+# id carries pi's provider prefix. Credits per request scale with the model's
+# rateMultiplier from ListAvailableModels:
+#     claude-opus-5 2.2   claude-sonnet-5 1.3   claude-haiku-4-5 0.4
+#     gpt-5.6-sol 4.4     gpt-5.6-terra 2.2     gpt-5.6-luna 1.1
+# Same frontier models as the claude/codex rungs (TB2.1: sol 89.5, opus-5 89.1,
+# luna 75.7, sonnet-5 74.6 — measured under their own CLIs; under pi they are
+# expected to be comparable, not yet measured). Two rungs per tier so the
+# operator can spread model families; the Claude one is listed first because
+# it is half the credits of its GPT peer at T1.
+#
+# EVERY KIRO RUNG CARRIES A pi THINKING SUFFIX (`:high` / `:medium` / `:low`),
+# and that is load-bearing, not style. v5's normalizeModelNameForBackend (the
+# copilot-era "dots in version" rewrite, manager_routing.go) turns a trailing
+# `-<digits>` into `.<digits>` for every backend except claude/bob, so
+# `kiro-api-key/claude-opus-5` launched as `pi --model kiro-api-key/claude-opus.5`
+# — an unknown id pi passes through as custom (observed 2026-09-24, hanthor
+# architect). pi's `provider/id:<thinking>` syntax ends the id in a non-digit, so
+# v5 leaves it alone, and it pins the reasoning level explicitly.
 TIERS="
 T1|google|agy|gemini-3.8-flash-high
-T1|deepseek|pi|deepseek-flash
+T1|kiro|pi|kiro-api-key/claude-opus-5:high
+T1|kiro|pi|kiro-api-key/gpt-5-6-sol:high
 T1|openai|codex|gpt-5.6-sol
 T1|anthropic|claude|$T1_ANTHROPIC_MODEL
 T2|google|agy|gemini-3.8-flash-low
-T2|deepseek|pi|deepseek-flash
+T2|kiro|pi|kiro-api-key/claude-sonnet-5:medium
+T2|kiro|pi|kiro-api-key/gpt-5-6-luna:medium
 T2|openai|codex|gpt-5.6-luna
 T2|anthropic|claude|$T2_ANTHROPIC_MODEL
 T2|google|agy|gemini-3.6-flash-low
 T2|meta|muse|$META_MODEL
 T3|google|agy|gemini-3.8-flash-low
-T3|deepseek|pi|deepseek-flash
+T3|kiro|pi|kiro-api-key/claude-haiku-4-5:low
 T3|openai|codex|gpt-5.6-luna
 T3|anthropic|claude|claude-haiku-4-5-20251001
 T3|google|agy|gemini-3.6-flash-low
@@ -356,7 +372,9 @@ tier_members() {
       }
     }
     NF < 4 { next }
-    { if (!measured[$2] || have[$2 "|" $4]) print }
+    # A pi `:<thinking>` suffix is launch syntax, not part of the model id.
+    { m = $4; sub(/:(off|minimal|low|medium|high|xhigh|max)$/, "", m)
+      if (!measured[$2] || have[$2 "|" m]) print }
   '
 }
 
@@ -376,7 +394,7 @@ hive_open "$NS" || { echo "ERROR: could not read /api/status from $NS" >&2; exit
 # hive_api <METHOD> <path> [max_time] — via the hive Service in-cluster, via
 # exec from a workstation. Always prints JSON (transport failures are wrapped
 # as {"ok":false,"error":...}), so `jq -r '.status // .error'` is always safe.
-hive_api() { hive_call "$NS" "$POD" "$SID" "$1" "$2" "${3:-}"; }
+hive_api() { hive_call "$NS" "$POD" "$SID" "$1" "$2" "${3:-}" "${4:-}"; }
 
 # Field lookups come from an associative array filled by ONE jq pass. Each
 # jq/fork costs ~1 s at the hive node's load (~85 on 4 vCPU), and the old
@@ -420,7 +438,10 @@ provider_login_blocked() { [ "${LOGIN_BLOCKED[$1]:-0}" = 1 ]; }
 
 # backend_model_mismatch <backend> <model>: 0 when the pair CANNOT launch.
 #
-# Placement is two API calls (/api/switch then /api/model) with no transaction
+# (History: placement was two API calls — /api/switch then /api/model — with no
+# transaction; place_agent now uses the atomic endpoint, but a pair left by an
+# older run, a human, or another tool is still repaired here.)
+# Placement WAS two API calls (/api/switch then /api/model) with no transaction
 # around them. When the second fails — and it does, the dashboard API times out
 # under concurrent mutations — the agent is left on the NEW backend with the
 # OLD model, e.g. `claude --model gemini-3.8-flash-low`. That is a hard startup
@@ -439,6 +460,11 @@ backend_model_mismatch() {
     claude) case "$m" in *claude*|*opus*|*sonnet*|*haiku*) return 1 ;; *) return 0 ;; esac ;;
     agy)    case "$m" in *gemini*) return 1 ;; *) return 0 ;; esac ;;
     codex)  case "$m" in *gpt-*|*codex*) return 1 ;; *) return 0 ;; esac ;;
+    # pi's only provider in this fleet is Kiro now (its old deepseek default is
+    # gone), so a pi agent on any non-kiro model cannot launch — typically the
+    # half-placed `pi --model gemini-…` left when /api/model failed after
+    # /api/switch.
+    pi)     case "$m" in kiro-api-key/*) return 1 ;; *) return 0 ;; esac ;;
     *)      return 1 ;;
   esac
 }
@@ -460,9 +486,7 @@ repair_mismatch() {
   [ -z "$want" ] && return 1
   printf '%-14s MISMATCH %s/%s -> setting model %s\n' "$a" "$b" "$m" "$want"
   dry && return 0
-  local md; md=$(hive_api POST "/api/model/$a/$want" | jq -r '.status // .error')
-  if [ "$md" = "model_set" ]; then sync_effort "$a" "$b" "$want"
-  else printf '    ! repair failed: %s\n' "$md"; fi
+  place_agent "$a" "$b" "$want" || printf '    ! repair failed\n'
 }
 
 # dry: true when this run must not mutate anything (plan, or a dry-run watchdog).
@@ -493,29 +517,23 @@ sync_effort() {
   fi
 }
 
-# place_agent <agent> <backend> <model>: switch (only if the backend changes),
-# set the model, then the effort. Returns 0 only when the agent ended on the
-# requested pair. Never leaves a new backend with the old backend's model —
-# `claude --model gemini-...` cannot launch — so a failed model set rolls the
-# backend back.
+# place_agent <agent> <backend> <model>: ONE atomic call,
+# PUT /api/config/agent/{name}/models with backend + model (+ the effort an agy
+# model requires), which v5 applies to the live launch config and follows with
+# a single restart (see hive_placement_body in hive-lib.sh). Returns 0 only when
+# the hive confirmed it. There is no half-placed state to roll back: the old
+# /api/switch + /api/model pair could leave a new backend with the old model.
 place_agent() {
-  local a="$1" wb="$2" wm="$3" curb sw md rb
-  curb=$(agent_field "$a" cli)
-  if [ "$wb" != "$curb" ]; then
-    sw=$(hive_api POST "/api/switch/$a/$wb" | jq -r '.status // .error')
-    if [ "$sw" != switched ]; then echo "    ! switch failed: $sw — leaving $a alone"; return 1; fi
-  fi
-  md=$(hive_api POST "/api/model/$a/$wm" | jq -r '.status // .error')
-  if [ "$md" != model_set ]; then
-    if [ "$wb" != "$curb" ]; then
-      rb=$(hive_api POST "/api/switch/$a/$curb" | jq -r '.status // .error')
-      echo "    ! model set failed: $md — rolled back to $curb ($rb)"
-    else
-      echo "    ! model set failed: $md"
-    fi
+  local a="$1" wb="$2" wm="$3" out e
+  out=$(hive_api PUT "/api/config/agent/$a/models" "" "$(hive_placement_body "$wb" "$wm")")
+  if ! hive_placement_ok "$out"; then
+    echo "    ! placement failed: $(printf '%s' "$out" | jq -r '.status // .error // .' 2>/dev/null | head -c 200)"
     return 1
   fi
-  sync_effort "$a" "$wb" "$wm"
+  if [ "$wb" = agy ]; then
+    e=$(agy_effort_of "$wm")
+    [ -n "$e" ] && ! dry && mkdir -p "$EFFORT_DIR" && echo "$e" > "$EFFORT_DIR/$a"
+  fi
   return 0
 }
 
@@ -548,8 +566,15 @@ probe_all() {
   timeout "${HIVE_PROBE_TIMEOUT:-150}" kubectl exec -n "$NS" "$POD" -- sh -c '
     A="$1"; T=$(mktemp -d /tmp/hive-probe.XXXXXX)
     u=$(id -u "hive-$A" 2>/dev/null || getent passwd | awk -F: "/^hive-/{print \$3; exit}")
-    ( timeout 25 curl -sS --max-time 20 -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-        https://api.deepseek.com/user/balance > "$T/deepseek" 2>&1 ) &
+    ( if [ -n "${KIRO_API_KEY:-}" ]; then
+        timeout 25 curl -sS --max-time 20 -X POST https://q.us-east-1.amazonaws.com/ \
+          -H "Authorization: Bearer $KIRO_API_KEY" -H "tokentype: API_KEY" \
+          -H "Content-Type: application/x-amz-json-1.0" -H "Accept: application/json" \
+          -H "X-Amz-Target: AmazonCodeWhispererService.GetUsageLimits" \
+          -H "x-amzn-codewhisperer-optout: true" \
+          -H "user-agent: aws-sdk-rust/1.0.0 ua/2.1 os/other lang/rust api/codewhispererruntime#1.28.3 m/E app/AmazonQ-For-CLI" \
+          -d "{\"origin\":\"AI_EDITOR\",\"resourceType\":\"AGENTIC_REQUEST\"}"
+      else echo KIRO-KEY-MISSING; fi > "$T/kiro" 2>&1 ) &
     ( timeout 25 curl -sS --max-time 20 -H "Authorization: Bearer $META_API_KEY" \
         https://api.meta.ai/v1/models > "$T/meta" 2>&1 ) &
     ( timeout 25 su-exec "$u" sh -c "
@@ -569,7 +594,7 @@ probe_all() {
           > "$T/google" 2>/dev/null
       else echo AGY-BINARY-MISSING > "$T/google"; fi ) &
     wait
-    for p in deepseek meta anthropic openai google; do
+    for p in kiro meta anthropic openai google; do
       echo "=====HIVE-PROBE $p"; cat "$T/$p" 2>/dev/null; echo
     done
     rm -rf "$T"' sh "$1" 2>/dev/null
@@ -582,17 +607,29 @@ probe_section() {
     on { print }'
 }
 
-parse_probe_deepseek() {  # stdin: /user/balance body
-  local out avail bal
+# Kiro GetUsageLimits (AmazonCodeWhispererService, same endpoint and bearer
+# key as the pi provider; found 2026-09-24 — the Kiro IDE's own usage call).
+# Answer: usageBreakdownList[] with resourceType CREDIT, currentUsageWithPrecision
+# / usageLimitWithPrecision (10000 on Power), nextDateReset (epoch; the 1st of
+# the month 00:00Z), and overageConfiguration.overageStatus. With overage
+# DISABLED the plan hard-stops at 100%, so it is exhaustion like any cap; with
+# overage ENABLED every credit past the limit is billed ($0.04), so the reading
+# is flagged and the threshold still keeps the fleet off it.
+# credits=U/L is carried in the note so the pacer can fit sub-percent burn.
+parse_probe_kiro() {  # stdin: GetUsageLimits body
+  local out
   out=$(cat)
-  # jq's `//` treats false as empty, which turned DeepSeek's explicit
-  # {"is_available":false} into "unknown". Test key presence instead.
-  avail=$(printf '%s' "$out" | jq -r 'if has("is_available") then .is_available else empty end' 2>/dev/null)
-  bal=$(printf '%s' "$out"  | jq -r '.balance_infos[0].total_balance // empty' 2>/dev/null)
-  [ -z "$avail" ] && { echo "-1 unknown"; return; }
-  # Prepaid credit, not a percentage: "unavailable" or <$1 is exhausted.
-  if [ "$avail" != "true" ]; then echo "100 balance=${bal:-0}"; return; fi
-  awk -v b="${bal:-0}" 'BEGIN{ printf "%d balance=$%s\n", (b+0 < 1 ? 100 : 0), b }'
+  case "$out" in KIRO-KEY-MISSING*) echo "-1 no-key (KIRO_API_KEY not in the hive pod env)"; return ;; esac
+  printf '%s' "$out" | jq -r '
+    ([.usageBreakdownList[]? | select(.resourceType == "CREDIT")] | first) as $u
+    | if $u == null or ($u.usageLimitWithPrecision // 0) <= 0 then empty else
+        ($u.currentUsageWithPrecision / $u.usageLimitWithPrecision * 100) as $p
+        | "\([($p | floor), 100] | min) credits=\($u.currentUsageWithPrecision + 0)/\($u.usageLimitWithPrecision + 0)"
+          + " resets=\(((.nextDateReset // $u.nextDateReset) | floor | todate))"
+          + (if (.overageConfiguration.overageStatus // "") == "ENABLED" then " overage=ENABLED" else "" end)
+      end' 2>/dev/null | grep . \
+    || { if printf '%s' "$out" | grep -qi 'AccessDenied\|invalid'; then echo "100 key-rejected"
+         else echo "-1 unparsed"; fi; }
 }
 
 # muse has NO usage/quota endpoint. What can be checked: the credential works
@@ -732,7 +769,7 @@ in_peak_window() {
 declare -A PCT NOTE
 # The provider pools this fleet measures and places on. Written ONCE (adding a
 # provider to only some loops left it with no note, which provider_ok rejects).
-PROVIDERS="${HIVE_ROTATE_PROVIDERS:-deepseek anthropic openai google meta}"
+PROVIDERS="${HIVE_ROTATE_PROVIDERS:-kiro anthropic openai google meta}"
 
 # Where the measurement is published. ALWAYS the primary hive's namespace:
 # every spoke draws on the SAME accounts (the .claude/.gemini/.codex homes are
@@ -786,7 +823,7 @@ measure_usage() {
   raw=$(probe_all "$a")
   for p in $PROVIDERS; do
     case $p in
-      deepseek)  r=$(probe_section "$raw" deepseek  | parse_probe_deepseek) ;;
+      kiro)      r=$(probe_section "$raw" kiro      | parse_probe_kiro) ;;
       meta)      r=$(probe_section "$raw" meta      | parse_probe_meta) ;;
       anthropic) r=$(probe_section "$raw" anthropic | parse_probe_anthropic "$STATE_DIR/anthropic-limits.json") ;;
       openai)    r=$(probe_section "$raw" openai    | parse_probe_openai)
@@ -855,20 +892,20 @@ gather() {
 
 # ── Provider economics ──────────────────────────────────────────────────
 # Providers are ranked by TRUE cost of running an agent there (lower is
-# cheaper, preferred first). This deliberately INVERTS the old
-# "metered-before-subscription" rule: that treated DeepSeek as the cheap base
-# load, but DeepSeek is the ONLY pool that burns real prepaid money, while
-# agy is FREE and claude/codex are subscriptions whose caps reset for free.
+# cheaper, preferred first). Nothing metered is left (DeepSeek, the only pool
+# that burned prepaid money, was dropped 2026-09-24); every pool is a cap that
+# resets for free, so the order is "most room, least shared" first.
 #
 #   google    (agy)     rank 0 — FREE. No money spend at all; the cap resets
 #                                and is free again.
-#   anthropic (claude)  rank 1 — subscription with a HIGH limit: low shared-cap
-#                                risk, safe to lean on.
-#   openai    (codex)   rank 2 — subscription with a LOW limit, shared with the
+#   kiro      (pi)      rank 1 — Kiro Power: 10000 credits/month, used by no
+#                                one else (not the operator's interactive CLI).
+#                                The pool with the most headroom.
+#   anthropic (claude)  rank 2 — subscription shared with the operator's own
+#                                Claude Code and burning ~3x its allowance
+#                                (2026-09-24): lean on it less.
+#   openai    (codex)   rank 3 — subscription with a LOW limit, shared with the
 #                                operator's own interactive CLI: protect it.
-#   deepseek            rank 3 — metered: every token is real money from
-#                                prepaid credit. The availability insurance
-#                                (no hard cap), spent last, not first.
 #
 # Consequence: a high-cadence agent is barred ONLY from codex during normal
 # operation (the pool most likely to strand the operator too). agy and claude
@@ -877,9 +914,9 @@ gather() {
 provider_cost_rank() {
   case "$1" in
     google)    echo 0 ;;
-    anthropic) echo 1 ;;
-    openai)    echo 2 ;;
-    deepseek)  echo 3 ;;
+    kiro)      echo 1 ;;
+    anthropic) echo 2 ;;
+    openai)    echo 3 ;;
     *)         echo 4 ;;
   esac
 }
@@ -904,6 +941,15 @@ METERED_EXHAUSTION_FAILOVER="${HIVE_ROTATE_METERED_FAILOVER:-1}"
 # catch the fleet. A cap below the fleet size is a cap on failover capacity,
 # not just on cost.
 AGY_MAX_HIGH_VOLUME="${HIVE_ROTATE_AGY_MAX_HIGH_VOLUME:-5}"
+# Kiro credit stewardship. MEASURED 2026-09-24, first hour on Kiro: 16 agents
+# burned ~470 credits/hour against a pace allowance of ~65/hour (10000/month,
+# 9635 left over 149 h) — the plan would have been empty in ~20 h. pi sends
+# the whole context on every step (one pass read 0.5-6 M input tokens), so a
+# credit is spent per STEP, and a 5-10 minute driver pays for dozens of steps
+# per hour. Agents kicked more often than this are therefore never placed on
+# kiro and are moved off it (stickiness does not protect them), unless their
+# current provider is positively exhausted (the same escape hatch as codex).
+KIRO_MIN_CADENCE_S="${HIVE_ROTATE_KIRO_MIN_CADENCE_S:-900}"
 # Watchdog: minimum minutes between auto-heal kicks of the same agent (the
 # k8s CrashLoopBackOff analog; a fresh launch needs ~1min to reach ready).
 # (Base of the exponential backoff in hive-lib.sh's watchdog_backoff_s; the
@@ -927,14 +973,14 @@ cadence_s() { agent_field "$1" cadence \
 
 # provider_threshold: how deep each pool may be consumed before rotation treats
 # it as full. Generous limits ride higher; codex's low shared limit cuts off
-# earlier. DeepSeek is balance-driven — the probe already reports 100% when the
-# account is unavailable or below $1, so its threshold is moot but explicit.
+# earlier. Kiro has overage disabled — 100% is a hard stop for the rest of the
+# month — so leave a margin for the agents already mid-turn when it trips.
 provider_threshold() {
   case "$1" in
     openai)    echo "${HIVE_ROTATE_OPENAI_THRESHOLD:-85}" ;;
     anthropic) echo "${HIVE_ROTATE_CLAUDE_THRESHOLD:-90}" ;;
     google)    echo "${HIVE_ROTATE_AGY_THRESHOLD:-90}" ;;
-    deepseek)  echo 100 ;;
+    kiro)      echo "${HIVE_ROTATE_KIRO_THRESHOLD:-95}" ;;
     *)         echo "${HIVE_ROTATE_THRESHOLD:-85}" ;;
   esac
 }
@@ -996,6 +1042,15 @@ provider_ok() {
     if [ "$p" = openai ] && [ "${c:-999999}" -le "$HIGH_VOLUME_CADENCE_S" ] && [ "$allow_subscription" != 1 ]; then
       return 1
     fi
+    # Waived ONLY when the agent's current provider is positively exhausted —
+    # not by allow_subscription, which the watchdog's rotate-off path always
+    # passes: a freshly switched agy agent showing its first-run pane was
+    # "rotated off" straight back onto kiro that way (reef/ci-maintainer,
+    # 2026-09-24 19:32).
+    if [ "$p" = kiro ] && [ "${c:-999999}" -lt "$KIRO_MIN_CADENCE_S" ] &&
+       ! provider_exhausted "$(provider_of "$(agent_field "$agent" cli)" "$(agent_field "$agent" govModel)")"; then
+      return 1
+    fi
     # agy 5h-window stewardship: a high-cadence agent on the free pool burns
     # the rolling five-hour limit in ~an hour. Cap concurrent placements.
     if [ "$p" = google ] && [ "${c:-999999}" -le "$HIGH_VOLUME_CADENCE_S" ] &&
@@ -1037,10 +1092,8 @@ rung_in_tier() {
 }
 
 # Among eligible rungs, rank by:
-#   1. provider COST rank — free (agy) first, then generous-limit claude, then
-#      protected codex, then real-money DeepSeek last. The old "metered before
-#      subscription" rule spent prepaid money to save caps; the inverted ladder
-#      spends free/abundant quota first and money last.
+#   1. provider COST rank — free (agy) first, then Kiro's roomy monthly
+#      credits, then the shared Claude subscription, then protected codex.
 #   2. peak — a peak-priced window demotes a provider WITHIN its cost rank, so
 #      peak never pushes work from free/cheap onto a dearer pool just to dodge
 #      a 2x charge on the last-ranked one.
@@ -1076,18 +1129,16 @@ choose_rung() {
   done <<< "$(tier_members "$tier")" | sort -k1,1n -k2,2n -k3,3n | head -1 | awk '{print $4}'
 }
 
-# DeepSeek is the only no-cap availability net and every token is real money:
-# warn before a low balance strands the fleet again (as -$0.00 did).
-deepseek_reserve_warning() {
-  local bal
-  case "${NOTE[deepseek]:-}" in *balance=*) bal=${NOTE[deepseek]#*balance=} ;; *) return 0 ;; esac
-  [ "$(awk -v b="$bal" 'BEGIN{gsub(/[$]/,"",b); print b+0}')" -lt 2 ] 2>/dev/null \
-    && echo "WARN: DeepSeek balance $bal is below the \$2 reserve — top up soon"
+# Kiro overage: with it ENABLED, credits past the monthly limit are billed.
+# The threshold keeps agents off before that, but say it out loud.
+kiro_overage_warning() {
+  case "${NOTE[kiro]:-}" in *overage=ENABLED*)
+    echo "WARN: Kiro overage is ENABLED — credits past the monthly limit are billed" ;; esac
+  return 0
 }
 
 # ── Actions ─────────────────────────────────────────────────────────────
-# deepseek_reserve_warning etc. are defined above; gather must run before
-# any action that reads probes.
+# gather must run before any action that reads probes.
 gather
 
 # ── Contributor workers ────────────────────────────────────────────────
@@ -1392,7 +1443,7 @@ if [ "$ACTION" = watchdog ]; then
     # restarting on the same rung just re-breaks it — rotate onto a
     # positively-measured-healthy rung first (place_agent restarts it).
     rotated=0
-    if [ "$state" = auth ] || [ "$state" = shell ]; then
+    if [ "$state" = auth ] || [ "$state" = shell ] || [ "$state" = approval ]; then
       if ! pinned "$a"; then
         want=$(choose_rung_healthy "$(tier_of "$a")" "$a")
         if [ -n "$want" ]; then
@@ -1425,7 +1476,7 @@ if [ "$ACTION" = probe ]; then
     printf '%-11s %-9s %s\n' "$p" "$v" "${NOTE[$p]}"
   done
   in_peak_window && echo && echo "peak window ACTIVE (UTC $(date -u +%H:%M)); avoiding: $PEAK_PROVIDERS"
-  deepseek_reserve_warning
+  kiro_overage_warning
   exit 0
 fi
 
@@ -1444,10 +1495,8 @@ if [ "$ACTION" = restore ]; then
     if [ "$curb" = "$b" ] && [ "$curm" = "$m" ]; then
       printf '%-14s already on %s %s\n' "$a" "$b" "$m"; continue
     fi
-    sw=$(hive_api POST "/api/switch/$a/$b" | jq -r '.status // .error')
-    if [ "$sw" != switched ]; then printf '%-14s ! switch failed: %s\n' "$a" "$sw"; continue; fi
-    md=$(hive_api POST "/api/model/$a/$m" | jq -r '.status // .error')
-    printf '%-14s restored -> %s %s (%s)\n' "$a" "$b" "$m" "$md"
+    if ! place_agent "$a" "$b" "$m"; then printf '%-14s ! restore failed\n' "$a"; continue; fi
+    printf '%-14s restored -> %s %s\n' "$a" "$b" "$m"
     n=$((n+1))
   done <<< "$(tac "$STATE_DIR/rotated")"
   mv "$STATE_DIR/rotated" "$STATE_DIR/rotated.$(date +%s).done"
@@ -1631,7 +1680,13 @@ for a in $(agent_names); do
   # crash-looping. Pace owns the rung WITHIN a provider; rotate owns the
   # provider.
   demoted_from=$(pace_demoted_from "$PACE_DEMOTED" "$NS" "$a" "$curm")
-  if ! provider_exhausted "$curp" && ! provider_login_blocked "$curp" &&
+  # A high-cadence agent sitting on kiro is NOT sticky (KIRO_MIN_CADENCE_S).
+  kiro_evict=0
+  if [ "$curp" = kiro ]; then
+    kc=$(cadence_s "$a")
+    [ "${kc:-999999}" -lt "$KIRO_MIN_CADENCE_S" ] && kiro_evict=1
+  fi
+  if [ "$kiro_evict" = 0 ] && ! provider_exhausted "$curp" && ! provider_login_blocked "$curp" &&
      { rung_in_tier "$tier" "$curb" "$curm" ||
        { [ -n "$demoted_from" ] && rung_in_tier "$tier" "${demoted_from%%|*}" "${demoted_from#*|}"; }; }; then
     note_placement "$curp" "$a"
@@ -1676,7 +1731,7 @@ for a in $(agent_names); do
   changed=$((changed+1))
   [ "$ACTION" = plan ] && continue
 
-  # switch -> model -> effort, with rollback (see place_agent).
+  # backend + model + agy effort in ONE atomic call (see place_agent).
   place_agent "$a" "$wb" "$wm" || continue
   md=model_set
   # login-detector pauses are provider failures, not operator pauses. Release

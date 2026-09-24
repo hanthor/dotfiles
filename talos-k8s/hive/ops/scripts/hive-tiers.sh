@@ -113,7 +113,8 @@ jq -r '
     ($c | ascii_downcase) as $l
     | if   $l | test("anthropic") then "anthropic|claude"
       elif $l | test("openai")    then "openai|codex"
-      elif $l | test("deepseek")  then "deepseek|pi"
+      # deepseek removed 2026-09-24 (no longer funded). Kiro rungs come only
+      # from hive-rotate.sh TIERS: the feed scores models, not the Kiro route.
       else empty end;
 
   # Map an API slug/name to the id the CLI wants. Falls back to the slug, which

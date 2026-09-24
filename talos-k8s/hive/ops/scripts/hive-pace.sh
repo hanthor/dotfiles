@@ -55,7 +55,7 @@
 # WHAT IT ACTUATES
 # ----------------
 # Placement (move an agent to another provider) is hive-rotate.sh's job and is
-# only a pacing lever when another pool has room — with DeepSeek dry, OpenAI
+# only a pacing lever when another pool has room — with OpenAI
 # unseated and Google in its own cooldown there are periods with exactly one
 # usable pool and placement has ZERO degrees of freedom. So the actuator here
 # is the one that works even then: MODEL RUNG. Moving an agent from a
@@ -129,9 +129,8 @@ NOW=$(date -u +%s)
 # expensive rung -> cheap rung, per provider. Deliberately NOT read from
 # hive-rotate.sh's TIERS table: this script decides by looking at what an agent
 # is ACTUALLY running, so it cannot drift out of sync with a table it does not
-# consult. deepseek has no pair — v4-flash is already both its T1 and T2 rung
-# (it outscores Sonnet on TB2.1 while costing a fraction), so there is nothing
-# below it to demote to.
+# consult. Kiro rungs demote within the same model family (opus-5 -> sonnet-5,
+# gpt-5.6 sol/terra -> luna), which cuts credits per request by 1.7-4x.
 # rung_down <model> lives in hive-lib.sh. Added 2026-09-24: claude-fable-5-1
 # (the live T1 rung from the tier cache) had no cheaper pair, so anthropic ran
 # `hot` with "SATURATED ... 0 demotable" while two agents sat on it.
@@ -142,9 +141,12 @@ NOW=$(date -u +%s)
 # it (2026-09-24) — copilot bills GitHub, so that changed nothing about the
 # Anthropic burn. Only the four paced pools are returned; anything else
 # (github, meta, unknown) is outside the pacer's control.
+# deepseek was dropped from the paced pools 2026-09-24 (no longer used);
+# kiro (monthly credits, readable via GetUsageLimits) was added.
+PACED_POOLS="anthropic google openai kiro"
 provider_of_agent() {
   local p; p=$(hive_provider_of "$1" "$2")
-  case "$p" in anthropic|google|openai|deepseek) echo "$p" ;; *) echo "" ;; esac
+  case " $PACED_POOLS " in *" $p "*) echo "$p" ;; *) echo "" ;; esac
 }
 
 # ── Reading: per-limit, not collapsed ───────────────────────────────────
@@ -201,6 +203,16 @@ read_limits_from_configmap() {
   [ -z "$raw" ] && return 1
   pct=$(printf '%s' "$raw" | grep -oE '^[0-9]+' | head -1)
   [ -z "$pct" ] && return 1            # "unknown ..." — not a measurement
+  # Kiro publishes the exact credit count (credits=U/L). 1% of its 10000/month
+  # is 100 credits — hours of burn at a sane pace — so the integer percent
+  # would read as flat for most of a fit window. Use the precise value.
+  local cu cl
+  cu=$(printf '%s' "$raw" | sed -n 's/.*credits=\([0-9.]*\)\/\([0-9.]*\).*/\1/p')
+  cl=$(printf '%s' "$raw" | sed -n 's/.*credits=\([0-9.]*\)\/\([0-9.]*\).*/\2/p')
+  if [ -n "$cu" ] && [ -n "$cl" ]; then
+    pct=$(awk -v u="$cu" -v l="$cl" 'BEGIN{ if (l+0 > 0) printf "%.3f", u*100/l; else print "" }')
+    [ -z "$pct" ] && return 1
+  fi
   rst=$(printf '%s' "$raw" | grep -oE 'resets=[^ ]+' | sed 's/^resets=//')
   ep=""
   [ -n "$rst" ] && ep=$(python3 -c "
@@ -215,7 +227,7 @@ except Exception: print('')" "$rst" 2>/dev/null)
 
 record() {
   local p slot pct ep
-  for p in anthropic google openai deepseek; do
+  for p in $PACED_POOLS; do
     if [ "$p" = anthropic ]; then
       read_limits_anthropic
     else
@@ -368,21 +380,15 @@ session_for() {
   hive_session "$1" "$pod"
 }
 
-# Uses POST /api/model/{agent}/{model} — NOT PUT /api/config/agent/{a}/models.
+# Uses the ATOMIC PUT /api/config/agent/{agent}/models (hive_placement_body):
+# backend + model + (for agy) the effort the model requires, one restart.
 #
-# The config route returns {"ok":true,"status":"updated"} and does not change
-# what the agent runs. Verified 2026-09-02 on the `hive` spoke: PUT ...
-# /models with claude-opus-5 answered ok, cleared `model_override` in
-# hive-state.json back to null, and left govModel on claude-sonnet-5 — the pack
-# default reasserted. The same call DOES work on `hive-reef`, so this is
-# ACMM-level-dependent (L6 vs L5) and cannot be trusted fleet-wide. An actuator
-# that logs "demote" while changing nothing is worse than no actuator: the
-# pacer would report itself in control while the burn ran on unchecked.
-#
-# hive-rotate has always used /api/model + /api/switch, which is why ITS
-# placements stick. The pacer only ever moves along a rung WITHIN one provider
-# (rung_down maps opus->sonnet, never across backends), so the model call alone
-# is sufficient and there is no switch/model two-call transaction to get wrong.
+# History: on 2026-09-02 (the v4 fork) this route answered ok and changed
+# nothing on the L6 `hive` spoke — a stale ModelOverride won at launch — so
+# the pacer used POST /api/model + a separate /api/effort (two restarts). v5.35
+# applies the override itself (hivecommons/hive#7374); re-verified on `hive`
+# 2026-09-24: overrides, hive.yaml.runtime and the launched CLI all changed
+# from one PUT.
 #
 # NOTE: /api/status lags a mutation by >10s, so a read-back immediately after
 # this call still shows the OLD model. Do not treat that as failure.
@@ -401,26 +407,23 @@ set_model() {
     echo "WARN: $ns has no pod or no unexpired owner session — cannot actuate" >&2
     return 1
   fi
-  local out
+  local out want edir
   # 150 s: v5 restarts the agent inside the request.
-  out=$(hive_call "$ns" "$pod" "$sid" POST "/api/model/$agent/$model")
+  out=$(hive_call "$ns" "$pod" "$sid" PUT "/api/config/agent/$agent/models" "" \
+          "$(hive_placement_body "$backend" "$model")")
   # Judge by the response, not by exit status: a 200 carrying an error body is
   # a documented failure shape on this API.
-  case "$out" in
-    *'"status":"model_set"'*|*'"ok":true'*)
-      # agy suffixes must match --effort or agy silently runs 3.6 Flash Low
-      # (see hive-lib.sh agy_effort_of). The recorded effort lives with
-      # hive-rotate's per-hive state so both scripts agree.
-      local want edir
+  if hive_placement_ok "$out"; then
+    # Record the agy effort where hive-rotate keeps it, so both scripts agree.
+    want=$( [ "$backend" = agy ] && agy_effort_of "$model")
+    if [ -n "$want" ]; then
       edir="$(dirname "$STATE_DIR")/$( [ "$ns" = hive ] && echo hive-rotate || echo "hive-rotate-${ns#hive-}")/effort"
-      want=$(effort_change "$backend" "$model" "$(cat "$edir/$agent" 2>/dev/null)")
-      if [ -n "$want" ] && hive_call "$ns" "$pod" "$sid" POST "/api/effort/$agent/$want" | grep -q effort_set; then
-        mkdir -p "$edir" && echo "$want" > "$edir/$agent"
-      fi
-      printf '%s' "$out"; return 0 ;;
-    *) echo "WARN: model set for $ns/$agent -> $model did not confirm: ${out:0:160}" >&2
-       return 1 ;;
-  esac
+      mkdir -p "$edir" && echo "$want" > "$edir/$agent"
+    fi
+    printf '%s' "$out"; return 0
+  fi
+  echo "WARN: model set for $ns/$agent -> $model did not confirm: ${out:0:160}" >&2
+  return 1
 }
 
 publish() {
@@ -439,7 +442,7 @@ VERDICTS=$(compute)
 FLEET=$(fleet)
 
 printf '%-11s %-9s %-9s %-11s %-11s %s\n' PROVIDER VERDICT PRESSURE OBSERVED ALLOWED DETAIL
-for p in anthropic google openai deepseek; do
+for p in $PACED_POOLS; do
   row=$(printf '%s' "$VERDICTS" | jq -r --arg p "$p" '
     if .[$p] then
       .[$p] as $v
@@ -532,7 +535,7 @@ done <<< "$FLEET"
 # This is the line that means INTERVENE: the loop is no longer able to correct,
 # and the remaining levers (cadence, pausing agents, accepting the burn) are
 # outside this script.
-for p in anthropic google openai deepseek; do
+for p in $PACED_POOLS; do
   v=$(printf '%s' "$VERDICTS" | jq -r --arg p "$p" '.[$p].verdict // "no-data"')
   [ "$v" = hot ] || continue
   [ -n "${MOVED_ON[$p]:-}" ] && continue

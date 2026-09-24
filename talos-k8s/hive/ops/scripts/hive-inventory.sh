@@ -29,7 +29,11 @@
 #                                        it is literally what --model accepts.
 #   anthropic  GET /v1/models          — with the SAME OAuth token the usage
 #                                        probe uses; no extra credential.
-#   deepseek   GET /models             — with DEEPSEEK_API_KEY from the pod env.
+#   kiro       ListAvailableModels     — AmazonCodeWhispererService, with
+#                                        KIRO_API_KEY from the pod env; ids are
+#                                        converted to pi's form (4.6 -> 4-6) and
+#                                        prefixed `kiro-api-key/`, exactly what
+#                                        the pi-kiro-api provider registers.
 #   openai     codex app-server        — JSON-RPC `model/list` over stdio, which
 #                                        returns exactly what --model accepts,
 #                                        on the agents' own subscription. There
@@ -115,17 +119,29 @@ else
   NOTES="$NOTES anthropic:unreadable"
 fi
 
-# ── deepseek ────────────────────────────────────────────────────────────
-ds_rows=$(kubectl exec -n "$NS" "$POD" -- sh -c \
-            'curl -s --max-time 20 -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-               https://api.deepseek.com/models' 2>/dev/null \
-          | jq -r 'try (.data[]? | .id) // empty' 2>/dev/null)
-if [ -n "$ds_rows" ]; then
-  printf '%s\n' "$ds_rows" | while read -r id; do
-    printf 'deepseek\tpi\t%s\t%s\n' "$id" "$id" >> "$TMP"
+# ── kiro (pi + pi-kiro-api) ─────────────────────────────────────────────
+# (deepseek was dropped 2026-09-24 — no longer funded.) The key stays inside the
+# pod; only the model list crosses the exec boundary. The -1m variants the pi
+# provider derives are client-side aliases and are deliberately not listed.
+# ListAvailableModels answers 403 WITHOUT a CLI user-agent (GetUsageLimits
+# does not care); send the same UA the pi provider sends.
+# shellcheck disable=SC2016
+kiro_rows=$(kubectl exec -n "$NS" "$POD" -- sh -c '
+  [ -n "${KIRO_API_KEY:-}" ] || exit 1
+  curl -s --max-time 20 -X POST https://q.us-east-1.amazonaws.com/ \
+    -H "Authorization: Bearer $KIRO_API_KEY" -H "tokentype: API_KEY" \
+    -H "Content-Type: application/x-amz-json-1.0" -H "Accept: application/json" \
+    -H "X-Amz-Target: AmazonCodeWhispererService.ListAvailableModels" \
+    -H "x-amzn-codewhisperer-optout: true" \
+    -H "user-agent: aws-sdk-rust/1.0.0 ua/2.1 os/other lang/rust api/codewhispererruntime#1.28.3 m/E app/AmazonQ-For-CLI" \
+    -d "{\"origin\":\"AI_EDITOR\"}"' 2>/dev/null \
+  | jq -r 'try (.models[]? | "\(.modelId | gsub("(?<a>[0-9])\\.(?<b>[0-9])"; "\(.a)-\(.b)"))\t\(.modelName // .modelId) x\(.rateMultiplier // "?")") // empty' 2>/dev/null)
+if [ -n "$kiro_rows" ]; then
+  printf '%s\n' "$kiro_rows" | while IFS=$'\t' read -r id disp; do
+    printf 'kiro\tpi\tkiro-api-key/%s\t%s\n' "$id" "$disp" >> "$TMP"
   done
 else
-  NOTES="$NOTES deepseek:unreadable"
+  NOTES="$NOTES kiro:unreadable"
 fi
 
 # ── openai ──────────────────────────────────────────────────────────────
