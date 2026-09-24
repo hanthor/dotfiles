@@ -1,0 +1,18 @@
+{
+  "general_channel_id": "1532668823130472448",
+  "daily_digest_channel_id": "1542297357163569243",
+  "releases_channel_id": "1542297358526717992",
+  "ci_channel_id": "1542297360330133565",
+  "security_channel_id": "1542297361865253016",
+  "hive_ops_channel_id": "1542297363908001802",
+  "projects": [
+    {"name": "Protota", "repo": "tuna-os/protota", "channel_id": "1531154136022777889"},
+    {"name": "Corral", "repo": "tuna-os/corral", "channel_id": "1531155241309835284"},
+    {"name": "Dualcut", "repo": "tuna-os/dualcut", "channel_id": "1531155356460257463"},
+    {"name": "Wootc", "repo": "tuna-os/wootc", "channel_id": "1531155437515182090"},
+    {"name": "tunaOS", "repo": "tuna-os/tunaOS", "channel_id": "1531198133961490512"},
+    {"name": "GTK Office", "repo": "tuna-os/gtk-office-suite", "channel_id": "1531325334685745303"},
+    {"name": "Tavern", "repo": "tuna-os/Tavern", "channel_id": "1531652412278964304"}
+  ]
+}
+

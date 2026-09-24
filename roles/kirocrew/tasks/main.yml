@@ -1,0 +1,57 @@
+---
+# Kiro Crew gateway (dashboard + Slack + cron) on punjab. The venv and unit are
+# owned by Kiro's own installer (`kirocrew service install`), so this role
+# doesn't template them — it keeps the service running, keeps its env file
+# (where tokens go) root-only, and asserts the dashboard never listens beyond
+# localhost. Enable with `kirocrew_enabled: true` in host_vars.
+
+- name: Check for kirocrew binary
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/bin/kirocrew"
+  register: kirocrew_bin
+
+- name: Check for kirocrew unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/kirocrew.service
+  register: kirocrew_unit
+
+- name: Warn when Kiro Crew is not installed
+  ansible.builtin.debug:
+    msg: >-
+      kirocrew_enabled is set but Kiro Crew isn't installed (binary or unit
+      missing). Install it per https://github.com/kirodotdev/KiroCrew, then
+      run `sudo ~/.local/bin/kirocrew service install`.
+  when: not (kirocrew_bin.stat.exists and kirocrew_unit.stat.exists)
+
+- name: Manage Kiro Crew
+  when: kirocrew_bin.stat.exists and kirocrew_unit.stat.exists
+  block:
+    - name: Keep kirocrew env file root-only
+      ansible.builtin.file:
+        path: /etc/kirocrew/kirocrew.env
+        owner: root
+        group: root
+        mode: "0600"
+      become: true
+
+    - name: Enable and start kirocrew
+      ansible.builtin.systemd:
+        name: kirocrew.service
+        enabled: true
+        state: started
+      become: true
+
+    - name: Read kirocrew listening sockets
+      ansible.builtin.shell: set -o pipefail && ss -Htlnp | grep '"kirocrew"' || true
+      args:
+        executable: /bin/bash
+      register: kirocrew_listen
+      changed_when: false
+      become: true
+
+    - name: Assert kirocrew dashboard is localhost-only
+      ansible.builtin.assert:
+        that:
+          - kirocrew_listen.stdout_lines | reject('search', '127\.0\.0\.1:|\[::1\]:') | list | length == 0
+        fail_msg: "kirocrew is listening beyond localhost: {{ kirocrew_listen.stdout_lines }}"
+        quiet: true

@@ -16,7 +16,7 @@
     - name: Download JetBrains Mono Nerd Font
       ansible.builtin.get_url:
         url: https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
-        dest: /tmp/JetBrainsMono.zip
+        dest: /tmp/JetBrainsMonoNerdFont.zip
         mode: "0644"
 
     - name: Create JetBrainsMono font directory
@@ -27,7 +27,7 @@
 
     - name: Unarchive JetBrains Mono Nerd Font
       ansible.builtin.unarchive:
-        src: /tmp/JetBrainsMono.zip
+        src: /tmp/JetBrainsMonoNerdFont.zip
         dest: "{{ ansible_facts['env']['HOME'] }}/.local/share/fonts/JetBrainsMono"
         remote_src: true
 

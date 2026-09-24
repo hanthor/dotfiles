@@ -41,6 +41,19 @@ jobs:
             python3 -m json.tool "$f" > /dev/null && echo "$f: OK" || { echo "$f: INVALID"; exit 1; }
           done
 
+      - name: Compile Python scripts
+        run: git ls-files '*.py' | xargs python3 -m py_compile
+
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: pytest
+        run: uvx --with pyyaml pytest -q tests
 
   justfile:
     runs-on: ubuntu-latest
@@ -52,6 +65,25 @@ jobs:
 
       - name: Validate Justfile
         run: just --justfile Justfile --list
+
+  tofu:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aws
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+
+      - name: fmt
+        run: tofu fmt -check -recursive
+
+      - name: validate
+        run: tofu init -backend=false -input=false && tofu validate
+
+      - name: test (mock provider, no AWS access)
+        run: tests/run.sh
 
   broker:
     runs-on: ubuntu-latest

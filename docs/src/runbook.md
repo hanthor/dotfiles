@@ -35,9 +35,10 @@ ssh-copy-id <broken-host>     # adds the rotating host's pub key by hand
 
 ## BW is locked on a remote — how do I unlock it there?
 
-`just apply-remote-tags <host> ...` forwards your local `BW_SESSION`, but the
-remote host's vault can still report `locked` because the token isn't always
-portable across vaults. To unlock directly on that host:
+`just apply-remote` / `apply-remote-tags` try to unlock the vault on the remote
+themselves (`scripts/bw-resolve.sh remote`), but that can fail — e.g. no
+`bw-api-key` item, or the remote CLI was never logged in. To unlock directly on
+that host:
 
 ```bash
 ssh <host>
@@ -76,10 +77,9 @@ The most common causes:
   on disk. If the working tree drifted from main, fix manually.
 - **a role started failing after a config change**: re-run interactively
   with `just apply-nosecrets` and read the failure.
-- **`mkswap: /swapfile is mounted`**: pre-existing bug in
-  `roles/server_hardening`; the swapfile is already active and the
-  idempotency check is wrong. Set `skip_server_hardening: true` in that
-  host's `host_vars/` as a workaround.
+- **`mkswap: /swapfile is mounted`** (resolved): `server_hardening` now
+  gates `mkswap`/`swapon` on `swapon --show`, so an already-active swapfile
+  is left alone. If you still see this, the host is running an old checkout.
 
 ---
 
@@ -108,7 +108,7 @@ race in most cases going forward.
 
 ```bash
 # 1. From an existing fleet machine (with BW unlocked):
-just onboard <newhost> desktop      # or server / vps / llm
+just onboard <newhost> desktop      # or server / vps
 
 # 2. Copy the printed bootstrap command, then on the new machine:
 curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh \
@@ -121,7 +121,7 @@ bw unlock --raw | tee /tmp/bw_session > /dev/null
 # 4. Run the full apply (this pushes the new machine's pubkey to BW):
 dots-apply
 
-# 5. Back on each existing host (one at a time, or wait for the timer):
+# 5. Back on each existing host (the no-secrets timer skips ssh_keys):
 dots-apply                          # picks up the new host's pubkey
 ```
 
@@ -132,8 +132,9 @@ Verify with `just doctor` on the new host — should be all green and report
 
 ## I added a flatpak / brew package — how do I roll it out?
 
-Edit the relevant role's package list (`roles/flatpak/files/...` or the
-homebrew Brewfile), commit, push. Every host picks it up on the next
+Edit the package list — `system_flatpaks` in `roles/flatpak/vars/main.yml`,
+or the brew lists (`core_brews`, `desktop_brews`, …) in `group_vars/all.yml`,
+which render the Brewfile — then commit, push. Every host picks it up on the next
 `dots-apply` or the next timer fire.
 
 To force-apply immediately on the local machine:
@@ -147,13 +148,15 @@ just apply-tags packages
 ## I want to disable a role on one host
 
 In that host's `host_vars/<name>.yml`, add a `skip_<role>: true` line. The
-roles that respect this convention:
+flags `site.yml` actually checks:
 
-`skip_kube`, `skip_flatpak`, `skip_bluefin`, `skip_gnome`, `skip_proxy`,
-`skip_zen_browser`, `skip_monitoring`,
-`skip_syncthing`, `skip_tailscale_cert`,
-`skip_server_hardening` (not all may be wired yet — grep `site.yml` to
-confirm).
+`skip_sudo`, `skip_ssh_mesh`, `skip_kube`, `skip_forgejo`, `skip_flatpak`,
+`skip_bluefin`, `skip_gnome`, `skip_zen_browser`, `skip_pipewire_audio`,
+`skip_syncthing`, `skip_systemd`, `skip_proxy`, `skip_tailscale_cert`.
+
+Roles without a flag are gated some other way — `server_hardening` on
+`server`/`vps` membership, `termux_packages` on `termux_hosts`, many roles on
+`machine_profile != 'vm-test'`. Grep `site.yml`.
 
 ---
 
@@ -167,7 +170,8 @@ Runs `just doctor` on every online host in parallel. The `→ Last apply`
 line tells you which hosts have an old or failed convergence — those are
 the ones that need attention.
 
-To roll a single change out manually instead of waiting for the timer:
+To roll a single change out manually instead of waiting for the timer
+(skip `matrix` and `telengana` — retired, nothing on them may be restarted):
 
 ```bash
 for h in $(scripts/nmap-inventory.sh | awk '/ON / {print $3}'); do

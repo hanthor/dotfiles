@@ -15,11 +15,11 @@ Deploys [Caddy](https://caddyserver.com/) as a reverse proxy with automatic TLS 
 
 ## Proxied Services
 
-Caddy routes traffic for services like:
-- Grafana (monitoring)
-- Homepage dashboards
-- AppFlowy, Authentik, n8n (on bihar)
-- BST Dashboard (on build machines)
+The Caddyfile (listening on `:9000`, fronted by `tailscale serve`) carries:
+- `/service/<name>` — a redirect for each entry in the host's `web_services`
+- `/bst/` — the BuildStream dashboard (on build machines)
+
+There is no homepage at `/`.
 
 ## Notes
 

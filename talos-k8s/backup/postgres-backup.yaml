@@ -12,7 +12,8 @@
 #   * proves the archive parses with `pg_restore --list` rather than trusting a
 #     non-zero file size,
 #   * asserts a size floor as a second, independent signal,
-#   * fails loudly to ntfy, and
+#   * copies each verified dump off-cluster to S3 and checks the uploaded size,
+#   * fails loudly to Discord/ntfy, and
 #   * reports success too, so a *silent* job is itself the alarm (see the
 #     companion staleness check).
 ---
@@ -65,8 +66,8 @@ spec:
                   # discovered during an incident.
                   export DEBIAN_FRONTEND=noninteractive
                   apt-get update -qq >/dev/null 2>&1 \
-                    && apt-get install -y -qq --no-install-recommends curl ca-certificates >/dev/null 2>&1 \
-                    || echo "WARNING: could not install curl; alerts will not send" >&2
+                    && apt-get install -y -qq --no-install-recommends curl ca-certificates awscli >/dev/null 2>&1 \
+                    || echo "WARNING: could not install curl/awscli; alerts or S3 upload will fail" >&2
                   command -v curl >/dev/null \
                     || echo "WARNING: curl unavailable — this backup will not be able to alert" >&2
 
@@ -82,7 +83,7 @@ spec:
                     local sent=0
                     if [ -n "${DISCORD_BOT_TOKEN:-}" ] && [ -n "${DISCORD_CHANNEL:-}" ] && command -v curl >/dev/null; then
                       local payload
-                      payload=$(printf '{"content":"**%s**\n%s"}' "$2" "$3")
+                      payload=$(printf '{"content":"**%s**\\n%s"}' "$2" "$3")
                       for attempt in 1 2 3; do
                         if curl -fsS --max-time 25 -X POST \
                              -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
@@ -135,6 +136,23 @@ spec:
                     echo "${DB}: $(numfmt --to=iec "$SZ") across ${TABLES} tables"
                   done
 
+                  # Off-cluster copy. The local PVC shares a node with the database,
+                  # so without this a lost node loses the backups too. The writer
+                  # key can put/get under postgres/ only (no delete); the bucket
+                  # tiers and expires them (aws/backups.tf).
+                  for DB in synapse mas; do
+                    OUT="${DEST}/${DB}.dump"
+                    KEY="postgres/${STAMP}/${DB}.dump"
+                    aws s3 cp --only-show-errors "$OUT" "s3://${S3_BUCKET}/${KEY}" \
+                      || fail "S3 upload failed for ${DB}"
+                    REMOTE=$(aws s3api head-object --bucket "$S3_BUCKET" --key "$KEY" \
+                      --query ContentLength --output text) \
+                      || fail "S3 head-object failed for ${DB}"
+                    [ "$REMOTE" = "$(stat -c%s "$OUT")" ] \
+                      || fail "S3 copy of ${DB} is ${REMOTE} bytes, local is $(stat -c%s "$OUT")"
+                  done
+                  echo "uploaded to s3://${S3_BUCKET}/postgres/${STAMP}/"
+
                   # Retention: keep 7 days locally. Off-cluster copies live in S3.
                   find /backups -maxdepth 1 -type d -name '20*' -mtime +7 \
                     -exec rm -rf {} + 2>/dev/null || true
@@ -143,7 +161,7 @@ spec:
                   KEPT=$(find /backups -maxdepth 1 -type d -name '20*' | wc -l)
                   trap - ERR
                   notify default "Postgres backup ok" \
-                    "${STAMP}: ${SUMMARY} written, ${KEPT} day(s) retained"
+                    "${STAMP}: ${SUMMARY} written + copied to S3, ${KEPT} day(s) retained locally"
                   echo "backup complete: ${DEST} (${SUMMARY}), ${KEPT} retained"
               env:
                 - name: POSTGRES_PASSWORD
@@ -151,6 +169,25 @@ spec:
                     secretKeyRef:
                       name: postgres-superuser
                       key: POSTGRES_PASSWORD
+                # IAM user postgres-backup-writer (aws/backups.tf); key also
+                # in Bitwarden note `postgres-backup-s3`.
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-backup-s3
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-backup-s3
+                      key: AWS_SECRET_ACCESS_KEY
+                - name: S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-backup-s3
+                      key: S3_BUCKET
+                - name: AWS_DEFAULT_REGION
+                  value: eu-north-1
                 - name: NTFY_TOPIC
                   valueFrom:
                     secretKeyRef:
@@ -224,7 +261,7 @@ spec:
                           -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
                           -H "Content-Type: application/json" \
                           -H "User-Agent: TunaOS-Hive-Ops/1.0" \
-                          -d "$(printf '{"content":"**Postgres backup STALE**\n%s"}' "$1")" \
+                          -d "$(printf '{"content":"**Postgres backup STALE**\\n%s"}' "$1")" \
                           "https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages" >/dev/null && break
                         sleep 5
                       done

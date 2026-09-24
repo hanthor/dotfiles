@@ -15,7 +15,6 @@ Secondary workstation in the hanthor fleet.
 ## Services
 
 - BuildStream Dashboard — build monitor
-- Homepage dashboard
 
 ## Notes
 

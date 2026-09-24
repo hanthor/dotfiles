@@ -77,8 +77,9 @@ POD=$(kubectl get pods -n "$NS" -l "$LABEL" \
 [ -n "$POD" ] || { echo "ERROR: no hive pod found" >&2; exit 1; }
 
 # Newest non-expired owner session from the dashboard's own store. Expiry is
-# compared as an ISO-8601 string against `date -Is`, which sorts correctly.
-NOW=$(date -Is)
+# compared as an ISO-8601 string against UTC `now` (the pod stores Z-suffixed
+# UTC; a local-offset `date -Is` would mis-sort on any non-UTC desktop).
+NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 SID=$(kubectl exec -n "$NS" "$POD" -- \
         cat /data/dashboard-sessions.json 2>/dev/null \
       | jq -r --arg now "$NOW" '
@@ -191,6 +192,7 @@ fi
 mkdir -p "$(dirname "$STATE")"
 rc=0
 done_agents=()
+failed_agents=()
 for a in $TARGETS; do
   out=$(hive_api POST "/api/$ACTION/$a")
   if [ "$(printf '%s' "$out" | jq -r '.ok // empty' 2>/dev/null)" = "true" ]; then
@@ -198,14 +200,19 @@ for a in $TARGETS; do
     done_agents+=("$a")
   else
     echo "FAIL: $ACTION $a -> ${out:0:200}"
+    failed_agents+=("$a")
     rc=1
   fi
 done
 
 # Record only what actually succeeded, so a partial pause resumes exactly the
-# agents it really paused.
+# agents it really paused. A second pause merges into the recorded set rather
+# than replacing it; a partial resume keeps the failures for the next run.
 if [ "$ACTION" = pause ]; then
-  printf '%s\n' "${done_agents[@]+"${done_agents[@]}"}" > "$STATE"
+  { cat "$STATE" 2>/dev/null; printf '%s\n' "${done_agents[@]+"${done_agents[@]}"}"; } \
+    | grep -v '^$' | sort -u > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+elif [ ${#failed_agents[@]} -gt 0 ]; then
+  printf '%s\n' "${failed_agents[@]}" > "$STATE"
 else
   rm -f "$STATE"
 fi

@@ -1,9 +1,17 @@
 ---
+# The unit's ExecStart points at the brew binary; hosts without it would
+# crash-loop with 203/EXEC, so only deploy/enable when it's installed.
+- name: Check for syncthing binary
+  ansible.builtin.stat:
+    path: /home/linuxbrew/.linuxbrew/bin/syncthing
+  register: syncthing_bin
+
 - name: Create systemd user directory
   ansible.builtin.file:
     path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user"
     state: directory
     mode: "0755"
+  when: syncthing_bin.stat.exists
 
 - name: Copy syncthing service file
   ansible.builtin.copy:
@@ -11,6 +19,7 @@
     dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/syncthing.service"
     mode: "0644"
   notify: Reload systemd user daemon
+  when: syncthing_bin.stat.exists
 
 - name: Enable and start syncthing user service
   ansible.builtin.systemd:
@@ -18,3 +27,13 @@
     scope: user
     enabled: true
     state: started
+  when: syncthing_bin.stat.exists
+
+- name: Stop and disable syncthing user service (binary missing)
+  ansible.builtin.systemd:
+    name: syncthing.service
+    scope: user
+    enabled: false
+    state: stopped
+  failed_when: false
+  when: not syncthing_bin.stat.exists

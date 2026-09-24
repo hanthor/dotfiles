@@ -27,13 +27,15 @@
   - [Kerala](desktop/kerala/README.md)
 - [Servers]()
   - [Goa](servers/goa/README.md)
-  - [Talos K8s Cluster](servers/talos-k8s/cluster.md)
+  - [Punjab (AWS)](servers/punjab/README.md)
+  - [Talos K8s Cluster (offline)](servers/talos-k8s/cluster.md)
     - [Bihar](servers/talos-k8s/bihar/README.md)
     - [Karnataka](servers/talos-k8s/karnataka/README.md)
+  - [AWS Account & IaC](servers/aws/README.md)
   - [AWS Talos Cluster](servers/aws-k8s/cluster.md)
 - [VPS]()
-  - [lkofoss](vps/lkofoss/README.md)
-  - [Matrix](vps/matrix/README.md)
+  - [Matrix (retired)](vps/matrix/README.md)
+  - [Telengana (retired)](vps/telengana/README.md)
 
 # Roles Reference
 
@@ -48,9 +50,14 @@
 
 - [homebrew](roles/homebrew.md)
 - [flatpak](roles/flatpak.md)
+- [termux_packages](roles/termux_packages.md)
 
 ## Dotfiles
 
+- [shell_fonts](roles/shell_fonts.md)
+- [shell_dotfiles](roles/shell_dotfiles.md)
+- [shell_atuin](roles/shell_atuin.md)
+- [shell_ai](roles/shell_ai.md)
 - [pi](roles/pi.md)
 - [hive_ops](roles/hive_ops.md)
 - [git](roles/git.md)
@@ -64,6 +71,7 @@
 - [github](roles/github.md)
 - [tailscale](roles/tailscale.md)
 - [kube](roles/kube.md)
+- [forgejo_registry](roles/forgejo_registry.md)
 
 ## Desktop
 
@@ -80,8 +88,9 @@
 - [proxy (Caddy)](roles/proxy.md)
 - [tailscale_cert](roles/tailscale_cert.md)
 - [bst_dashboard](roles/bst_dashboard.md)
+- [kirocrew](roles/kirocrew.md)
 
-## Server Applications
+## Removed / migrated
 
 - [appflowy](roles/appflowy.md)
 - [authentik](roles/authentik.md)

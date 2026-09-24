@@ -23,7 +23,7 @@ end
 {% endif %}
 {% endfor %}
 # ── Shell-specific aliases (syntax differs from bash/zsh; not in the shared source) ──
-abbr --add dots       'cd ~/.local/share/dotfiles; and git pull --ff-only; and just apply --skip-tags secrets'
+abbr --add dots       'cd ~/.local/share/dotfiles; and just apply-nosecrets'
 abbr --add dots-apply 'cd ~/.local/share/dotfiles; and git pull --ff-only; and just apply'
 abbr --add dots-edit  'cd ~/.local/share/dotfiles; and $EDITOR .'
 abbr --add reload     'exec fish -l'

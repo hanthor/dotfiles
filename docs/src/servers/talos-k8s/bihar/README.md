@@ -1,6 +1,8 @@
 # Bihar
 
-Kubernetes control plane + home server. [Talos Linux](https://www.talos.dev/) node.
+Kubernetes control plane. [Talos Linux](https://www.talos.dev/) node — not in `inventory.yml`, managed with `talosctl`/`kubectl` only.
+
+> **Powered down and in storage, expected back.** See the [cluster handbook](../cluster.md).
 
 ## Hardware
 
@@ -16,21 +18,18 @@ Kubernetes control plane + home server. [Talos Linux](https://www.talos.dev/) no
 
 ## Services
 
-| Service | URL |
-|---------|-----|
-| [Grafana](https://grafana.com/) | `bihar.manatee-basking.ts.net/grafana` |
-| [Prometheus](https://prometheus.io/) | `bihar.manatee-basking.ts.net:9091` |
-| Alertmanager | `bihar.manatee-basking.ts.net:9093` |
-| [Authentik](https://goauthentik.io/) SSO | `bihar.manatee-basking.ts.net/auth` |
-| [n8n](https://n8n.io/) | `bihar.manatee-basking.ts.net/n8n` |
-| [AppFlowy](https://appflowy.io/) | `bihar.manatee-basking.ts.net/appflowy` |
-| [Lima](https://github.com/lima-vm/lima) VM | `bihar.manatee-basking.ts.net/lima` |
+Bihar no longer serves anything directly — the old per-host Caddy paths
+(`bihar.manatee-basking.ts.net/grafana`, `/auth`, `/n8n`, …) predate Talos.
+Cluster services are reached through the Tailscale Operator; see the
+[ingress list in the cluster handbook](../cluster.md#tailscale--manatee-baskingtsnet).
 
 ## Networking
 
+Tailscale runs as a Talos system extension, configured by
+[`talos-k8s/networking/tailscale-bihar.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/networking/tailscale-bihar.yaml):
+
 - Advertises subnet routes: `192.168.0.0/24`
-- Tailscale DNS: disabled (uses systemd-resolved directly)
-- Operator: `james`
+- Tailscale DNS: disabled (`TS_ACCEPT_DNS=false`)
 
 ## See also
 

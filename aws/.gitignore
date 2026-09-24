@@ -1,0 +1,11 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+# Personal IPs + alert address — public repo
+terraform.tfvars
+*.auto.tfvars
+# Local-only overrides (e.g. backend "local" for a dry run)
+*_override.tf

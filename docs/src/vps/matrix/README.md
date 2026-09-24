@@ -31,7 +31,7 @@ VPS node in the hanthor fleet.
 | 22 | SSH | Tailscale only |
 | 25 | SMTP | Tailscale |
 | 6443 | k8s API | Tailscale |
-| 5432 | [PostgreSQL](https://www.postgresql.org/) | 🚨 Public IP exposed |
+| 5432 | [PostgreSQL](https://www.postgresql.org/) | Firewalled (not reachable publicly as of 2026-09-24) |
 | 10248-10259 | kubelet/containerd | localhost |
 
 ## Security
@@ -41,7 +41,7 @@ VPS node in the hanthor fleet.
 - ✅ [UFW](https://help.ubuntu.com/community/UFW): active
 - ✅ `unattended-upgrades`: active
 - ✅ [Tailscale](https://tailscale.com/): running (`reilly-asia-matrix`)
-- 🚨 PostgreSQL on `37.27.84.201:5432` — should be firewalled to Tailscale IPs only
+- ✅ PostgreSQL 5432 not reachable from the internet (probed from punjab 2026-09-24)
 
 ## Notes
 

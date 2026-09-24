@@ -2,6 +2,8 @@
 
 Two-node Kubernetes cluster running on Talos Linux, managed from the `talos-k8s/` directory.
 
+> **Powered down and in storage, expected back** — commands below fail until it returns. Matrix, the Hive and the CFP dashboard run on the [AWS Talos cluster](servers/aws-k8s/cluster.md) meanwhile.
+
 ## Hardware
 
 | Node | Role | Hardware |
@@ -55,9 +57,9 @@ See the [cluster handbook](servers/talos-k8s/cluster.md) for the full list — F
 # kubectl (from kubeconfig in Bitwarden)
 kubectl get nodes
 
-# Talos CLI
-talosctl -n 100.85.9.86 version
-talosctl -n 100.67.142.116 version
+# Talos CLI (LAN IPs; off-LAN they're reachable via bihar's 192.168.0.0/24 subnet route)
+talosctl -n 192.168.0.5 version   # bihar
+talosctl -n 192.168.0.6 version   # karnataka
 ```
 
 ## Image Factory

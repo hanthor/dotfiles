@@ -15,12 +15,13 @@
   when: not (bw_unlocked | default(false))
 
 - name: Fetch tailscale auth/API key from Bitwarden
-  ansible.builtin.shell: BW_SESSION={{ bw_session }} bw get item tailscale-apikey | python3 -c "import sys,json; print(json.load(sys.stdin)['login']['password'])"
+  ansible.builtin.shell: set -o pipefail && bw get item tailscale-apikey | python3 -c "import sys,json; print(json.load(sys.stdin)['login']['password'])"
   register: tailscale_apikey
   changed_when: false
   no_log: true
   environment:
     PATH: "{{ ansible_env_path }}"
+    BW_SESSION: "{{ bw_session }}"
 
 - name: Remove old tailscale device with same hostname
   block:
@@ -42,7 +43,7 @@
       ansible.builtin.set_fact:
         ts_old_device_id: >-
           {{ (ts_devices.json.devices | default([])
-            | selectattr('hostname', 'equalto', inventory_hostname + '.' + tailscale_domain)
+            | selectattr('name', 'equalto', inventory_hostname + '.' + tailscale_domain)
             | map(attribute='id') | first) | default('') }}
 
     - name: Delete old tailscale device

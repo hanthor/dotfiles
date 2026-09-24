@@ -60,7 +60,7 @@
 
 The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on each node and persists. Reboots survive.
 
-**Source of truth for manifests:** [`talos-k8s/`](../talos-k8s/) in this repo.
+**Source of truth for manifests:** [`talos-k8s/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s) in this repo.
 **Source of truth for secrets** (`talosconfig`, `controlplane.yaml`, `worker.yaml`, `kubeconfig`): Bitwarden, fetched onto your workstation by the `kube` role.
 
 ---
@@ -86,7 +86,6 @@ The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on
 | CPU             | Intel x86_64 |
 | NIC             | MAC `A8:A1:59:E1:6D:84` |
 | Boot disk       | `/dev/nvme0n1` |
-| Role on LAN     | DHCP, DNS (dnsmasq) |
 
 ---
 
@@ -94,7 +93,7 @@ The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on
 
 ### LAN — `192.168.0.0/24`
 
-DHCP/DNS served by **dnsmasq** on bihar. All assignments static via MAC.
+DHCP/DNS are served by the TP-Link router at `.1` (pool `.2`–`.253`, with an address-reservation table) — see [Gateway](../../network/gateway/README.md). Older revisions of this page said dnsmasq on bihar; that predates Talos, which can't run it on the host.
 
 | Host        | IP             | MAC                  | Role                       |
 |-------------|----------------|----------------------|----------------------------|
@@ -153,7 +152,7 @@ Talos ships with an immutable root filesystem, so kernel modules cannot be added
 - `siderolabs/util-linux-tools` — fstrim/nsenter, for Longhorn
 
 Both nodes run this schematic. Earlier schematics were `e5912b95…` (amdgpu
-only) and, in older docs, `b6ab12e…`. Storage details: [`talos-k8s/longhorn/`](../../../talos-k8s/longhorn/README.md).
+only) and, in older docs, `b6ab12e…`. Storage details: [`talos-k8s/longhorn/`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/longhorn/README.md).
 
 ```yaml
 machine:
@@ -177,7 +176,7 @@ user volume on the Crucial P3's EPHEMERAL partition:
 talosctl -n 192.168.0.6 patch mc --patch @storage-volume.yaml
 ```
 
-The patch is stored at [`talos-k8s/longhorn/storage-volume.yaml`](../talos-k8s/longhorn/storage-volume.yaml).
+The patch is stored at [`talos-k8s/longhorn/storage-volume.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/longhorn/storage-volume.yaml).
 It creates `/var/mnt/storage` as a directory on the EPHEMERAL partition.
 The mount is automatically propagated into the kubelet namespace.
 
@@ -258,7 +257,7 @@ resources:
 
 ## 7. Production workloads
 
-All manifests live in [`talos-k8s/`](../../../talos-k8s/), organized by purpose:
+All manifests live in [`talos-k8s/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s), organized by purpose:
 
 ```
 talos-k8s/
@@ -282,7 +281,7 @@ talos-k8s/
 ### Lemonade — AMD-optimized local AI runtime
 
 Single-replica [Lemonade](https://lemonade-sdk.github.io/) omni-modal server on the Strix Halo APU.
-Manifest: [`talos-k8s/ai/lemonade.yaml`](../../../talos-k8s/ai/lemonade.yaml).
+Manifest: [`talos-k8s/ai/lemonade.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/lemonade.yaml).
 
 Lemonade is an AMD-optimized, open-source local AI runtime that auto-detects hardware and provides standard OpenAI-compatible endpoints for chat, vision, image generation, image editing, speech generation, and transcription. Built on llama.cpp, ONNX Runtime, whisper.cpp, and stable-diffusion.cpp.
 
@@ -316,7 +315,7 @@ The `default` namespace is labelled `pod-security.kubernetes.io/enforce=privileg
 
 ### KubeVirt Manager (web UI)
 
-Manifest: deployed from upstream bundle. Also see [`talos-k8s/infrastructure/`](../../../talos-k8s/infrastructure/) for KubeVirt CR and Corral VM dashboard.
+Manifest: deployed from upstream bundle. Also see [`talos-k8s/infrastructure/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s/infrastructure) for KubeVirt CR and Corral VM dashboard.
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
@@ -335,7 +334,7 @@ kubectl port-forward svc/kubevirt-manager 8080:8080 -n kubevirt-manager
 
 ### Additional services
 
-All other production services have their own directory in [`talos-k8s/`](../../../talos-k8s/):
+All other production services have their own directory in [`talos-k8s/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s):
 
 | Service | Directory | Description |
 |---------|-----------|-------------|

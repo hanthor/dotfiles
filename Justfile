@@ -6,24 +6,7 @@ machine := `cat /etc/dotfiles-machine 2>/dev/null || hostname`
 export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" + env("PATH")
 
 # Resolve online fleet hosts: intersect tailscale online peers with inventory (excluding vps + self)
-_online_hosts := ```
-python3 -c "
-import subprocess, json, re, os
-ts = json.loads(subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True).stdout)
-online = set()
-for p in ts.get('Peer', {}).values():
-    if p.get('Online'):
-        online.add(p.get('DNSName', '').lower().split('.')[0])
-        online.add(p.get('HostName', '').lower())
-inv_path = os.path.expanduser('~/.local/share/dotfiles/inventory.yml')
-raw = open(inv_path).read()
-# Parse hosts from inventory.yml without PyYAML — extract 'hostname:' keys under 'hosts:'
-all_hosts = set(re.findall(r'^\s{4}(\w+):\s*$', raw, re.MULTILINE))
-vps = set(re.findall(r'^\s{6}(\w+):\s*$', raw, re.MULTILINE))
-all_hosts -= vps | {os.uname().nodename.lower()}
-print(' '.join(sorted(all_hosts & online)))
-"
-```
+_online_hosts := shell('python3 "$1"', justfile_directory() / "scripts/online_hosts.py")
 
 # Apply all config to this machine (unlocks BW interactively if needed)
 apply *args:
@@ -40,7 +23,9 @@ apply *args:
     fi
 
     SKIP_TAGS=""
-    if ! eval "$(scripts/bw-resolve.sh local)" 2>/dev/null; then
+    if bw_env=$(scripts/bw-resolve.sh local); then
+      eval "$bw_env"
+    else
       echo "Continuing without secrets (run scripts/bw-unlock.sh manually for details)..."
       SKIP_TAGS="secrets"
     fi
@@ -78,12 +63,12 @@ apply-nosecrets *args:
 apply-remote-tags name tags:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -z "${BW_SESSION:-}" ]; then
-      export BW_SESSION=$({{ dotfiles_dir }}/scripts/bw-unlock.sh)
-    fi
+    # A BW session is only valid on the machine that unlocked it, so resolve
+    # one on the remote rather than forwarding ours.
+    REMOTE_BW_SESSION=$({{ dotfiles_dir }}/scripts/bw-resolve.sh remote {{ name }} || true)
     ssh -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-      export BW_SESSION='${BW_SESSION}'
+      export BW_SESSION='${REMOTE_BW_SESSION}'
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply-tags {{ tags }}
     "
 
@@ -113,7 +98,7 @@ apply-remote name *args:
     ssh -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
       export BW_SESSION='${APPLY_BW_SESSION}'
-      (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
+      [ -n \"\$BW_SESSION\" ] && (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply {{ args }}
     "
     just push-terminfo {{ name }}
@@ -127,7 +112,7 @@ purge name:
     cd {{ dotfiles_dir }}
     git pull --ff-only
     python3 scripts/purge-machine.py {{ name }} inventory.yml
-    git add inventory.yml "host_vars/{{ name }}.yml" 2>/dev/null || true
+    git add -A inventory.yml host_vars/
     git diff --cached --quiet || git commit -m "inventory: remove {{ name }}"
     git push
 
@@ -227,11 +212,16 @@ broker-whoami:
 apply-all:
     #!/usr/bin/env bash
     set -euo pipefail
-    eval "$(scripts/bw-resolve.sh local)" 2>/dev/null || true
-
     ONLINE_HOSTS="{{ _online_hosts }}"
     echo "Online fleet hosts: ${ONLINE_HOSTS:-none}"
     [ -z "$ONLINE_HOSTS" ] && echo "No remote hosts online." && exit 0
+
+    # Resolve a remote-side BW session per host up front (may prompt), since a
+    # session is only valid on the machine that unlocked it.
+    declare -A SESSIONS
+    for host in $ONLINE_HOSTS; do
+      SESSIONS[$host]=$(scripts/bw-resolve.sh remote "$host" || true)
+    done
 
     PIDS=()
 
@@ -243,8 +233,8 @@ apply-all:
       echo "Applying to $host (background)..."
       ssh "$host" "
         export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-        export BW_SESSION='${BW_SESSION}'
-        (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
+        export BW_SESSION='${SESSIONS[$host]}'
+        [ -n \"\$BW_SESSION\" ] && (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
         cd ~/.local/share/dotfiles && git pull --ff-only && just apply
       " > "/tmp/apply_${host}.log" 2>&1 &
       PIDS+=("$!:$host")
@@ -279,11 +269,14 @@ apply-all:
 apply-online-tags tags:
     #!/usr/bin/env bash
     set -euo pipefail
-    eval "$(scripts/bw-resolve.sh local)" 2>/dev/null || true
-
     ONLINE_HOSTS="{{ _online_hosts }}"
     echo "Online fleet hosts: ${ONLINE_HOSTS:-none}"
     [ -z "$ONLINE_HOSTS" ] && echo "No remote hosts online." && exit 0
+
+    declare -A SESSIONS
+    for host in $ONLINE_HOSTS; do
+      SESSIONS[$host]=$(scripts/bw-resolve.sh remote "$host" || true)
+    done
 
     PIDS=()
 
@@ -295,7 +288,7 @@ apply-online-tags tags:
       echo "Applying tags '{{ tags }}' to $host (background)..."
       ssh "$host" "
         export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-        export BW_SESSION='${BW_SESSION}'
+        export BW_SESSION='${SESSIONS[$host]}'
         cd ~/.local/share/dotfiles && git pull --ff-only && just apply-tags {{ tags }}
       " > "/tmp/apply_${host}.log" 2>&1 &
       PIDS+=("$!:$host")
@@ -362,8 +355,8 @@ add-machine name type="desktop":
        | bash -s -- --name {{ name }} --type {{ type }}"
 
 # Pull latest changes and apply
-update:
-    cd {{ dotfiles_dir }} && git pull --ff-only && just apply
+update *args:
+    cd {{ dotfiles_dir }} && git pull --ff-only && just apply {{ args }}
 
 # Pull latest, apply, and upgrade all packages
 update-all:
@@ -518,3 +511,43 @@ doctor-fleet:
       echo "═══ $h ═══"
       ssh -o BatchMode=yes "$h" 'cd ~/.local/share/dotfiles && just doctor' || true
     done
+
+# ── AWS account IaC (aws/, OpenTofu) ─────────────────────────────────────
+# Docs: docs/src/servers/aws/README.md. Needs AWS creds (`aws login`) and
+# aws/terraform.tfvars, which holds personal IPs + alert address and so lives in
+# the Bitwarden note `aws-tofu-tfvars`, not in git.
+
+# Fetch aws/terraform.tfvars from Bitwarden (no-op if it already exists)
+aws-tfvars:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{ dotfiles_dir }}/aws
+    [ -f terraform.tfvars ] && exit 0
+    eval "$({{ dotfiles_dir }}/scripts/bw-resolve.sh local)"
+    (umask 077 && bw get notes aws-tofu-tfvars > terraform.tfvars)
+    echo "✓ aws/terraform.tfvars fetched from Bitwarden"
+
+# Push aws/terraform.tfvars to the Bitwarden note `aws-tofu-tfvars` (create or update)
+aws-seed-tfvars:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{ dotfiles_dir }}/aws
+    eval "$({{ dotfiles_dir }}/scripts/bw-resolve.sh local)"
+    bw sync >/dev/null
+    id=$(bw get item aws-tofu-tfvars 2>/dev/null | jq -r .id || true)
+    if [ -n "$id" ]; then
+      bw get item "$id" | jq --rawfile n terraform.tfvars '.notes=$n' | bw encode | bw edit item "$id" >/dev/null
+    else
+      bw get template item | jq --rawfile n terraform.tfvars \
+        '.type=2 | .secureNote={type:0} | .name="aws-tofu-tfvars" | .notes=$n' \
+        | bw encode | bw create item >/dev/null
+    fi
+    echo "✓ aws-tofu-tfvars saved to Bitwarden"
+
+# Show what OpenTofu would change in the AWS account (read-only)
+aws-plan *args: aws-tfvars
+    cd {{ dotfiles_dir }}/aws && tofu init -input=false >/dev/null && tofu plan {{ args }}
+
+# Apply the AWS IaC (interactive confirmation; prevent_destroy guards the nodes)
+aws-apply *args: aws-tfvars
+    cd {{ dotfiles_dir }}/aws && tofu init -input=false >/dev/null && tofu apply {{ args }}

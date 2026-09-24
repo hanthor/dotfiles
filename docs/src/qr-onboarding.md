@@ -17,7 +17,7 @@ first secret arrive?*
 
 ## The spine: Tailscale identity as the bootstrap credential
 
-We already run Tailscale everywhere and Authentik for SSO, so the passwordless +
+We already run Tailscale everywhere, so the passwordless +
 QR experience is mostly already in the stack:
 
 1. **Approve the new device on your phone.** `tailscale up --qr` renders the login

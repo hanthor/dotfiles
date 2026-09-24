@@ -2,19 +2,22 @@
 
 **Tags:** `system`, `hardening`, `security`  
 **Secrets needed:** No  
-**Runs on:** Servers and VPS only (`is_desktop: false`)
+**Runs on:** `server` and `vps` groups (`site.yml` gates on group membership)
 
-Applies security and reliability hardening for long-running server hosts.
+Applies reliability and light security hardening for long-running server hosts.
 
 ## What It Does
 
-- Hardens SSH configuration (disable password auth, restrict ciphers)
-- Configures automatic security updates
-- Sets kernel hardening parameters via sysctl
-- Configures log rotation and journald limits
-- Installs and configures fail2ban for SSH brute-force protection
+- **journald:** sets `SystemMaxUse=500M` and vacuums journals to that size
+- **swap:** creates a 2G `/swapfile` if missing, sets 0600, runs `mkswap` + `swapon` only when it isn't already active, adds it to `/etc/fstab`
+- **NTP:** enables and starts `systemd-timesyncd`
+- **SSH rate limits:** `MaxStartups 3:50:10`, `MaxSessions 10`, `ClientAliveCountMax 3` in `sshd_config` (reloads sshd)
+- **UFW:** turns logging on if UFW is already active (doesn't enable UFW or add rules)
+- **Livepatch:** runs `pro enable livepatch` if Ubuntu Pro is attached (best-effort)
+- **Reboot check:** prints a warning if `/var/run/reboot-required` exists
 
 ## Notes
 
-- Skips desktops — keyboard-interactive machines have different security needs
-- Designed for unattended servers that may run for months between reboots
+- Does **not** install fail2ban, change SSH auth/cipher settings, set sysctls, or configure automatic updates
+- No `skip_` flag — to keep a host out, take it out of `server`/`vps`
+- The retired VPSes (`matrix`, `telengana`) are still in `vps`; don't apply to them — nothing on them may be restarted, and this role reloads sshd and restarts journald

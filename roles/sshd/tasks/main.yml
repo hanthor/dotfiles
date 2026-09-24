@@ -13,3 +13,25 @@
   when: sshd_config_d.stat.isdir is defined and sshd_config_d.stat.isdir
   ignore_errors: true
   notify: Reload sshd
+
+# Opt-in hardening for internet-facing hosts (sshd_harden: true in host_vars).
+# Deliberately not fleet-wide: reloading sshd on the retired VPSes is off-limits.
+- name: Deploy sshd hardening drop-in
+  ansible.builtin.copy:
+    content: |
+      # Managed by dotfiles (sshd role, sshd_harden)
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      X11Forwarding no
+      MaxAuthTries 3
+      LoginGraceTime 30
+    dest: /etc/ssh/sshd_config.d/10-hardening.conf
+    mode: "0644"
+    # sshd takes the first value it sees, so 10- beats the distro drop-ins.
+    validate: /usr/sbin/sshd -t -f %s
+  become: true
+  when:
+    - sshd_harden | default(false)
+    - sshd_config_d.stat.isdir is defined and sshd_config_d.stat.isdir
+  notify: Reload sshd
