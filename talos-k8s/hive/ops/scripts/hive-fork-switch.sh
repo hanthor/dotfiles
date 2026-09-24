@@ -76,6 +76,7 @@ SWITCH_STATE="$STATE_DIR/fork-switch.tsv"      # ns <TAB> mode <TAB> fork_digest
 COOLDOWN_FILE="$STATE_DIR/fork-switch-cooldown"
 COOLDOWN_DAYS="${HIVE_FORK_SWITCH_COOLDOWN_DAYS:-7}"
 UPSTREAM_REPO=kubestellar/hive
+# shellcheck disable=SC2034  # documents the image family this job manages
 FORK_IMAGE_REPO=ghcr.io/tuna-os/hive
 DRY="${HIVE_FORK_SWITCH_DRYRUN:-0}"
 mkdir -p "$STATE_DIR"; touch "$SWITCH_STATE"
@@ -168,9 +169,9 @@ branding_files_present() {
 # ── Gate 4: cooldown ────────────────────────────────────────────────────
 in_cooldown() {
   [ -s "$COOLDOWN_FILE" ] || return 1
-  local then now
-  then=$(cat "$COOLDOWN_FILE" 2>/dev/null); now=$(date +%s)
-  [ -n "$then" ] && [ $(( (now - then) / 86400 )) -lt "$COOLDOWN_DAYS" ]
+  local since now
+  since=$(cat "$COOLDOWN_FILE" 2>/dev/null); now=$(date +%s)
+  [ -n "$since" ] && [ $(( (now - since) / 86400 )) -lt "$COOLDOWN_DAYS" ]
 }
 
 # ── Content verification ────────────────────────────────────────────────

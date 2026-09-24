@@ -138,8 +138,7 @@ api_for() {  # <ns> <pod> <sid> <METHOD> <path> [body]
 # extra provider, and it reuses the shared auth the fleet already has. A single
 # short prompt per NEW repo only — this is not in any hot path.
 classify_repo() {
-  local repo="$1" meta desc lang topics prompt out choice names
-  names=$(hive_names | tr '\n' ' ')
+  local repo="$1" meta desc lang topics prompt out
   meta=$(kubectl exec -n "$NS" "$POD" -- sh -c \
     "curl -sS --max-time 20 -H 'Authorization: Bearer \$(cat /var/run/hive-metrics/gh-app-token.cache 2>/dev/null)' \
      -H 'Accept: application/vnd.github+json' https://api.github.com/repos/$ORG/$repo" 2>/dev/null)
@@ -237,6 +236,7 @@ done <<< "$ORG_REPOS"
 # `hold` label, so a duplicate is a review-queue annoyance rather than two
 # competing auto-merges. Adding more shared repos without that asymmetry would
 # not be safe.
+# shellcheck disable=SC2034  # read by the documentation above; not yet enforced
 SHARED="${HIVE_REPO_SYNC_SHARED:-hive}"
 new=$(printf '%s' "$new" | grep -v '^$' || true)
 

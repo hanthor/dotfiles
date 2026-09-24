@@ -54,23 +54,23 @@
 # ("Releasing restores only the agents this breaker paused").
 
 
-# Hive runs on the AWS Talos cluster; override to point elsewhere.
-# Cluster-aware kubeconfig. Running IN the cluster (a CronJob under the
-# hive-ops ServiceAccount) there is no kubeconfig at all — kubectl must use the
-# in-cluster service account. Defaulting KUBECONFIG to a workstation path there
-# makes every kubectl call fail with a missing-file error that reads like the
-# hive is down. Note `${VAR:=default}` fires on EMPTY as well as unset, so
-# passing KUBECONFIG="" from a pod spec is not enough on its own.
-if [ -z "${KUBERNETES_SERVICE_HOST:-}" ]; then
-  : "${KUBECONFIG:=$HOME/.kube/config-aws-migration}"
-  export KUBECONFIG
-else
-  unset KUBECONFIG
-fi
+# Shared plumbing: kubeconfig, the dashboard API over the hive Service, the
+# slim /api/status (v5's full one is ~3 MB and truncated at --max-time 20,
+# which is how the 10:00 peak-resume runs died), cached owner session.
+# shellcheck source=hive-lib.sh
+. "${HIVE_LIB:-$(dirname "$0")/hive-lib.sh}"
+hive_kube_env
 
 set -u
 
-STATE="${HIVE_PEAK_STATE:-$HOME/.local/state/hive-peak-paused}"
+# The paused set MUST live on persistent storage: pause and resume are
+# separate CronJob pods, and $HOME there is the pod's emptyDir. Until
+# 2026-09-24 it defaulted to $HOME/.local/state, so every in-cluster resume
+# found "no recorded peak-pause set" and resumed nothing. It also has to be
+# where hive-rotate looks, or rotate's operator-pause auto-resume undoes the
+# window within 20 minutes (see peak_held there).
+STATE="${HIVE_PEAK_STATE:-${HIVE_ROTATE_STATE:+$HIVE_ROTATE_STATE/peak-paused}}"
+STATE="${STATE:-$HOME/.local/state/hive-peak-paused}"
 
 ACTION="${1:-}"
 case "$ACTION" in
@@ -78,54 +78,19 @@ case "$ACTION" in
   *) echo "usage: $0 pause|resume|status" >&2; exit 2 ;;
 esac
 
-NS=hive
-LABEL=app.kubernetes.io/name=hive
-API=http://127.0.0.1:3002   # dashboard port inside the pod
+NS="${HIVE_NS:-hive}"
 
-POD=$(kubectl get pods -n "$NS" -l "$LABEL" \
-      -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-[ -n "$POD" ] || { echo "ERROR: no hive pod found" >&2; exit 1; }
-
-# Newest owner session from the dashboard's own store — do NOT try to decide
-# locally whether it is expired. The store writes the hive pod's UTC offset
-# (…-04:00) while `date -Is` writes the caller's (+00:00 in-cluster, +05:30 on
-# a workstation), and a lexicographic ISO-8601 comparison across differing
-# offsets is only accidentally right: near the boundary it silently discards
-# live sessions or keeps dead ones. hive-rotate.sh removed exactly this
-# comparison for exactly this reason — see its session block.
-#
-# The newest session is the best candidate regardless of what any local clock
-# thinks, and the server is the only authority on validity, so use it and let a
-# real call decide. hive_api surfaces the auth failure.
-SID=$(kubectl exec -n "$NS" "$POD" -- \
-        cat /data/dashboard-sessions.json 2>/dev/null \
-      | jq -r '
-          to_entries
-          | map(select(.value.Role == "owner"))
-          | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null)
-
-if [ -z "$SID" ]; then
-  echo "ERROR: no unexpired owner session in the hive dashboard session store." >&2
-  echo "       Log in at https://hive.tunaos.org as an authorized_users member" >&2
-  echo "       (GitHub device flow), then re-run. Mutations require an owner" >&2
-  echo "       session; Bearer and X-Hive-Internal are read-only here." >&2
+# Owner session cookie (not Bearer, not X-Hive-Internal — see above) and the
+# status snapshot. hive_open reads the session from the pod's own store, so a
+# fresh browser login is picked up with no edit here; when every session is
+# gone it says so loudly instead of silently doing nothing.
+if ! hive_open "$NS"; then
+  echo "ERROR: could not read agents from the $NS dashboard." >&2
+  echo "       If there is no owner session: log in to the dashboard as an" >&2
+  echo "       authorized_users member (GitHub device flow), then re-run." >&2
   exit 1
 fi
-
-# hive_api <method> <path> — always from inside the pod, always the session
-# cookie. curl is passed straight to kubectl exec rather than wrapped in
-# `sh -c` with an interpolated secret, which has produced bogus responses
-# (see tunaos-hive-checkin).
-hive_api() {
-  kubectl exec -n "$NS" "$POD" -- \
-    curl -sS -X "$1" --max-time 20 -H "Cookie: hive_session=$SID" "$API$2" 2>&1
-}
-
-STATUS_JSON=$(hive_api GET /api/status)
-if ! printf '%s' "$STATUS_JSON" | jq -e '.agents' >/dev/null 2>&1; then
-  echo "ERROR: could not list agents from dashboard -> ${STATUS_JSON:0:200}" >&2
-  exit 1
-fi
+hive_api() { hive_call "$NS" "$POD" "$SID" "$1" "$2"; }
 
 # ── Provider classification ─────────────────────────────────────────────
 # This window exists for DEEPSEEK peak pricing, so it must only touch agents
@@ -162,7 +127,7 @@ if [ "$ACTION" = status ]; then
     ["agent","provider","model","paused","trigger","reason"],
     (.agents[] | [.name, provider, (.govModel//"-"), (.paused|tostring),
                   (.pausedTrigger//"-"), (.pausedReason//"-")])
-    | @tsv' | column -t -s $'\t'
+    | @tsv' | awk -F'\t' '{printf "%-14s %-10s %-27s %-6s %-15s %s\n", $1,$2,$3,$4,$5,$6}'
   echo
   echo "peak applies to provider(s): $PEAK_PROVIDERS"
   [ -s "$STATE" ] && echo "peak-paused set: $(tr '\n' ' ' < "$STATE")"
