@@ -7,10 +7,10 @@ Kubernetes worker node with AMD GPU. [Talos Linux](https://www.talos.dev/) node 
 ## Hardware
 
 - Arch: x86_64
-- System: [Framework Computer](https://frame.work/) (MAC `9C:BF:0D:00:E5:0F`)
+- System: [Framework Computer](https://frame.work/)
 - CPU: [AMD Strix Halo APU](https://www.amd.com/en/products/processors/laptop/ryzen-ai-max-plus.html)
 - GPU: AMD integrated (exposed via [Talos Image Factory](https://www.talos.dev/latest/talos-guides/install/boot-assets/) schematic with [`siderolabs/amdgpu`](https://github.com/siderolabs/extensions/tree/main/amdgpu))
-- LAN IP: `192.168.0.6`
+- LAN: reserved address on the home /24
 - Role: Worker (Talos K8s)
 - Tailscale IP: via MagicDNS
 

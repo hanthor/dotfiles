@@ -17,7 +17,7 @@ Automates Firefox Account sign-in for Zen Browser (and optionally Firefox).
 ```yaml
 # group_vars/all.yml
 fxa_bw_item: "accounts.firefox.com"
-fxa_bw_username: "jreilly1821@gmail.com"
+fxa_bw_username: "<your-fxa-email>"
 fxa_browsers:
   - zen
   - firefox

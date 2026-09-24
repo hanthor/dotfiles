@@ -5,6 +5,12 @@ Ansible-driven dotfiles and infrastructure for a personal fleet. Two distinct co
 1. **Workstation config** — shells, packages, browser, SSH, Tailscale, kubeconfig, GNOME, and more
 2. **Talos K8s cluster** — manifests for the Bihar + Karnataka cluster
 
+> **This handbook is public.** It covers architecture, decisions and runbooks.
+> Host-specific addresses and cloud resource identifiers are deliberately left
+> out — they live in the repo's inventory and IaC (`inventory.yml`,
+> `host_vars/`, `aws/`), or come from `just inventory`. Runbooks use
+> placeholders such as `<host>` and `<node-ip>` where you substitute them.
+
 ## Quick Start
 
 ```bash
@@ -40,8 +46,8 @@ Ansible-managed hosts, from `inventory.yml`:
 | vm | server | VM | Local dev VM |
 | termux | termux_hosts | Phone | Raw Termux/Android layer |
 | test-fleet-fedora, test-fleet-node2 | test_fleet | VM | KubeVirt test VMs (`vm-test`) |
-| matrix | vps | VPS | **Retired** — burn-in only, restart nothing |
-| telengana | vps | VPS | **Retired** — burn-in only, restart nothing |
+| matrix | vps | VPS | **Retired** — see the cutover runbook |
+| telengana | vps | VPS | **Retired** — see the cutover runbook |
 
 Not Ansible-managed (Talos — `talosctl`/`kubectl` only):
 

@@ -1,59 +1,31 @@
 # Matrix
 
 > **Retired 2026-08-27.** The Matrix homeserver was migrated to the
-> [AWS Talos cluster](../../servers/aws-k8s/cluster.md). This box is kept
-> powered on for burn-in only — Synapse and MAS are scaled to zero and must
-> **never** be restarted (two live homeservers sharing one federation identity
-> is unrecoverable). `auto-upgrade.timer` is disabled so nothing resurrects
-> them. Everything below describes the box as it was.
+> [AWS Talos cluster](../../servers/aws-k8s/cluster.md). See the
+> [Matrix cutover runbook](https://github.com/hanthor/dotfiles/blob/master/docs/matrix-cutover-runbook.md)
+> before touching anything that was on this box. The page below is historical.
 
-VPS node in the hanthor fleet.
+Former VPS node in the fleet (`vps` group in `inventory.yml`) that hosted the
+`reilly.asia` Matrix homeserver.
 
-## Connection
+## What it ran
 
-- Hostname: `matrix.reilly.asia`
-- Tailscale IP: `100.73.19.81`
-- Public IP: `37.27.84.201`
-- Arch: x86_64
-- Auth: himachal's fleet key
+- Ubuntu 24.04 LTS, x86_64
+- [Synapse](https://github.com/element-hq/synapse) + MAS on a single-node
+  [Kubernetes](https://kubernetes.io/) install, with
+  [PostgreSQL](https://www.postgresql.org/) as the database
+- Managed by the fleet playbook (daily cron apply, no secrets/homebrew)
 
-## Specs
+## Retirement
 
-- OS: [Ubuntu 24.04.4 LTS](https://releases.ubuntu.com/noble/)
-- RAM: 7.5 GiB
-- Disk: 75 GB (64% used — 46G/75G)
-- Uptime: typically days
+Synapse and MAS were scaled to zero at cutover and must stay that way: two live
+homeservers sharing one federation identity is unrecoverable. Automatic
+upgrades on the box were disabled so nothing resurrects them.
 
-## Services
+## Lessons carried forward
 
-| Port | Service | Exposure |
-|------|---------|----------|
-| 22 | SSH | Tailscale only |
-| 25 | SMTP | Tailscale |
-| 6443 | k8s API | Tailscale |
-| 5432 | [PostgreSQL](https://www.postgresql.org/) | Firewalled (not reachable publicly as of 2026-09-24) |
-| 10248-10259 | kubelet/containerd | localhost |
-
-## Security
-
-- ✅ SSH: no root login, no password auth
-- ✅ [fail2ban](https://github.com/fail2ban/fail2ban): active
-- ✅ [UFW](https://help.ubuntu.com/community/UFW): active
-- ✅ `unattended-upgrades`: active
-- ✅ [Tailscale](https://tailscale.com/): running (`reilly-asia-matrix`)
-- ✅ PostgreSQL 5432 not reachable from the internet (probed from punjab 2026-09-24)
-
-## Notes
-
-- Runs [Kubernetes](https://kubernetes.io/) (kubelet + containerd ports)
-- `reilly.asia` DNS hosted on [Cloudflare](https://www.cloudflare.com/), not served from this VPS
-- Fleet keys deployed: bihar, dilli, goa, himachal, kanpur, karnataka, termux
-- Cron: daily playbook at 3am (no secrets/homebrew)
-
-## Recommendations
-
-- ⚠️ **NTP not synced** — time drift affects TLS, K8s certs
-- 🔧 **Enable swap** — 7.5G RAM with no swap is risky for K8s
-- 🔧 **Kernel livepatch** — `sudo pro attach` ([Ubuntu Pro](https://ubuntu.com/pro), free for personal)
-- 🔧 **SSH rate limiting** — protect against brute force despite fail2ban
-- 🔧 **logrotate/journald** — 731M logs, set `SystemMaxUse=500M` in journald.conf
+- A single VPS with no swap and unmanaged journald growth was fragile for K8s;
+  the AWS cluster sizes nodes for their workloads instead (see the OOM incident
+  in the [AWS cluster handbook](../../servers/aws-k8s/cluster.md)).
+- `reilly.asia` DNS is on [Cloudflare](https://www.cloudflare.com/), which made
+  the cutover a DNS change rather than a server move.

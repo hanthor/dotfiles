@@ -57,9 +57,9 @@ See the [cluster handbook](servers/talos-k8s/cluster.md) for the full list — F
 # kubectl (from kubeconfig in Bitwarden)
 kubectl get nodes
 
-# Talos CLI (LAN IPs; off-LAN they're reachable via bihar's 192.168.0.0/24 subnet route)
-talosctl -n 192.168.0.5 version   # bihar
-talosctl -n 192.168.0.6 version   # karnataka
+# Talos CLI (LAN addresses; off-LAN they're reachable via bihar's subnet route)
+talosctl -n <bihar-ip> version       # bihar
+talosctl -n <karnataka-ip> version   # karnataka
 ```
 
 ## Image Factory

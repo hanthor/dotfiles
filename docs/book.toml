@@ -8,9 +8,9 @@ description = "James Reilly's personal fleet (Ansible dotfiles) and the TunaOS i
 build-dir = "book"
 
 [output.html]
-# Canonical home is https://reilly.asia/infra/ (the reilly.asia Worker proxies
-# /infra/* to this repo's GitHub Pages build).
-site-url = "/infra/"
+# Canonical home is https://reilly.asia/infra/handbook/ (the reilly.asia Worker
+# proxies /infra/handbook/* to this repo's GitHub Pages build).
+site-url = "/infra/handbook/"
 no-section-label = true
 git-repository-url = "https://github.com/hanthor/dotfiles"
 git-repository-icon = "fa-github"

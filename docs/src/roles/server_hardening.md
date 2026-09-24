@@ -20,4 +20,4 @@ Applies reliability and light security hardening for long-running server hosts.
 
 - Does **not** install fail2ban, change SSH auth/cipher settings, set sysctls, or configure automatic updates
 - No `skip_` flag — to keep a host out, take it out of `server`/`vps`
-- The retired VPSes (`matrix`, `telengana`) are still in `vps`; don't apply to them — nothing on them may be restarted, and this role reloads sshd and restarts journald
+- The retired VPSes (`matrix`, `telengana`) are still in `vps`; don't apply to them (see the cutover runbook) — this role reloads sshd and restarts journald
