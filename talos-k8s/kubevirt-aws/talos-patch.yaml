@@ -13,5 +13,11 @@ machine:
   # a node labelling itself with it. Placement uses tunaos.org/kubevirt.
   nodeLabels:
     tunaos.org/kubevirt: "true"
-  nodeTaints:
-    tunaos.org/kubevirt: "true:NoSchedule"
+  # Not machine.nodeTaints: NodeRestriction forbids a worker from changing
+  # its own taints, and the failed patch then blocks the labels too (seen
+  # 2026-09-24). kubelet sets the taint at registration instead; for a node
+  # that is already registered, taint it once from the admin side:
+  #   kubectl taint node ip-10-20-1-12 tunaos.org/kubevirt=true:NoSchedule
+  kubelet:
+    extraArgs:
+      register-with-taints: tunaos.org/kubevirt=true:NoSchedule
