@@ -1,6 +1,6 @@
 # browser_fxa
 
-**Tags:** `desktop`, `browser`, `browser_fxa`  
+**Tags:** none of its own — pulled in by `zen_browser` via `include_role`, so it runs under `desktop`, `browser`, `zen_browser`  
 **Secrets needed:** Yes (Firefox Account credentials from Bitwarden)  
 **Runs on:** Desktop group only
 

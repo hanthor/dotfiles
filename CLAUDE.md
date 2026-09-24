@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ansible-driven dotfiles + infra for a personal fleet (desktops, servers, VPS). Each machine manages itself locally via `just` + `ansible-playbook`. Secrets come from Bitwarden at runtime — the repo is public, no secrets in git.
 
-Two distinct concerns live here:
+Three distinct concerns live here:
 1. **Workstation config** (`roles/`, `site.yml`, `host_vars/`, `group_vars/`) — shells, packages, browser, SSH, Tailscale, kubeconfig, etc.
 2. **Talos K8s cluster IaC** (`talos-k8s/`) — manifests for the Bihar + Karnataka cluster. Detailed handbook in [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md).
+3. **AWS account IaC** (`aws/`, OpenTofu) — the AWS Talos cluster's VPC/nodes/EIPs, punjab's instance, backups (DLM + S3), IAM, budgets. Handbook: [`docs/src/servers/aws/README.md`](docs/src/servers/aws/README.md).
 
 ### Two Talos clusters, not one
 
@@ -52,11 +53,11 @@ just add-machine NAME   # Onboard + bootstrap an already-reachable machine via S
 - `kube` fetches `~/.kube/config` + `~/.talos/config` from Bitwarden — desktops only.
 - `ssh_keys` round-trips per-machine ed25519 keys through Bitwarden, building cross-machine `authorized_keys`.
 
-Roles are conditional on inventory group (`desktop`, `server`, `vps`, `llm`) and on `skip_*` flags in `host_vars/`. See [`docs/roles.md`](docs/roles.md) for the full reference.
+Roles are conditional on inventory group (`desktop`, `server`, `vps`, `test_fleet`, `termux_hosts`; `llm` is dormant/commented out) and on `skip_*` flags / `machine_profile` in `host_vars/`. See [`docs/src/roles/`](docs/src/roles/) for the full reference.
 
 ## Kubeconfig + Talos secrets
 
-`~/.kube/config` and `~/.talos/config` contain cluster PKI — they live in **Bitwarden as secure notes** named `kubeconfig` and `talosconfig`. Seed via `just seed-kube`, pull via `just apply-tags kube`.
+`~/.kube/config` and `~/.talos/config` contain cluster PKI — they live in **Bitwarden as secure notes** named `kubeconfig` and `talosconfig` (home cluster). The AWS cluster's are `kubeconfig-aws-migration` / `talosconfig-aws-migration`, written to `~/.kube/config-aws-migration` / `~/.talos/config-aws-migration`. Pull all four via `just apply-tags kube`; `just seed-kube` only seeds the two home-cluster notes.
 
 `talos-k8s/.gitignore` excludes `controlplane.yaml`, `worker.yaml`, and `talosconfig` from git.
 
@@ -68,6 +69,13 @@ Production workloads: Lemonade (AMD-optimized local AI), KubeVirt v1.8.2 + KubeV
 
 **The cluster handbook is [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md)** — hardware, network, reinstall, troubleshooting.
 
+## AWS account (`aws/`)
+
+- **punjab** (this repo's only AWS-hosted Ansible host) is an EC2 `t3.large` in `us-east-1`; the Talos cluster is in `eu-north-1`; `runs-on` (us-east-2) is its own CloudFormation stack — don't import it.
+- `just aws-plan` / `just aws-apply`. A plan against the live account must read "No changes"; console edits are drift — codify or revert them.
+- State is in S3 (`hanthor-fleet-backups-*/tofu/aws/`) and contains Talos PKI via node `user_data`. `aws/terraform.tfvars` (admin IPs, alert email) is gitignored and lives in Bitwarden note `aws-tofu-tfvars` (`just aws-tfvars` / `just aws-seed-tfvars`).
+- Never put Talos `user_data` in the config — nodes `ignore_changes` it. `prevent_destroy` guards nodes, punjab, the worker EIP (DNS), pgdata and the bucket.
+
 ## Don'ts
 
 - **Don't commit `talosconfig`, `controlplane.yaml`, `worker.yaml`, or `~/.kube/config`.** `talos-k8s/.gitignore` covers the first three; the kubeconfig isn't in the repo path at all.
@@ -75,11 +83,12 @@ Production workloads: Lemonade (AMD-optimized local AI), KubeVirt v1.8.2 + KubeV
 - **Don't add files to `karnataka/`** — that directory was deleted in cleanup. Workstation-specific config goes in `host_vars/karnataka.yml`; cluster manifests go in `talos-k8s/`.
 - **Don't rely on host sudo in automated/pi sessions** — `sudo -v` doesn't carry over across TTYs.
 - **This repo is public.** Secrets flow through Bitwarden only — never hardcode credentials.
+- **Don't commit tofu state, plans or `aws/terraform.tfvars`.** `aws/.gitignore` covers them.
 
 ## References
 
 - [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md) — Talos cluster handbook
-- [`docs/roles.md`](docs/roles.md) — every Ansible role explained
+- [`docs/src/roles/`](docs/src/roles/) — every Ansible role explained
 - [`docs/src/bitwarden.md`](docs/src/bitwarden.md) — BW vault structure
 - `Justfile` — every task recipe; `just --list` for a menu
 - `ansible.cfg`, `site.yml`, `inventory.yml` — the playbook entrypoints

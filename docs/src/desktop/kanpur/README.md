@@ -6,15 +6,11 @@ Laptop workstation in the hanthor fleet.
 
 - Arch: x86_64
 - Laptop (runs on login, not periodic timer)
-- Tailscale IP: via MagicDNS
+- Tailscale IP: `100.107.52.37`
 
 ## OS
 
 [Bluefin](https://projectbluefin.io/) (Fedora Atomic)
-
-## Services
-
-- Homepage dashboard
 
 ## Notes
 

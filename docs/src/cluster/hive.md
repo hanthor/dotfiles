@@ -1,5 +1,14 @@
 # Hive — 24/7 AI Agent Supervisor
 
+> **Now runs on the [AWS Talos cluster](../servers/aws-k8s/cluster.md)** at
+> **https://hive.tunaos.org** (namespace `hive`, Cloudflare-proxied, on the
+> control-plane node). Point `kubectl` at it with
+> `export KUBECONFIG=~/.kube/config-aws-migration`. Operator timers (rotation,
+> watchdog, peak windows) live in the [`hive_ops`](../roles/hive_ops.md) role on
+> himachal. The architecture below was written for the home cluster (bihar,
+> Tailscale ingress `hive.manatee-basking.ts.net`), which is powered down —
+> treat node names and the Tailscale URL as historical.
+
 > **Hive** is an open-source AI agent orchestration system running on the Talos K8s cluster. A fleet of specialized agents autonomously maintain the `tuna-os/tunaos` repository — triaging issues, analyzing code, and creating PRs. A governor dynamically adjusts agent pace based on issue queue depth.
 
 ## Table of contents
@@ -161,7 +170,7 @@ kubectl apply -f talos-k8s/hive/hive.yaml
 kubectl rollout restart deploy/hive -n hive
 ```
 
-Access: **https://hive.manatee-basking.ts.net**
+Access: **https://hive.tunaos.org** (AWS cluster). The old home-cluster URL was `https://hive.manatee-basking.ts.net`.
 
 ---
 
@@ -430,11 +439,12 @@ kubectl logs -n hive -f job/hive-build
 ### Check agent status
 
 ```bash
-# Dashboard API
-curl -sk https://hive.manatee-basking.ts.net/api/status | jq .
+# Public health check (the dashboard itself is login-gated — 401 is normal)
+curl -s -o /dev/null -w '%{http_code}\n' https://hive.tunaos.org/api/health
 
-# Or from within the pod
-kubectl exec -n hive deploy/hive -- curl -s localhost:3001/api/status
+# Full status: authenticated, from inside the pod (see the tunaos-hive-checkin skill)
+TOKEN=$(kubectl get secret -n hive hive-secrets -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' | base64 -d)
+kubectl exec -n hive deploy/hive -- curl -sS -H "X-Hive-Internal: $TOKEN" http://127.0.0.1:3002/api/status | jq
 ```
 
 ### View agent terminal

@@ -2,7 +2,7 @@
 
 **Tags:** `desktop`, `audio`, `pipewire`  
 **Secrets needed:** No  
-**Runs on:** Desktop group only
+**Runs on:** Desktop group only (unless `skip_pipewire_audio: true`)
 
 Replaces Easy Effects with native PipeWire `filter-chain` modules using LSP LV2 and LADSPA plugins — no Flatpak, no GUI, no D-Bus service.
 
@@ -86,4 +86,4 @@ ls /usr/lib64/ladspa/librnnoise_ladspa.so
 - PipeWire must be restarted after deploying configs (handled by Ansible handlers)
 - Select "Speakers (DSP)" and "Microphone (DSP)" in GNOME Sound settings if WirePlumber doesn't auto-select them
 - The virtual sink approach works because PipeWire prevents self-looping when capture/playback share the same `node.name`
-- To skip: use `skip_flatpak: true` or exclude the pipewire_audio tag
+- To skip: set `skip_pipewire_audio: true` in `host_vars`, or exclude the `pipewire` tag

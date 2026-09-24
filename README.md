@@ -4,7 +4,7 @@ Ansible-managed dotfiles for every machine I own. One command to go from a fresh
 
 ```bash
 just apply        # full apply with secrets
-dots              # quick pull + apply (no secrets)
+dots              # quick pull + apply without secrets
 ```
 
 ---
@@ -40,29 +40,39 @@ just edit-host         # Edit this machine's host_vars
 Shell aliases available everywhere after first apply:
 
 ```bash
-dots                   # git pull + apply-nosecrets
-dots-apply             # git pull + full apply with BW unlock
+dots                   # cd to the repo + just apply-nosecrets
+dots-apply             # git pull + just apply (full, with BW unlock)
 ```
 
 ---
 
 ## Machines
 
-| Name | Type | Host |
-|------|------|------|
-| karnataka | Desktop (Bluefin) | karnataka |
-| kanpur | Desktop (Bluefin) | kanpur |
-| himachal | Desktop | himachal |
-| dilli | Desktop | dilli |
-| bihar | Server (Debian) | bihar |
-| matrix | Server | matrix.reilly.asia |
-| lkofoss | Server | lkofoss.club |
+From `inventory.yml`:
+
+| Name | Group | What |
+|------|-------|------|
+| kanpur | desktop | Laptop (Bluefin) |
+| himachal | desktop | Laptop — also drives the Hive (`hive_ops`) |
+| dilli | desktop | Secondary workstation (Bluefin) |
+| kerala | desktop | postmarketOS ARM device (musl, `apk`) |
+| mumbai | desktop | Debian VM on the phone (Android Virtualization Framework), `cli-only` |
+| punjab | server | Headless Ubuntu agent box (EC2 `t3.large`, us-east-1) |
+| goa | server | Raspberry Pi 5 (applies locally) |
+| vm | server | Local dev VM |
+| termux | termux_hosts | Raw Termux layer on the phone — `termux_packages` only |
+| test-fleet-fedora, test-fleet-node2 | test_fleet | KubeVirt test VMs (`machine_profile: vm-test`) |
+| matrix, telengana | vps | **Retired** Hetzner VPSes, powered on for burn-in — restart nothing on them |
+
+Not Ansible-managed (Talos, `talosctl`/`kubectl` only): **bihar** + **karnataka**
+(home cluster — powered down, in storage, expected back) and the AWS cluster in
+`eu-north-1`. The `llm` group is dormant (commented out in `inventory.yml`).
 
 ---
 
 ## Security
 
-Repo is public — no secrets in git, ever. All secrets are fetched from Bitwarden at runtime. BW session is forwarded over SSH so you unlock once on your laptop and everything else just works.
+Repo is public — no secrets in git, ever. All secrets are fetched from Bitwarden at runtime. `just apply-remote` unlocks Bitwarden on the target (via `scripts/bw-resolve.sh remote`) and exports that session inline over `ssh -t`, so you drive every host from one terminal.
 
 ---
 
@@ -70,7 +80,8 @@ Repo is public — no secrets in git, ever. All secrets are fetched from Bitward
 
 Full handbook lives in [`docs/`](docs/) and is published as an mdbook — run `just docs` to serve it locally.
 
-- [Talos cluster handbook](docs/servers/talos-k8s/cluster.md) — Bihar + Karnataka, Lemonade, KubeVirt
-- [Adding a new machine](docs/new-machine.md)
-- [Roles reference](docs/roles.md)
-- [Bitwarden vault setup](docs/bitwarden.md)
+- [Talos cluster handbook](docs/src/servers/talos-k8s/cluster.md) — Bihar + Karnataka (home, offline), Lemonade, KubeVirt
+- [AWS cluster handbook](docs/src/servers/aws-k8s/cluster.md) — Matrix/ESS, the Hive, CFP dashboard
+- [Adding a new machine](docs/src/onboarding.md)
+- [Roles reference](docs/src/roles/)
+- [Bitwarden vault setup](docs/src/bitwarden.md)

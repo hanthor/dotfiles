@@ -14,7 +14,7 @@ Laptop workstation in the hanthor fleet.
 
 ## Services
 
-- Homepage dashboard
+- `hive_ops` timers — drives the tuna-os Hive on the AWS cluster (`hive_ops_enabled: true`)
 
 ## Notes
 

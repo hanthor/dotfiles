@@ -38,10 +38,10 @@ just add-machine <name> <type>
 ```
 
 This:
-1. Adds the machine to `inventory.yml` under the right group
-2. Creates `host_vars/<name>.yml` with sensible defaults
+1. If the machine isn't in `inventory.yml` yet, adds it (`ansible_host: localhost`, `ansible_connection: local`) and puts it in the `<type>` group
+2. Creates `host_vars/<name>.yml` containing just `is_arm: false` — edit it afterwards
 3. Commits and pushes
-4. Prints the next step — run `just apply-remote <name>`
+4. SSHes in (`ssh -t <name>`) and runs `bootstrap.sh --name <name> --type <type>` there — the same bootstrap as Path B
 
 ## Path B: Fresh Install
 
@@ -59,24 +59,30 @@ curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.s
 ```
 
 The bootstrap script:
-1. Installs git and clones the dotfiles repo from [GitHub](https://github.com/hanthor/dotfiles)
-2. Installs [Homebrew](https://brew.sh/) (Linux) and core packages
-3. Writes `/etc/dotfiles-machine` so the playbook can self-identify
-4. Runs `just apply` for the first time
+1. Ensures python, git, uv and Ansible, then clones the dotfiles repo from [GitHub](https://github.com/hanthor/dotfiles)
+2. Registers the machine in `inventory.yml` if needed (prompts for the type when `--type` isn't given)
+3. Writes `/etc/dotfiles-machine` so the playbook can self-identify, sets the hostname, sets up sudo and Tailscale
+4. Runs `site.yml` with `--skip-tags secrets` (installs [Homebrew](https://brew.sh/) and core packages among the rest)
+5. If the Bitwarden CLI is now available and unlocks, runs `site.yml --tags secrets` and pushes any inventory changes
 
 ## Machine Types
 
-| Type | Group | Has Desktop? | Example Host Vars |
-|------|-------|-------------|-------------------|
-| `desktop` | desktop | Yes | `is_laptop: false`, web services |
-| `laptop` | desktop | Yes | `is_laptop: true` |
-| `server` | server | No | `skip_flatpak: true`, `skip_gnome: true` |
-| `vps` | vps | No | `skip_*: true`, uses `group_vars/vps.yml` |
+`<type>` is the inventory group to join. `bootstrap.sh` offers `desktop`, `server` and `vps`:
+
+| Type | Group | Has Desktop? | Notes |
+|------|-------|-------------|-------|
+| `desktop` | desktop | Yes | Laptops are desktops too — set `is_laptop: true` in `host_vars` |
+| `server` | server | No | Gets `server_hardening`; desktop roles skip automatically |
+| `vps` | vps | No | Also skips `syncthing`, `proxy`, `tailscale_cert` |
+
+There is no `laptop` type — a type that doesn't match a group leaves the host in
+no group. `test_fleet` and `termux_hosts` hosts are added to `inventory.yml` by
+hand.
 
 ## Post-Onboarding
 
 1. The `ssh_keys` role generates a fresh ed25519 key on the new host, then pushes the pub key up to Bitwarden as `james@<hostname>`.
-2. The new host now needs to **trust the rest of the fleet, and the rest of the fleet needs to trust it**. The first apply on the new host downloads every other host's pub key into `~/.ssh/authorized_keys`. The other hosts will pick up the new host's pub key on *their* next apply (manually run `dots-apply` on each, or wait for the timer).
+2. The new host now needs to **trust the rest of the fleet, and the rest of the fleet needs to trust it**. The first apply on the new host downloads every other host's pub key into `~/.ssh/authorized_keys`. The other hosts will pick up the new host's pub key on *their* next full apply (`dots-apply` on each — the timer runs without secrets, so it skips `ssh_keys`).
 3. The `github` role registers the SSH key with GitHub for both auth and commit signing.
 4. The `tailscale` role joins the machine to the [Tailscale](https://tailscale.com/) network using the auth key in BW.
 5. The daily `dotfiles-update.timer` (servers) or on-login service (laptops) runs `just apply-nosecrets` — secrets stay on the manual `dots-apply` cadence because BW can't be unlocked non-interactively.

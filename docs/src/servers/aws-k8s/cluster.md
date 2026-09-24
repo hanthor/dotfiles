@@ -3,6 +3,11 @@
 Two-node Talos Kubernetes cluster in AWS `eu-north-1`, built 2026-08-27 to
 consolidate the two Hetzner VPSes (`matrix` and `telengana`) onto one cluster.
 
+All AWS resources here (VPC, SGs, nodes, EIPs, volumes, snapshot policy) are
+codified in OpenTofu under [`aws/`](https://github.com/hanthor/dotfiles/tree/master/aws).
+See [AWS Account](../aws/README.md). Node *configuration* is not; that is
+`talosctl`'s job.
+
 Like the home cluster, these nodes are **talosctl/kubectl-managed only** — Talos
 has no SSH, no package manager, and an immutable root. They are deliberately
 *not* in `inventory.yml` and no Ansible role targets them.
@@ -33,7 +38,9 @@ NAT gateway (unnecessary, and ~$32/mo).
 Both nodes carry `migration-matrix-public`, so either public IP serves 80/443.
 The RTC ports match what the ESS chart's MatrixRTC SFU exposes as NodePorts.
 
-> The admin IP allowlist **will go stale**. The long-term fix is a Tailscale
+> The admin IP allowlist **will go stale**. It lives in `cluster_admin_ingress`
+> in `aws/terraform.tfvars` (Bitwarden `aws-tofu-tfvars`). Update it with
+> `just aws-apply`, not in the console. The long-term fix is a Tailscale
 > subnet router in-cluster rather than widening the CIDR.
 
 ## Ingress — the important gotcha
@@ -42,7 +49,7 @@ The Traefik `Service` is `type: LoadBalancer` and stays **`<pending>` forever**:
 Talos on EC2 has no cloud-controller-manager, so nothing provisions an ELB.
 Public traffic works only because the Traefik pod binds **hostPorts 80/443**.
 
-Driven from [`talos-k8s/traefik/values.yaml`](../../../../talos-k8s/traefik/values.yaml).
+Driven from [`talos-k8s/traefik/values.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/traefik/values.yaml).
 Three non-obvious settings, all load-bearing:
 
 - **`deployment.kind: DaemonSet`.** A single-replica Deployment is a SPOF whose
@@ -126,20 +133,21 @@ credits zero the bill, so a commitment buys nothing and locks in instance shape.
 
 ## Known gaps
 
-- Traefik pin is not in Helm values (above).
 - 50GB Postgres volume unmounted (above).
-- **Backups are partial.** Postgres now has verified nightly dumps —
-  see [`talos-k8s/backup/postgres-backup.yaml`](../../../../talos-k8s/backup/postgres-backup.yaml)
-  — but they land on a **local-path PVC on the same node as the database**.
-  That protects against dropped tables and bad migrations, *not* against losing
-  the node. `ess-synapse-media` (4.6GB) and `hive-data` (17GB) have **no backup
-  at all**. Off-cluster copies are blocked: `james-admin` has neither `dlm:*`
-  (managed EBS snapshots) nor IAM permissions (to mint a scoped S3 writer for an
-  in-cluster job). Granting those two is the unblock.
+- **Backups are partial.** Postgres has verified nightly dumps
+  (see [`talos-k8s/backup/postgres-backup.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/backup/postgres-backup.yaml)),
+  but they land on a **local-path PVC on the same node as the database**.
+  Node loss is now covered by **DLM EBS snapshots** of both root volumes
+  (daily ×7, weekly ×4; tag `Backup=fleet-daily`), which include
+  `ess-synapse-media` and `hive-data`. These are crash-consistent images, not
+  application-consistent. Still missing is an off-cluster Postgres copy: the
+  `hanthor-fleet-backups-*` S3 bucket exists with a `postgres/` lifecycle, but
+  nothing uploads to it yet. That needs an in-cluster writer credential, and
+  `james-admin` can't mint IAM users/roles, so it has to be done as root.
 - API-server OIDC + finer-grained RBAC still deferred; access is a single admin
   client cert.
 
 ## See also
 
-- [Matrix cutover runbook](../../../matrix-cutover-runbook.md)
+- [Matrix cutover runbook](https://github.com/hanthor/dotfiles/blob/master/docs/matrix-cutover-runbook.md)
 - [`hive_ops` role](../../roles/hive_ops.md)
