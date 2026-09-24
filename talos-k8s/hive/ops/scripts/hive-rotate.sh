@@ -1042,7 +1042,13 @@ provider_ok() {
     if [ "$p" = openai ] && [ "${c:-999999}" -le "$HIGH_VOLUME_CADENCE_S" ] && [ "$allow_subscription" != 1 ]; then
       return 1
     fi
-    if [ "$p" = kiro ] && [ "${c:-999999}" -lt "$KIRO_MIN_CADENCE_S" ] && [ "$allow_subscription" != 1 ]; then
+    # Waived ONLY when the agent's current provider is positively exhausted —
+    # not by allow_subscription, which the watchdog's rotate-off path always
+    # passes: a freshly switched agy agent showing its first-run pane was
+    # "rotated off" straight back onto kiro that way (reef/ci-maintainer,
+    # 2026-09-24 19:32).
+    if [ "$p" = kiro ] && [ "${c:-999999}" -lt "$KIRO_MIN_CADENCE_S" ] &&
+       ! provider_exhausted "$(provider_of "$(agent_field "$agent" cli)" "$(agent_field "$agent" govModel)")"; then
       return 1
     fi
     # agy 5h-window stewardship: a high-cadence agent on the free pool burns
