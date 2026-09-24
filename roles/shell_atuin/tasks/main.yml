@@ -142,10 +142,12 @@
 
 - name: Import existing shell history into atuin
   ansible.builtin.shell: |
-    atuin import auto 2>&1
+    atuin import auto 2>&1 &&
     touch "{{ ansible_facts['env']['HOME'] }}/.local/share/atuin/.history_imported"
   environment:
     PATH: "{{ ansible_env_path }}"
-  when: not atuin_import_sentinel.stat.exists
+  when:
+    - atuin_binary.rc == 0
+    - not atuin_import_sentinel.stat.exists
   changed_when: false
   failed_when: false

@@ -10,7 +10,7 @@
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
   block:
     - name: Check podman is available
-      ansible.builtin.command: command -v podman
+      ansible.builtin.shell: command -v podman
       register: _podman_bin
       changed_when: false
       failed_when: false

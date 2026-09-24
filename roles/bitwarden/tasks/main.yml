@@ -55,6 +55,7 @@
         dest: /tmp/bw_session
         mode: "0600"
       when: bw_session is defined
+      no_log: true
 
     - name: Warn if no Bitwarden session found
       ansible.builtin.debug:

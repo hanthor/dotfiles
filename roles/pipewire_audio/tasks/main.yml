@@ -125,6 +125,12 @@
 # On immutable systems /usr/lib*/ladspa is read-only. If we need user-space
 # LADSPA plugins, pipewire needs LADSPA_PATH to find them.
 
+- name: Ensure pipewire.service drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/pipewire.service.d"
+    state: directory
+    mode: "0755"
+
 - name: Ensure pipewire LADSPA_PATH includes user ladspa directory
   ansible.builtin.copy:
     content: |

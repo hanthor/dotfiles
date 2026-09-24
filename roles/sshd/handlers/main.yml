@@ -1,4 +1,6 @@
 ---
+# The unit is `sshd` on Fedora/Arch and `ssh` on Debian/Ubuntu; both handlers
+# listen on the same topic and the fallback only runs if the first failed.
 - name: Reload sshd
   ansible.builtin.systemd:
     name: sshd
@@ -6,6 +8,7 @@
   become: true
   ignore_errors: true
   register: sshd_reload
+  listen: Reload sshd
 
 - name: Reload ssh
   ansible.builtin.systemd:
@@ -14,3 +17,4 @@
   become: true
   ignore_errors: true
   when: sshd_reload is failed
+  listen: Reload sshd

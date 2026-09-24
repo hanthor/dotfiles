@@ -20,6 +20,14 @@
   become: true
   notify: Restart systemd-resolved
 
+# Only repoint resolv.conf when resolved is actually running — otherwise the
+# stub file doesn't exist and we'd break DNS on the host.
+- name: Check whether systemd-resolved is active
+  ansible.builtin.command: systemctl is-active systemd-resolved  # noqa: command-instead-of-module
+  register: tailscale_resolved_active
+  changed_when: false
+  failed_when: false
+
 - name: Point resolv.conf to systemd-resolved stub resolver
   ansible.builtin.file:
     src: /run/systemd/resolve/stub-resolv.conf
@@ -29,7 +37,9 @@
     follow: false
   become: true
   notify: Restart systemd-resolved
-  when: not (tailscale_accept_dns is defined and not tailscale_accept_dns)
+  when:
+    - not (tailscale_accept_dns is defined and not tailscale_accept_dns)
+    - tailscale_resolved_active.stdout | default('') == 'active'
 
 # rp_filter=2 (loose mode) is required for exit node traffic to route correctly.
 - name: Configure sysctl for Tailscale exit node compatibility

@@ -75,6 +75,33 @@
         (forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0)
         or (tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0)
 
+    # Fish doesn't source secrets.sh; give it the same values via conf.d.
+    - name: Ensure fish conf.d directory exists
+      ansible.builtin.file:
+        path: "{{ ansible_facts['env']['HOME'] }}/.config/fish/conf.d"
+        state: directory
+        mode: "0755"
+      when: >-
+        (forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0)
+        or (tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0)
+
+    - name: Write fish secrets file
+      ansible.builtin.copy:
+        content: |
+          # Managed by dotfiles playbook — DO NOT EDIT
+          {% if forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0 %}
+          set -gx FORGEJO_TOKEN {{ forgejo_token.stdout | trim | quote }}
+          {% endif %}
+          {% if tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0 %}
+          set -gx TAVILY_API_KEY {{ tavily_key.stdout | trim | quote }}
+          {% endif %}
+        dest: "{{ ansible_facts['env']['HOME'] }}/.config/fish/conf.d/secrets.fish"
+        mode: "0600"
+      no_log: true
+      when: >-
+        (forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0)
+        or (tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0)
+
 - name: Warn if deepseek-api-key not found in Bitwarden
   ansible.builtin.debug:
     msg: >-
