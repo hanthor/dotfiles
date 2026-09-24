@@ -15,7 +15,7 @@
   when: not (bw_unlocked | default(false))
 
 - name: Fetch tailscale auth/API key from Bitwarden
-  ansible.builtin.shell: bw get item tailscale-apikey | python3 -c "import sys,json; print(json.load(sys.stdin)['login']['password'])"
+  ansible.builtin.shell: set -o pipefail && bw get item tailscale-apikey | python3 -c "import sys,json; print(json.load(sys.stdin)['login']['password'])"
   register: tailscale_apikey
   changed_when: false
   no_log: true

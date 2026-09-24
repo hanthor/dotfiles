@@ -71,6 +71,7 @@
     # of issuing API calls with empty credentials.
     - name: Check Bitwarden vault state
       ansible.builtin.shell: |
+        set -o pipefail
         bw status 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','unknown'))"
       args:
         executable: /bin/bash

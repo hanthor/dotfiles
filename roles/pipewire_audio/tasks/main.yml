@@ -51,7 +51,7 @@
 
 - name: Find RNNoise LADSPA plugin (cross-distro paths)
   ansible.builtin.shell: >
-    find /usr/lib /usr/lib64 -name librnnoise_ladspa.so 2>/dev/null | head -1
+    set -o pipefail; find /usr/lib /usr/lib64 -name librnnoise_ladspa.so 2>/dev/null | head -1
   register: rnnoise_path
   failed_when: false
   changed_when: false
