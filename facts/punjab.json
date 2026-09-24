@@ -7,9 +7,7 @@
         "cpu": "Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz",
         "cpu_threads": 2,
         "form_factor": "Other",
-        "gpus": [
-            "Device 1111"
-        ],
+        "gpus": [],
         "memory_gb": 7.6,
         "model": "t3.large",
         "vendor": "Amazon EC2"
