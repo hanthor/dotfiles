@@ -7,6 +7,10 @@ on:
     branches: [master]
   workflow_dispatch:
 
+# PRs (including agent PRs) run with a read-only token.
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -54,6 +58,26 @@ jobs:
 
       - name: pytest
         run: uvx --with pyyaml pytest -q tests
+
+  # Renovate may bump pi's npm deps unreviewed (CODEOWNERS carve-out); this
+  # makes sure a PR can't *add* or remove one without a human.
+  deps-guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: package.json dependency set unchanged
+        run: |
+          f=roles/pi/files/package.json
+          base="origin/${{ github.base_ref }}"
+          git diff --quiet "$base"...HEAD -- "$f" && { echo "untouched"; exit 0; }
+          keys() { python3 -c 'import json,sys; d=json.load(sys.stdin); print(sorted({k for s in ("dependencies","devDependencies","optionalDependencies","peerDependencies") for k in d.get(s,{})}))'; }
+          before=$(git show "$base:$f" | keys); after=$(keys < "$f")
+          echo "before: $before"; echo "after:  $after"
+          [ "$before" = "$after" ] || { echo "::error::$f dependency set changed — needs a human-authored PR"; exit 1; }
 
   justfile:
     runs-on: ubuntu-latest

@@ -1,0 +1,51 @@
+name: Agent auto-merge
+
+# Queues GitHub auto-merge on PRs opened by the Hive's GitHub App. Whether a
+# PR actually merges is decided by branch protection, not here: CI must be
+# green, and anything outside the CODEOWNERS carve-outs waits for @hanthor.
+#
+# pull_request_target runs THIS file from master, never the PR's copy, so an
+# agent can't rewrite its own gate. It must never check out or execute PR
+# code — it only calls the API.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  queue:
+    if: >-
+      github.event.pull_request.user.login == 'hanthor-hive-agent[bot]' &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Enable auto-merge (squash)
+        run: gh pr merge "$PR" --repo "$REPO" --auto --squash
+
+      - name: Flag PRs that need a human
+        run: |
+          # Mirror of the CODEOWNERS carve-outs, only to label/comment —
+          # branch protection is the real gate.
+          files=$(gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path')
+          owned=$({
+            printf '%s\n' "$files" \
+              | grep -vE '^(docs/|tests/|talos-k8s/|roles/pi/files/skills/)|\.md$' \
+              | grep -vxE 'roles/pi/files/package\.json|tools/secret-broker/go\.(mod|sum)|aws/\.terraform\.lock\.hcl'
+            printf '%s\n' "$files" | grep '^\.github/'
+          } | sort -u | sed '/^$/d')
+          if [ -n "$owned" ]; then
+            gh pr edit "$PR" --repo "$REPO" --add-label needs-human
+            {
+              echo "Queued for auto-merge, but these paths run on fleet machines and need @hanthor's review first:"
+              echo
+              printf '%s\n' "$owned" | sed 's/^/- `/; s/$/`/'
+            } | gh pr comment "$PR" --repo "$REPO" --body-file -
+          fi
