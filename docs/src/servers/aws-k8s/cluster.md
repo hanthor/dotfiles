@@ -134,16 +134,9 @@ credits zero the bill, so a commitment buys nothing and locks in instance shape.
 ## Known gaps
 
 - 50GB Postgres volume unmounted (above).
-- **Backups are partial.** Postgres has verified nightly dumps
-  (see [`talos-k8s/backup/postgres-backup.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/backup/postgres-backup.yaml)),
-  but they land on a **local-path PVC on the same node as the database**.
-  Node loss is now covered by **DLM EBS snapshots** of both root volumes
-  (daily ×7, weekly ×4; tag `Backup=fleet-daily`), which include
-  `ess-synapse-media` and `hive-data`. These are crash-consistent images, not
-  application-consistent. Still missing is an off-cluster Postgres copy: the
-  `hanthor-fleet-backups-*` S3 bucket exists with a `postgres/` lifecycle, but
-  nothing uploads to it yet. That needs an in-cluster writer credential, and
-  `james-admin` can't mint IAM users/roles, so it has to be done as root.
+- ~~Backups partial~~ — done 2026-09-24: nightly Postgres dumps are copied to
+  S3 (`hanthor-fleet-backups-*/postgres/`) and size-verified, and DLM
+  snapshots both root volumes. See [`talos-k8s/backup/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s/backup).
 - API-server OIDC + finer-grained RBAC still deferred; access is a single admin
   client cert.
 

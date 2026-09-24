@@ -15,7 +15,7 @@
 - Subnet: `192.168.0.0/24`
 - DHCP pool: `.2` – `.253`
 - Lease time: 120 minutes
-- **WAN**: Direct public IP `122.163.159.113` (Airtel Fiber, dynamic)
+- **WAN**: Direct public IP (Airtel Fiber, dynamic — not recorded here; the repo is public)
 - **ISP**: Bharti Airtel Broadband
 - **Connection**: Fiber → ONT (bridge mode) → Ethernet → AX10 WAN port
 - **CGNAT**: ❌ No — public IP directly on router, services can be port-forwarded
