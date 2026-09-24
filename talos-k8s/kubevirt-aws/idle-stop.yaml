@@ -1,0 +1,103 @@
+# Stops the AWS KubeVirt node (aws/kubevirt.tf) after IDLE_MINUTES with no
+# workload pods on it (VM launchers, CDI importers; DaemonSets don't
+# count). Start it again with `scripts/kubevirt-node up` from the tailnet.
+#
+# Credentials: secret kubevirt-aws/node-power holds an access key for IAM
+# user kubevirt-node-power, which can only start/stop/describe this one
+# instance. Create it by hand; it is never committed:
+#   kubectl -n kubevirt-aws create secret generic node-power \
+#     --from-literal=AWS_ACCESS_KEY_ID=... --from-literal=AWS_SECRET_ACCESS_KEY=... \
+#     --from-literal=INSTANCE_ID=i-...
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubevirt-aws
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: idle-stop
+  namespace: kubevirt-aws
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubevirt-idle-stop
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["list", "get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubevirt-idle-stop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubevirt-idle-stop
+subjects:
+  - kind: ServiceAccount
+    name: idle-stop
+    namespace: kubevirt-aws
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: idle-stop
+  namespace: kubevirt-aws
+spec:
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: idle-stop
+          restartPolicy: Never
+          containers:
+            - name: idle-stop
+              image: alpine/k8s:1.36.4
+              env:
+                - name: IDLE_MINUTES
+                  value: "30"
+                - name: AWS_DEFAULT_REGION
+                  value: eu-north-1
+              envFrom:
+                - secretRef:
+                    name: node-power
+              command: ["/bin/sh", "-euc"]
+              args:
+                - |
+                  state=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+                    --query 'Reservations[0].Instances[0].State.Name' --output text)
+                  [ "$state" = running ] || { echo "instance $state"; exit 0; }
+                  node=$(kubectl get nodes -l tunaos.org/kubevirt=true -o jsonpath='{.items[0].metadata.name}')
+                  [ -n "$node" ] || { echo "node not registered yet"; exit 0; }
+                  busy=$(kubectl get pods -A --field-selector "spec.nodeName=$node" -o json | jq '[.items[]
+                    | select((.metadata.ownerReferences // [])[0].kind != "DaemonSet")
+                    | select(.status.phase == "Running" or .status.phase == "Pending")] | length')
+                  now=$(date +%s)
+                  if [ "$busy" -gt 0 ]; then
+                    echo "$busy workload pod(s) on $node"
+                    kubectl annotate node "$node" tunaos.org/idle-since- >/dev/null 2>&1 || true
+                    exit 0
+                  fi
+                  since=$(kubectl get node "$node" -o jsonpath='{.metadata.annotations.tunaos\.org/idle-since}')
+                  if [ -z "$since" ]; then
+                    kubectl annotate node "$node" tunaos.org/idle-since="$now" --overwrite
+                    echo "idle from now"; exit 0
+                  fi
+                  idle=$(( (now - since) / 60 ))
+                  echo "idle ${idle}m"
+                  if [ "$idle" -ge "$IDLE_MINUTES" ]; then
+                    kubectl annotate node "$node" tunaos.org/idle-since-
+                    aws ec2 stop-instances --instance-ids "$INSTANCE_ID"
+                    echo "stopped $INSTANCE_ID"
+                  fi

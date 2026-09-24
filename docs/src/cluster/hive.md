@@ -5,8 +5,10 @@
 > [TunaOS AWS Account & IaC](../servers/aws/README.md).
 
 > **Now runs on the [AWS Talos cluster](../servers/aws-k8s/cluster.md)** at
-> **https://hive.tunaos.org** (namespace `hive`, Cloudflare-proxied, on the
-> control-plane node). Point `kubectl` at it with
+> **https://school.tunaos.org** (namespace `hive`, Cloudflare-proxied, on the
+> control-plane node; `hive.tunaos.org` is a legacy alias). Every Hive — school,
+> reef, hive.reilly.asia — reports to **https://hub.tunaos.org**, the one place to
+> see them all. Point `kubectl` at it with
 > `export KUBECONFIG=~/.kube/config-aws-migration`. Operator timers (rotation,
 > watchdog, peak windows) live in the [`hive_ops`](../roles/hive_ops.md) role on
 > himachal. The architecture below was written for the home cluster (bihar,
@@ -174,7 +176,7 @@ kubectl apply -f talos-k8s/hive/hive.yaml
 kubectl rollout restart deploy/hive -n hive
 ```
 
-Access: **https://hive.tunaos.org** (AWS cluster). The old home-cluster URL was `https://hive.manatee-basking.ts.net`.
+Access: **https://school.tunaos.org** (AWS cluster; legacy alias `hive.tunaos.org`). Fleet-wide view of every Hive: **https://hub.tunaos.org**. The old home-cluster URL was `https://hive.manatee-basking.ts.net`.
 
 ---
 
@@ -444,7 +446,7 @@ kubectl logs -n hive -f job/hive-build
 
 ```bash
 # Public health check (the dashboard itself is login-gated — 401 is normal)
-curl -s -o /dev/null -w '%{http_code}\n' https://hive.tunaos.org/api/health
+curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/api/health
 
 # Full status: authenticated, from inside the pod (see the tunaos-hive-checkin skill)
 TOKEN=$(kubectl get secret -n hive hive-secrets -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' | base64 -d)
@@ -569,7 +571,7 @@ and it had fallen a major version behind (v4 vs upstream's v5).
 |---|---|---|
 | hive.reilly.asia (canary) | `hive-hanthor` | none |
 | reef.tunaos.org | `hive-reef` | REEF |
-| hive.tunaos.org / school.tunaos.org | `hive` | SCHOOL |
+| school.tunaos.org (legacy alias hive.tunaos.org) | `hive` | SCHOOL |
 | hub.tunaos.org | `hive-hub` | — |
 
 **`hive-upgrade`** (CronJob in ns `hive`, daily 04:30 America/New_York) keeps

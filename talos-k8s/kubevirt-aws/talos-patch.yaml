@@ -1,0 +1,17 @@
+# Talos machine-config patch for the AWS KubeVirt node (aws/kubevirt.tf).
+# Applied on top of the existing AWS worker's config:
+#
+#   talosctl -n 10.20.1.11 get machineconfig -o jsonpath='{.spec}' > /tmp/worker.yaml   # never commit
+#   talosctl machineconfig patch /tmp/worker.yaml --patch @talos-patch.yaml -o /tmp/kubevirt.yaml
+#   talosctl apply-config --insecure -e <public ip> -n <public ip> -f /tmp/kubevirt.yaml
+#
+# The taint keeps everything except VM workloads (and DaemonSets that
+# tolerate it) off this node, so stopping it when idle never takes a
+# production pod with it.
+machine:
+  # node-role.kubernetes.io/* is deliberately absent: NodeRestriction forbids
+  # a node labelling itself with it. Placement uses tunaos.org/kubevirt.
+  nodeLabels:
+    tunaos.org/kubevirt: "true"
+  nodeTaints:
+    tunaos.org/kubevirt: "true:NoSchedule"

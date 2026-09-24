@@ -18,7 +18,7 @@ Three distinct concerns live here:
   temporarily offline, not decommissioned — don't delete its configs, Bitwarden
   notes, or `talos-k8s/` manifests, and expect `just doctor`/`kubectl` against it
   to fail until it returns.
-- **AWS** (`eu-north-1`, built 2026-08-27) — runs Matrix/ESS, the Hive, and the CFP dashboard.
+- **AWS** (`eu-north-1`, built 2026-08-27) — runs Matrix/ESS, the Hives (school.tunaos.org, reef.tunaos.org, hive.reilly.asia — all visible on hub.tunaos.org), and the CFP dashboard.
   Configs: `~/.kube/config-aws-migration`, `~/.talos/config-aws-migration`.
   Handbook: [`docs/src/servers/aws-k8s/cluster.md`](docs/src/servers/aws-k8s/cluster.md).
 

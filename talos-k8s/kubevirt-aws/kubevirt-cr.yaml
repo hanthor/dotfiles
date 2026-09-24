@@ -1,0 +1,58 @@
+# KubeVirt + CDI configuration for the AWS cluster. Install the operators
+# first (see README.md), then apply this.
+#
+# Infra (virt-api, virt-controller, cdi-*) stays on the always-on nodes so
+# corral-web keeps working while the KubeVirt node is stopped; only VM
+# workloads (virt-handler, virt-launcher, CDI importers) go to the node.
+apiVersion: kubevirt.io/v1
+kind: KubeVirt
+metadata:
+  name: kubevirt
+  namespace: kubevirt
+spec:
+  configuration:
+    developerConfiguration:
+      featureGates:
+        - Snapshot
+        - HotplugVolumes
+        - VMExport
+    # One VM node: nothing to live-migrate to, so CPU/memory changes are
+    # staged and applied on the next restart instead of LiveUpdate.
+    vmRolloutStrategy: Stage
+  imagePullPolicy: IfNotPresent
+  infra:
+    nodePlacement:
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+  workloads:
+    nodePlacement:
+      nodeSelector:
+        tunaos.org/kubevirt: "true"
+      tolerations:
+        - key: tunaos.org/kubevirt
+          operator: Exists
+          effect: NoSchedule
+---
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: CDI
+metadata:
+  name: cdi
+spec:
+  imagePullPolicy: IfNotPresent
+  infra:
+    nodeSelector:
+      kubernetes.io/os: linux
+  workload:
+    nodeSelector:
+      tunaos.org/kubevirt: "true"
+    tolerations:
+      - key: tunaos.org/kubevirt
+        operator: Exists
+        effect: NoSchedule
+  config:
+    # VM disks live on the KubeVirt node's local-path volume.
+    scratchSpaceStorageClass: local-path

@@ -99,7 +99,9 @@ viable with that headroom.
 | Namespace | What | Exposure |
 |---|---|---|
 | `ess` | Matrix (Synapse + workers, MAS, MatrixRTC, haproxy, redis, element-admin) | `matrix`/`auth`/`call`/`matrixadmin.reilly.asia` |
-| `hive` | tuna-os Hive + Discord realtime | `hive.tunaos.org` (Cloudflare-proxied) |
+| `hive` | tuna-os Hive (SCHOOL) + Discord bots | `school.tunaos.org` (legacy alias `hive.tunaos.org`), Cloudflare-proxied |
+| `hive-reef` | tuna-os Hive (REEF) | `reef.tunaos.org` |
+| `hive-hub` | Hive hub — every Hive's status in one place | `hub.tunaos.org` |
 | `postgres` | Postgres 16 — **the production DB** for Synapse + MAS | in-cluster only |
 | `default` | CFP review dashboard, searxng | Tailscale ingress |
 | `cert-manager` | Let's Encrypt via Cloudflare DNS-01 | — |

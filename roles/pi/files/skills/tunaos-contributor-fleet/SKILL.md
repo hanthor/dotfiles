@@ -1,6 +1,6 @@
 ---
 name: tunaos-contributor-fleet
-description: Check on and unwedge the four local Hive contributor sessions (claude, codex, agy, pi) running as podman quadlets against both hive.tunaos.org and the Project Bluefin hive. Use when asked how the contributors/sessions are doing, when one looks idle or stuck, or when changing contributor config, backends, or hub subscriptions.
+description: Check on and unwedge the four local Hive contributor sessions (claude, codex, agy, pi) running as podman quadlets against both school.tunaos.org and the Project Bluefin hive. Use when asked how the contributors/sessions are doing, when one looks idle or stuck, or when changing contributor config, backends, or hub subscriptions.
 ---
 
 # tuna-os contributor fleet

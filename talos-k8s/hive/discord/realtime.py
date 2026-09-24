@@ -51,7 +51,7 @@ CI_FAIL_STREAK = max(1, int(os.environ.get("REALTIME_CI_FAIL_STREAK", "2")))  # 
 CI_COOLDOWN = float(os.environ.get("REALTIME_CI_COOLDOWN_SECONDS", str(12 * 3600)))  # don't re-alert a flapping workflow
 BEAD_POLL = os.environ.get("REALTIME_BEAD_POLL", "false").lower() == "true"
 DISCONNECT_GRACE = float(os.environ.get("REALTIME_DISCONNECT_GRACE_SECONDS", "300"))
-HIVE_URL = os.environ.get("HIVE_PUBLIC_URL", "https://hive.tunaos.org/")
+HIVE_URL = os.environ.get("HIVE_PUBLIC_URL", "https://hub.tunaos.org/")
 
 RED, AMBER, GREEN, BLUE = 0xE5484D, 0xF5A524, 0x30A46C, 0x3E63DD
 SEVERITY = {"red": 0, "amber": 1, "blue": 2, "green": 3}
