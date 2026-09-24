@@ -1,0 +1,32 @@
+{
+    "groups": [
+        "server"
+    ],
+    "hardware": {
+        "arch": "x86_64",
+        "cpu": "Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz",
+        "cpu_threads": 2,
+        "form_factor": "Other",
+        "gpus": [
+            "Device 1111"
+        ],
+        "memory_gb": 7.6,
+        "model": "t3.large",
+        "vendor": "Amazon EC2"
+    },
+    "host": "punjab",
+    "last_apply": {
+        "at": "2026-09-24T00:16:03Z",
+        "ok": false
+    },
+    "os": {
+        "codename": "noble",
+        "kernel": "7.0.0-1013-aws",
+        "name": "Ubuntu",
+        "version": "24.04"
+    },
+    "schema": 1,
+    "updated": "2026-09-24T14:50:55Z",
+    "uptime_days": 1.0,
+    "virtualization": "kvm"
+}
