@@ -10,6 +10,7 @@
 - [Onboarding a New Machine](onboarding.md)
 - [QR Secret Onboarding](qr-onboarding.md)
 - [Operational Runbook](runbook.md)
+- [Bots, Agents & Guardrails](automation.md)
 
 # Fleet Reference
 

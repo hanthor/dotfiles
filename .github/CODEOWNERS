@@ -1,0 +1,24 @@
+# Deny by default: every change needs @hanthor's review, because master is
+# pulled and applied (with sudo) by every fleet machine's daily timer.
+# Branch protection requires code-owner review, so agent and bot PRs that
+# touch these paths wait for a human; everything carved out below can
+# auto-merge once CI is green. Direct pushes by the owner are unaffected.
+* @hanthor
+
+# ── Carve-outs: nothing here runs on fleet machines ─────────────────────
+/docs/
+*.md
+/tests/
+# Cluster manifests are applied by hand, never by the fleet timer.
+/talos-k8s/
+# pi agent skills are prompt text, not executed config.
+/roles/pi/files/skills/
+# Dependency bumps. package.json is additionally guarded by CI
+# (deps-guard): versions may change, the dependency set may not.
+/roles/pi/files/package.json
+/tools/secret-broker/go.mod
+/tools/secret-broker/go.sum
+/aws/.terraform.lock.hcl
+
+# ── Always owned, even inside carve-outs ────────────────────────────────
+/.github/ @hanthor
