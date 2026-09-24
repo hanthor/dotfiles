@@ -6,44 +6,7 @@ machine := `cat /etc/dotfiles-machine 2>/dev/null || hostname`
 export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" + env("PATH")
 
 # Resolve online fleet hosts: intersect tailscale online peers with inventory (excluding vps + self)
-_online_hosts := ```
-python3 -c "
-import subprocess, json, re, os
-try:
-    ts = json.loads(subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True, timeout=10).stdout)
-except Exception:
-    ts = {}
-online = set()
-for p in (ts.get('Peer') or {}).values():
-    if p.get('Online'):
-        online.add(p.get('DNSName', '').lower().split('.')[0])
-        online.add(p.get('HostName', '').lower())
-# Parse inventory.yml without PyYAML (not guaranteed on the system python):
-# hosts are the 4-space keys under all.hosts; vps members are the 8-space keys
-# under children.vps.hosts. Retired VPSes must never be applied to.
-inv_path = os.path.expanduser('~/.local/share/dotfiles/inventory.yml')
-all_hosts, vps, section = set(), set(), None
-for line in open(inv_path):
-    if not line.strip() or line.lstrip().startswith('#'):
-        continue
-    indent = len(line) - len(line.lstrip())
-    key = line.strip().rstrip(':')
-    if indent == 2:
-        section = key
-    elif indent == 4 and section == 'hosts':
-        all_hosts.add(key)
-    elif indent == 4 and section == 'children':
-        group = key
-    elif indent == 8 and section == 'children' and group == 'vps':
-        vps.add(key)
-try:
-    me = open('/etc/dotfiles-machine').read().strip().lower()
-except OSError:
-    me = os.uname().nodename.lower()
-all_hosts -= vps | {me, os.uname().nodename.lower()}
-print(' '.join(sorted(all_hosts & online)))
-"
-```
+_online_hosts := shell('python3 "$1"', justfile_directory() / "scripts/online_hosts.py")
 
 # Apply all config to this machine (unlocks BW interactively if needed)
 apply *args:

@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-cache=/tmp/bw_session
+cache="${BW_SESSION_CACHE:-/tmp/bw_session}"
 
 if [ -n "${BW_SESSION:-}" ]; then
   printf '%s' "$BW_SESSION"
