@@ -90,6 +90,27 @@
 #   HIVE_PACE_MIN_SAMPLES  samples needed before any verdict (default 3)
 #   HIVE_PACE_MIN_SPAN_S   seconds the samples must span (default 3600)
 #   HIVE_PACE_DRYRUN=1     compute and publish, actuate nothing
+#   HIVE_PACE_PIN          "ns/agent,..." never re-ruled by the pacer (mirror
+#                          of the rotate CronJobs' HIVE_ROTATE_PIN)
+#   HIVE_PROBE_SOURCE      ccleft (default): read ccleft's /readings; direct:
+#                          read the hive-provider-usage ConfigMap rotate
+#                          publishes (also the fallback when ccleft is down)
+#
+# Kiro budget pacing (see "Kiro budget" below):
+#   HIVE_PACE_KIRO_BUDGET=1        enable (default 1; 0 = generic fit for kiro)
+#   HIVE_PACE_KIRO_SAFETY          allowed = remaining / hours_left x this (0.85)
+#   HIVE_PACE_KIRO_HOT             act when burn/allowed is above (1.0)
+#   HIVE_PACE_KIRO_COLD            promote when burn/allowed is below (0.6)
+#   HIVE_PACE_KIRO_PROMOTE_MAX     ...and the projected ratio after it stays
+#                                  under this (0.8)
+#   HIVE_PACE_KIRO_WINDOW_S        burn is fitted over this much history (3600),
+#                                  never across the last Kiro actuation
+#   HIVE_PACE_KIRO_MIN_SAMPLES / _MIN_SPAN_S   needed for a burn (3 / 1200)
+#   HIVE_PACE_KIRO_MAX_DEMOTE      demotions per tick (4)
+#   HIVE_PACE_KIRO_MAX_PROMOTE     promotions per tick (1)
+#   HIVE_PACE_KIRO_MAX_EVICT       cap requests (move off Kiro) per tick (2)
+#   HIVE_PACE_KIRO_EVICT_TTL_S     how long a cap request stands (21600)
+#   HIVE_PACE_EVICT_TARGET_MAX_PCT a pool is a cap target only below this % (85)
 
 set -u
 
@@ -108,6 +129,11 @@ MIN_SPAN_S="${HIVE_PACE_MIN_SPAN_S:-3600}"
 
 HISTORY="$STATE_DIR/pace-history.jsonl"
 DEMOTED="$STATE_DIR/pace-demoted"
+KIRO_EVICT="$STATE_DIR/kiro-evict"
+KIRO_LAST_ACT="$STATE_DIR/pace-kiro-last-act"
+KIRO_BUDGET="${HIVE_PACE_KIRO_BUDGET:-1}"
+PACE_PIN=",$(printf '%s' "${HIVE_PACE_PIN:-}" | tr -d '[:space:]'),"
+pace_pinned() { [ "$PACE_PIN" != ",," ] && [ "${PACE_PIN#*,$1/$2,}" != "$PACE_PIN" ]; }
 mkdir -p "$STATE_DIR"
 # touch, NOT truncate. This file is the pacer's only memory of which agents it
 # demoted; emptying it each run would make every demotion permanent, since the
@@ -174,9 +200,39 @@ provider_of_agent() {
 # percent dropping instead (see the fit), which works for both.
 #
 # Emits TSV: slot <TAB> percent <TAB> reset_epoch
+#
+# SOURCE (2026-09-25): ccleft's /readings by default (HIVE_PROBE_SOURCE), the
+# one poller of every quota endpoint. Translated with the same hive-lib.sh
+# helpers rotate uses into the same shape the ConfigMap carries, so the rest of
+# this script is unchanged. Each sample is stamped with ccleft's FETCH time and
+# de-duplicated, so a last-good (stale) reading seen on several ticks is ONE
+# point in the fit, not a flat run that drags the fitted rate down. When ccleft
+# is unreachable the published ConfigMap is read, as before (stamped NOW).
 USAGE_DATA=""
-usage_data() {  # the published hive-provider-usage .data, fetched once per run
-  [ -n "$USAGE_DATA" ] || USAGE_DATA=$(k8s_get /api/v1/namespaces/hive/configmaps/hive-provider-usage | jq -c '.data // {}' 2>/dev/null)
+USAGE_SRC=""
+CCLEFT_JSON=""
+declare -A USAGE_TS
+load_usage() {
+  local p r v lim
+  if [ "$(hive_probe_source)" = ccleft ] && CCLEFT_JSON=$(ccleft_fetch); then
+    USAGE_DATA='{}'
+    for p in $PACED_POOLS; do
+      r=$(printf '%s' "$CCLEFT_JSON" | ccleft_probe "$p" "$NOW")
+      if [ "${r%% *}" = -1 ]; then v="unknown ${r#* }"; else v="${r%% *}% used ${r#* }"; fi
+      USAGE_DATA=$(printf '%s' "$USAGE_DATA" | jq -c --arg k "$p" --arg v "$v" '.[$k]=$v')
+      USAGE_TS[$p]=$(printf '%s' "$CCLEFT_JSON" | ccleft_measured_at "$p")
+    done
+    lim=$(printf '%s' "$CCLEFT_JSON" | ccleft_anthropic_limits "$NOW")
+    [ -n "$lim" ] && USAGE_DATA=$(printf '%s' "$USAGE_DATA" | jq -c --arg l "$lim" '.anthropic_limits=$l')
+    USAGE_SRC=ccleft
+  else
+    [ "$(hive_probe_source)" = ccleft ] &&
+      echo "!!! WARN: ccleft unreachable — pacing from the published hive-provider-usage ConfigMap this run" | tee /dev/stderr
+    USAGE_DATA=$(k8s_get /api/v1/namespaces/hive/configmaps/hive-provider-usage | jq -c '.data // {}' 2>/dev/null)
+    USAGE_SRC=configmap
+  fi
+}
+usage_data() {  # the reading for this run (load_usage), as ConfigMap-shaped .data
   printf '%s' "${USAGE_DATA:-{\}}"
 }
 
@@ -226,16 +282,20 @@ except Exception: print('')" "$rst" 2>/dev/null)
 }
 
 record() {
-  local p slot pct ep
+  local p slot pct ep ts
+  load_usage
+  # Kiro first, with the exact credit count (used/limit) the budget needs.
+  [ -n "$CCLEFT_JSON" ] && pace_history_add "$HISTORY" "$(printf '%s' "$CCLEFT_JSON" | ccleft_kiro_sample "$NOW")"
   for p in $PACED_POOLS; do
+    ts=${USAGE_TS[$p]:-$NOW}
     if [ "$p" = anthropic ]; then
       read_limits_anthropic
     else
       read_limits_from_configmap "$p"
     fi | while IFS=$'\t' read -r slot pct ep; do
         [ -z "${pct:-}" ] && continue
-        printf '{"ts":%s,"provider":"%s","slot":"%s","pct":%s,"reset":%s}\n' \
-          "$NOW" "$p" "$slot" "$pct" "${ep:-null}" >> "$HISTORY"
+        pace_history_add "$HISTORY" "$(printf '{"ts":%s,"provider":"%s","slot":"%s","pct":%s,"reset":%s}' \
+          "$ts" "$p" "$slot" "$pct" "${ep:-null}")"
       done
   done
   # Bound the file. 24h at a 20-minute tick is ~72 ticks x ~5 rows; 2000 lines
@@ -366,7 +426,7 @@ fleet() {
     # read silently dropped two of three hives — "controls 12 agents").
     hive_open "$ns" 2>/dev/null || { echo "WARN: $ns unreadable — not paced this tick" >&2; continue; }
     printf '%s' "$STATUS_JSON" | jq -r --arg ns "$ns" '.agents[]?
-        | "\($ns)\t\(.name)\t\(.cli // "")\t\(.govModel // .model // "")\t\(.paused // false)"' 2>/dev/null
+        | "\($ns)\t\(.name)\t\(.cli // "")\t\(.govModel // .model // "")\t\(.paused // false)\t\(.cadence // "")"' 2>/dev/null
   done
 }
 
@@ -430,8 +490,241 @@ publish() {
   local json="$1"
   k8s_put_cm hive hive-pace "$(jq -cn --arg j "$json" --arg u "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
       --arg c "$(printf '%s' "$FLEET" | grep -c . || echo 0) agents in: $NAMESPACES" \
-      '{"pace.json":$j, updated_at:$u, controls:$c}')" \
+      --arg kb "${KB:-}" --arg src "${USAGE_SRC:-}" \
+      '{"pace.json":$j, updated_at:$u, controls:$c, source:$src}
+       + (if $kb != "" then {"kiro-budget.json":$kb} else {} end)')" \
     || echo "WARN: could not publish hive-pace ConfigMap" >&2
+}
+
+# ── Kiro budget ─────────────────────────────────────────────────────────
+# Kiro Power is 10000 credits per calendar month with overage DISABLED: 100%
+# is a hard stop until the 1st, with no weekly/5h window to recover in. The
+# generic fit above is the wrong tool for it — its percent-scale slope spans
+# the whole month-to-date (the 205 cr/h first day dominates for days), and its
+# one-notch-per-tick actuator was built for pools this script only partly
+# controls. Kiro is different on both counts: nothing but these agents draws on
+# it (no operator CLI, no contributor), so the pacer has full authority, and
+# the remaining budget is an exact credit count.
+#
+#   allowed = remaining_credits / hours_to_reset x SAFETY        (credits/h)
+#   burn    = least-squares slope of used credits over the last WINDOW,
+#             never across the last Kiro actuation (so a demotion is judged
+#             only by samples taken after it)
+#   ratio   = burn / allowed
+#
+# Samples come from every ccleft reading the primary hive's rotate and
+# watchdog see (hive-rotate.sh usage_from_ccleft) plus this script's own, keyed
+# by ccleft's fetch time: ~one per 5 min, the rate ccleft refreshes Kiro.
+#
+# Levers, in order (ratio > HOT):
+#   1. DEMOTE within Kiro — opus-5/sol -> sonnet-5/luna -> haiku-4.5 (rung_down),
+#      most credits saved first. Savings are estimated per agent from its share
+#      of the burn (credit multiplier x kicks/hour), and only as many agents as
+#      needed to close burn - allowed are moved, at most MAX_DEMOTE per tick.
+#      Agents that are not being kicked (cadence paused/idle) save nothing and
+#      are never restarted for it.
+#   2. CAP — only when every kicked Kiro agent is already on haiku: ask
+#      hive-rotate (it owns placement) to move the highest-burn agents OFF Kiro,
+#      onto a pool with headroom: agy, else claude, each only when its own
+#      pace verdict is not `hot` and it is below EVICT_TARGET_MAX_PCT. Rotate
+#      places them on a rung of their own tier with the atomic models PUT.
+#   3. Neither possible -> SATURATED, said out loud. The remaining lever is
+#      cadence, which is the governor's, not this script's (no pausing here:
+#      rotate resumes any undeclared pause on its next tick).
+# ratio < COLD: promote ONE pace-demoted agent one notch, only if the projected
+# ratio afterwards stays under PROMOTE_MAX, and drop pending cap requests.
+# Agents already moved off Kiro stay where rotate put them (rotate is a
+# failover, not an optimiser).
+kiro_budget() {
+  python3 - "$HISTORY" "$NOW" "${HIVE_PACE_KIRO_WINDOW_S:-3600}" "${HIVE_PACE_KIRO_MIN_SAMPLES:-3}" \
+    "${HIVE_PACE_KIRO_MIN_SPAN_S:-1200}" "${HIVE_PACE_KIRO_SAFETY:-0.85}" "${HIVE_PACE_KIRO_HOT:-1.0}" \
+    "${HIVE_PACE_KIRO_COLD:-0.6}" "$(cat "$KIRO_LAST_ACT" 2>/dev/null || echo 0)" \
+    "${HIVE_PACE_KIRO_MAX_READING_AGE_S:-1800}" <<'PY'
+import json, sys
+(path, now, win, min_n, min_span, safety, hot, cold, last_act, max_age) = sys.argv[1:11]
+now, win, min_n, min_span = int(now), int(win), int(min_n), int(min_span)
+safety, hot, cold, max_age = float(safety), float(hot), float(cold), int(max_age)
+try: last_act = int(float(last_act or 0))
+except ValueError: last_act = 0
+
+pts = {}
+try:
+    with open(path) as f:
+        for line in f:
+            try: r = json.loads(line)
+            except Exception: continue
+            if r.get("provider") != "kiro" or r.get("slot", "slot0") != "slot0": continue
+            lim = r.get("limit") or 10000.0
+            used = r.get("used")
+            if used is None: used = float(r["pct"]) * lim / 100.0
+            ts = int(r["ts"])
+            # prefer the exact row (with "used") when two share a timestamp
+            if ts not in pts or "used" in r:
+                pts[ts] = {"ts": ts, "used": float(used), "limit": float(lim), "reset": r.get("reset")}
+except FileNotFoundError:
+    pass
+pts = [pts[k] for k in sorted(pts)]
+if not pts:
+    print(json.dumps({"verdict": "no-data"})); sys.exit()
+
+# Month rollover: used drops, or the reset moves forward.
+cut = 0
+for i in range(1, len(pts)):
+    a, b = pts[i-1], pts[i]
+    if b["used"] < a["used"] - 50 or (a.get("reset") and b.get("reset") and b["reset"] > a["reset"] + 60):
+        cut = i
+pts = pts[cut:]
+latest = pts[-1]
+out = {"used": round(latest["used"], 2), "limit": latest["limit"],
+       "remaining": round(latest["limit"] - latest["used"], 2), "reset": latest.get("reset"),
+       "reading_age_s": now - latest["ts"], "safety": safety}
+hrs = (latest["reset"] - now) / 3600.0 if latest.get("reset") else None
+out["hours_left"] = round(hrs, 2) if hrs is not None else None
+allowed = (out["remaining"] / hrs * safety) if hrs and hrs > 0.05 else None
+out["allowed"] = round(allowed, 1) if allowed is not None else None
+
+def slope(ps):
+    xs = [(p["ts"] - ps[0]["ts"]) / 3600.0 for p in ps]; ys = [p["used"] for p in ps]
+    n = len(xs); mx, my = sum(xs)/n, sum(ys)/n
+    den = sum((x-mx)**2 for x in xs)
+    return (sum((x-mx)*(y-my) for x, y in zip(xs, ys)) / den) if den > 1e-9 else 0.0
+
+start = max(now - win, last_act)
+w = [p for p in pts if p["ts"] >= start]
+span = (w[-1]["ts"] - w[0]["ts"]) if len(w) > 1 else 0
+out.update(samples=len(w), span_s=span, window_start=start)
+# trend context: burn over the last 6 h (not used for decisions)
+w6 = [p for p in pts if p["ts"] >= now - 6*3600]
+if len(w6) >= 2 and w6[-1]["ts"] - w6[0]["ts"] >= 1800:
+    out["burn_6h"] = round((w6[-1]["used"] - w6[0]["used"]) / ((w6[-1]["ts"] - w6[0]["ts"]) / 3600.0), 1)
+
+if allowed is None:
+    out["verdict"] = "no-deadline"
+elif out["reading_age_s"] > max_age:
+    out["verdict"] = "stale"        # no fresh Kiro reading: measure before acting
+elif len(w) >= min_n and span >= min_span:
+    burn = slope(w)
+    out["burn"] = round(burn, 1)
+    out["ratio"] = round(burn / allowed, 2) if allowed > 0 else None
+    r = out["ratio"]
+    out["verdict"] = "over" if r is None or r > hot else ("under" if r < cold else "on-budget")
+else:
+    out["verdict"] = "settling" if last_act > now - win else "learning"
+print(json.dumps(out, sort_keys=True))
+PY
+}
+
+# kicks_per_hour <cadence>: the governor's cadence ("15m", "4h", "30s") as
+# kicks/hour; "paused"/"idle"/"" -> 0 (not kicked, burns nothing).
+kicks_per_hour() {
+  printf '%s' "$1" | awk '{ s=$0; n=s; sub(/[a-z]$/,"",n)
+    if (n !~ /^[0-9.]+$/ || n+0 <= 0) { print 0; exit }
+    if (s ~ /h$/) print 1/n; else if (s ~ /m$/) print 60/n; else if (s ~ /s$/) print 3600/n; else print 0 }'
+}
+
+# kiro_rows: TSV of every unpaused Kiro agent in FLEET:
+#   ns agent backend model kicks/h credit-mult
+kiro_rows() {
+  local ns agent backend model paused cadence
+  while IFS=$'\t' read -r ns agent backend model paused cadence; do
+    [ -z "${agent:-}" ] && continue
+    [ "$paused" = true ] && continue
+    [ "$(provider_of_agent "$backend" "$model")" = kiro ] || continue
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$ns" "$agent" "$backend" "$model" \
+      "$(kicks_per_hour "$cadence")" "$(kiro_credit_mult "$model")"
+  done <<< "$FLEET"
+}
+
+kiro_note_act() { [ "$1" -gt 0 ] && echo "$NOW" > "$KIRO_LAST_ACT"; return 0; }
+
+kiro_budget_actuate() {
+  local verdict burn allowed rows total need n=0 cum=0 ns agent backend model kph mult cheap nm sav
+  local df up add best orig_b orig_m targets p v pct
+  verdict=$(printf '%s' "$KB" | jq -r '.verdict')
+  burn=$(printf '%s' "$KB" | jq -r '.burn // 0'); allowed=$(printf '%s' "$KB" | jq -r '.allowed // 0')
+  rows=$(kiro_rows)
+  # Burn weight of each kicked agent: credits/request x requests/hour (proxy).
+  total=$(printf '%s\n' "$rows" | awk -F'\t' 'NF>=6 {t += $5 * $6} END {print t+0}')
+  case "$verdict" in
+    over)
+      need=$(awk -v b="$burn" -v a="$allowed" 'BEGIN{print b - a}')
+      # candidates: savings (credits/h) desc
+      while IFS=$'\t' read -r sav ns agent backend model cheap; do
+        [ -z "${agent:-}" ] && continue
+        [ "$n" -ge "${HIVE_PACE_KIRO_MAX_DEMOTE:-4}" ] && break
+        awk -v c="$cum" -v nd="$need" 'BEGIN{exit !(c >= nd)}' && break
+        df=$(pace_demoted_from "$DEMOTED" "$ns" "$agent" "$model")
+        if set_model "$ns" "$agent" "$backend" "$cheap" >/dev/null; then
+          grep -vF "$ns/$agent|" "$DEMOTED" > "$DEMOTED.tmp" 2>/dev/null; mv "$DEMOTED.tmp" "$DEMOTED"
+          echo "$ns/$agent|${df:-$backend|$model}" >> "$DEMOTED"
+          echo "  kiro-demote $ns/$agent  $model -> $cheap  (saves ~${sav} cr/h; need ${need})"
+          n=$((n+1)); moved=$((moved+1))
+          cum=$(awk -v c="$cum" -v s="$sav" 'BEGIN{print c + s}')
+        fi
+      done < <(printf '%s\n' "$rows" | while IFS=$'\t' read -r ns agent backend model kph mult; do
+                 [ -z "${agent:-}" ] && continue
+                 pace_pinned "$ns" "$agent" && continue
+                 cheap=$(rung_down "$model"); [ -n "$cheap" ] || continue
+                 nm=$(kiro_credit_mult "$cheap")
+                 awk -v b="$burn" -v k="$kph" -v m="$mult" -v nm="$nm" -v t="$total" \
+                     -v ns="$ns" -v a="$agent" -v be="$backend" -v mo="$model" -v ch="$cheap" \
+                   'BEGIN{ if (k <= 0 || t <= 0) exit; printf "%.1f\t%s\t%s\t%s\t%s\t%s\n", b*(k*m/t)*(1-nm/m), ns, a, be, mo, ch }'
+               done | sort -t$'\t' -k1,1gr)
+      kiro_note_act "$n"
+      [ "$n" -gt 0 ] && return 0
+      # 2. CAP: nothing left to demote among kicked agents.
+      targets=""
+      for p in google anthropic; do
+        v=$(printf '%s' "$VERDICTS" | jq -r --arg p "$p" '.[$p].verdict // "no-data"')
+        [ "$v" = hot ] && continue
+        pct=$(usage_data | jq -r --arg p "$p" '.[$p] // ""' | grep -oE '^[0-9]+' | head -1)
+        [ -n "$pct" ] && [ "$pct" -lt "${HIVE_PACE_EVICT_TARGET_MAX_PCT:-85}" ] || continue
+        targets="$targets${targets:+,}$p"
+      done
+      if [ -z "$targets" ]; then
+        echo "  SATURATED: kiro over budget (burn ${burn} > allowed ${allowed} cr/h), every kicked Kiro agent" \
+             "is on the cheapest rung, and neither agy nor claude has headroom — needs cadence (operator)"
+        return 0
+      fi
+      while IFS=$'\t' read -r _w ns agent; do
+        [ -z "${agent:-}" ] && continue
+        [ "$n" -ge "${HIVE_PACE_KIRO_MAX_EVICT:-2}" ] && break
+        [ -n "$(kiro_evict_targets "$KIRO_EVICT" "$ns" "$agent" "$NOW")" ] && continue
+        grep -vF "$ns/$agent|" "$KIRO_EVICT" > "$KIRO_EVICT.tmp" 2>/dev/null; mv "$KIRO_EVICT.tmp" "$KIRO_EVICT"
+        echo "$ns/$agent|$((NOW + ${HIVE_PACE_KIRO_EVICT_TTL_S:-21600}))|$targets" >> "$KIRO_EVICT"
+        echo "  kiro-cap    $ns/$agent  -> off Kiro onto [$targets] (hive-rotate enacts on its next tick)"
+        n=$((n+1)); moved=$((moved+1))
+      done < <(printf '%s\n' "$rows" | awk -F'\t' 'NF>=6 && $5 > 0 {printf "%.3f\t%s\t%s\n", $5*$6, $1, $2}' \
+                 | sort -t$'\t' -k1,1gr | while IFS=$'\t' read -r w ns agent; do
+                     pace_pinned "$ns" "$agent" || printf '%s\t%s\t%s\n' "$w" "$ns" "$agent"; done)
+      kiro_note_act "$n"
+      ;;
+    under)
+      [ -s "$KIRO_EVICT" ] && { rm -f "$KIRO_EVICT"; echo "  kiro under budget: pending cap requests withdrawn"; }
+      # Cheapest promotion first; only if the projected ratio stays low.
+      best=$(printf '%s\n' "$rows" | while IFS=$'\t' read -r ns agent backend model kph mult; do
+          [ -z "${agent:-}" ] && continue
+          pace_pinned "$ns" "$agent" && continue
+          df=$(pace_demoted_from "$DEMOTED" "$ns" "$agent" "$model"); [ -n "$df" ] || continue
+          up=$(rung_up_toward "${df#*|}" "$model"); [ -n "$up" ] || continue
+          add=$(awk -v b="$burn" -v k="$kph" -v m="$mult" -v um="$(kiro_credit_mult "$up")" -v t="$total" \
+                  'BEGIN{ if (t <= 0 || k <= 0) print 0; else printf "%.1f", b*(k*m/t)*(um/m - 1) }')
+          printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$add" "$ns" "$agent" "$model" "$up" "$df"
+        done | sort -t$'\t' -k1,1g | awk -F'\t' -v b="$burn" -v a="$allowed" -v mx="${HIVE_PACE_KIRO_PROMOTE_MAX:-0.8}" \
+          'a > 0 && (b + $1) / a <= mx' | head -n "${HIVE_PACE_KIRO_MAX_PROMOTE:-1}")
+      while IFS=$'\t' read -r add ns agent model up df; do
+        [ -z "${agent:-}" ] && continue
+        orig_b=${df%%|*}; orig_m=${df#*|}
+        if set_model "$ns" "$agent" "$orig_b" "$up" >/dev/null; then
+          [ "$up" = "$orig_m" ] && { grep -vF "$ns/$agent|" "$DEMOTED" > "$DEMOTED.tmp" 2>/dev/null; mv "$DEMOTED.tmp" "$DEMOTED"; }
+          echo "  kiro-promote $ns/$agent  $model -> $up  (adds ~${add} cr/h; kiro under budget)"
+          n=$((n+1)); moved=$((moved+1))
+        fi
+      done <<< "$best"
+      kiro_note_act "$n"
+      ;;
+  esac
+  return 0
 }
 
 # ── Run ─────────────────────────────────────────────────────────────────
@@ -459,6 +752,16 @@ done
 echo
 echo "controls $(printf '%s' "$FLEET" | grep -c . || echo 0) agents across: $NAMESPACES"
 echo "NOTE: contributor CLIs draw on the same pools and are NOT actuated here."
+echo "readings: ${USAGE_SRC:-?}"
+
+KB=""
+if [ "$KIRO_BUDGET" = 1 ]; then
+  KB=$(kiro_budget)
+  echo
+  printf '%s' "$KB" | jq -r '"kiro budget: \(.verdict) — used \(.used // "?")/\(.limit // "?") cr, \(.remaining // "?") left, \(.hours_left // "?")h to reset"
+    + " -> allowed \(.allowed // "-") cr/h (safety \(.safety // "-")); burn \(.burn // "-") cr/h over \(.samples // 0) sample(s)/\((.span_s // 0) / 60 | floor)m"
+    + " (6h: \(.burn_6h // "-")) -> ratio \(.ratio // "-")"' 2>/dev/null
+fi
 
 publish "$VERDICTS"
 
@@ -474,11 +777,14 @@ declare -A SEATED      # provider -> agents currently running on it
 declare -A DEMOTABLE   # provider -> agents that still have a cheaper rung
 declare -A RESTORABLE  # provider -> agents this pacer demoted and could restore
 
-while IFS=$'\t' read -r ns agent backend model paused; do
+while IFS=$'\t' read -r ns agent backend model paused _cadence; do
   [ -z "${agent:-}" ] && continue
   [ "$paused" = "true" ] && continue
   prov=$(provider_of_agent "$backend" "$model")
   [ -z "$prov" ] && continue
+  # Kiro is paced against its credit BUDGET below, not by this generic fit.
+  [ "$prov" = kiro ] && [ "$KIRO_BUDGET" = 1 ] && continue
+  pace_pinned "$ns" "$agent" && continue
   SEATED[$prov]=$(( ${SEATED[$prov]:-0} + 1 ))
 
   cheap=$(rung_down "$model")
@@ -502,9 +808,10 @@ while IFS=$'\t' read -r ns agent backend model paused; do
       [ -z "$cheap" ] && continue            # already on the cheap rung
       if set_model "$ns" "$agent" "$backend" "$cheap" >/dev/null; then
         # One line per agent: re-demotions used to append duplicates (~25 for
-        # reef/sec-check while rotate and pace fought over it).
+        # reef/sec-check while rotate and pace fought over it). A further notch
+        # keeps the ORIGINAL rung (pace_demoted_from follows the chain).
         grep -vF "$ns/$agent|" "$DEMOTED" > "$DEMOTED.tmp" 2>/dev/null; mv "$DEMOTED.tmp" "$DEMOTED"
-        echo "$ns/$agent|$backend|$model" >> "$DEMOTED"
+        echo "$ns/$agent|${demoted_from:-$backend|$model}" >> "$DEMOTED"
         echo "  demote  $ns/$agent  $model -> $cheap  (${prov} hot)"
         MOVED_ON[$prov]=1; moved=$((moved+1))
       fi
@@ -536,6 +843,7 @@ done <<< "$FLEET"
 # and the remaining levers (cadence, pausing agents, accepting the burn) are
 # outside this script.
 for p in $PACED_POOLS; do
+  [ "$p" = kiro ] && [ "$KIRO_BUDGET" = 1 ] && continue   # reported by the budget
   v=$(printf '%s' "$VERDICTS" | jq -r --arg p "$p" '.[$p].verdict // "no-data"')
   [ "$v" = hot ] || continue
   [ -n "${MOVED_ON[$p]:-}" ] && continue
@@ -548,6 +856,8 @@ for p in $PACED_POOLS; do
        "(${DEMOTABLE[$p]:-0} of ${SEATED[$p]:-0} seated agents demotable)" \
        "— model-rung pacing is exhausted; needs cadence or capacity"
 done
+
+[ "$KIRO_BUDGET" = 1 ] && [ -n "$KB" ] && kiro_budget_actuate
 
 echo
 echo "pace: $moved change(s)"

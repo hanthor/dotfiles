@@ -12,8 +12,8 @@ Kiro, DeepSeek, …) and when it resets. It serves the answers on
 | `GET /healthz` | 200 once the first refresh has completed. |
 
 The operator (`tuna-os/hive-operator` `UsagePool.spec.ccleft`) reads
-`/readings`. The bash `hive-rotate` / `hive-pace` probes keep running for now
-(nothing here changes them); see "Retiring the bash probes" below.
+`/readings`, and so do `hive-rotate` / `hive-pace` (see "The bash probes read
+ccleft" below).
 
 ## Files
 
@@ -115,17 +115,18 @@ ccleft_upstream_requests_total{state="rate_limited"}                   # throttl
 - **Agents added or removed:** edit the `homes:` list in `config.yaml`. A missing agent home is harmless (the entry detects nothing); a new one is only needed to prove dedupe or to catch a per-agent login.
 - **Keep one replica** (`Recreate`). Two pods would double the upstream calls.
 
-## Retiring the bash probes (not done here)
+## The bash probes read ccleft (2026-09-25)
 
-`hive-rotate.sh` `probe_all` polls Anthropic's usage endpoint from the primary
-Hive every 20 minutes, and the spokes and watchdogs poll it again whenever the
-published ConfigMap is older than 20–30 minutes. Together with ccleft, that is
-two pollers on one rate-limited endpoint. The intended end state is:
+`hive-rotate` (every rotate and watchdog run, all three hives) and `hive-pace`
+now read `/readings` instead of polling the providers themselves
+(`HIVE_PROBE_SOURCE=ccleft` on their CronJobs; see
+[`../ops/README.md`](../ops/README.md), "How the decisions are made"). ccleft is
+therefore the only caller of Anthropic's usage endpoint. The old direct probes
+remain as a fallback for a run in which ccleft cannot be reached, and it logs
+`FALLING BACK TO DIRECT PROVIDER PROBES`. Still to do: the operator's UsagePools
+read ccleft, and `probe_all` can be removed once the fallback has gone unused for a while.
 
-1. the operator's UsagePools read ccleft;
-2. `hive-provider-usage` is written from ccleft's `/readings` (or the rotate
-   script reads `/readings` directly) instead of `probe_all`;
-3. `probe_all` is removed.
-
-Until then, expect `claude` to show `rate_limited` / `stale` in ccleft more
-often than it would on its own.
+Before the switch, busybox `date` in the ops image could not parse the
+publication timestamp, so every rotate and every watchdog (3 hives × every
+5 min) polled Anthropic directly. ccleft's claude calls came back 429 about 5
+times in 6.
