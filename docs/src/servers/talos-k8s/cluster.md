@@ -298,7 +298,7 @@ Key env overrides (RDNA 3.5 needs special handling):
 - LAN: `http://<karnataka-ip>:31305/v1` (NodePort)
 - Tailscale: `https://lemonade.manatee-basking.ts.net/v1`
 
-Model weights cached on `karnataka:/var/tmp/lemonade-cache` (HuggingFace) and `/var/tmp/lemonade-models` (llama models) via local-storage PersistentVolumes.
+Model weights cached on `karnataka:/var/lib/lemonade-cache` (HuggingFace) and `/var/lib/lemonade-models` (llama models) via local-storage PersistentVolumes.
 
 **Web UI:** Point a browser at `http://<karnataka-ip>:31305` for the built-in control panel to download models, configure endpoints, and test chat/vision/image generation.
 
@@ -440,8 +440,8 @@ If a node is wiped or replaced:
 6. **Create host directories** for local PVs (if re-creating from scratch):
    ```bash
    kubectl exec -n kube-system $(kubectl get pods -n kube-system --field-selector spec.nodeName=karnataka -l app=kube-flannel -o name) -- \
-     mkdir -p /proc/1/root/var/tmp/lemonade-cache
-     mkdir -p /proc/1/root/var/tmp/lemonade-models
+     mkdir -p /proc/1/root/var/lib/lemonade-cache
+     mkdir -p /proc/1/root/var/lib/lemonade-models
    ```
 7. **Re-apply workloads** (idempotent):
    ```bash

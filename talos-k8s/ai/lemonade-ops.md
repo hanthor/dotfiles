@@ -15,8 +15,8 @@
 | Port | 13305 (NodePort 31305) |
 | WebSocket | auto (port 9000 seen in logs) |
 | Tailscale ingress | `ts-lemonade-rtr8t-0` → `*.manatee-basking.ts.net` |
-| PVC models | `lemonade-models` 100 Gi, hostPath `/var/tmp/lemonade-models` |
-| PVC cache | `lemonade-cache` 100 Gi, hostPath `/var/tmp/lemonade-cache` |
+| PVC models | `lemonade-models` 100 Gi, hostPath `/var/lib/lemonade-models` |
+| PVC cache | `lemonade-cache` 100 Gi, hostPath `/var/lib/lemonade-cache` |
 | shm | 16 Gi tmpfs (emptyDir `Memory`) |
 | HF token | secret `hf-token` key `token` |
 
