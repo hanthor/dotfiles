@@ -1,0 +1,49 @@
+# ccleft configuration: which agent homes to probe. Mounted at /etc/ccleft.
+#
+# Every path is on READ-ONLY mounts (see deployment.yaml). The three Hives
+# (hive, hive-reef, hive-hanthor) draw on the SAME accounts: .claude, .codex
+# and .gemini are one hostPath store (the shared-* PVs → hive-shared-auth), and
+# KIRO/DEEPSEEK/META keys hash identically in all three namespaces
+# (re-verified 2026-09-25). So one ccleft in ns hive measures every Hive's
+# accounts; ccleft dedupes the homes below to one reading per account.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ccleft-config
+  namespace: hive
+  labels: {app.kubernetes.io/name: ccleft, app.kubernetes.io/part-of: hive}
+data:
+  ccleft.yaml: |
+    addr: ":9464"
+    # One refresh cycle every 5 min; each account is still asked upstream at
+    # most once per min_interval (cycles in between are served from cache).
+    refresh: 5m
+    # KIRO_API_KEY, DEEPSEEK_API_KEY, META_API_KEY from the pod env.
+    env_providers: true
+    min_interval:
+      claude: 10m    # api.anthropic.com/api/oauth/usage 429s under fleet polling
+      codex: 5m
+      agy: 5m        # each probe boots the agy CLI
+      kiro: 5m
+      deepseek: 30m  # prepaid balance; not in use any more
+    homes:
+      # The shared home every agent's .claude/.codex/.gemini points at.
+      - path: /data/home
+        label: hive:shared
+      # Per-agent homes (their dot-dirs symlink to /data/home) with each
+      # agent's own CODEX_HOME. They cost no upstream calls — they resolve to
+      # the same accounts — but they prove the dedupe and would surface an
+      # agent that is ever given a login of its own.
+      - {path: /data/home/agents/architect, label: "hive:architect", env: {CODEX_HOME: /data/home/.codex-architect}}
+      - {path: /data/home/agents/brainstorm, label: "hive:brainstorm", env: {CODEX_HOME: /data/home/.codex-brainstorm}}
+      - {path: /data/home/agents/ci-maintainer, label: "hive:ci-maintainer", env: {CODEX_HOME: /data/home/.codex-ci-maintainer}}
+      - {path: /data/home/agents/guide, label: "hive:guide", env: {CODEX_HOME: /data/home/.codex-guide}}
+      - {path: /data/home/agents/operations, label: "hive:operations", env: {CODEX_HOME: /data/home/.codex-operations}}
+      - {path: /data/home/agents/outreach, label: "hive:outreach", env: {CODEX_HOME: /data/home/.codex-outreach}}
+      - {path: /data/home/agents/quality, label: "hive:quality", env: {CODEX_HOME: /data/home/.codex-quality}}
+      - {path: /data/home/agents/reviewer, label: "hive:reviewer", env: {CODEX_HOME: /data/home/.codex-reviewer}}
+      - {path: /data/home/agents/scanner, label: "hive:scanner", env: {CODEX_HOME: /data/home/.codex-scanner}}
+      - {path: /data/home/agents/sec-check, label: "hive:sec-check", env: {CODEX_HOME: /data/home/.codex-sec-check}}
+      - {path: /data/home/agents/strategist, label: "hive:strategist", env: {CODEX_HOME: /data/home/.codex-strategist}}
+      - {path: /data/home/agents/supervisor, label: "hive:supervisor", env: {CODEX_HOME: /data/home/.codex-supervisor}}
+      - {path: /data/home/agents/telemetry, label: "hive:telemetry", env: {CODEX_HOME: /data/home/.codex-telemetry}}
