@@ -170,12 +170,15 @@ Runs `just doctor` on every online host in parallel. The `→ Last apply`
 line tells you which hosts have an old or failed convergence — those are
 the ones that need attention.
 
-To roll a single change out manually instead of waiting for the timer
-(skip `matrix` and `telengana` — retired; see the cutover runbook):
+To roll a single change out manually across online hosts instead of waiting for the timer:
 
 ```bash
-for h in $(scripts/nmap-inventory.sh | awk '/ON / {print $3}'); do
-  just apply-remote-tags "$h" <tag-or-tags> &
-done
-wait
+# Check online tailnet hosts in fleet inventory
+just online
+
+# Apply specific tags to all online fleet machines in parallel
+just apply-online-tags <tag-or-tags>
+
+# Or perform a full apply across all online fleet machines
+just apply-all
 ```

@@ -7,7 +7,7 @@ of copying an auth key, join it by scanning a QR with your phone — **run this 
 the new machine**:
 
 ```bash
-just tailscale-qr <name>
+just tailscale-qr [name]    # defaults to current machine name if omitted
 ```
 
 This runs interactive `tailscale up --qr`: it renders the login URL as a QR in
