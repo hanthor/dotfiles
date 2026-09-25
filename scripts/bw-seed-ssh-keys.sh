@@ -10,6 +10,8 @@
 #
 # Requirements: bw, ssh, jq (all available via Homebrew)
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/bw-item.sh"
 
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
@@ -33,16 +35,12 @@ SSH_USER="james"
 declare -A COLLECTED_KEYS
 
 # ── Bitwarden login/unlock ────────────────────────────────────────────────────
-STATUS=$(bw status 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])" 2>/dev/null || echo "unauthenticated")
-
-if [ "$STATUS" = "unauthenticated" ]; then
-  echo "Bitwarden: logging in..."
-  bw login
-fi
-
+# bw-unlock.sh handles the env/cache/interactive-unlock chain, including the
+# unauthenticated case (exit 3, with a message telling the user to run
+# `bw login`). Trying `bw login` speculatively here would be redundant with
+# that and would prompt twice on a genuinely unauthenticated vault.
 echo "Bitwarden: unlocking vault..."
-export BW_SESSION
-BW_SESSION=$(bw unlock --raw)
+export BW_SESSION=$("$SCRIPT_DIR/bw-unlock.sh")
 echo "Bitwarden: unlocked."
 echo ""
 
@@ -68,27 +66,8 @@ upsert_bw_item() {
       }
     }')
 
-  # Check if item already exists (type 5 = SSH Key)
-  local existing_id
-  existing_id=$(BW_SESSION="$BW_SESSION" bw list items --search "$machine" 2>/dev/null \
-    | python3 -c "
-import sys, json
-items = json.load(sys.stdin)
-for i in items:
-    if i.get('name') == '$machine' and i.get('type') == 5:
-        print(i['id'])
-        break
-" 2>/dev/null || true)
-
-  if [ -n "$existing_id" ]; then
-    echo "  → Updating existing Bitwarden item (id: $existing_id)..."
-    echo "$item_json" | BW_SESSION="$BW_SESSION" bw encode | BW_SESSION="$BW_SESSION" bw edit item "$existing_id" > /dev/null
-    echo "  ✓ Updated."
-  else
-    echo "  → Creating new Bitwarden item..."
-    echo "$item_json" | BW_SESSION="$BW_SESSION" bw encode | BW_SESSION="$BW_SESSION" bw create item > /dev/null
-    echo "  ✓ Created."
-  fi
+  # type 5 = SSH Key
+  bw_upsert_item "$machine" "$item_json" "5"
 }
 
 # ── Helper: register public key with GitHub (auth + signing) ─────────────────
