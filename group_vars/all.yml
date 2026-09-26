@@ -73,11 +73,18 @@ core_brews:
   - shellcheck
   - shfmt
   - unzip
-  - trash-cli
   - yq
   # atuin is also in bluefin-cli, but the brew copy keeps non-Bluefin glibc hosts (Ubuntu, Debian) covered
   - atuin
   # bluefin-cli provides: atuin, bat, eza, fd, fzf, starship, carapace, ripgrep, tealdeer, zoxide, colordiff, television, ugrep
+# ── Blocked packages (all machines) ──────────────────────────────
+# Uninstalled on every apply; the homebrew role fails if any install list
+# above (or extra_brews in host_vars) names one.
+#   trash-cli — `rm` was aliased to `trash`, so every deletion (scripts,
+#   agents, build cleanups) went to ~/.local/share/Trash, which nothing
+#   empties. It filled punjab's 242 GB disk (133 GB of Trash, 2026-09-26).
+brew_blocked:
+  - trash-cli
 core_taps:
   - ublue-os/experimental-tap
 core_tap_brews:

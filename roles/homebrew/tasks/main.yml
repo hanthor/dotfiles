@@ -92,6 +92,22 @@
       }}
   when: brew_supported
 
+- name: Refuse blocked Homebrew packages (brew_blocked) in any install list
+  ansible.builtin.assert:
+    that: blocked_requested | length == 0
+    fail_msg: "{{ blocked_requested | join(', ') }} is in brew_blocked (group_vars/all.yml) — remove it from the install lists"
+    quiet: true
+  vars:
+    blocked_requested: >-
+      {{
+        ((core_brews | default([])) + (core_tap_brews | default([])) +
+        (desktop_brews | default([])) + (extra_brews | default([])) +
+        (desktop_casks | default([])))
+        | map('regex_replace', '^.*/', '')
+        | intersect(brew_blocked | default([]))
+      }}
+  when: brew_supported
+
 - name: Tap our own Homebrew taps
   ansible.builtin.command:
     cmd: /home/linuxbrew/.linuxbrew/bin/brew tap {{ item }}
@@ -131,6 +147,22 @@
   ansible.builtin.debug:
     msg: "brew bundle returned {{ brew_bundle.rc }} — last stderr: {{ brew_bundle.stderr_lines[-10:] | default([]) }}"
   when: brew_supported and brew_bundle.rc | default(0) != 0
+
+- name: Uninstall blocked Homebrew packages
+  ansible.builtin.command:
+    cmd: /home/linuxbrew/.linuxbrew/bin/brew uninstall --formula {{ item }}
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+    HOMEBREW_NO_AUTO_UPDATE: "1"
+    HOMEBREW_NO_ENV_HINTS: "1"
+  loop: "{{ brew_blocked | default([]) }}"
+  register: brew_blocked_uninstall
+  when: brew_supported
+  # rc 1 + "No such keg" = already absent.
+  changed_when: brew_blocked_uninstall.rc == 0
+  failed_when: >-
+    brew_blocked_uninstall.rc != 0 and
+    'No such keg' not in (brew_blocked_uninstall.stderr | default(''))
 
 - name: Upgrade all Homebrew packages
   ansible.builtin.command: /home/linuxbrew/.linuxbrew/bin/brew upgrade
