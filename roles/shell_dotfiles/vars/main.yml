@@ -1,7 +1,7 @@
 ---
 # Single source of truth for aliases shared across bash/zsh and fish.
 # Rendered into aliases.sh.j2 (POSIX `alias`) and aliases.fish.j2 (fish
-# `abbr`, or `alias` where fish_kind: alias is set — e.g. rm→trash, where
+# `abbr`, or `alias` where fish_kind: alias is set — e.g. vim→nvim, where
 # an abbreviation's visual text-expansion would be surprising).
 #
 # Entries requiring shell-specific syntax (&&/`; and`, ${VAR:-default},
@@ -93,8 +93,3 @@ alias_groups:
       - { name: cls, cmd: clear }
       - { name: md, cmd: "mkdir -p" }
       - { name: h, cmd: history }
-
-  - guard: trash
-    fish_kind: alias
-    aliases:
-      - { name: rm, cmd: trash }
