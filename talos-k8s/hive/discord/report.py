@@ -552,6 +552,19 @@ def summarise_alerts(alerts: list[dict]) -> tuple[int, str]:
     return worst, text
 
 
+def cadence_paused_agents(status: dict) -> set[str]:
+    """Agents whose governor cadence is `paused` in every mode.
+
+    Uses /api/status `cadenceMatrix` (one row per agent, a column per mode);
+    falls back to the per-agent `cadence` when the matrix is absent."""
+    modes = ("idle", "quiet", "busy", "surge")
+    matrix = status.get("cadenceMatrix") or []
+    if matrix:
+        return {row.get("agent") for row in matrix
+                if all(str(row.get(m, "")).lower() == "paused" for m in modes)}
+    return {a.get("name") for a in status.get("agents", []) if str(a.get("cadence", "")).lower() == "paused"}
+
+
 def hive_attention(status: dict | None) -> list[tuple[int, str]]:
     if not status:
         return []
@@ -565,8 +578,24 @@ def hive_attention(status: dict | None) -> list[tuple[int, str]]:
     breaker = status.get("breaker") or {}
     if breaker.get("engaged"):
         items.append((0, "Fleet circuit breaker is **engaged** — all agents are held"))
-    groups: dict[str, list[dict]] = collections.OrderedDict()
+    # The hive's "not producing" watchdog also fires for agents the governor is
+    # configured never to kick (cadence `paused` in every mode — operations and
+    # telemetry in this fleet). That is a deliberate config, not a stall, so it
+    # must not read as "running but produced nothing". Report it as one quiet
+    # line instead: the queued lane work is still worth knowing about.
+    never_kicked = cadence_paused_agents(status)
+    alerts_in, parked = [], []
     for alert in status.get("systemAlerts") or []:
+        match = WATCHDOG.search(str(alert.get("message", "")))
+        (parked if match and match.group(1) in never_kicked else alerts_in).append(alert)
+    if parked:
+        matches = [WATCHDOG.search(str(a.get("message", ""))) for a in parked]
+        names = ", ".join(f"**{m.group(1)}**" for m in matches)
+        verb = "is" if len(matches) == 1 else "are"
+        items.append((2, f"{names} {verb} paused by governor cadence in every mode, so never kicked "
+                         f"({matches[0].group(3)} items queued)"))
+    groups: dict[str, list[dict]] = collections.OrderedDict()
+    for alert in alerts_in:
         prefix = "-".join(str(alert.get("id", "")).split("-")[:2]) or alert.get("message", "")
         groups.setdefault(prefix, []).append(alert)
     for alerts in groups.values():

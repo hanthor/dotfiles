@@ -185,6 +185,27 @@ def test_repeated_hive_alerts_collapse_to_one_line():
     assert "**operations**, **telemetry**" in items[0][1] and "1031 items queued" in items[0][1]
 
 
+def test_watchdog_on_cadence_paused_agents_is_not_a_stall():
+    paused = {m: "paused" for m in ("idle", "quiet", "busy", "surge")}
+    status = {
+        "cadenceMatrix": [{"agent": "operations", **paused}, {"agent": "telemetry", **paused},
+                          {"agent": "scanner", "idle": "30m", "quiet": "20m", "busy": "10m", "surge": "5m"}],
+        "systemAlerts": [
+            {"id": "watchdog-producing-operations", "severity": "warning",
+             "message": 'Agent "operations" is alive but not producing: no production evidence for 6h1m0s (threshold 6h0m0s) while 24 item(s) are queued'},
+            {"id": "watchdog-producing-telemetry", "severity": "warning",
+             "message": 'Agent "telemetry" is alive but not producing: no production evidence for 6h1m0s (threshold 6h0m0s) while 24 item(s) are queued'},
+            {"id": "watchdog-producing-scanner", "severity": "warning",
+             "message": 'Agent "scanner" is alive but not producing: no production evidence for 7h0m0s (threshold 6h0m0s) while 24 item(s) are queued'},
+        ]}
+    items = report.hive_attention(status)
+    parked = [t for s, t in items if "paused by governor cadence" in t]
+    assert len(parked) == 1 and "**operations**, **telemetry**" in parked[0]
+    assert [s for s, t in items if t == parked[0]] == [2]
+    stuck = [t for s, t in items if "produced nothing" in t]
+    assert len(stuck) == 1 and "**scanner**" in stuck[0] and "operations" not in stuck[0]
+
+
 # ── Discord limits ──────────────────────────────────────────────────────────
 
 def test_huge_input_respects_discord_limits():
