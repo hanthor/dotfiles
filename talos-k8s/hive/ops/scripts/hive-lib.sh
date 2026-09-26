@@ -389,20 +389,60 @@ rung_down() {
       echo "kiro-api-key/gpt-5-6-luna${1#kiro-api-key/gpt-5-6-sol}" ;;
     kiro-api-key/gpt-5-6-terra|kiro-api-key/gpt-5-6-terra:*)
       echo "kiro-api-key/gpt-5-6-luna${1#kiro-api-key/gpt-5-6-terra}" ;;
+    # Second notch (2026-09-25, Kiro budget pacing): sonnet-5 1.3 / luna 1.1
+    # -> haiku-4.5 0.4, the bottom of the Kiro ladder. Always `:low` — the
+    # exact T3 rung (launch-verified under pi), whatever the upper suffix was.
+    kiro-api-key/claude-sonnet-5|kiro-api-key/claude-sonnet-5:*|kiro-api-key/gpt-5-6-luna|kiro-api-key/gpt-5-6-luna:*)
+      echo "kiro-api-key/claude-haiku-4-5:low" ;;
     *)                      echo "" ;;
   esac
 }
 
+# rung_chain <model>: the model, then every rung_down below it (one per line).
+rung_chain() {
+  local m="$1" i=0
+  while [ -n "$m" ] && [ "$i" -lt 6 ]; do echo "$m"; m=$(rung_down "$m"); i=$((i + 1)); done
+}
+
+# rung_up_toward <original> <current>: the rung one notch ABOVE <current> on
+# <original>'s demotion chain (== <original> after the first notch), or
+# nothing when <current> is not below <original> on that chain.
+rung_up_toward() {
+  local prev="" m
+  while IFS= read -r m; do
+    [ "$m" = "$2" ] && { [ -n "$prev" ] && echo "$prev"; return 0; }
+    prev=$m
+  done <<< "$(rung_chain "$1")"
+  return 0
+}
+
+# kiro_credit_mult <model>: Kiro credits per request (rateMultiplier from
+# ListAvailableModels, 2026-09-24). Unknown kiro models count as 1.0.
+kiro_credit_mult() {
+  case "$1" in
+    *gpt-5-6-sol*)   echo 4.4 ;;
+    *gpt-5-6-terra*) echo 2.2 ;;
+    *gpt-5-6-luna*)  echo 1.1 ;;
+    *claude-opus-*)  echo 2.2 ;;
+    *claude-sonnet-*) echo 1.3 ;;
+    *claude-haiku-*) echo 0.4 ;;
+    *)               echo 1.0 ;;
+  esac
+}
+
 # pace_demoted_from <demoted-file> <ns> <agent> <current-model>: when the
-# pacer demoted this agent and it is still sitting on exactly that cheaper
-# rung, print the "backend|model" it was demoted FROM; else nothing.
+# pacer demoted this agent and it is still sitting on a rung of that demotion
+# chain, print the ORIGINAL "backend|model" it was demoted from; else nothing.
 pace_demoted_from() {
   local f="$1" key="$2/$3" cur="$4" line ob om
   [ -s "$f" ] || return 0
   line=$(grep -F "$key|" "$f" 2>/dev/null | tail -1)
   [ -n "$line" ] || return 0
   ob=$(printf '%s' "$line" | cut -d'|' -f2); om=$(printf '%s' "$line" | cut -d'|' -f3)
-  [ "$(rung_down "$om")" = "$cur" ] && echo "$ob|$om"
+  # Any notch BELOW the original counts (the Kiro ladder has two:
+  # opus -> sonnet -> haiku). The row keeps the ORIGINAL rung however many
+  # notches the pacer has taken, so rotate still sees the tier it came from.
+  rung_chain "$om" | tail -n +2 | grep -qxF -- "$cur" && echo "$ob|$om"
   return 0
 }
 
@@ -428,4 +468,201 @@ pane_stalled() {
     return 1
   fi
   [ $(( now - pf )) -ge $(( min * 60 )) ]
+}
+
+# ── Provider readings from ccleft (2026-09-25) ────────────────────────────
+# ccleft (talos-k8s/hive/ccleft) is the ONE poller of every provider's quota
+# endpoint: single-flight, per-provider min interval, backoff on 429, and a
+# last-good reading marked stale:true. The ops scripts used to poll the same
+# accounts themselves (rotate's probe_all), and because busybox `date` cannot
+# parse the ISO timestamps the "reuse a fresh publication" path always failed,
+# so every rotate AND every watchdog (3 hives x every 5 min) hit Anthropic's
+# OAuth usage endpoint — which then 429'd ccleft's own calls.
+#
+# HIVE_PROBE_SOURCE=ccleft (default) reads GET /readings and translates each
+# reading into the exact "<pct_used> <note>" the direct parsers produce, so
+# every decision downstream is unchanged. HIVE_PROBE_SOURCE=direct, or ccleft
+# being unreachable, uses the old direct probes (kept, logged loudly).
+HIVE_CCLEFT_DEFAULT_URL="http://ccleft.hive.svc:9464"
+
+hive_probe_source() {
+  case "${HIVE_PROBE_SOURCE:-ccleft}" in direct) echo direct ;; *) echo ccleft ;; esac
+}
+
+# iso_to_epoch <ISO-8601>: epoch seconds, or nothing. jq, not `date -d`: the
+# ops image's busybox date rejects "2026-09-25T13:40:20Z" (that bug silently
+# disabled published-usage reuse and the renewal wake-up).
+iso_to_epoch() {
+  jq -rn --arg t "$1" 'try ($t | sub("\\.[0-9]+"; "") | sub("(\\+00:00|\\+0000)$"; "Z") | fromdateiso8601) catch empty' 2>/dev/null
+}
+
+# ccleft_fetch: the /readings JSON on stdout; rc 1 (reason on stderr) when
+# ccleft cannot be read. In-cluster (or with HIVE_CCLEFT_URL set) over the
+# Service; from a workstation through `kubectl exec deploy/ccleft`.
+ccleft_fetch() {
+  local body rc
+  if [ -n "${HIVE_CCLEFT_URL:-}" ] || [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then
+    body=$(curl -sS --max-time "${HIVE_CCLEFT_TIMEOUT:-15}" "${HIVE_CCLEFT_URL:-$HIVE_CCLEFT_DEFAULT_URL}/readings" 2>&1); rc=$?
+  else
+    body=$(timeout "${HIVE_KUBECTL_TIMEOUT:-60}" kubectl -n "${HIVE_CCLEFT_NS:-hive}" exec deploy/ccleft -- \
+             curl -sS --max-time "${HIVE_CCLEFT_TIMEOUT:-15}" http://127.0.0.1:9464/readings 2>&1); rc=$?
+  fi
+  if [ "$rc" = 0 ] && printf '%s' "$body" | jq -e '(.readings | type) == "array" and (.readings | length) > 0' >/dev/null 2>&1; then
+    printf '%s' "$body"; return 0
+  fi
+  echo "ccleft unreadable (rc=$rc): $(printf '%s' "$body" | head -c 200)" >&2
+  return 1
+}
+
+# The hive-ops provider pool -> ccleft's provider name.
+ccleft_provider_name() {
+  case "$1" in
+    anthropic) echo claude ;; openai) echo codex ;; google) echo agy ;;
+    meta) echo muse ;; github) echo copilot ;; *) echo "$1" ;;
+  esac
+}
+
+# Shared jq definitions. A reading is USABLE when it has a fetched_at and is
+# not too old: a stale (last-good) reading counts for $maxstale seconds, a
+# fresh one for $maxfresh (a wedged ccleft must not serve yesterday forever).
+# shellcheck disable=SC2016
+_CCLEFT_JQ_DEFS='
+def ep: sub("\\.[0-9]+"; "") | sub("(\\+00:00|\\+0000)$"; "Z") | fromdateiso8601;
+def sec: sub("\\.[0-9]+"; "") | sub("(\\+00:00|\\+0000)$"; "Z");
+def reading($cp): [.readings[]? | select(.provider == $cp)]
+                  | sort_by(-((.homes // []) | length)) | first;
+def age: if .fetched_at then ($now - (.fetched_at | ep)) else null end;
+def usable: age as $a | $a != null
+            and (if .stale == true then $a <= $maxstale else $a <= $maxfresh end);
+def pctwins: [.windows[]? | select(.unit == "percent" and .used_pct != null)];
+def upct: [[(.used_pct | ceil), 0] | max, 100] | min;
+'
+
+# ccleft_probe <hive-provider> [now-epoch]: stdin /readings JSON; prints
+# "<pct_used> <note>" exactly like the parse_probe_* functions:
+#   ok/limited with windows -> the worst binding window, as the direct probe
+#                              collapsed it (anthropic: unscoped limits only;
+#                              google: the Gemini windows only; kiro: the
+#                              exact credit count in the note)
+#   limited/exhausted, no window  -> 100
+#   auth_required                 -> 100 no-credential (like an empty token)
+#   unsupported                   -> -1 no-usage-api (entry allowed, as muse today)
+#   error/rate_limited, no window -> -1 (unmeasured: never "exhausted")
+#   stale older than HIVE_CCLEFT_MAX_STALE_S (1800) or absent -> -1 (unmeasured)
+ccleft_probe() {
+  local p="$1" now="${2:-$(date -u +%s)}"
+  jq -r --arg cp "$(ccleft_provider_name "$p")" --arg p "$p" --argjson now "$now" \
+     --argjson maxstale "${HIVE_CCLEFT_MAX_STALE_S:-1800}" \
+     --argjson maxfresh "${HIVE_CCLEFT_MAX_AGE_S:-3600}" "$_CCLEFT_JQ_DEFS"'
+    reading($cp) as $r
+    | if $r == null then "-1 ccleft-no-reading"
+      else ($r | age) as $age | ($r.cause // "") as $cause
+      | (if $cause != "" then " cause=\($cause)" else "" end) as $cn
+      | (if $r.stale == true then " (ccleft stale \($age / 60 | floor)m\($cn))" else "" end) as $st
+      | if $age == null then "-1 ccleft-unmeasured state=\($r.state // "?")"
+        elif ($r | usable | not) then "-1 ccleft-stale age=\($age / 60 | floor)m\($cn)"
+        elif $r.state == "unsupported" then "-1 no-usage-api (ccleft unsupported\($cn))"
+        elif $r.state == "auth_required" then "100 no-credential (ccleft auth_required\($cn): needs an interactive login)"
+        else
+          ( if $p == "kiro" then
+              ([$r.windows[]? | select(.unit == "credits" and (.limit // 0) > 0)] | first) as $w
+              | if $w == null then null else
+                  { pct: ([(($w.used / $w.limit * 100) | floor), 100] | min),
+                    note: ("credits=\(($w.used * 100 | round) / 100)/\($w.limit) resets=\($w.resets_at | sec)") }
+                end
+            else
+              ($r | pctwins) as $all
+              | (if $p == "anthropic" then [$all[] | select(.scope == null)]
+                 elif $p == "google" then ([$all[] | select(.scope == "gemini")] | if length > 0 then . else $all end)
+                 else $all end) as $ws
+              | if ($ws | length) == 0 then null else
+                  ($ws | max_by(.used_pct)) as $b
+                  | { pct: ($b | upct),
+                      note: ( (if $p == "openai" then
+                                 ($ws | map((if .kind == "five_hour" then "5h" else (.kind // .id) end)
+                                            + "=\(upct)%") | join(" ")) + " "
+                               else "" end)
+                              + (if $b.resets_at then "resets=\($b.resets_at | sec)" else "" end)
+                              + (if $p == "anthropic" then
+                                   ([$all[] | select(.scope != null and .used_pct >= 100) | .scope] | join(","))
+                                   | if . != "" then " capped-models=\(.)" else "" end
+                                 else "" end) ) }
+                end
+            end ) as $m
+          | if $m != null then
+              (if ($r.state == "exhausted" or $r.state == "limited") and $m.pct < 100
+               then "100" else "\($m.pct)" end) + " " + ($m.note | ltrimstr(" ")) + $st
+            elif $r.state == "exhausted" or $r.state == "limited" then
+              "100 ccleft \($r.state)\($cn)" + (if $r.message then ": \($r.message | .[0:80])" else "" end)
+            else "-1 ccleft-\($r.state // "unknown")\($cn)" end
+        end
+      end' 2>/dev/null | head -1 | grep . || echo "-1 ccleft-unparsed"
+}
+
+# ccleft_anthropic_limits [now-epoch]: stdin /readings; the unscoped Claude
+# limits as the pacer's anthropic_limits array ([{slot,percent,resets_at}],
+# sorted by reset so slot indexes are stable), or nothing when the Claude
+# reading is not usable.
+ccleft_anthropic_limits() {
+  jq -c --argjson now "${1:-$(date -u +%s)}" \
+     --argjson maxstale "${HIVE_CCLEFT_MAX_STALE_S:-1800}" \
+     --argjson maxfresh "${HIVE_CCLEFT_MAX_AGE_S:-3600}" "$_CCLEFT_JQ_DEFS"'
+    reading("claude") as $r
+    | if $r == null or ($r | usable | not) then empty else
+        [$r | pctwins[] | select(.scope == null and .resets_at != null)]
+        | sort_by(.resets_at | ep)
+        | to_entries | map({slot: "slot\(.key)", percent: (.value | upct), resets_at: (.value.resets_at | sec)})
+        | if length == 0 then empty else . end
+      end' 2>/dev/null
+}
+
+# ccleft_measured_at <hive-provider>: stdin /readings; epoch of that
+# provider's reading (its fetched_at), or nothing.
+ccleft_measured_at() {
+  jq -r --arg cp "$(ccleft_provider_name "$1")" --argjson now 0 --argjson maxstale 0 --argjson maxfresh 0 \
+     "$_CCLEFT_JQ_DEFS"'reading($cp) | if . == null or .fetched_at == null then empty else (.fetched_at | ep) end' 2>/dev/null
+}
+
+# ccleft_kiro_sample [now-epoch]: stdin /readings; one pace-history row for the
+# Kiro credit pool, stamped with ccleft's FETCH time (not the caller's clock,
+# so a reading seen by several jobs is one sample), or nothing.
+ccleft_kiro_sample() {
+  jq -c --argjson now "${1:-$(date -u +%s)}" \
+     --argjson maxstale "${HIVE_CCLEFT_MAX_STALE_S:-1800}" \
+     --argjson maxfresh "${HIVE_CCLEFT_MAX_AGE_S:-3600}" "$_CCLEFT_JQ_DEFS"'
+    reading("kiro") as $r
+    | if $r == null or ($r | usable | not) then empty else
+        ([$r.windows[]? | select(.unit == "credits" and (.limit // 0) > 0)] | first) as $w
+        | if $w == null then empty else
+            {ts: ($r.fetched_at | ep), provider: "kiro", slot: "slot0",
+             pct: (($w.used / $w.limit * 100000 | round) / 1000),
+             reset: (if $w.resets_at then ($w.resets_at | ep) else null end),
+             used: (($w.used * 100 | round) / 100), limit: $w.limit}
+          end
+      end' 2>/dev/null
+}
+
+# pace_history_add <history-file> <row-json>: append a sample unless a row for
+# the same provider/slot/ts is already there (several jobs see one reading).
+pace_history_add() {
+  local f="$1" row="$2" key
+  [ -n "$row" ] || return 0
+  key=$(printf '%s' "$row" | jq -r '"\"ts\":\(.ts),\"provider\":\"\(.provider)\",\"slot\":\"\(.slot)\""' 2>/dev/null) || return 0
+  [ -n "$key" ] || return 0
+  tail -n 400 "$f" 2>/dev/null | grep -qF -- "$key" && return 0
+  printf '%s\n' "$row" >> "$f"
+}
+
+# kiro_evict_targets <evict-file> <ns> <agent> [now-epoch]: when hive-pace has
+# asked for this agent to leave Kiro (budget cap, see hive-pace.sh) and the
+# request has not expired, print the target pools it judged to have headroom
+# (space-separated); else nothing. Row: "<ns>/<agent>|<expiry-epoch>|<p1,p2>".
+kiro_evict_targets() {
+  local f="$1" key="$2/$3" now="${4:-$(date -u +%s)}" line exp tg
+  [ -s "$f" ] || return 0
+  line=$(grep -F "$key|" "$f" 2>/dev/null | tail -1)
+  [ -n "$line" ] || return 0
+  exp=$(printf '%s' "$line" | cut -d'|' -f2); tg=$(printf '%s' "$line" | cut -d'|' -f3)
+  [ "${exp:-0}" -gt "$now" ] 2>/dev/null || return 0
+  printf '%s' "$tg" | tr ',' ' '
 }

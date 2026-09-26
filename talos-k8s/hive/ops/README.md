@@ -44,7 +44,7 @@ kubectl -n hive logs -f job/hive-rotate-manual-...
 |---|---|---|---|
 | `hive-rotate` (+`-reef` :07, `-hanthor` :14) | every 20 min | `hive-rotate.sh apply` | **Backend switching.** Measures quota for every provider. Agents on an exhausted provider move sideways within their capability tier to a provider that has headroom. Unusable backend/model pairs are repaired, a codex canary is placed so openai stays measurable, and contributor Deployments are scaled to 0 or 1 (primary hive only). Pauses declared in `HIVE_ROTATE_HOLD` are kept; other dashboard pauses are resumed. |
 | `hive-watchdog` (+`-reef`, `-hanthor`) | every 5 min | `hive-rotate.sh watchdog` | **Liveness.** Classifies each agent's pane: ready, wizard, auth, shell, empty, or **stalled** (turn still open and pane unchanged for 60 min or more). Heals with `POST /api/restart` using exponential backoff (5→120 min). If the backend itself is broken it first rotates the agent off it. Before acting it re-reads the live pane (`GET /api/pane`), because the `/api/status` snapshot can lag by minutes. Also fixes agy `--effort` drift, repairs shared-home permissions, and wakes the fleet when an exhausted provider's reset time passes. At most 3 restart-causing actions per pass. |
-| `hive-pace` | :05 :25 :45 | `hive-pace.sh apply` | **Burn-rate pacing.** Fits the burn rate per limit against the time left until reset. When a provider is `hot` it demotes one agent one notch (for example fable/opus → sonnet, gemini-…-high → -low). When `cold` it restores only agents it demoted itself. Covers all 3 hives. |
+| `hive-pace` | :05 :25 :45 | `hive-pace.sh apply` | **Burn-rate pacing.** Fits the burn rate per limit against the time left until reset. When a provider is `hot` it demotes one agent one notch (for example fable/opus → sonnet, gemini-…-high → -low). When `cold` it restores only agents it demoted itself. Kiro is paced against its credit **budget** instead (see [Kiro budget pacing](#kiro-budget-pacing)). Covers all 3 hives. |
 | `hive-tiers` | 05:50 daily | `hive-tiers.sh refresh` | Rebuilds the **model tier** cache (`tiers.tsv`) from the Artificial Analysis agentic index. rotate merges it with its built-in table. |
 | `hive-inventory` | 05:40 daily | `hive-inventory.sh collect` | Lists the models each backend really offers (`inventory.tsv`), so rungs naming unavailable models are dropped. |
 | `hive-peak-pause` / `-resume` | suspended | `hive-peak.sh pause\|resume` | Paused agents on **DeepSeek** during its weekday peak-price windows. Suspended 2026-09-24: DeepSeek is no longer used and nothing else is peak-priced. |
@@ -87,16 +87,51 @@ to `env`.
 
 ## How the decisions are made
 
-- **Measurement** (`hive-rotate.sh`, `probe_all`): one `kubectl exec` runs every probe in parallel inside the pod:
-  - kiro: `GetUsageLimits` (credits used / monthly limit, reset date, overage status)
-  - anthropic: the OAuth usage API
-  - openai: `codex app-server` `account/rateLimits/read`
-  - google: `agy --print /usage`
-  - meta: model catalog only; it has no quota API
+- **Measurement** comes from [ccleft](../ccleft/README.md) by default
+  (`HIVE_PROBE_SOURCE=ccleft`, set on the rotate, watchdog and pace CronJobs).
+  Every rotate, watchdog and pace run reads `GET http://ccleft.hive.svc:9464/readings`
+  and translates each reading into the same `<pct_used> <note>` the direct
+  parsers produce (`ccleft_probe` in `hive-lib.sh`), so every decision
+  downstream is unchanged. ccleft is then the **only** poller of the quota
+  endpoints; the scripts contact no provider.
 
-  Every hive uses the same accounts, so one measurement is published and reused.
-  The primary hive's rotate always measures. The other hives reuse a publication up to 20 min old, and watchdogs up to 30 min old.
-  Before this, about 40 hits per hour rate-limited the Anthropic usage API.
+  | ccleft | scripts |
+  |---|---|
+  | `ok` / `limited` with windows | the worst binding window: anthropic = unscoped limits only (model-scoped caps become `capped-models=`); google = the Gemini windows only (the worse of weekly / 5 h); openai = the worse window, labelled `5h=`/`weekly=`; kiro = the exact `credits=U/L` |
+  | `limited` / `exhausted`, no window | `100` |
+  | `auth_required` | `100 no-credential` (as an empty Claude token was) |
+  | `unsupported` (muse, gemini) | `-1 no-usage-api`: unmeasurable, entry allowed (as muse was) |
+  | `error` / `rate_limited` with no last-good window | `-1`: unmeasured, never "exhausted" |
+  | `stale: true` (last good after a 429 / error) | still a measurement while younger than `HIVE_CCLEFT_MAX_STALE_S` (1800 s), with `(ccleft stale Nm …)` in the note; older → `-1 ccleft-stale` (unmeasured) |
+  | a non-stale reading older than `HIVE_CCLEFT_MAX_AGE_S` (3600 s), or none | `-1` (unmeasured) |
+
+  The primary hive's runs also publish the translation to `hive-provider-usage`
+  (`source: ccleft`), and the primary rotate/watchdog add every new Kiro reading
+  to pace's history (so the Kiro burn fit gets a sample every ~5 min).
+
+  **Fallback:** if ccleft cannot be read, that run uses the old direct probes
+  and prints `!!! WARN: ccleft unreachable … FALLING BACK TO DIRECT PROVIDER PROBES`.
+  `HIVE_PROBE_SOURCE=direct` selects them permanently. The direct path
+  (`probe_all`: one `kubectl exec` running kiro `GetUsageLimits`, the Anthropic
+  OAuth usage API, `codex app-server account/rateLimits/read`, `agy --print /usage`
+  and the muse catalog in parallel) is kept unchanged, except that published-usage
+  reuse now actually works: it compared `date -d` of an ISO timestamp, which the
+  ops image's busybox `date` cannot parse, so every rotate **and every watchdog**
+  (3 hives × every 5 min) re-probed Anthropic — the 429s ccleft saw.
+
+  What the direct probes had that ccleft does not (lost while on ccleft):
+  - **Kiro `overageStatus`.** `overage=ENABLED` is no longer flagged (it is DISABLED on this plan).
+  - **muse catalog check.** The direct probe also checked that `META_MODEL` is in
+    the pod's `/v1/models` catalog (`100 … not offered`). ccleft reports muse as
+    `unsupported` without a network call, so a withdrawn model id now shows up only
+    as a failing agent (the watchdog rotates it off).
+  - The **codex canary** is skipped while ccleft measures codex (it read the pool
+    headlessly from the shared home; the canary only existed to give the pane probe a pane).
+
+  Everything the scripts compute themselves is unchanged: per-agent attribution
+  (`hive_provider_of`), the pace history, fits and verdicts, pace-demoted journal,
+  stranded/rotated journals, reset wake-ups (`resets.d`), login-detector blocking,
+  the codex pane-cap fallback.
 - **Rotation** stays put while the current provider is usable and the rung belongs to the agent's tier (it's a failover, not an optimizer). Otherwise it chooses:
   1. the cheapest provider class first: agy (free) → kiro (Kiro Power credits) → claude → codex;
   2. peak-priced providers last within that class;
@@ -199,6 +234,57 @@ Credits per request scale with the model's `rateMultiplier` from `ListAvailableM
 | gpt-5.6 sol | 4.4 |
 | gpt-5.6 terra | 2.2 |
 | gpt-5.6 luna | 1.1 |
+
+### Kiro budget pacing
+
+Kiro Power has no rolling window to recover in: 10000 credits a month, a hard
+stop at 100% until the 1st. `hive-pace` therefore paces Kiro against the
+remaining **budget** (`HIVE_PACE_KIRO_BUDGET=1`), not with the generic
+percent fit:
+
+- `allowed = remaining credits / hours to reset × HIVE_PACE_KIRO_SAFETY (0.85)`,
+  from ccleft's Kiro monthly window each run.
+- `burn` = least-squares slope of used credits over the last
+  `HIVE_PACE_KIRO_WINDOW_S` (3600 s) of samples in `pace-history.jsonl` (one per
+  ccleft Kiro fetch, ~5 min), never across the last Kiro actuation, so a change
+  is judged only on samples taken after it (`settling` until
+  `HIVE_PACE_KIRO_MIN_SAMPLES`/`_MIN_SPAN_S` = 3 / 1200 s accumulate). The
+  verdict (`over` / `on-budget` / `under` / `settling` / `learning` / `stale`)
+  is printed and published as `kiro-budget.json` in ConfigMap `hive-pace`.
+- **over** (`ratio > HIVE_PACE_KIRO_HOT`, 1.0):
+  1. **Demote within Kiro** first: `opus-5 / sol → sonnet-5 / luna → haiku-4.5`
+     (2.2/4.4 → 1.3/1.1 → 0.4 credits per request). Each kicked agent's share
+     of the burn is estimated as credit multiplier × kicks/hour, the biggest
+     savings go first, and only as many as close `burn − allowed` are moved
+     (at most `HIVE_PACE_KIRO_MAX_DEMOTE`, 4, per tick). Agents the governor is
+     not kicking (cadence `paused`/`idle`) save nothing and are left alone.
+     The journal keeps the **original** rung, so rotate still sees the agent as
+     in-tier two notches down.
+  2. **Cap** only when every kicked Kiro agent is already on haiku: pace
+     writes `kiro-evict` (`ns/agent|expiry|pools`) for the highest-burn agents
+     (≤ `HIVE_PACE_KIRO_MAX_EVICT`, 2, per tick, valid
+     `HIVE_PACE_KIRO_EVICT_TTL_S`, 6 h). The pools listed are agy, else claude,
+     each only when its own pace verdict is not `hot` and it is under
+     `HIVE_PACE_EVICT_TARGET_MAX_PCT` (85%). Rotate, which owns placement,
+     moves those agents with the atomic models PUT onto a rung of their own
+     tier on one of those pools, or leaves them if none fits.
+  3. Otherwise `SATURATED` is printed. The remaining lever is cadence, which
+     is the governor's, and pausing is not used (rotate resumes undeclared pauses).
+- **under** (`ratio < HIVE_PACE_KIRO_COLD`, 0.6): promote one pace-demoted
+  agent one notch (`HIVE_PACE_KIRO_MAX_PROMOTE`), only if the projected ratio
+  stays under `HIVE_PACE_KIRO_PROMOTE_MAX` (0.8), and withdraw pending cap
+  requests. Agents already moved off Kiro stay where rotate put them.
+- Pins (`HIVE_PACE_PIN`, `ns/agent`, mirrors `HIVE_ROTATE_PIN`) and paused or
+  held agents are never touched. Rotate's cadence guard
+  (`HIVE_ROTATE_KIRO_MIN_CADENCE_S`) still applies.
+
+**Trade-offs (2026-09-25).** At deploy time agy's Gemini 5 h window was at
+96%, codex was exhausted until 2026-09-26T08:15Z, and claude was `hot` (burning
+~6× its weekly allowance). Moving agents off Kiro would have pushed them onto a
+pool that was just as short, so the design demotes within Kiro first and caps
+only onto a pool pace itself reports as not hot. The price is capability: a
+T1 agent on haiku-4.5 is well below its tier's floor while the budget is tight.
+It is promoted back one notch at a time once the burn is well under the allowance.
 
 **Measured burn (2026-09-24).** 16 agents on Kiro burned ~470 credits/hour against
 a pace allowance of ~65/hour. pi re-sends the whole context on every step, and one
