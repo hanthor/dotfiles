@@ -3,15 +3,11 @@
 # Usage: ./scripts/bw-seed-kube.sh
 # Re-run safely — updates existing items in place.
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/bw-item.sh"
 
 if [ -z "${BW_SESSION:-}" ]; then
-  if [ -f /tmp/bw_session ]; then
-    export BW_SESSION=$(cat /tmp/bw_session)
-  else
-    echo "Unlocking Bitwarden..."
-    export BW_SESSION=$(bw unlock --raw)
-    (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
-  fi
+  export BW_SESSION=$("$SCRIPT_DIR/bw-unlock.sh")
 fi
 
 KUBECONFIG_PATH="${KUBECONFIG:-$HOME/.kube/config}"
@@ -26,23 +22,12 @@ seed() {
 
   local notes
   notes=$(cat "$path")
-  local existing_id
-  existing_id=$(bw list items --search "$name" 2>/dev/null \
-    | jq -r --arg name "$name" '.[] | select(.name == $name) | .id' \
-    | head -n1)
-
   local payload
   payload=$(bw get template item \
     | jq --arg name "$name" --arg notes "$notes" \
         '. + {name: $name, notes: $notes, type: 2, secureNote: {type: 0}, login: null}')
 
-  if [ -n "$existing_id" ]; then
-    echo "updating $name ($existing_id)"
-    echo "$payload" | bw encode | bw edit item "$existing_id" >/dev/null
-  else
-    echo "creating $name"
-    echo "$payload" | bw encode | bw create item >/dev/null
-  fi
+  bw_upsert_item "$name" "$payload"
 }
 
 seed kubeconfig "$KUBECONFIG_PATH"
