@@ -37,7 +37,7 @@ class TestPurgeMachine:
                 webservers:
                   hosts:
                     host1:
-        """).strip())
+        """).strip() + "\n")
         
         result = run_script("purge-machine.py", "host1", str(inv), cwd=tmp_path)
         assert result.returncode == 0
@@ -60,7 +60,7 @@ class TestPurgeMachine:
                   hosts:
                     host1:
                     host2:
-        """).strip())
+        """).strip() + "\n")
         
         result = run_script("purge-machine.py", "host1", str(inv), cwd=tmp_path)
         assert result.returncode == 0
@@ -80,7 +80,7 @@ class TestPurgeMachine:
               hosts:
                 host1:
                   ansible_host: 192.168.1.1
-        """).strip())
+        """).strip() + "\n")
         
         hostvars_file = host_vars_dir / "host1.yml"
         hostvars_file.write_text("key: value\n")
@@ -98,7 +98,7 @@ class TestPurgeMachine:
               hosts:
                 host1:
                   ansible_host: 192.168.1.1
-        """).strip())
+        """).strip() + "\n")
         
         result = run_script("purge-machine.py", "nonexistent", str(inv), cwd=tmp_path)
         assert result.returncode == 1
@@ -122,7 +122,7 @@ class TestPurgeMachine:
                 databases:
                   hosts:
                     host2:
-        """).strip())
+        """).strip() + "\n")
         
         original = inv.read_text()
         result = run_script("purge-machine.py", "host1", str(inv), cwd=tmp_path)
