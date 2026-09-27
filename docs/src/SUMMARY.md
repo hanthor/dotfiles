@@ -11,6 +11,7 @@
 - [QR Secret Onboarding](qr-onboarding.md)
 - [Operational Runbook](runbook.md)
 - [Bots, Agents & Guardrails](automation.md)
+- [Utility Scripts](scripts.md)
 
 # Fleet Reference
 
