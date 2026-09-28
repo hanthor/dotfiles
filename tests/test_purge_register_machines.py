@@ -37,7 +37,7 @@ class TestPurgeMachine:
                 webservers:
                   hosts:
                     host1:
-        """).strip())
+        """).strip() + "\n")
         
         result = run_script("purge-machine.py", "host1", str(inv), cwd=tmp_path)
         assert result.returncode == 0
