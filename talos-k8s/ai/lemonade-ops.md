@@ -359,6 +359,30 @@ Not detailed here — these target Ryzen AI NPU or CPU fallback.
 
 ---
 
+## Disaster recovery — re-downloading essential models
+
+If the models PVC is lost or restored empty (fresh cluster, disk failure, or
+restored from a backup that predates the models being downloaded), models are
+not pre-loaded at startup — Lemonade only fetches on first request. Re-warm
+the essential set with one script instead of replaying curl commands by hand:
+
+```bash
+./lemonade-warmup.sh
+# or, for direct/LAN access instead of the Tailscale ingress:
+./lemonade-warmup.sh http://192.168.0.6:31305
+```
+
+The set of "essential" models is declared in `lemonade-models.txt` — models
+the catalog already marks `hot` (i.e. observed as frequently used), trimmed to
+fit the 100Gi PVC (the full hot set is ~142GB, over budget). Edit that file to
+change the warmup set; the script re-reads it on every run.
+
+This is out of scope for automatic loading: Lemonade does not currently
+support pre-loading models at container startup, so warmup is always a
+manual/scripted step after the pod is up and reachable.
+
+---
+
 ## Diagnosing problems
 
 ### Check pod health
