@@ -35,7 +35,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -129,7 +129,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -225,7 +225,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -319,7 +319,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -413,7 +413,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -507,7 +507,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -601,7 +601,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -695,7 +695,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -789,7 +789,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -883,7 +883,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -979,7 +979,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -1073,7 +1073,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -1167,7 +1167,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -1261,7 +1261,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -1359,7 +1359,7 @@ spec:
               value: supervisor
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -1460,7 +1460,7 @@ spec:
             - name: HIVE_ROTATE_PIN
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -1560,7 +1560,7 @@ spec:
             - name: HIVE_ROTATE_PIN
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -1654,7 +1654,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -1754,7 +1754,7 @@ spec:
                   optional: true
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -1848,7 +1848,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -1946,7 +1946,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:
@@ -2044,7 +2044,7 @@ spec:
               value: /tmp
             - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
               value: "false"
-            image: alpine/k8s:1.31.0
+            image: alpine/k8s:1.37.1
             imagePullPolicy: IfNotPresent
             name: ops
             resources:

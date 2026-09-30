@@ -35,7 +35,7 @@ patches:
           # from source at a pinned commit. Replace with
           # `corral plugin install aws-power` once it is.
           - name: install-aws-power
-            image: docker.io/library/golang:1.26
+            image: docker.io/library/golang:1.27
             command: ["go", "install", "github.com/tuna-os/corral/cmd/corral-aws-power@main"]
             env:
               - name: GOBIN
