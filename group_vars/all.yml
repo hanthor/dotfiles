@@ -1,68 +1,9 @@
 ---
 tailscale_domain: manatee-basking.ts.net
-monitoring_hub_host: bihar
-# Prometheus hub now in-cluster (kube-prometheus-stack), exposed via Tailscale ingress
-monitoring_hub_ip: "prometheus.manatee-basking.ts.net"
-loki_hub_url: "https://loki.manatee-basking.ts.net"
-monitoring_hub_url: "https://grafana.manatee-basking.ts.net"
 user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james
 brew_prefix: /home/linuxbrew/.linuxbrew
-# Global services
-global_services:
-  - name: Authentik
-    href: https://auth.manatee-basking.ts.net
-    icon: authentik.png
-    description: SSO / identity provider
-    group: Core
-    siteMonitor: https://auth.manatee-basking.ts.net
-  - name: AppFlowy
-    href: https://appflowy.manatee-basking.ts.net
-    icon: appflowy.png
-    description: Collaboration platform
-    group: Core
-    siteMonitor: https://appflowy.manatee-basking.ts.net
-  - name: Proxmox
-    href: https://bihar.manatee-basking.ts.net/proxmox
-    icon: proxmox.png
-    description: Server hypervisor
-    group: Core
-    siteMonitor: https://bihar.manatee-basking.ts.net:8006
-  - name: n8n
-    href: https://n8n.manatee-basking.ts.net
-    icon: n8n.png
-    description: Workflow automation
-    group: Core
-    siteMonitor: https://n8n.manatee-basking.ts.net
-
-# Fleet machines
-fleet:
-  bihar:
-    name: Bihar
-    url: https://bihar.manatee-basking.ts.net
-    icon: mdi-server-network
-    description: Home server (Proxmox)
-  karnataka:
-    name: Karnataka
-    url: https://karnataka.manatee-basking.ts.net
-    icon: mdi-desktop-tower
-    description: Main workstation
-  kanpur:
-    name: Kanpur
-    url: https://kanpur.manatee-basking.ts.net
-    icon: mdi-laptop
-    description: Laptop
-  kerala:
-    name: Kerala
-    url: https://kerala.manatee-basking.ts.net
-    icon: mdi-cellphone
-    description: PostMarketOS mobile device
-  dilli:
-    name: Dilli
-    url: https://dilli.manatee-basking.ts.net
-    icon: mdi-desktop-tower
-    description: Secondary workstation
 # All machine names (for SSH config generation)
 machines:
   himachal:
@@ -96,7 +37,8 @@ machines:
 # without Bitwarden. Each machine warns on apply if its own key is
 # missing/stale here.
 machine_pubkeys:
-  telengana: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP9VKRfO6q+mk43mJ1BYn2omRyKJcieTgZem0jGGEtN2 telengana
+  goa: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP9VKRfO6q+mk43mJ1BYn2omRyKJcieTgZem0jGGEtN2 goa
+  punjab: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKTteKkOac3kryqONYQB91nN9tuVTxogiiRG5LRmiiIH punjab
   dilli: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPOZx220I8Av7KmEAOib4iAKZFCzPp8cwtzvteJJ7VB
   kanpur: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGR7ZHHHguM8yl4vbDsSMlk5VFg+PaLA4+kNtYLJwBxc james@kanpur
   himachal: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPelaWkNsfwqnceB/5gftUcnprfnflCsDlMDeQkm0Hps himachal
@@ -104,6 +46,7 @@ machine_pubkeys:
   vm: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIISpsmEf1I6nKchkatNY08OInckBvQCGm0L3rDse6nBy james@Jamess-MacBook-Air.local
   termux: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyFPxxcqd3bA+SPDL5eGlYzS5mDV2gJcp6vuDpx+spR u0_a372@localhost
   mumbai: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN059d8p5GeXivRywaeJwvx+pAcLdsebGaj7ypalFCuO pixel-9a
+  nothing: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIDWQMpTXLLE8z3sxeCFpW7RBURRuNEOdxbe5XBCG2eT u0_a266@localhost
 
 # Machines never probed by the ssh_mesh check: Talos nodes (no user SSH)
 # and port-forwarded test VMs.
@@ -130,9 +73,18 @@ core_brews:
   - shellcheck
   - shfmt
   - unzip
-  - trash-cli
   - yq
+  # atuin is also in bluefin-cli, but the brew copy keeps non-Bluefin glibc hosts (Ubuntu, Debian) covered
+  - atuin
   # bluefin-cli provides: atuin, bat, eza, fd, fzf, starship, carapace, ripgrep, tealdeer, zoxide, colordiff, television, ugrep
+# ── Blocked packages (all machines) ──────────────────────────────
+# Uninstalled on every apply; the homebrew role fails if any install list
+# above (or extra_brews in host_vars) names one.
+#   trash-cli — `rm` was aliased to `trash`, so every deletion (scripts,
+#   agents, build cleanups) went to ~/.local/share/Trash, which nothing
+#   empties. It filled punjab's 242 GB disk (133 GB of Trash, 2026-09-26).
+brew_blocked:
+  - trash-cli
 core_taps:
   - ublue-os/experimental-tap
 core_tap_brews:
@@ -281,5 +233,6 @@ gnome_enabled_extensions:
   - paperwm@paperwm.github.com
   - papershell@lalovene.github.com
 
-extra_authorized_keys:
-  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP9VKRfO6q+mk43mJ1BYn2omRyKJcieTgZem0jGGEtN2 goa
+# Keys to authorize beyond the per-machine Bitwarden items (goa's used to be
+# listed here; it's in machine_pubkeys now).
+extra_authorized_keys: []

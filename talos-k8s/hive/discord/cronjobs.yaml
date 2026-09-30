@@ -1,0 +1,231 @@
+# Daily digest (#daily-dev-digest) and weekly roundup (general, per-project,
+# releases, CI, security). Exported from the live cluster 2026-09-24; the only
+# change vs live is the optional HIVE_DASHBOARD_* env so the digest can surface
+# hive attention items (stuck agents, held PRs, budget).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app.kubernetes.io/component: daily
+    app.kubernetes.io/name: hive-discord-reports
+  name: hive-discord-daily-report
+  namespace: hive
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    metadata: {}
+    spec:
+      activeDeadlineSeconds: 900
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: hive-discord-reports
+        spec:
+          containers:
+            - command:
+                - python
+                - /app/report.py
+                - --kind
+                - daily
+              env:
+                - name: GH_APP_ID
+                  valueFrom:
+                    secretKeyRef:
+                      key: GH_APP_ID
+                      name: hive-secrets
+                - name: GH_INSTALLATION_ID
+                  valueFrom:
+                    secretKeyRef:
+                      key: GH_APP_INSTALLATION_ID
+                      name: hive-secrets
+                - name: GH_APP_KEY_FILE
+                  value: /secrets/app.pem
+                - name: DISCORD_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      key: DISCORD_BOT_TOKEN
+                      name: discord-report-secrets
+                - name: GITHUB_OWNER
+                  value: tuna-os
+                - name: REPORT_TIMEZONE
+                  value: America/New_York
+                - name: REPORT_CONFIG
+                  value: /config/projects.json
+                - name: REPORT_STATE
+                  value: /data/state.json
+                - name: HIVE_DASHBOARD_URL
+                  value: http://hive:3002
+                - name: HIVE_DASHBOARD_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: hive-secrets
+                      key: HIVE_DASHBOARD_TOKEN
+                      optional: true
+              image: python:3.12-slim
+              imagePullPolicy: IfNotPresent
+              name: report
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /app
+                  name: code
+                  readOnly: true
+                - mountPath: /config
+                  name: config
+                  readOnly: true
+                - mountPath: /secrets
+                  name: github-key
+                  readOnly: true
+                - mountPath: /data
+                  name: data
+          dnsPolicy: ClusterFirst
+          nodeSelector:
+            workload-role: hive
+          restartPolicy: Never
+          schedulerName: default-scheduler
+          securityContext: {}
+          terminationGracePeriodSeconds: 30
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+          volumes:
+            - configMap:
+                defaultMode: 365
+                name: discord-report-code
+              name: code
+            - configMap:
+                defaultMode: 420
+                name: discord-report-config
+              name: config
+            - name: github-key
+              secret:
+                defaultMode: 420
+                items:
+                  - key: gh-app-key.pem
+                    path: app.pem
+                secretName: hive-secrets
+            - name: data
+              persistentVolumeClaim:
+                claimName: discord-reports-data
+  schedule: 0 18 * * *
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  suspend: false
+  timeZone: America/New_York
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app.kubernetes.io/component: weekly
+    app.kubernetes.io/name: hive-discord-reports
+  name: hive-discord-weekly-roundup
+  namespace: hive
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    metadata: {}
+    spec:
+      activeDeadlineSeconds: 900
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: hive-discord-reports
+        spec:
+          containers:
+            - command:
+                - python
+                - /app/report.py
+                - --kind
+                - weekly
+              env:
+                - name: GH_APP_ID
+                  valueFrom:
+                    secretKeyRef:
+                      key: GH_APP_ID
+                      name: hive-secrets
+                - name: GH_INSTALLATION_ID
+                  valueFrom:
+                    secretKeyRef:
+                      key: GH_APP_INSTALLATION_ID
+                      name: hive-secrets
+                - name: GH_APP_KEY_FILE
+                  value: /secrets/app.pem
+                - name: DISCORD_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      key: DISCORD_BOT_TOKEN
+                      name: discord-report-secrets
+                - name: GITHUB_OWNER
+                  value: tuna-os
+                - name: REPORT_TIMEZONE
+                  value: America/New_York
+                - name: REPORT_CONFIG
+                  value: /config/projects.json
+                - name: REPORT_STATE
+                  value: /data/state.json
+                - name: HIVE_DASHBOARD_URL
+                  value: http://hive:3002
+                - name: HIVE_DASHBOARD_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: hive-secrets
+                      key: HIVE_DASHBOARD_TOKEN
+                      optional: true
+              image: python:3.12-slim
+              imagePullPolicy: IfNotPresent
+              name: report
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /app
+                  name: code
+                  readOnly: true
+                - mountPath: /config
+                  name: config
+                  readOnly: true
+                - mountPath: /secrets
+                  name: github-key
+                  readOnly: true
+                - mountPath: /data
+                  name: data
+          dnsPolicy: ClusterFirst
+          nodeSelector:
+            workload-role: hive
+          restartPolicy: Never
+          schedulerName: default-scheduler
+          securityContext: {}
+          terminationGracePeriodSeconds: 30
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+          volumes:
+            - configMap:
+                defaultMode: 365
+                name: discord-report-code
+              name: code
+            - configMap:
+                defaultMode: 420
+                name: discord-report-config
+              name: config
+            - name: github-key
+              secret:
+                defaultMode: 420
+                items:
+                  - key: gh-app-key.pem
+                    path: app.pem
+                secretName: hive-secrets
+            - name: data
+              persistentVolumeClaim:
+                claimName: discord-reports-data
+  schedule: 0 18 * * 0
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  suspend: true
+  timeZone: America/New_York

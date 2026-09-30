@@ -1,0 +1,119 @@
+# ccleft serve: remaining-quota readings for the tuna-os Hives' agent accounts.
+# See README.md. Creates only: ServiceAccount, Deployment, Service (+ the
+# ConfigMap in config.yaml). No RBAC — ccleft never talks to the Kubernetes API.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ccleft
+  namespace: hive
+  labels: {app.kubernetes.io/name: ccleft, app.kubernetes.io/part-of: hive}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ccleft
+  namespace: hive
+  labels: {app.kubernetes.io/name: ccleft, app.kubernetes.io/part-of: hive}
+spec:
+  replicas: 1                     # ONE poller per account pool — never scale up
+  strategy: {type: Recreate}      # no overlap: two pods would double upstream calls
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels: {app.kubernetes.io/name: ccleft}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: ccleft, app.kubernetes.io/part-of: hive}
+    spec:
+      serviceAccountName: ccleft
+      automountServiceAccountToken: false
+      # hive-data and hive-shared-auth are local-path (hostPath) volumes on the
+      # hive node; RWO is per NODE, so a second pod there can mount them.
+      nodeSelector: {workload-role: hive}
+      tolerations:
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+      enableServiceLinks: false
+      securityContext:
+        # dev:node, the owner/group of the agent homes (files are 0660 dev:node).
+        # No fsGroup on purpose: nothing may chown/chmod the Hive's volumes.
+        runAsUser: 1001
+        runAsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: ccleft
+          # The Hive's own image, for its `agy` CLI (agy has no HTTP quota API).
+          # Keep this digest in step with deploy/hive when the Hive is upgraded.
+          image: ghcr.io/hivecommons/hive:v5.49.0@sha256:9f40d7dc6830033d1a7b86e76b746c77a7a8a8ab50d5336157c3843d169589cd
+          imagePullPolicy: IfNotPresent
+          # ccleft itself comes from the image volume below (no copy step).
+          command: [/opt/ccleft/usr/local/bin/ccleft, serve, --config, /etc/ccleft/ccleft.yaml]
+          env:
+            - {name: HOME, value: /tmp}   # ccleft's own HOME; never used for probing
+            - name: KIRO_API_KEY
+              valueFrom: {secretKeyRef: {name: kiro-api, key: KIRO_API_KEY}}
+            - name: DEEPSEEK_API_KEY
+              valueFrom: {secretKeyRef: {name: hive-secrets, key: DEEPSEEK_API_KEY, optional: true}}
+            - name: META_API_KEY        # only to report muse as unsupported (no network call)
+              valueFrom: {secretKeyRef: {name: hive-secrets, key: META_API_KEY, optional: true}}
+          ports:
+            - {name: http-metrics, containerPort: 9464, protocol: TCP}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http-metrics}
+            periodSeconds: 15
+          livenessProbe:
+            httpGet: {path: /readings, port: http-metrics}
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: 10m, memory: 64Mi}
+            limits: {memory: 768Mi}     # headroom for the agy CLI it spawns
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            # Same layout as deploy/hive, all READ-ONLY (kernel-enforced).
+            - {name: data, mountPath: /data, readOnly: true}
+            - {name: shared-claude, mountPath: /data/home/.claude, readOnly: true}
+            - {name: shared-gemini, mountPath: /data/home/.gemini, readOnly: true}
+            - {name: shared-codex, mountPath: /data/home/.codex, readOnly: true}
+            - {name: config, mountPath: /etc/ccleft, readOnly: true}
+            - {name: ccleft-bin, mountPath: /opt/ccleft, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: hive-data, readOnly: true}
+        - name: shared-claude
+          persistentVolumeClaim: {claimName: shared-claude, readOnly: true}
+        - name: shared-gemini
+          persistentVolumeClaim: {claimName: shared-gemini, readOnly: true}
+        - name: shared-codex
+          persistentVolumeClaim: {claimName: shared-codex, readOnly: true}
+        - name: config
+          configMap: {name: ccleft-config}
+        - name: ccleft-bin
+          image:
+            reference: ghcr.io/tuna-os/ccleft:sha-9b66a76@sha256:e7fa9445e01406f19f5c6c49024812cec102244a0bdac6a9f6acef25bb1a01b7
+            pullPolicy: IfNotPresent
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ccleft
+  namespace: hive
+  labels: {app.kubernetes.io/name: ccleft, app.kubernetes.io/part-of: hive}
+  annotations:
+    # No Prometheus runs on this cluster (2026-09-25); conventional hints for
+    # when one does. Endpoints: /readings (JSON), /metrics, /healthz.
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9464"
+    prometheus.io/path: /metrics
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: ccleft}
+  ports:
+    - {name: http-metrics, port: 9464, targetPort: http-metrics, protocol: TCP}

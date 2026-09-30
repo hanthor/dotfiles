@@ -5,9 +5,10 @@
   ],
   "automerge": true,
   "automergeType": "pr",
+  "platformAutomerge": true,
   "packageRules": [
     {
-      "description": "Auto-merge minor/patch/digest/pin updates",
+      "description": "Auto-merge minor/patch/digest/pin updates (branch protection still requires green CI)",
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
       "automerge": true
     },
@@ -15,6 +16,27 @@
       "description": "Require manual approval for major updates",
       "matchUpdateTypes": ["major"],
       "automerge": false
+    },
+    {
+      "description": "OpenTofu providers (aws/): lockfile bumps are validated + tofu-tested in CI; applying stays manual",
+      "matchManagers": ["terraform"],
+      "groupName": "opentofu providers"
+    },
+    {
+      "description": "Cluster images/charts: manifests are applied by hand, so a merge would only drift git from the cluster. Open weekly grouped PRs as a to-do, never auto-merge.",
+      "matchFileNames": ["talos-k8s/**"],
+      "automerge": false,
+      "groupName": "cluster images and charts",
+      "schedule": ["before 6am on monday"],
+      "labels": ["deploy-needed"]
     }
-  ]
+  ],
+  "kubernetes": {
+    "managerFilePatterns": ["/^talos-k8s/.+\\.ya?ml$/"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["before 6am on monday"]
+  }
 }

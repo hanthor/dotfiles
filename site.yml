@@ -131,18 +131,21 @@
       when: not skip_systemd | default(false)
     - role: bst_dashboard
       tags: [services, bst_dashboard]
+    - role: kirocrew
+      tags: [services, kirocrew]
+      when: kirocrew_enabled | default(false)
     - role: proxy
       tags: [services, proxy, caddy]
       when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_proxy | default(false)
     - role: tailscale_cert
       tags: [services, tailscale_cert]
       when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_tailscale_cert | default(false)
-    - role: cockpit
-      tags: [services, cockpit]
-      when: (is_desktop | bool or inventory_hostname in groups.get('server', [])) and machine_profile != 'vm-test' and not skip_cockpit | default(false)
     - role: server_hardening
       tags: [system, hardening, security]
       when: inventory_hostname in groups.get('server', []) or inventory_hostname in groups.get('vps', [])
+    # Last, so it reports the state this run left behind.
+    - role: fleet_facts
+      tags: [facts, fleet_facts]
 
   post_tasks:
     - name: Summarise secrets phase

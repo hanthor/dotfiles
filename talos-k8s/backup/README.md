@@ -1,11 +1,11 @@
 # Backups — AWS Talos cluster
 
-Two independent layers, because they fail differently and cover different
-disasters.
+Three layers, because they fail differently and cover different disasters.
 
 | Layer | What | Covers | Does not cover |
 |---|---|---|---|
 | **Postgres dumps** | `postgres-backup.yaml` — nightly 02:17 UTC, 7 days on a local PVC | dropped tables, bad migrations, logical corruption | losing the node |
+| **S3 copy of the dumps** | same job, after verification → `s3://hanthor-fleet-backups-*/postgres/<date>/`, size checked; IA 30d → Glacier IR 90d → expire 1y | node loss for the DB; survives the cluster | region loss |
 | **EBS snapshots** | DLM `policy-0f074c7d13f94e355` — daily 03:30 UTC (7) + weekly Sun (4) | node loss, volume loss, whole-cluster rebuild | fine-grained "undo this one table" |
 
 The snapshot window is deliberately *after* the dump window, so each snapshot
@@ -60,6 +60,9 @@ kubectl -n postgres exec -it deploy/postgres -- \
 ```
 Scale Synapse to zero first; it will not tolerate the schema moving underneath it.
 
+**From S3 (node gone)** — `aws s3 cp s3://hanthor-fleet-backups-181185361136/postgres/<date>/synapse.dump .`
+(any admin credential; the writer key can read too), then `pg_restore` as above.
+
 **Volume (for node loss)** — create a volume from the snapshot, attach it to a
 replacement node, and let Talos boot from it. Note `local-path` PVs carry node
 affinity: restoring onto a differently-named node needs the PV's
@@ -70,7 +73,9 @@ affinity: restoring onto a differently-named node needs the PV's
 Discord is primary; ntfy is best-effort secondary. ntfy.sh was tried first and
 rejected — it returned 502 on all three retries during a real run and then went
 unreachable entirely. An alert channel that silently drops messages is worse
-than none. If neither channel delivers, the job logs a warning rather than
+than none. (Until 2026-09-24 the Discord payload itself was invalid JSON — a
+literal newline from `printf '\n'` — so every Discord alert 400'd and only ntfy
+ever delivered. Fixed; verified with a test post.) If neither channel delivers, the job logs a warning rather than
 exiting quietly.
 
 ## Known gaps
@@ -78,7 +83,7 @@ exiting quietly.
 - Snapshots are **crash-consistent**, not application-consistent. That is fine
   for Postgres (it replays WAL on start) and is why the logical dumps exist
   alongside them.
-- Everything is in `eu-north-1`. A region loss takes both layers. Cross-region
+- Everything is in `eu-north-1`. A region loss takes all three layers. Cross-region
   snapshot copy is a one-line DLM addition if that ever matters.
 - No restore drill has been performed. Until a dump has actually been restored
   into a scratch database, "restorable" is an assumption — a good one, since

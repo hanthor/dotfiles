@@ -15,24 +15,42 @@ All secrets live in [Bitwarden](https://bitwarden.com/) and are resolved at runt
 
 ## Remote Apply
 
-When running `just apply-remote <host>` or `just apply-remote-tags <host> <tags>`:
+`just apply-remote <host>` (and `just apply-remote-tags <host> <tags>`):
 
-1. Your local Bitwarden session is forwarded over SSH (via `SendEnv BW_SESSION`).
-2. The remote machine writes it to `/tmp/bw_session`.
-3. The `bitwarden` role runs `bw status` on the remote: if it reports `unlocked`, `bw_unlocked` flips to true and secrets work proceeds.
+1. Runs `scripts/bw-resolve.sh remote <host>`, which unlocks Bitwarden **on the
+   remote** and prints that host's session token. If the remote CLI is logged
+   out it tries `bw login --apikey` with the `bw-api-key` item from your local
+   vault; to unlock it pipes the master password (item `James Bitwarden`) over
+   stdin, falling back to an interactive `bw unlock` over `ssh -t`.
+2. Runs `ssh -t <host> "export BW_SESSION='…'; …; just apply"` — the session
+   is exported inline in the remote command, not via `SendEnv`. `apply-remote`
+   also caches it in the remote's `/tmp/bw_session`.
+3. The `bitwarden` role on the remote runs `bw status`: if it reports
+   `unlocked`, `bw_unlocked` flips to true and secrets work proceeds.
 
-**Caveat — session portability is not guaranteed.** A `BW_SESSION` token derived on one machine may be rejected on another because the encrypted vault state, KDF parameters, or vault sync state differ. When that happens, the remote `bw status` returns `locked`, the role prints a one-line warning, and every BW-touching task is skipped cleanly — nothing fails, no files get clobbered with empty values. Unlock the vault directly on that host (`bw unlock`, then write the session to `/tmp/bw_session`) to enable secrets there.
+**Caveat — session portability is not guaranteed.** A `BW_SESSION` token is only valid on the machine that unlocked it — that's why the recipes unlock on the remote instead of forwarding yours. If the remote unlock fails, the remote `bw status` returns `locked`, the role prints a one-line warning, and every BW-touching task is skipped cleanly — nothing fails, no files get clobbered with empty values. Unlock the vault directly on that host (`bw unlock`, then write the session to `/tmp/bw_session`) to enable secrets there.
 
 ## Vault Items
+
+Every item a role or script reads (grep `bw get` / `bw list` under `roles/` and `scripts/`):
 
 | Bitwarden Item | Type | Used By |
 |---------------|------|---------|
 | `james@<machine>` | SSH Key | `ssh_keys` role — per-machine ed25519 keys |
-| `tailscale-authkey` | Secure Note | `tailscale` role — reusable [Tailscale](https://tailscale.com/) auth key |
-| `kubeconfig` | Secure Note | `kube` role — cluster kubeconfig |
-| `talosconfig` | Secure Note | `kube` role — Talos cluster config |
-| `accounts.firefox.com` | Login | `browser_fxa` role — Firefox Account credentials + TOTP |
-| `gh_pat`, `pi_api`, etc. | Secure Note | `shell` role — API keys for CLI tools |
+| `tailscale-apikey` | Login (password) | `tailscale` role — key for `tailscale up --authkey` and stale-device cleanup via the API |
+| `kubeconfig` | Secure Note | `kube` role — home cluster kubeconfig |
+| `talosconfig` | Secure Note | `kube` role — home cluster Talos config |
+| `kubeconfig-aws-migration` | Secure Note | `kube` role — AWS cluster kubeconfig |
+| `talosconfig-aws-migration` | Secure Note | `kube` role — AWS cluster Talos config |
+| `accounts.firefox.com` | Login + TOTP | `browser_fxa` role — Firefox Account credentials |
+| `github-token` | Login (password) | `github` role — PAT for `gh auth login` |
+| `atuin.sh` | Login + custom field `key` | `shell_atuin` role — atuin sync login + mnemonic |
+| `deepseek-api-key` | Login (password) | `shell_ai` role — pi `auth.json` |
+| `forgejo` | Secure Note (`API Token:` line) | `shell_ai` role — `FORGEJO_TOKEN` |
+| `tavily-api-key` | Login (password) | `shell_ai` role — `TAVILY_API_KEY` |
+| `forgejo.manatee-basking.ts.net` | Login | `forgejo_registry` role — podman registry login |
+| `bw-api-key` | Login | `scripts/bw-resolve.sh` — `bw login --apikey` on a remote |
+| `James Bitwarden` | Login | `scripts/bw-resolve.sh` — non-interactive unlock on a remote |
 
 ## Running Without Secrets
 
@@ -40,7 +58,7 @@ For fast iteration that doesn't need the vault — packages, dotfiles, desktop c
 
 ```bash
 just apply-nosecrets   # git pull + apply with --skip-tags secrets
-dots                   # the same, as a shell alias
+dots                   # alias: cd to the repo + just apply-nosecrets
 ```
 
 The daily systemd timer (`dotfiles-update.service`) calls `apply-nosecrets` for the same reason: it can't unlock the vault non-interactively, so it doesn't try.
@@ -52,6 +70,9 @@ If Bitwarden can't unlock (first run, no BW CLI installed, vault genuinely locke
 ## Seeding New Secrets
 
 ```bash
-# Push kubeconfig + talosconfig to Bitwarden from a machine that has them:
+# Push kubeconfig + talosconfig (home cluster) to Bitwarden from a machine that has them:
 just seed-kube
 ```
+
+`seed-kube` only handles the two home-cluster notes; the `*-aws-migration`
+notes are maintained by hand.

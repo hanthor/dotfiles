@@ -5,6 +5,12 @@ Ansible-driven dotfiles and infrastructure for a personal fleet. Two distinct co
 1. **Workstation config** — shells, packages, browser, SSH, Tailscale, kubeconfig, GNOME, and more
 2. **Talos K8s cluster** — manifests for the Bihar + Karnataka cluster
 
+> **This handbook is public.** It covers architecture, decisions and runbooks.
+> Host-specific addresses and cloud resource identifiers are deliberately left
+> out — they live in the repo's inventory and IaC (`inventory.yml`,
+> `host_vars/`, `aws/`), or come from `just inventory`. Runbooks use
+> placeholders such as `<host>` and `<node-ip>` where you substitute them.
+
 ## Quick Start
 
 ```bash
@@ -26,30 +32,43 @@ just lint
 
 ## Machine Fleet
 
+Ansible-managed hosts, from `inventory.yml`:
+
 | Machine | Group | Type | Role |
 |---------|-------|------|------|
-| karnataka | desktop, llm | Workstation | GPU dev, K8s worker |
-| himachal | desktop | Laptop | Portable workstation |
 | kanpur | desktop | Laptop | Portable workstation |
-| kerala | desktop | Mobile | PostMarketOS ARM device |
+| himachal | desktop | Laptop | Portable workstation; runs `hive_ops` |
 | dilli | desktop | Desktop | Secondary workstation |
-| bihar | server | Server | Home server (Proxmox, K8s control plane) |
-| vm | server | VM | Local dev VM |
+| kerala | desktop | Mobile | postmarketOS ARM device |
+| mumbai | desktop | VM | Debian VM on the phone, `machine_profile: cli-only` |
+| punjab | server | Server | Headless Ubuntu agent box (EC2 `t3.large`, us-east-1) |
 | goa | server | Server | [Raspberry Pi 5](https://www.raspberrypi.com/products/raspberry-pi-5/) ARM server |
-| matrix | vps | VPS | Public services |
-| lkofoss | vps | VPS | Public services |
+| vm | server | VM | Local dev VM |
+| termux | termux_hosts | Phone | Raw Termux/Android layer |
+| test-fleet-fedora, test-fleet-node2 | test_fleet | VM | KubeVirt test VMs (`vm-test`) |
+| matrix | vps | VPS | **Retired** — see the cutover runbook |
+| telengana | vps | VPS | **Retired** — see the cutover runbook |
+
+Not Ansible-managed (Talos — `talosctl`/`kubectl` only):
+
+- **bihar** (control plane) + **karnataka** (worker, AMD GPU) — the home cluster.
+  Powered down and in storage, expected back. See the [cluster handbook](servers/talos-k8s/cluster.md).
+- The [AWS Talos cluster](servers/aws-k8s/cluster.md) — Matrix/ESS, the Hive, CFP dashboard.
+
+The `llm` group is dormant (commented out in `inventory.yml`).
 
 ## Playbook Phases
 
-The playbook runs in tagged phases:
+`site.yml` groups roles into four commented phases. Tags cut across them — use
+`just apply-tags <tag>` to target a subset.
 
-| Phase | Tags | What |
-|-------|------|------|
-| 1 — System | `system` | SSH, sudo, APK packages |
-| 2 — Packages | `packages` | Homebrew, Flatpak |
-| 3 — Dotfiles | `dotfiles` | Shell, PI, git, neovim |
-| 4 — Secrets | `secrets` | Bitwarden, SSH keys, GitHub, Tailscale, kubeconfig |
-| 5 — Desktop | `desktop` | GNOME, browser, fonts, wallpaper, PipeWire native DSP |
-| 6 — Services | `services` | Systemd timers, Caddy proxy, monitoring |
+| Phase | Roles | Main tags |
+|-------|-------|-----------|
+| 1 — System + packages + dotfiles | sudo, sshd, apk_packages, homebrew, termux_packages, bitwarden, shell_fonts, shell_dotfiles, pi, hive_ops, git, neovim | `system`, `packages`, `dotfiles` |
+| 2 — Secrets + auth | shell_atuin, shell_ai, ssh_keys, ssh_mesh, github, tailscale, kube, forgejo_registry | `secrets` |
+| 3 — Desktop apps | flatpak, bluefin_common, gnome, zen_browser (+ browser_fxa), pipewire_audio | `desktop` |
+| 4 — Services | syncthing, systemd, bst_dashboard, proxy, tailscale_cert, server_hardening | `services` |
 
-Phases 4+ require Bitwarden session credentials.
+Only the `secrets`-tagged work needs Bitwarden. With the vault locked (or
+`--skip-tags secrets`), phases 1, 3 and 4 run normally and BW-touching tasks
+skip cleanly.

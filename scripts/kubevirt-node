@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Power the AWS KubeVirt node (aws/kubevirt.tf) up or down from the tailnet.
+#
+#   scripts/kubevirt-node up      # start it and wait until the k8s node is Ready
+#   scripts/kubevirt-node down    # stop it (VMs on it are shut down first)
+#   scripts/kubevirt-node status
+#
+# The in-cluster idle-stop CronJob stops it after 30 idle minutes, and the
+# migration budget action stops it if spend nears the credits, so `up` is
+# the only command needed day to day.
+set -euo pipefail
+export AWS_DEFAULT_REGION=eu-north-1
+export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config-aws-migration}"
+ID=$(aws ec2 describe-instances --filters Name=tag:Name,Values=aws-migration-kubevirt \
+     Name=instance-state-name,Values=pending,running,stopping,stopped \
+     --query 'Reservations[0].Instances[0].InstanceId' --output text)
+[ "$ID" != None ] || { echo "no aws-migration-kubevirt instance" >&2; exit 1; }
+state() { aws ec2 describe-instances --instance-ids "$ID" --query 'Reservations[0].Instances[0].State.Name' --output text; }
+
+case "${1:-status}" in
+  up)
+    aws ec2 start-instances --instance-ids "$ID" >/dev/null
+    aws ec2 wait instance-running --instance-ids "$ID"
+    node=$(kubectl get nodes -l tunaos.org/kubevirt=true -o jsonpath='{.items[0].metadata.name}')
+    kubectl annotate node "$node" tunaos.org/idle-since- >/dev/null 2>&1 || true
+    kubectl wait --for=condition=Ready "node/$node" --timeout=10m
+    echo "up: $node ($ID). Stops by itself after 30 idle minutes."
+    ;;
+  down)
+    for vm in $(kubectl get vmi -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'); do
+      virtctl stop -n "${vm%/*}" "${vm#*/}" || kubectl -n "${vm%/*}" patch vm "${vm#*/}" --type merge -p '{"spec":{"runStrategy":"Halted"}}'
+    done
+    aws ec2 stop-instances --instance-ids "$ID" >/dev/null
+    echo "stopping $ID"
+    ;;
+  status)
+    echo "$ID: $(state)"
+    kubectl get vmi -A 2>/dev/null || true
+    ;;
+  *) echo "usage: $0 up|down|status" >&2; exit 2 ;;
+esac

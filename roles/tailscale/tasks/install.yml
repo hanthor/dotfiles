@@ -22,6 +22,6 @@
   when: _ujust_exists.rc == 0
 
 - name: Install tailscale via install script (non-Bluefin)
-  ansible.builtin.shell: curl -fsSL https://tailscale.com/install.sh | sh
+  ansible.builtin.shell: set -o pipefail && curl -fsSL https://tailscale.com/install.sh | sh
   become: true
   when: _ujust_exists.rc != 0

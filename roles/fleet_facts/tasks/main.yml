@@ -1,0 +1,108 @@
+---
+# ── Public device facts for reilly.asia/infra ──────────────────────────
+# Each host writes facts/<host>.json on the fleet-facts branch through the
+# GitHub contents API (the gh CLI's existing login, so it works in the
+# no-secrets daily timer too). Only what's safe to publish: OS, hardware
+# model, CPU/GPU, memory, uptime, last apply. No addresses, serials or MACs.
+
+- name: Check gh is available and logged in
+  ansible.builtin.command: gh auth status
+  register: fleet_facts_gh
+  changed_when: false
+  failed_when: false
+  environment:
+    PATH: "{{ ansible_env_path }}"
+
+- name: Publish device facts
+  when:
+    - fleet_facts_publish | bool
+    - fleet_facts_gh.rc == 0
+  block:
+    # DMI model names are often placeholders on self-built boards, and ARM
+    # boards (the Pi) and phones don't have DMI at all.
+    - name: Read device-tree model (ARM boards)
+      ansible.builtin.slurp:
+        src: /sys/firmware/devicetree/base/model
+      register: fleet_facts_dt
+      failed_when: false
+
+    - name: Read Android device model (Termux)
+      ansible.builtin.command: getprop ro.product.model
+      register: fleet_facts_android
+      changed_when: false
+      failed_when: false
+      when: is_termux | default(false)
+
+    - name: Detect GPUs
+      ansible.builtin.shell: set -o pipefail; lspci -mm 2>/dev/null | grep -iE '"(VGA|3D|Display)' | cut -d'"' -f6,8 | tr '"' ' '
+      args:
+        executable: /bin/bash
+      register: fleet_facts_gpu
+      changed_when: false
+      failed_when: false
+
+    - name: Read last apply outcome
+      ansible.builtin.slurp:
+        src: "{{ ansible_facts['env']['HOME'] }}/.cache/dotfiles/last-apply.json"
+      register: fleet_facts_last_apply
+      failed_when: false
+
+    - name: Build device facts
+      vars:
+        _placeholder_models: ["", "NA", "None", "System Product Name", "To Be Filled By O.E.M.", "Default string", "Not Specified"]
+        _dmi_model: "{{ (ansible_facts['product_name'] | default('') | trim) if (ansible_facts['product_name'] | default('') | trim) not in _placeholder_models else '' }}"
+        _dt_model: "{{ (fleet_facts_dt.content | default('') | b64decode | replace('\u0000', '') | trim) if fleet_facts_dt.content is defined else '' }}"
+        _android_model: "{{ fleet_facts_android.stdout | default('') | trim }}"
+        _vendor: "{{ ansible_facts['system_vendor'] | default('') | trim }}"
+        _cpu_list: "{{ ansible_facts['processor'] | default([]) }}"
+        _cpu: "{{ (_cpu_list | select('search', '[A-Za-z]{3,}') | reject('match', '^(GenuineIntel|AuthenticAMD|[0-9]+)$') | first | default('')) }}"
+        _last: "{{ (fleet_facts_last_apply.content | b64decode | from_json) if fleet_facts_last_apply.content is defined else {} }}"
+      ansible.builtin.set_fact:
+        fleet_facts_doc:
+          schema: 1
+          host: "{{ inventory_hostname }}"
+          updated: "{{ ansible_facts['date_time']['iso8601'] }}"
+          groups: "{{ group_names | reject('equalto', 'ungrouped') | list }}"
+          os:
+            name: "{{ ansible_facts['distribution'] | default('') }}"
+            version: "{{ ansible_facts['distribution_version'] | default('') }}"
+            codename: "{{ ansible_facts['distribution_release'] | default('') }}"
+            kernel: "{{ ansible_facts['kernel'] | default('') }}"
+          hardware:
+            vendor: "{{ '' if _vendor in _placeholder_models else _vendor }}"
+            model: "{{ _android_model or _dt_model or _dmi_model }}"
+            form_factor: "{{ ansible_facts['form_factor'] | default('') }}"
+            arch: "{{ ansible_facts['architecture'] | default('') }}"
+            cpu: "{{ _cpu | regex_replace('\\s+', ' ') | trim }}"
+            cpu_threads: "{{ ansible_facts['processor_vcpus'] | default(ansible_facts['processor_count'] | default(0)) | int }}"
+            # lspci prints bare 'Device 1111' for unnamed virtual adapters (EC2, QEMU).
+            gpus: "{{ fleet_facts_gpu.stdout_lines | default([]) | map('trim') | select | reject('match', '^(\\S+ )?Device [0-9a-fA-F]{4}$') | list }}"
+            memory_gb: "{{ ((ansible_facts['memtotal_mb'] | default(0) | int) / 1024) | round(1) }}"
+          virtualization: "{{ ansible_facts['virtualization_type'] if ansible_facts['virtualization_role'] | default('') == 'guest' else '' }}"
+          uptime_days: "{{ ((ansible_facts['uptime_seconds'] | default(0) | int) / 86400) | round(1) }}"
+          last_apply:
+            at: "{{ _last.timestamp | default(_last.at | default('')) }}"
+            ok: "{{ (_last.rc | default(_last.exit_code | default(1)) | int) == 0 if _last else '' }}"
+
+    - name: Publish facts to the fleet-facts branch
+      ansible.builtin.shell: |
+        set -euo pipefail
+        path="facts/{{ inventory_hostname }}.json"
+        sha=$(gh api "repos/{{ fleet_facts_repo }}/contents/$path?ref={{ fleet_facts_branch }}" --jq .sha 2>/dev/null || true)
+        body=$(jq -n --arg c "$FACTS_B64" --arg b "{{ fleet_facts_branch }}" --arg s "$sha" \
+          --arg m "facts: {{ inventory_hostname }}" \
+          '{message:$m, content:$c, branch:$b} + (if $s == "" then {} else {sha:$s} end)')
+        gh api -X PUT "repos/{{ fleet_facts_repo }}/contents/$path" --input - <<<"$body" --jq .commit.sha
+      args:
+        executable: /bin/bash
+      environment:
+        PATH: "{{ ansible_env_path }}"
+        FACTS_B64: "{{ fleet_facts_doc | to_nice_json | b64encode }}"
+      register: fleet_facts_put
+      changed_when: fleet_facts_put.rc == 0
+      failed_when: false
+
+    - name: Report publish failure
+      ansible.builtin.debug:
+        msg: "fleet_facts: could not publish ({{ fleet_facts_put.stderr | default('') | truncate(200) }})"
+      when: fleet_facts_put.rc | default(0) != 0

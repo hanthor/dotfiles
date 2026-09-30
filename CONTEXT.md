@@ -2,14 +2,14 @@
 
 > Created 2026-06-14 during architecture review.
 > Add terms as they are sharpened during grilling sessions or refactors.
-> This is a glossary, not a spec. Implementation details live in `docs/roles.md`, `docs/cluster.md`, and ADRs.
+> This is a glossary, not a spec. Implementation details live in `docs/src/roles/` and the cluster handbooks (`docs/src/servers/talos-k8s/cluster.md`, `docs/src/servers/aws-k8s/cluster.md`).
 
 ## Fleet
 
 - **Machine** — a physical host, VM, or VPS managed by this repo. Each has an entry in `inventory.yml` and `host_vars/<name>.yml`.
 - **Fleet** — the set of all machines.
-- **Group** — a logical subset of machines (`desktop`, `server`, `vps`, `llm`, `test_fleet`). Used by Ansible inventory groups and by `site.yml` `when:` conditionals.
-- **Hostname** — the machine's short name (e.g. `karnataka`, `bihar`). Used as the inventory hostname, Tailscale hostname, and BW item key suffix.
+- **Group** — a logical subset of machines (`desktop`, `server`, `vps`, `test_fleet`, `termux_hosts`; `llm` is dormant, commented out). Used by Ansible inventory groups and by `site.yml` `when:` conditionals.
+- **Hostname** — the machine's short name (e.g. `kanpur`, `punjab`). Used as the inventory hostname, Tailscale hostname, and BW item key suffix.
 - **Machine profile** — a proposed replacement for scattered `skip_*` flags. A single typed variable that declares a machine's role (e.g. `headless`, `desktop`, `vm-test`) and derives which components to install.
 
 ## Secrets
@@ -20,14 +20,14 @@
 
 ## Playbook
 
-- **Role** — an Ansible role that configures one concern (e.g. `shell`, `tailscale`, `proxy`). The interface is `tasks/main.yml`; the implementation is templates, files, and handlers.
+- **Role** — an Ansible role that configures one concern (e.g. `shell_dotfiles`, `tailscale`, `proxy`). The interface is `tasks/main.yml`; the implementation is templates, files, and handlers.
 - **Phase** — a logical grouping of roles in `site.yml` (Phase 1: system + packages, Phase 2: secrets + auth, Phase 3: desktop, Phase 4: services). Phases are documented in comments, not enforced by the playbook.
 - **Tag** — an Ansible tag applied to roles so `just apply-tags <tag>` can target a subset.
 
 ## Cluster
 
-- **Node** — a Talos Linux machine in the K8s cluster (`bihar` = control plane, `karnataka` = worker).
-- **Workload** — a Kubernetes deployment on the cluster (Lemonade, KubeVirt, Tailscale Operator).
+- **Node** — a Talos Linux machine in a K8s cluster. Home: `bihar` = control plane, `karnataka` = worker (powered down, expected back). AWS (`eu-north-1`): one control-plane + one worker. Neither is in `inventory.yml`.
+- **Workload** — a Kubernetes deployment on a cluster (home: Lemonade, KubeVirt, Tailscale Operator; AWS: Matrix/ESS, the Hive, CFP dashboard).
 - **Manifest** — a YAML file in `talos-k8s/` that defines a workload.
 
 ## Architecture (from improve-codebase-architecture)

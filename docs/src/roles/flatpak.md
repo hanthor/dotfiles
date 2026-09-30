@@ -17,7 +17,7 @@ Installs and manages [Flatpak](https://flatpak.org/) applications from [Flathub]
 
 ## Package List
 
-Defined in `group_vars/all.yml` as `system_flatpaks`. Key apps:
+Defined in `roles/flatpak/vars/main.yml` as `system_flatpaks` (the Flathub remote is in `flatpak_remotes`, also set in `group_vars/all.yml`). Key apps:
 
 | App | Flatpak ID |
 |-----|-----------|

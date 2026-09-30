@@ -65,12 +65,30 @@
   become: true
 
 # ── NTP time sync ─────────────────────────────────────────────────
+# Some images keep time with chrony instead (Ubuntu on EC2 uses it for the
+# Amazon Time Sync Service) and don't ship timesyncd at all — and the two
+# shouldn't both run. Only enable timesyncd when it exists and chrony isn't
+# already doing the job.
+- name: Check for chrony
+  ansible.builtin.command: systemctl is-active chrony chronyd  # noqa: command-instead-of-module
+  register: server_hardening_chrony
+  changed_when: false
+  failed_when: false
+
+- name: Check for systemd-timesyncd
+  ansible.builtin.stat:
+    path: /usr/lib/systemd/systemd-timesyncd
+  register: server_hardening_timesyncd
+
 - name: Enable systemd-timesyncd
   ansible.builtin.systemd:
     name: systemd-timesyncd
     enabled: true
     state: started
   become: true
+  when:
+    - server_hardening_timesyncd.stat.exists
+    - "'active' not in server_hardening_chrony.stdout_lines"
 
 # ── SSH rate limiting ─────────────────────────────────────────────
 - name: Harden SSH rate limits

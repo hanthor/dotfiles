@@ -4,7 +4,10 @@
 Mirror of register-machine.py. Does NOT touch Bitwarden — the SSH key item
 named `james@<name>` is left intact so you can re-onboard the same name later.
 """
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from inventory_parser import purge_host
 
 name = sys.argv[1]
