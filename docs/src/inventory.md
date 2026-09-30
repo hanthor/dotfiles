@@ -83,7 +83,6 @@ expected back. The AWS cluster's nodes are likewise not in the inventory.
 Each machine has a `host_vars/<name>.yml` file with common knobs:
 
 ```yaml
-is_arm: false          # ARM architecture
 is_laptop: true        # Laptop (runs on login, not timer)
 skip_flatpak: true     # Skip Flatpak installs
 skip_gnome: true       # Skip GNOME config

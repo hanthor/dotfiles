@@ -128,7 +128,7 @@ onboard name type="desktop":
     python3 scripts/register-machine.py {{ name }} {{ type }} inventory.yml
 
     if [ ! -f "host_vars/{{ name }}.yml" ]; then
-      echo "is_arm: false" > "host_vars/{{ name }}.yml"
+      echo "---" > "host_vars/{{ name }}.yml"
     fi
 
     git add inventory.yml host_vars/{{ name }}.yml
@@ -337,7 +337,7 @@ add-machine name type="desktop":
       echo "→ Registering {{ name }} ({{ type }}) in inventory..."
       python3 scripts/register-machine.py {{ name }} {{ type }} inventory.yml
       if [ ! -f "host_vars/{{ name }}.yml" ]; then
-        echo "is_arm: false" > "host_vars/{{ name }}.yml"
+        echo "---" > "host_vars/{{ name }}.yml"
       fi
       git add inventory.yml "host_vars/{{ name }}.yml"
       git diff --cached --quiet || git commit -m "inventory: add {{ name }} ({{ type }})"

@@ -1,4 +1,3 @@
-is_arm: false
 extra_brews:
   - ublue-os/experimental-tap/rocm-smi-lib
 extra_authorized_keys:
