@@ -67,7 +67,7 @@ spec:
             seccompProfile: {type: RuntimeDefault}
           containers:
             - name: idle-stop
-              image: alpine/k8s:1.36.4
+              image: alpine/k8s:1.37.1
               securityContext:
                 allowPrivilegeEscalation: false
                 capabilities: {drop: ["ALL"]}

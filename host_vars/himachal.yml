@@ -1,5 +1,4 @@
 ---
-is_arm: false
 is_laptop: true
 dotfiles_update_delay_seconds: 90
 # Keep login responsive; run `just apply-nosecrets` manually when desired.

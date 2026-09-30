@@ -11,7 +11,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: local-storage
   hostPath:
-    path: /var/tmp/lemonade-cache
+    path: /var/lib/lemonade-cache
     type: DirectoryOrCreate
   nodeAffinity:
     required:
@@ -35,7 +35,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: local-storage
   hostPath:
-    path: /var/tmp/lemonade-models
+    path: /var/lib/lemonade-models
     type: DirectoryOrCreate
   nodeAffinity:
     required:

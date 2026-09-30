@@ -52,7 +52,7 @@ spec:
             secretKeyRef:
               key: token
               name: github-token
-        image: python:3.12-slim
+        image: python:3.14-slim
         resources:
           limits:
             cpu: 500m
@@ -121,7 +121,7 @@ spec:
       script:
         command:
         - bash
-        image: python:3.12-slim
+        image: python:3.14-slim
         resources:
           limits:
             cpu: 500m

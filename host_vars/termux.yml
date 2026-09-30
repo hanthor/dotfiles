@@ -16,7 +16,6 @@ ansible_scp_if_ssh: true
 # detection at its source, not just its symptoms.
 ansible_shell_executable: /data/data/com.termux/files/usr/bin/bash
 ansible_python_interpreter: /data/data/com.termux/files/usr/bin/python3
-is_arm: true
 is_laptop: false
 machine_profile: cli-only
 

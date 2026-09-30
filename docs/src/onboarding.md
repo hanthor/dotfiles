@@ -39,7 +39,7 @@ just add-machine <name> <type>
 
 This:
 1. If the machine isn't in `inventory.yml` yet, adds it (`ansible_host: localhost`, `ansible_connection: local`) and puts it in the `<type>` group
-2. Creates `host_vars/<name>.yml` containing just `is_arm: false` — edit it afterwards
+2. Creates an empty `host_vars/<name>.yml` — add per-machine knobs there afterwards
 3. Commits and pushes
 4. SSHes in (`ssh -t <name>`) and runs `bootstrap.sh --name <name> --type <type>` there — the same bootstrap as Path B
 

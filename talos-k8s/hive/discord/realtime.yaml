@@ -61,7 +61,7 @@ spec:
               value: "2"
             - name: REALTIME_BEAD_POLL
               value: "false"
-          image: python:3.12-slim
+          image: python:3.14-slim
           imagePullPolicy: IfNotPresent
           name: bridge
           ports:

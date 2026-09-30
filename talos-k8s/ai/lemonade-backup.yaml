@@ -1,0 +1,284 @@
+# Weekly backup of the Lemonade models + HF cache PVCs to bihar (dotfiles#27).
+#
+# All Lemonade models live on a single NVMe in karnataka. If that drive
+# fails, 100+ GB of downloaded models are gone and must be re-fetched from
+# Hugging Face — gated on HF availability and token validity, and slow for
+# large (10-60+ GB) models.
+#
+# Mirrors the verification discipline in talos-k8s/backup/postgres-backup.yaml:
+# don't trust a copy's exit code alone, assert something about the result,
+# and fail loud rather than succeed silently on a partial copy.
+#
+# Runs pinned to karnataka (where the source PVCs are — local-storage PVs are
+# node-local, so a pod mounting them cannot run anywhere else) and pushes over
+# SSH to bihar, rather than mounting a destination hostPath in the same pod —
+# bihar's own local-storage PV would only be schedulable on bihar, so the two
+# can't share a pod.
+#
+# MANUAL PREREQUISITES — this PR cannot provision these itself:
+#   - An SSH keypair for this job to authenticate to bihar as some backup
+#     user, with a `known_hosts` entry for bihar. Seed as a `kubernetes.io/ssh-auth`
+#     Secret named `lemonade-backup-ssh` (keys: ssh-privatekey, known_hosts)
+#     in the `default` namespace on the home cluster.
+#   - `/var/lib/lemonade-backup` (or wherever) exists on bihar with enough free
+#     space for a ~100GB+ mirror, owned by that backup user.
+#   - The `fleet-alerts` secret (NTFY_TOPIC/DISCORD_BOT_TOKEN/DISCORD_CHANNEL)
+#     used by talos-k8s/hive/ jobs on the AWS cluster does NOT exist on the
+#     home cluster by default — this job degrades to a log warning if it's
+#     absent, so alerts silently do nothing until it's created here too.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: lemonade-backup
+  namespace: default
+spec:
+  schedule: "30 3 * * 0"          # weekly, Sunday 03:30 UTC
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid        # a ~100GB rsync must never overlap itself
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 7
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: karnataka
+          containers:
+            - name: backup
+              image: instrumentisto/rsync-ssh:latest
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  mkdir -p ~/.ssh
+                  cp /ssh/ssh-privatekey ~/.ssh/id_ed25519
+                  cp /ssh/known_hosts ~/.ssh/known_hosts
+                  chmod 600 ~/.ssh/id_ed25519
+                  chmod 644 ~/.ssh/known_hosts
+
+                  STAMP="$(date -u +%Y-%m-%d)"
+                  DEST_BASE="${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}:${BACKUP_REMOTE_PATH}"
+                  DEST="${DEST_BASE}/${STAMP}"
+
+                  notify() {   # $1=priority $2=title $3=body
+                    sent=0
+                    if [ -n "${DISCORD_BOT_TOKEN:-}" ] && [ -n "${DISCORD_CHANNEL:-}" ] && command -v curl >/dev/null 2>&1; then
+                      payload=$(printf '{"content":"**%s**\\n%s"}' "$2" "$3")
+                      curl -fsS --max-time 25 -X POST \
+                        -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+                        -H "Content-Type: application/json" \
+                        -d "$payload" \
+                        "https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages" >/dev/null 2>&1 && sent=1
+                    fi
+                    if [ -n "${NTFY_TOPIC:-}" ] && command -v curl >/dev/null 2>&1; then
+                      curl -fsS --max-time 15 \
+                        -H "Title: $2" -H "Priority: $1" -H "Tags: floppy_disk" \
+                        -d "$3" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null 2>&1 && sent=1
+                    fi
+                    [ "$sent" = 1 ] || echo "WARNING: could not deliver alert (fleet-alerts secret missing or unreachable): $2: $3" >&2
+                  }
+                  fail() {
+                    notify urgent "Lemonade backup FAILED" "$1"
+                    exit 1
+                  }
+                  trap 'fail "unexpected error on line $LINENO"' ERR
+
+                  ssh -o StrictHostKeyChecking=yes "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" \
+                    "mkdir -p '${BACKUP_REMOTE_PATH}/${STAMP}/models' '${BACKUP_REMOTE_PATH}/${STAMP}/cache'" \
+                    || fail "could not create remote destination on bihar (SSH/auth broken?)"
+
+                  # --checksum (not just size/mtime) since these are large
+                  # binary GGUF files fetched once and never touched again —
+                  # a partial/corrupt prior sync would otherwise look "done".
+                  # rsync's own exit code is trustworthy here (no pipe to mask it).
+                  rsync -a --checksum --delete -e ssh /models/ "${DEST}/models/" \
+                    || fail "rsync of models PVC to bihar failed"
+                  rsync -a --checksum --delete -e ssh /cache/ "${DEST}/cache/" \
+                    || fail "rsync of cache PVC to bihar failed"
+
+                  # Verify: something actually landed on the remote, not just
+                  # a mkdir that succeeded while the sync silently no-op'd.
+                  COUNT=$(ssh "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" "find '${DEST}/models' -type f | wc -l") \
+                    || fail "could not verify remote file count after sync"
+                  [ "$COUNT" -gt 0 ] || fail "backup produced zero files under ${DEST}/models — source mount likely empty/failed"
+
+                  SIZE=$(ssh "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" "du -sh '${DEST}' | cut -f1") || SIZE="unknown"
+
+                  # Retention: keep 4 weekly snapshots (~1 month) on bihar.
+                  ssh "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" \
+                    "cd '${BACKUP_REMOTE_PATH}' && ls -1d 20* 2>/dev/null | sort | head -n -4 | xargs -r rm -rf" \
+                    || echo "WARNING: retention cleanup on bihar failed (non-fatal)" >&2
+
+                  KEPT=$(ssh "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" "cd '${BACKUP_REMOTE_PATH}' && ls -1d 20* 2>/dev/null | wc -l") || KEPT="unknown"
+                  trap - ERR
+                  notify default "Lemonade backup ok" \
+                    "${STAMP}: ${SIZE} synced (${COUNT} model files) to bihar, ${KEPT} week(s) retained"
+                  echo "backup complete: ${DEST} (${SIZE}), ${KEPT} retained on bihar"
+              env:
+                - name: BACKUP_SSH_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: lemonade-backup-ssh
+                      key: username
+                - name: BACKUP_SSH_HOST
+                  value: bihar.manatee-basking.ts.net
+                - name: BACKUP_REMOTE_PATH
+                  value: /var/lib/lemonade-backup
+                - name: NTFY_TOPIC
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: NTFY_TOPIC
+                      optional: true
+                - name: DISCORD_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: DISCORD_BOT_TOKEN
+                      optional: true
+                - name: DISCORD_CHANNEL
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: DISCORD_CHANNEL
+                      optional: true
+              volumeMounts:
+                - name: models-volume
+                  mountPath: /models
+                  readOnly: true
+                - name: cache-volume
+                  mountPath: /cache
+                  readOnly: true
+                - name: ssh-creds
+                  mountPath: /ssh
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+          volumes:
+            - name: models-volume
+              persistentVolumeClaim:
+                claimName: lemonade-models
+                readOnly: true
+            - name: cache-volume
+              persistentVolumeClaim:
+                claimName: lemonade-cache
+                readOnly: true
+            - name: ssh-creds
+              secret:
+                secretName: lemonade-backup-ssh
+                items:
+                  - key: ssh-privatekey
+                    path: ssh-privatekey
+                  - key: known_hosts
+                    path: known_hosts
+---
+# Dead-man's switch, same rationale as postgres-backup-staleness: a job that
+# never runs emits no error, so silence needs to be made loud on a timer.
+# Runs on karnataka too, since it authenticates to bihar the same way.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: lemonade-backup-staleness
+  namespace: default
+spec:
+  schedule: "0 9 * * 0"           # ~5.5h after the backup window
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: karnataka
+          containers:
+            - name: check
+              image: instrumentisto/rsync-ssh:latest
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  mkdir -p ~/.ssh
+                  cp /ssh/ssh-privatekey ~/.ssh/id_ed25519
+                  cp /ssh/known_hosts ~/.ssh/known_hosts
+                  chmod 600 ~/.ssh/id_ed25519
+                  chmod 644 ~/.ssh/known_hosts
+
+                  alert() {
+                    if [ -n "${DISCORD_BOT_TOKEN:-}" ] && [ -n "${DISCORD_CHANNEL:-}" ] && command -v curl >/dev/null 2>&1; then
+                      curl -fsS --max-time 25 -X POST \
+                        -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+                        -H "Content-Type: application/json" \
+                        -d "$(printf '{"content":"**Lemonade backup STALE**\\n%s"}' "$1")" \
+                        "https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages" >/dev/null 2>&1
+                    fi
+                    if [ -n "${NTFY_TOPIC:-}" ] && command -v curl >/dev/null 2>&1; then
+                      curl -fsS --max-time 15 \
+                        -H "Title: Lemonade backup STALE" -H "Priority: urgent" \
+                        -d "$1" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null 2>&1
+                    fi
+                    echo "STALE: $1" >&2
+                    exit 1
+                  }
+
+                  NEWEST=$(ssh -o StrictHostKeyChecking=yes "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" \
+                    "cd '${BACKUP_REMOTE_PATH}' && ls -1d 20* 2>/dev/null | sort | tail -1") \
+                    || alert "could not reach bihar to check backup staleness (SSH/auth broken?)"
+
+                  [ -n "$NEWEST" ] || alert "no Lemonade backup snapshot exists on bihar at all"
+                  NOW=$(date +%s)
+                  AGE_DAYS=$(( (NOW - $(date -d "$NEWEST" +%s 2>/dev/null || echo "$NOW")) / 86400 ))
+                  [ "$AGE_DAYS" -le 9 ] || alert "newest Lemonade backup is ${AGE_DAYS}d old (>9d, weekly job should refresh every 7d)"
+                  echo "ok: newest backup is ${AGE_DAYS}d old"
+              env:
+                - name: BACKUP_SSH_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: lemonade-backup-ssh
+                      key: username
+                - name: BACKUP_SSH_HOST
+                  value: bihar.manatee-basking.ts.net
+                - name: BACKUP_REMOTE_PATH
+                  value: /var/lib/lemonade-backup
+                - name: NTFY_TOPIC
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: NTFY_TOPIC
+                      optional: true
+                - name: DISCORD_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: DISCORD_BOT_TOKEN
+                      optional: true
+                - name: DISCORD_CHANNEL
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-alerts
+                      key: DISCORD_CHANNEL
+                      optional: true
+              volumeMounts:
+                - name: ssh-creds
+                  mountPath: /ssh
+                  readOnly: true
+          volumes:
+            - name: ssh-creds
+              secret:
+                secretName: lemonade-backup-ssh
+                items:
+                  - key: ssh-privatekey
+                    path: ssh-privatekey
+                  - key: known_hosts
+                    path: known_hosts

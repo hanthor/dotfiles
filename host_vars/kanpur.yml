@@ -1,4 +1,3 @@
-is_arm: false
 is_laptop: true
 dotfiles_update_delay_seconds: 90
 web_services:
