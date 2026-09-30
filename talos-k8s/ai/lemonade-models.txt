@@ -1,0 +1,30 @@
+# Canonical list of "essential" Lemonade models to pre-download (dotfiles#28).
+#
+# One model ID per line (matching the exact catalog ID from
+# `GET /v1/models?show_all=true`), consumed by lemonade-warmup.sh. Blank
+# lines and lines starting with # are ignored.
+#
+# Selection: models the catalog itself already marks "hot" in
+# lemonade-ops.md, i.e. observed as frequently used — not a fresh guess.
+# All 8 "hot" models total ~142GB, which does not fit the 100Gi models PVC
+# (talos-k8s/ai/lemonade.yaml), so this list picks one strong model per
+# capability class instead of every hot model. Revisit if the PVC grows
+# (dotfiles#26 discussion) or usage patterns shift.
+
+# Coding / tool-calling — the daily-driver for opencode/pi-coding-agent use
+# (see dotfiles#1). Qwen3-Coder-Next is hot but 48GB; the 30B variant covers
+# most coding tasks at a third of the size.
+Qwen3-Coder-30B-A3B-Instruct-GGUF     # 18.6 GB — coding, tool-calling, hot
+
+# General chat / reasoning with vision + tool-calling, hot and mid-size.
+Gemma-4-26B-A4B-it-GGUF               # 18.1 GB — hot, tool-calling, vision
+
+# Fast general chat for latency-sensitive use.
+Qwen3.5-4B-GGUF                       # 3.6 GB — vision, tool-calling, hot
+
+# Transcription — hot and an order of magnitude smaller than Whisper-Large-v3.
+Whisper-Large-v3-Turbo                # 1.6 GB — transcription, realtime-transcription, hot
+
+# Embeddings — not marked hot in the catalog, but essential for anything
+# doing retrieval/search locally, and negligible size.
+nomic-embed-text-v1-GGUF              # 0.1 GB — embeddings
