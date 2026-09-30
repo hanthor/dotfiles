@@ -253,7 +253,7 @@ open(path, "w").write(content)
 PYEOF
 
   if [ ! -f "$DOTFILES_DIR/host_vars/$MACHINE_NAME.yml" ]; then
-    echo "is_arm: false" > "$DOTFILES_DIR/host_vars/$MACHINE_NAME.yml"
+    echo "---" > "$DOTFILES_DIR/host_vars/$MACHINE_NAME.yml"
   fi
 
   INVENTORY_MODIFIED=true
