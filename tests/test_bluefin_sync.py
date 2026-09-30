@@ -1,20 +1,21 @@
 """Unit tests for bluefin-sync.py — gsettings/dconf configuration application.
 
 Tests the pure functions and error-handling paths without requiring actual
-gsettings/dconf/gschema infrastructure.
+gsettings/dconf/gschema infrastructure. All Homebrew Ansible-copied files use
+hyphens (bluefin-sync.py, not bluefin_sync.py), which isn't an importable
+module name, so it's loaded via importlib like talos-k8s/hive/discord/report.py.
 """
-import subprocess
-import tempfile
-from pathlib import Path
+import importlib.util
 from unittest import mock
 
 import pytest
 
+from conftest import REPO
 
-# Import the module we're testing (adjust path as needed)
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent / "roles/bluefin_common/files"))
-import bluefin_sync
+SRC = REPO / "roles/bluefin_common/files/bluefin-sync.py"
+spec = importlib.util.spec_from_file_location("bluefin_sync", SRC)
+bluefin_sync = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(bluefin_sync)
 
 
 class TestRunCmd:
@@ -40,243 +41,188 @@ class TestRunCmd:
 class TestApplyGschemaOverride:
     """Tests for gschema override file application."""
 
-    @pytest.fixture
-    def sample_override_file(self):
-        """Create a temporary gschema override file."""
-        content = """[org.gnome.shell]
-enabled-extensions=['dash-to-dock@micxjo.gmail.com', 'blur-my-shell@aunetx']
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.gschema.override', delete=False) as f:
-            f.write(content)
-            f.flush()
-            yield Path(f.name)
-        Path(f.name).unlink()
-
-    def test_apply_gschema_override_parses_schema_id(self, sample_override_file):
-        """Parses schema ID from [schema.id] section header."""
-        with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-            mock_run.return_value = mock.MagicMock(returncode=0, stdout="", stderr="")
-            bluefin_sync.apply_gschema_override(str(sample_override_file))
-            # Verify that run_cmd was called (gsettings set would be invoked)
-            assert mock_run.called
-
-    def test_apply_gschema_override_skips_comments(self):
-        """Skips comment lines in gschema file."""
-        content = """# This is a comment
-[org.gnome.shell]
-# Another comment
-enabled-extensions=['test']
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.gschema.override', delete=False) as f:
-            f.write(content)
-            f.flush()
-            with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-                mock_run.return_value = mock.MagicMock(returncode=0, stdout="", stderr="")
-                bluefin_sync.apply_gschema_override(str(f.name))
-                assert mock_run.called
-            Path(f.name).unlink()
-
-    def test_apply_gschema_override_handles_empty_file(self):
-        """Handles empty gschema file gracefully."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.gschema.override', delete=False) as f:
-            f.write("")
-            f.flush()
-            with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-                mock_run.return_value = mock.MagicMock(returncode=0, stdout="", stderr="")
-                # Should not raise
-                bluefin_sync.apply_gschema_override(str(f.name))
-            Path(f.name).unlink()
-
-    def test_apply_gschema_override_multiple_sections(self):
-        """Handles multiple schema sections in one file."""
-        content = """[org.gnome.shell]
-enabled-extensions=['ext1']
-
-[org.gnome.desktop.interface]
-gtk-theme='adwaita'
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.gschema.override', delete=False) as f:
-            f.write(content)
-            f.flush()
-            with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-                mock_run.return_value = mock.MagicMock(returncode=0, stdout="", stderr="")
-                bluefin_sync.apply_gschema_override(str(f.name))
-                # Should be called for each setting
-                assert mock_run.call_count >= 2
-            Path(f.name).unlink()
-
-
-class TestApplyDconfProfile:
-    """Tests for dconf profile file application."""
-
-    def test_apply_dconf_profile_reads_file(self):
-        """Reads dconf profile file."""
-        content = """[/org/gnome/shell/]
-enabled-extensions=['test']
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.profile', delete=False) as f:
-            f.write(content)
-            f.flush()
-            with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-                mock_run.return_value = mock.MagicMock(returncode=0, stdout="", stderr="")
-                bluefin_sync.apply_dconf_profile(str(f.name))
-                assert mock_run.called
-            Path(f.name).unlink()
-
-    def test_apply_dconf_profile_empty_file(self):
-        """Handles empty dconf profile gracefully."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.profile', delete=False) as f:
-            f.write("")
-            f.flush()
-            with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-                mock_run.return_value = mock.MagicMock(returncode=0, stdout="", stderr="")
-                bluefin_sync.apply_dconf_profile(str(f.name))
-            Path(f.name).unlink()
-
-
-class TestApplyDconfDefaults:
-    """Tests for dconf defaults database."""
-
-    def test_apply_dconf_defaults_compilation(self):
-        """Compiles dconf defaults database."""
-        content = """[org/gnome/shell]
-enabled-extensions=['test']
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.gschema', delete=False) as f:
-            f.write(content)
-            f.flush()
-            with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-                mock_run.return_value = mock.MagicMock(returncode=0, stdout="", stderr="")
-                bluefin_sync.apply_dconf_defaults(str(f.name))
-                # dconf update should be called
-                assert mock_run.called
-            Path(f.name).unlink()
-
-    def test_apply_dconf_defaults_handles_missing_file(self):
-        """Handles gracefully when dconf defaults don't exist."""
-        with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-            mock_run.return_value = mock.MagicMock(returncode=1, stdout="", stderr="File not found")
-            with pytest.raises((FileNotFoundError, OSError)):
-                bluefin_sync.apply_dconf_defaults("/nonexistent/defaults.d/99-bluefin")
-
-
-class TestConfigParsing:
-    """Tests for INI/override file parsing."""
-
-    def test_parse_gschema_override_simple(self):
-        """Parses simple gschema override."""
-        content = """[org.gnome.shell]
-enabled-extensions=['ext1', 'ext2']
-favorite-apps=['app1', 'app2']
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.override', delete=False) as f:
-            f.write(content)
-            f.flush()
-            # Verify file is readable and has expected content
-            text = Path(f.name).read_text()
-            assert 'org.gnome.shell' in text
-            assert 'enabled-extenss' in text
-            Path(f.name).unlink()
-
-    def test_parse_gschema_override_with_special_chars(self):
-        """Parses gschema with special characters in values."""
-        content = """[org.gnome.desktop.interface]
-font-name='DejaVu Sans 11'
-gtk-theme='Adwaita'
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.override', delete=False) as f:
-            f.write(content)
-            f.flush()
-            text = Path(f.name).read_text()
-            assert 'DejaVu Sans 11' in text
-            Path(f.name).unlink()
-
-    def test_parse_gschema_override_array_values(self):
-        """Parses array-type values in gschema."""
-        content = """[org.gnome.shell]
-enabled-extensions=['extension-1@example.com', 'extension-2@example.com']
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.override', delete=False) as f:
-            f.write(content)
-            f.flush()
-            text = Path(f.name).read_text()
-            assert 'extension-1@example.com' in text
-            assert 'extension-2@example.com' in text
-            Path(f.name).unlink()
-
-
-class TestErrorHandling:
-    """Tests for error conditions and edge cases."""
-
-    def test_run_cmd_with_failing_gsettings(self):
-        """Handles gsettings command failures."""
-        with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-            mock_run.return_value = mock.MagicMock(
-                returncode=1,
-                stderr="Could not connect to system dbus"
+    def test_parses_schema_id_and_calls_gsettings(self, tmp_path):
+        """Parses the [schema.id] section header and calls gsettings set for each key."""
+        override = tmp_path / "zz0-bluefin-modifications.gschema.override"
+        override.write_text(
+            "[org.gnome.desktop.interface]\n"
+            "gtk-theme='Adwaita'\n"
+        )
+        with mock.patch.object(bluefin_sync, "run_cmd") as mock_run:
+            mock_run.return_value = mock.MagicMock(returncode=0, stderr="")
+            bluefin_sync.apply_gschema_override(str(override))
+            mock_run.assert_called_once_with(
+                ["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", "'Adwaita'"]
             )
-            result = bluefin_sync.run_cmd(['gsettings', 'set', 'test', 'test', 'value'])
-            assert result.returncode != 0
 
-    def test_apply_gschema_override_with_missing_file(self):
-        """Raises error for missing gschema file."""
+    def test_skips_comment_and_blank_lines(self, tmp_path):
+        """Comment and blank lines inside a section are not applied."""
+        override = tmp_path / "test.gschema.override"
+        override.write_text(
+            "[org.gnome.shell]\n"
+            "# a comment\n"
+            "\n"
+            "favorite-apps=['app1']\n"
+        )
+        with mock.patch.object(bluefin_sync, "run_cmd") as mock_run:
+            mock_run.return_value = mock.MagicMock(returncode=0, stderr="")
+            bluefin_sync.apply_gschema_override(str(override))
+            assert mock_run.call_count == 1
+            mock_run.assert_called_once_with(
+                ["gsettings", "set", "org.gnome.shell", "favorite-apps", "['app1']"]
+            )
+
+    def test_handles_empty_file(self, tmp_path):
+        """An override file with no sections applies nothing and does not raise."""
+        override = tmp_path / "empty.gschema.override"
+        override.write_text("")
+        with mock.patch.object(bluefin_sync, "run_cmd") as mock_run:
+            bluefin_sync.apply_gschema_override(str(override))
+            mock_run.assert_not_called()
+
+    def test_multiple_sections_each_applied(self, tmp_path):
+        """Each [schema.id] section's keys are applied independently."""
+        override = tmp_path / "multi.gschema.override"
+        override.write_text(
+            "[org.gnome.shell]\n"
+            "enabled-extensions=['ext1']\n"
+            "\n"
+            "[org.gnome.desktop.interface]\n"
+            "gtk-theme='Adwaita'\n"
+        )
+        with mock.patch.object(bluefin_sync, "run_cmd") as mock_run:
+            mock_run.return_value = mock.MagicMock(returncode=0, stderr="")
+            bluefin_sync.apply_gschema_override(str(override))
+            assert mock_run.call_count == 2
+
+    def test_redirects_system_background_path_to_local(self, tmp_path):
+        """A /usr/share/backgrounds/bluefin value is rewritten under ~/.local/share."""
+        override = tmp_path / "bg.gschema.override"
+        override.write_text(
+            "[org.gnome.desktop.background]\n"
+            "picture-uri='file:///usr/share/backgrounds/bluefin/foo.webp'\n"
+        )
+        with mock.patch.object(bluefin_sync, "run_cmd") as mock_run:
+            mock_run.return_value = mock.MagicMock(returncode=0, stderr="")
+            bluefin_sync.apply_gschema_override(str(override))
+            args = mock_run.call_args[0][0]
+            value = args[-1]
+            assert "/usr/share/backgrounds/bluefin" not in value
+            assert ".local/share/backgrounds/bluefin" in value
+
+    def test_adds_caffeine_to_enabled_extensions_when_missing(self, tmp_path):
+        """caffeine@patapon.info is appended when enabled-extensions omits it."""
+        override = tmp_path / "ext.gschema.override"
+        override.write_text(
+            "[org.gnome.shell]\n"
+            "enabled-extensions=['dash-to-dock@micxjo.gmail.com']\n"
+        )
+        with mock.patch.object(bluefin_sync, "run_cmd") as mock_run:
+            mock_run.return_value = mock.MagicMock(returncode=0, stderr="")
+            bluefin_sync.apply_gschema_override(str(override))
+            args = mock_run.call_args[0][0]
+            value = args[-1]
+            assert "caffeine@patapon.info" in value
+            assert "dash-to-dock@micxjo.gmail.com" in value
+
+    def test_does_not_duplicate_caffeine_when_already_present(self, tmp_path):
+        """caffeine@patapon.info is left alone (not duplicated) when already listed."""
+        override = tmp_path / "ext2.gschema.override"
+        override.write_text(
+            "[org.gnome.shell]\n"
+            "enabled-extensions=['caffeine@patapon.info']\n"
+        )
+        with mock.patch.object(bluefin_sync, "run_cmd") as mock_run:
+            mock_run.return_value = mock.MagicMock(returncode=0, stderr="")
+            bluefin_sync.apply_gschema_override(str(override))
+            args = mock_run.call_args[0][0]
+            value = args[-1]
+            assert value.count("caffeine@patapon.info") == 1
+
+    def test_malformed_enabled_extensions_value_does_not_raise(self, tmp_path):
+        """A value that ast.literal_eval can't parse still results in a gsettings call, unpatched."""
+        override = tmp_path / "bad.gschema.override"
+        override.write_text(
+            "[org.gnome.shell]\n"
+            "enabled-extensions=not a python literal\n"
+        )
+        with mock.patch.object(bluefin_sync, "run_cmd") as mock_run:
+            mock_run.return_value = mock.MagicMock(returncode=0, stderr="")
+            # Should not raise even though ast.literal_eval fails internally.
+            bluefin_sync.apply_gschema_override(str(override))
+            mock_run.assert_called_once()
+
+    def test_missing_file_raises_file_not_found(self):
+        """A nonexistent override path raises FileNotFoundError from open()."""
         with pytest.raises(FileNotFoundError):
-            bluefin_sync.apply_gschema_override("/nonexistent/file.override")
+            bluefin_sync.apply_gschema_override("/nonexistent/file.gschema.override")
 
-    def test_apply_gschema_override_with_invalid_path(self):
-        """Raises error for invalid path."""
-        with pytest.raises((FileNotFoundError, OSError, IsADirectoryError)):
-            bluefin_sync.apply_gschema_override("/tmp/")
+    def test_directory_path_raises(self, tmp_path):
+        """Passing a directory instead of a file raises (IsADirectoryError)."""
+        with pytest.raises((IsADirectoryError, OSError)):
+            bluefin_sync.apply_gschema_override(str(tmp_path))
 
-    def test_dconf_connection_failure_handled(self):
-        """Handles dconf connection failures."""
-        with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-            # Simulate dconf daemon not running
-            mock_run.return_value = mock.MagicMock(
-                returncode=1,
-                stderr="Cannot find dconf database"
-            )
-            result = bluefin_sync.run_cmd(['dconf', 'dump', '/'])
-            assert result.returncode != 0
+    def test_logs_warning_when_gsettings_fails(self, tmp_path, capsys):
+        """A non-zero gsettings return code is reported, not raised."""
+        override = tmp_path / "fail.gschema.override"
+        override.write_text(
+            "[org.gnome.shell]\n"
+            "favorite-apps=['app1']\n"
+        )
+        with mock.patch.object(bluefin_sync, "run_cmd") as mock_run:
+            mock_run.return_value = mock.MagicMock(returncode=1, stderr="Could not connect to system dbus")
+            bluefin_sync.apply_gschema_override(str(override))
+        captured = capsys.readouterr()
+        assert "Warning" in captured.out
+        assert "Could not connect to system dbus" in captured.out
 
 
-class TestIntegrationScenarios:
-    """Integration-level scenarios testing multiple functions together."""
+class TestApplyDconfKeyfile:
+    """Tests for the dconf keyfile loader."""
 
-    def test_apply_both_gschema_and_dconf(self):
-        """Applies both gschema and dconf configurations."""
-        gschema_content = """[org.gnome.shell]
-enabled-extensions=['test']
-"""
-        dconf_content = """[/org/gnome/desktop/interface/]
-gtk-theme='Adwaita'
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.gschema.override', delete=False) as gf:
-            gf.write(gschema_content)
-            gf.flush()
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dconf', delete=False) as df:
-                df.write(dconf_content)
-                df.flush()
-                with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-                    mock_run.return_value = mock.MagicMock(returncode=0, stdout="", stderr="")
-                    bluefin_sync.apply_gschema_override(str(gf.name))
-                    bluefin_sync.apply_dconf_profile(str(df.name))
-                    assert mock_run.call_count >= 2
-                Path(gf.name).unlink()
-                Path(df.name).unlink()
+    def test_loads_file_into_dconf(self, tmp_path):
+        """The keyfile's contents are piped into `dconf load /` via stdin."""
+        keyfile = tmp_path / "01-bluefin"
+        keyfile.write_text("[/org/gnome/desktop/interface/]\ngtk-theme='Adwaita'\n")
+        with mock.patch("subprocess.run") as mock_run:
+            bluefin_sync.apply_dconf_keyfile(str(keyfile))
+            assert mock_run.called
+            args, kwargs = mock_run.call_args
+            assert args[0] == ["dconf", "load", "/"]
+            assert "stdin" in kwargs
 
-    def test_configuration_order_independence(self):
-        """Configuration settings can be applied in any order."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.override', delete=False) as f:
-            f.write("""[org.gnome.shell]
-setting-a=1
-setting-b=2
-setting-c=3
-""")
-            f.flush()
-            with mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
-                mock_run.return_value = mock.MagicMock(returncode=0, stdout="", stderr="")
-                bluefin_sync.apply_gschema_override(str(f.name))
-                # All settings should be applied
-                assert mock_run.called
-            Path(f.name).unlink()
+    def test_missing_keyfile_raises(self):
+        """A nonexistent keyfile path raises FileNotFoundError from open()."""
+        with pytest.raises(FileNotFoundError):
+            bluefin_sync.apply_dconf_keyfile("/nonexistent/dconf/01-bluefin")
+
+
+class TestMainEntryPoint:
+    """Tests for the CLI entry point's file-discovery logic (module executed as __main__)."""
+
+    def test_no_args_prints_usage_and_exits(self):
+        """Running the script with no sync-dir argument exits non-zero."""
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [sys.executable, str(SRC)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert "Usage" in result.stdout
+
+    def test_missing_sync_dir_files_are_skipped_without_error(self, tmp_path):
+        """An empty sync dir (no override file, no dconf dir) exits cleanly."""
+        import subprocess
+        import sys
+
+        empty_dir = tmp_path / "empty-sync"
+        empty_dir.mkdir()
+        result = subprocess.run(
+            [sys.executable, str(SRC), str(empty_dir)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
