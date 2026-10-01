@@ -1,0 +1,611 @@
+# Spoke 'school' (namespace hive), exported from the AWS Talos cluster on 2026-10-01.
+# Secrets are NOT here (hive-secrets etc. are created out of band).
+# The hive container image is owned by the hive-operator HiveRelease controller;
+# see ../README.md before applying.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    hive.tunaos.org/previous-image: ghcr.io/hivecommons/hive:v5.105.10@sha256:6bcfc09e7fcfd10ca128d4ac7f9c41bea44bb32e4f92d088812e7892a9762de0
+    hive.tunaos.org/previous-version: v5.105.10
+    hive.tunaos.org/upgraded-at: "2026-10-01T14:08:19Z"
+    hive.tunaos.org/version: v6-459e63d58696
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: hive
+  name: hive
+  namespace: hive
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hive
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/name: hive
+    spec:
+      containers:
+        - args:
+            - --config
+            - /etc/hive/hive.yaml
+          env:
+            - name: META_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: META_API_KEY
+                  name: hive-secrets
+            - name: HIVE_DASHBOARD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: HIVE_DASHBOARD_TOKEN
+                  name: hive-secrets
+                  optional: true
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: DEEPSEEK_API_KEY
+                  name: hive-secrets
+            - name: HIVE_HUB_URL
+              value: https://hub.tunaos.org
+            - name: HIVE_HUB_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: HIVE_HUB_SECRET
+                  name: hive-secrets
+                  optional: true
+            - name: GH_APP_ID
+              value: "3942065"
+            - name: GH_APP_INSTALLATION_ID
+              value: "137498420"
+            - name: GH_APP_KEY_FILE
+              value: /secrets/gh-app-key.pem
+            - name: NTFY_TOPIC
+              valueFrom:
+                secretKeyRef:
+                  key: NTFY_TOPIC
+                  name: hive-secrets
+                  optional: true
+            - name: KIRO_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: KIRO_API_KEY
+                  name: kiro-api
+                  optional: true
+          image: ghcr.io/hivecommons/hive:v6-latest@sha256:f33662b37d2abf51816b81a04c05bfaba1ae63e38da8d062105d0e3283f23b16
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /api/livez
+              port: dashboard
+              scheme: HTTP
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 5
+          name: hive
+          ports:
+            - containerPort: 3002
+              name: dashboard
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /api/health
+              port: dashboard
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+            requests:
+              cpu: 300m
+              memory: 1Gi
+              ephemeral-storage: 4Gi
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - SETUID
+                - SETGID
+                - SETPCAP
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - FSETID
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /api/health
+              port: dashboard
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /etc/hive
+              name: config
+              readOnly: true
+            - mountPath: /data
+              name: data
+            - mountPath: /secrets
+              name: secrets
+              readOnly: true
+            - mountPath: /shared-auth
+              name: sharedauth
+            - mountPath: /data/home/.claude
+              name: sc
+            - mountPath: /data/home/.gemini
+              name: sg
+            - mountPath: /data/home/.codex
+              name: scx
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+        - name: ghcr-auth
+      nodeSelector:
+        workload-role: hive
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 1002
+      terminationGracePeriodSeconds: 30
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      volumes:
+        - configMap:
+            defaultMode: 420
+            name: hive-config
+          name: config
+        - name: data
+          persistentVolumeClaim:
+            claimName: hive-data
+        - name: secrets
+          secret:
+            defaultMode: 288
+            optional: true
+            secretName: hive-secrets
+        - name: shared-auth
+          persistentVolumeClaim:
+            claimName: hive-shared-auth
+        - name: sharedauth
+          persistentVolumeClaim:
+            claimName: hive-shared-auth
+        - name: sc
+          persistentVolumeClaim:
+            claimName: shared-claude
+        - name: sg
+          persistentVolumeClaim:
+            claimName: shared-gemini
+        - name: scx
+          persistentVolumeClaim:
+            claimName: shared-codex
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: hive
+  name: hive
+  namespace: hive
+spec:
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+    - name: dashboard
+      port: 3001
+      protocol: TCP
+      targetPort: dashboard
+    - name: api
+      port: 3002
+      protocol: TCP
+      targetPort: dashboard
+    - name: ttyd
+      port: 7681
+      protocol: TCP
+      targetPort: ttyd
+  selector:
+    app.kubernetes.io/name: hive
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  finalizers:
+    - tailscale.com/finalizer
+  name: hive
+  namespace: hive
+spec:
+  defaultBackend:
+    service:
+      name: hive
+      port:
+        number: 3001
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - hive
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  name: hive-public
+  namespace: hive
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: hive.tunaos.org
+      http:
+        paths:
+          - backend:
+              service:
+                name: hive-discord-realtime-webhook
+                port:
+                  number: 8080
+            path: /api/discord-reports/github
+            pathType: Prefix
+          - backend:
+              service:
+                name: hive
+                port:
+                  number: 3002
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - hive.tunaos.org
+      secretName: hive-tunaos-org-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  name: hive-school
+  namespace: hive
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: school.tunaos.org
+      http:
+        paths:
+          - backend:
+              service:
+                name: hive-console
+                port:
+                  number: 8080
+            path: /console
+            pathType: Prefix
+          - backend:
+              service:
+                name: hive-discord-realtime-webhook
+                port:
+                  number: 8080
+            path: /api/discord-reports/github
+            pathType: Prefix
+          - backend:
+              service:
+                name: hive
+                port:
+                  number: 3002
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - school.tunaos.org
+      secretName: school-tunaos-org-tls
+---
+apiVersion: v1
+data:
+  hive.yaml: |
+    # ACMM L6 "Fully Autonomous" — full agent pack, auto-merge with guardrails
+    acmm_level: 6
+    project:
+      org: tuna-os
+      name: TunaOS
+      repos:
+        - tuna-os/tunaos
+        - tuna-os/tromso
+        - tuna-os/tacklebox
+        - tuna-os/docs
+        - tuna-os/xfce-linux
+        - tuna-os/tunaos-packages
+        - tuna-os/bluefin-cli
+        - tuna-os/.github
+        - tuna-os/Tavern
+        - tuna-os/corral
+        - tuna-os/flatpak-index
+      ai_author: hanthor
+      primary_repo: tuna-os/tunaos
+
+    # ACMM level set explicitly in agent config; packs override backends to copilot
+
+    agents:
+      supervisor:
+        enabled: true
+        backend: pi
+        model: deepseek-v4-pro
+        beads_dir: /data/beads/supervisor
+        clear_on_kick: false
+        bead_role: supervisor
+        caveman_mode: full
+      scanner:
+        enabled: true
+        backend: pi
+        model: deepseek-v4-flash
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/scanner
+        clear_on_kick: false
+        caveman_mode: full
+      ci-maintainer:
+        enabled: true
+        backend: pi
+        model: deepseek-v4-flash
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/ci-maintainer
+        clear_on_kick: false
+        caveman_mode: full
+      quality:
+        enabled: true
+        backend: pi
+        model: deepseek-v4-flash
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/quality
+        clear_on_kick: false
+        caveman_mode: full
+      guide:
+        enabled: true
+        backend: pi
+        model: deepseek-v4-flash
+        beads_dir: /data/beads/guide
+        clear_on_kick: false
+        caveman_mode: full
+      sec-check:
+        enabled: true
+        backend: pi
+        model: deepseek-v4-flash
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/sec-check
+        clear_on_kick: false
+        caveman_mode: full
+      architect:
+        enabled: true
+        backend: pi
+        model: deepseek-v4-pro
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/architect
+        clear_on_kick: false
+        caveman_mode: full
+      strategist:
+        enabled: true
+        backend: pi
+        model: deepseek-v4-pro
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/strategist
+        clear_on_kick: false
+        caveman_mode: full
+      outreach:
+        enabled: true
+        backend: pi
+        model: deepseek-v4-flash
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/outreach
+        clear_on_kick: false
+        caveman_mode: full
+      brainstorm:
+        enabled: false
+
+    # Knowledge system: bead-to-wiki synthesizer, vaults, document sources
+    knowledge:
+      enabled: true
+      git_sources:
+        - name: tunaos-docs
+          url: https://github.com/tuna-os/docs.git
+          branch: main
+          layer: project
+        - name: tunaos-tunaos
+          url: https://github.com/tuna-os/tunaos.git
+          branch: main
+          layer: project
+        - name: dotfiles-docs
+          url: https://github.com/hanthor/dotfiles.git
+          branch: master
+          subpath: docs/src
+          layer: project
+        - name: dotfiles-hive
+          url: https://github.com/hanthor/dotfiles.git
+          branch: master
+          subpath: talos-k8s/hive
+          layer: project
+      vaults:
+        - name: bead-synth-wiki
+          path: /data/vaults/bead-synth-wiki
+          auto_index: true
+      bead_synthesizer:
+        enabled: true
+        schedule: hourly
+        min_confidence: 0.5
+        target_layer: project
+        max_facts_per_cycle: 20
+        vault_path: /data/vaults/bead-synth-wiki
+        retention_policy:
+          max_beads: 5000
+          archive_after_synth_days: 30
+          high_priority_retain_days: 90
+          preserve_with_deps: true
+
+    governor:
+      eval_interval_s: 300
+      modes:
+        surge:
+          threshold: 70
+          supervisor: 5m
+          scanner: 15m
+          ci-maintainer: pause
+          quality: 1h
+          guide: 1h
+          architect: 2h
+          strategist: 2h
+          sec-check: 1h
+          outreach: 2h
+        busy:
+          threshold: 10
+          supervisor: 5m
+          scanner: 15m
+          ci-maintainer: 1h
+          quality: 2h
+          guide: 2h
+          architect: 4h
+          strategist: 4h
+          sec-check: 2h
+          outreach: 4h
+        quiet:
+          threshold: 2
+          supervisor: 10m
+          scanner: 15m
+          ci-maintainer: 45m
+          quality: 4h
+          guide: 4h
+          architect: 6h
+          strategist: 6h
+          sec-check: 4h
+          outreach: 6h
+        idle:
+          threshold: 0
+          supervisor: 15m
+          scanner: 15m
+          ci-maintainer: 15m
+          quality: 6h
+          guide: 6h
+          architect: 8h
+          strategist: 8h
+          sec-check: 6h
+          outreach: 8h
+
+    github:
+      app_id: 3942065
+      installation_id: 137498420
+      key_file: /var/run/hive-metrics/gh-app-key.pem
+
+    dashboard:
+      port: 3002
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/name: hive
+  name: hive-config
+  namespace: hive
+---
+apiVersion: v1
+data:
+  custom.css: "/* TunaOS branding override for the hive dashboard.\n *\n * Served at /branding/custom.css by the operator-branding hook\n * (kubestellar/hive#5690) and linked last in <head>, so these win the cascade\n * without !important.\n *\n * TOKEN NAMES ARE READ FROM THE SHIPPED DOCUMENT, NOT GUESSED. An earlier\n * version invented plausible names (--text-primary, --surface-1, …) and\n * changed nothing at all. The dashboard's actual custom properties are --bg,\n * --bg-soft, --surface, --panel, --panel-strong, --card-bg, --line,\n * --line-strong, --border, --fg, --text, --muted, --accent plus a named colour\n * ramp.\n *\n * BOTH THEMES ARE OVERRIDDEN, and that is load-bearing. `:root` carries the\n * DARK palette and `body.light-mode` overrides it for light — so styling only\n * `:root` is silently discarded whenever the operator is in light mode, which\n * is exactly how the first attempt failed. Light mode gets its own aquatic\n * palette rather than a dark one forced into it.\n *\n * Scoped to COLOUR TOKENS only. The dashboard is one embedded SPA whose markup\n * changes between releases; restyling structure here would break on upgrade,\n * whereas custom properties are the surface intended to be re-pointed.\n */\n\n/* ── Dark: deep water ─────────────────────────────────────────────────── */\n:root {\n  --bg:            #04161f;\n  --bg-soft:       #07202b;\n  --surface:       #0a2430;\n  --panel:         #0a2430;\n  --panel-strong:  #0d2c3a;\n  --card-bg:       #0a2430;\n  --terminal-bg:   #020d13;\n\n  --line:          #12394a;\n  --line-strong:   #1b4d63;\n  --border:        #12394a;\n\n  --fg:            #e8f6f8;\n  --text:          #e8f6f8;\n  --muted:         #8fb3bd;\n  --terminal-fg:   #e8f6f8;\n  --terminal-muted:#8fb3bd;\n\n  --accent:        #2fb6c4;   /* tuna-fin cyan */\n  --oc-accent:     #2fb6c4;\n  --oc-accent-light:#7fd6df;\n  --cyan:          #2fb6c4;\n  --terminal-cyan: #2fb6c4;\n\n  /* Status stays distinct from the brand hue: a green that matches the accent\n   * stops reading as \"healthy\" and starts reading as \"branded\". */\n  --green:         #3fbf8f;\n  --green-bg:      #0c2f26;\n  --green-border:  #1d5a47;\n  --red:           #f2795b;\n  --red-bg:        #33150f;\n  --red-border:    #6b2b1d;\n  --orange:        #e0a33a;\n  --amber:         #e0a33a;\n  --yellow:        #e0c23a;\n  --blue:          #4aa8d8;\n  --indigo:        #6f8fd8;\n  --purple:        #a98fd8;\n}\n\n/* ── Light: shallow water ─────────────────────────────────────────────── */\nbody.light-mode {\n  --bg:            #f2f9fa;\n  --bg-soft:       #ffffff;\n  --surface:       #ffffff;\n  --panel:         #ffffff;\n  --panel-strong:  #e7f2f5;\n  --card-bg:       #ffffff;\n\n  --line:          #cbdfe5;\n  --line-strong:   #a8c9d2;\n  --border:        #cbdfe5;\n\n  --fg:            #06232e;\n  --text:          #06232e;\n  --muted:         #4d7683;\n\n  /* Darkened from the dark-mode cyan so it still clears contrast on white:\n   * #2fb6c4 on #ffffff is only ~2.2:1 and fails as text. */\n  --accent:        #10707c;\n  --oc-accent:     #10707c;\n  --oc-accent-light:#2fb6c4;\n  --cyan:          #10707c;\n\n  --green:         #1d7a5c;\n  --green-bg:      #e4f5ee;\n  --green-border:  #a9dcc9;\n  --red:           #c1442a;\n  --red-bg:        #fbe9e4;\n  --red-border:    #edb9a9;\n  --orange:        #a9741a;\n  --amber:         #a9741a;\n  --yellow:        #8a7413;\n  --blue:          #1f6f96;\n}\n\n/* ── school identity ────────────────────────────────────────────────── */\n/* Replaces the upstream bee/HIVE wordmark. See make-branding.py for why this\n   is done with pseudo-elements and what it deliberately cannot reach. */\n.oc-logo-icon { font-size: 0 !important; }\n.oc-logo-icon::after { content: \"\U0001F41F\"; font-size: 26px; line-height: 1; }\n\n.oc-logo-title { font-size: 0 !important; }\n.oc-logo-title::after {\n  content: \"SCHOOL\";\n  font-size: 20px; font-weight: 800; letter-spacing: .06em; color: var(--accent);\n}\n\n.oc-logo-sub { font-size: 0 !important; }\n.oc-logo-sub::after {\n  content: \"OPERATING SYSTEM\";\n  font-size: 10px; font-weight: 700; letter-spacing: .11em; color: var(--muted);\n}\n\nh1 .bee { font-size: 0 !important; }\nh1 .bee::after { content: \"\U0001F41F\"; font-size: 1rem; line-height: 1; }\n"
+kind: ConfigMap
+metadata:
+  name: hive-branding
+  namespace: hive
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+    - kubernetes.io/pvc-protection
+  labels:
+    app.kubernetes.io/name: hive
+  name: hive-data
+  namespace: hive
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: local-path
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+    - kubernetes.io/pvc-protection
+  name: hive-shared-auth
+  namespace: hive
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+    - kubernetes.io/pvc-protection
+  name: shared-claude
+  namespace: hive
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: ""
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+    - kubernetes.io/pvc-protection
+  name: shared-codex
+  namespace: hive
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: ""
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+    - kubernetes.io/pvc-protection
+  name: shared-gemini
+  namespace: hive
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: ""
+  volumeMode: Filesystem

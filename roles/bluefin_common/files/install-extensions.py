@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, urllib.request, zipfile, io, os, subprocess
+import json, os, subprocess, tempfile, urllib.request, zipfile
 
 EXTENSIONS = [
     'appindicatorsupport@rgcjonas.gmail.com',
@@ -15,6 +15,8 @@ USER_EXT_DIR = os.path.expanduser('~/.local/share/gnome-shell/extensions')
 os.makedirs(USER_EXT_DIR, exist_ok=True)
 
 def install_ext(uuid):
+    tmp_zip = None
+
     # Check if Shell recognizes it
     res = subprocess.run(['gnome-extensions', 'info', uuid], capture_output=True, text=True)
     if res.returncode == 0:
@@ -28,7 +30,7 @@ def install_ext(uuid):
         # Fetch extension metadata to find the latest version
         url = f"https://extensions.gnome.org/extension-query/?search={uuid}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:
             data = json.loads(response.read().decode())
             ext_data = next(e for e in data['extensions'] if e['uuid'] == uuid)
             pk = ext_data['pk']
@@ -36,7 +38,7 @@ def install_ext(uuid):
         # Fetch download URL for the latest version
         url = f"https://extensions.gnome.org/extension-info/?pk={pk}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:
             ext_info = json.loads(response.read().decode())
             # Pick the highest version compatible with current shell
             try:
@@ -65,12 +67,15 @@ def install_ext(uuid):
             version_pk = best_ver_data['pk']
             download_url = f"https://extensions.gnome.org/download-extension/{uuid}.shell-extension.zip?version_tag={version_pk}"
         
-        # Download and install via gnome-extensions CLI to trigger Shell scan
-        tmp_zip = f"/tmp/{uuid}.zip"
+        # Atomically create an owner-only archive instead of using a predictable
+        # shared /tmp path that another local user could pre-create or replace.
         req = urllib.request.Request(download_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response, open(tmp_zip, 'wb') as out:
+        with urllib.request.urlopen(req, timeout=30) as response, tempfile.NamedTemporaryFile(
+            mode='wb', prefix='gnome-extension-', suffix='.zip', delete=False
+        ) as out:
+            tmp_zip = out.name
             out.write(response.read())
-        
+
         # Run gnome-extensions install
         res = subprocess.run(['gnome-extensions', 'install', '--force', tmp_zip], capture_output=True, text=True)
         if res.returncode == 0:
@@ -84,11 +89,14 @@ def install_ext(uuid):
                 z.extractall(dest)
             print(f"Manually extracted {uuid} as fallback")
         
-        if os.path.exists(tmp_zip):
-            os.remove(tmp_zip)
-
     except Exception as e:
         print(f"Failed to install {uuid}: {e}")
+    finally:
+        if tmp_zip:
+            try:
+                os.unlink(tmp_zip)
+            except FileNotFoundError:
+                pass
 
 if __name__ == "__main__":
     for uuid in EXTENSIONS:

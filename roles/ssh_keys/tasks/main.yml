@@ -74,14 +74,15 @@
 
 # ── Sync local key with Bitwarden ─────────────────────────────────
 # Gated on `bw_unlocked` (set by the bitwarden role earlier in the play).
-# Local disk is the source of truth. On every run:
+# On every run:
 #   - if BW has no item   → create
-#   - if BW pubkey ≠ disk → edit (THIS is the case the old role missed,
-#                          which left stale public keys in BW and broke
-#                          authorized_keys distribution after a key change)
+#   - if BW pubkey ≠ disk → leave BW alone and warn, unless
+#                          ssh_keys_force_push=true. A key generated while the
+#                          vault was locked must never clobber the machine's
+#                          real key in BW; intentional rotations opt in.
 #   - if BW pubkey == disk → no-op
 # Skipped when the vault is locked; next unlocked apply will heal it.
-- name: Sync local SSH key to Bitwarden (create or update on mismatch)
+- name: Sync local SSH key to Bitwarden (create if missing, update only when forced)
   ansible.builtin.shell: |
     python3 - <<'PY'
     import json, os, subprocess, sys
@@ -100,6 +101,9 @@
         item = json.loads(r.stdout)
         if item.get("sshKey", {}).get("publicKey", "").strip() == pub_norm:
             print("MATCH")
+            sys.exit(0)
+        if os.environ.get("FORCE_PUSH", "false").lower() != "true":
+            print("MISMATCH")
             sys.exit(0)
         item["sshKey"] = {"privateKey": priv, "publicKey": pub_norm, "keyFingerprint": fp}
         encoded = subprocess.run(
@@ -136,7 +140,17 @@
     BW_ITEM_NAME: "{{ user_login }}@{{ inventory_hostname }}"
     PRIV_PATH: "{{ priv_key }}"
     PUB_PATH: "{{ pub_key }}"
+    FORCE_PUSH: "{{ ssh_keys_force_push | default(false) | bool | string | lower }}"
     PATH: "{{ ansible_env_path }}"
+
+- name: Warn when local SSH key differs from Bitwarden (not pushed)
+  ansible.builtin.debug:
+    msg: >-
+      Local ~/.ssh/id_ed25519 differs from the key stored in Bitwarden item
+      {{ user_login }}@{{ inventory_hostname }}; Bitwarden was NOT updated.
+      If this is an intentional rotation, re-run with -e ssh_keys_force_push=true.
+      Otherwise restore the Bitwarden key locally (move the local key aside and re-apply).
+  when: bw_sync.stdout | default('') is search('MISMATCH')
 
 # ── Update allowed_signers for git commit signing ──
 - name: Read public key
@@ -157,15 +171,10 @@
     modification_time: preserve
     access_time: preserve
 
-- name: Remove stale entries for this key
+- name: Ensure current key is in allowed_signers (replacing stale entry)
   ansible.builtin.lineinfile:
     path: "{{ ansible_facts['env']['HOME'] }}/.ssh/allowed_signers"
-    regexp: "{{ signers_key_body }}"
-    state: absent
-
-- name: Add current key to allowed_signers
-  ansible.builtin.lineinfile:
-    path: "{{ ansible_facts['env']['HOME'] }}/.ssh/allowed_signers"
+    regexp: "{{ signers_key_body | regex_escape }}"
     line: "{{ user_email }} namespaces=\"git\" {{ signers_pub_key }}"
     create: true
     mode: "0644"
@@ -217,7 +226,7 @@
   ansible.builtin.shell: |
     set -euo pipefail
     MACHINE_NAMES="{{ machines.keys() | list | join(' ') }}"
-    bw list items --session "{{ bw_session | default('') }}" 2>/dev/null | python3 -c "
+    bw list items 2>/dev/null | python3 -c "
     import sys, json
     items = json.load(sys.stdin)
     names = set('{{ user_login }}@' + m for m in '${MACHINE_NAMES}'.split())

@@ -108,6 +108,12 @@
       failed_when: false
       when: gh_has_key_scopes | bool
 
+    # Non-TTY `gh ssh-key list` is tab-separated: TITLE KEY ADDED ID TYPE,
+    # so the same key body can appear once per type; check each separately.
+    - name: Set existing GitHub key facts
+      ansible.builtin.set_fact:
+        gh_key_lines: "{{ gh_existing_keys.stdout_lines | default([]) | select('search', ssh_key_body | regex_escape) | list }}"
+
     - name: Register SSH authentication key with GitHub
       ansible.builtin.command: >
         gh ssh-key add "{{ ansible_facts['env']['HOME'] }}/.ssh/id_ed25519.pub"
@@ -115,7 +121,7 @@
         --type authentication
       when:
         - gh_has_key_scopes | bool
-        - ssh_key_body not in (gh_existing_keys.stdout | default(''))
+        - gh_key_lines | select('search', 'authentication$') | list | length == 0
       register: gh_auth_key_result
       failed_when: false
 
@@ -136,7 +142,7 @@
         --type signing
       when:
         - gh_has_key_scopes | bool
-        - ssh_key_body not in (gh_existing_keys.stdout | default(''))
+        - gh_key_lines | select('search', 'signing$') | list | length == 0
       register: gh_sign_key_result
       failed_when: false
 

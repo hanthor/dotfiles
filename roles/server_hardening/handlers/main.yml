@@ -5,8 +5,9 @@
     state: restarted
   become: true
 
-- name: Reload sshd
-  ansible.builtin.systemd:
-    name: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"
-    state: reloaded
-  become: true
+# `Reload sshd` is intentionally not defined here. It lives in roles/sshd, which
+# runs unconditionally in the same play, so this role's `notify: Reload sshd`
+# resolves to that single definition. Defining a second handler with the same
+# name would shadow it: Ansible keeps only the last definition, and because this
+# role is conditional, that copy inherits the role's `when:` and is skipped on
+# non-server hosts -- silently dropping the reload everywhere else.

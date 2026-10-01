@@ -6,16 +6,11 @@ Laptop workstation in the hanthor fleet.
 
 - Arch: x86_64
 - Laptop (runs on login, not periodic timer)
-- Tailscale IP: via MagicDNS
+- Tailscale: `kanpur` (MagicDNS)
 
 ## OS
 
 [Bluefin](https://projectbluefin.io/) (Fedora Atomic)
-
-## Services
-
-- [Cockpit](https://cockpit-project.org/) — system management
-- Homepage dashboard
 
 ## Notes
 

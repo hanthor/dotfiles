@@ -9,7 +9,7 @@
 # matters (no-changed-when, risky-shell-pipe) was buried under that
 # noise, so `just lint` exited non-zero and nobody noticed.
 
-profile: basic
+profile: safety
 
 skip_list:
   # `bw_session` and similar legitimately cross role boundaries; the

@@ -1,7 +1,7 @@
 # pi
 
 **Tags:** `dotfiles`, `pi`  
-**Secrets needed:** No (API keys deployed from Bitwarden by shell role)  
+**Secrets needed:** No (API keys deployed from Bitwarden by the `shell_ai` role)  
 **Runs on:** All machines
 
 Deploys the [PI Coding Agent](https://github.com/earendil-works/pi-coding-agent) configuration and extensions.
@@ -38,5 +38,5 @@ from the Bitwarden item `tavily-api-key`.
 
 ## Notes
 
-- API keys (`auth.json`) are deployed by the `shell` role from Bitwarden
+- API keys (`~/.pi/agent/auth.json`, from `deepseek-api-key`) and `models.json` are deployed by the [`shell_ai`](shell_ai.md) role
 - Extensions are installed to `~/.pi/agent/npm/` via npm

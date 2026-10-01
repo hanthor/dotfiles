@@ -1,0 +1,420 @@
+# Spoke 'hanthor' (namespace hive-hanthor), exported from the AWS Talos cluster on 2026-10-01.
+# Secrets are NOT here (hive-secrets etc. are created out of band).
+# The hive container image is owned by the hive-operator HiveRelease controller;
+# see ../README.md before applying.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    hive.tunaos.org/previous-image: ghcr.io/tuna-os/hive:v6-f896a2334e02@sha256:9429fbdf454e0419a2524ed823b212b9e292e5d2161c0c705d1da5107aed6a0a
+    hive.tunaos.org/previous-version: v6-f896a2334e02
+    hive.tunaos.org/upgraded-at: "2026-10-01T14:02:36Z"
+    hive.tunaos.org/version: v6-459e63d58696
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: hive
+  name: hive
+  namespace: hive-hanthor
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hive
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/name: hive
+    spec:
+      containers:
+        - args:
+            - --config
+            - /etc/hive/hive.yaml
+          env:
+            - name: META_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: META_API_KEY
+                  name: hive-secrets
+            - name: HIVE_DASHBOARD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: HIVE_DASHBOARD_TOKEN
+                  name: hive-secrets
+                  optional: true
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: DEEPSEEK_API_KEY
+                  name: hive-secrets
+            - name: HIVE_HUB_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: HIVE_HUB_SECRET
+                  name: hive-secrets
+                  optional: true
+            - name: GH_APP_ID
+              value: "3942065"
+            - name: GH_APP_INSTALLATION_ID
+              value: "158987150"
+            - name: GH_APP_KEY_FILE
+              value: /secrets/gh-app-key.pem
+            - name: NTFY_TOPIC
+              valueFrom:
+                secretKeyRef:
+                  key: NTFY_TOPIC
+                  name: hive-secrets
+                  optional: true
+            - name: HIVE_HUB_URL
+              value: https://hub.tunaos.org
+            - name: KIRO_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: KIRO_API_KEY
+                  name: kiro-api
+                  optional: true
+          image: ghcr.io/hivecommons/hive:v6-latest@sha256:f33662b37d2abf51816b81a04c05bfaba1ae63e38da8d062105d0e3283f23b16
+          imagePullPolicy: Always
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /api/livez
+              port: dashboard
+              scheme: HTTP
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 5
+          name: hive
+          ports:
+            - containerPort: 3002
+              name: dashboard
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /api/health
+              port: dashboard
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+            requests:
+              cpu: 300m
+              memory: 1Gi
+              ephemeral-storage: 4Gi
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - SETUID
+                - SETGID
+                - SETPCAP
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - FSETID
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /api/health
+              port: dashboard
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /etc/hive
+              name: config
+            - mountPath: /data
+              name: data
+            - mountPath: /secrets
+              name: secrets
+              readOnly: true
+            - mountPath: /data/home/.claude
+              name: sc
+            - mountPath: /data/home/.gemini
+              name: sg
+            - mountPath: /data/home/.codex
+              name: scx
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+        - name: ghcr-auth
+      nodeSelector:
+        workload-role: hive
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 1002
+      terminationGracePeriodSeconds: 30
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      volumes:
+        - configMap:
+            defaultMode: 420
+            name: hive-config
+          name: config
+        - name: data
+          persistentVolumeClaim:
+            claimName: hive-data
+        - name: secrets
+          secret:
+            defaultMode: 420
+            optional: true
+            secretName: hive-secrets
+        - name: sc
+          persistentVolumeClaim:
+            claimName: shared-claude
+        - name: sg
+          persistentVolumeClaim:
+            claimName: shared-gemini
+        - name: scx
+          persistentVolumeClaim:
+            claimName: shared-codex
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive
+  namespace: hive-hanthor
+spec:
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+    - name: dashboard
+      port: 3002
+      protocol: TCP
+      targetPort: dashboard
+  selector:
+    app.kubernetes.io/name: hive
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+  name: hive-hanthor-public
+  namespace: hive-hanthor
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: hive.reilly.asia
+      http:
+        paths:
+          - backend:
+              service:
+                name: hive
+                port:
+                  number: 3002
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - hive.reilly.asia
+      secretName: hive-reilly-asia-tls
+---
+apiVersion: v1
+data:
+  hive.yaml: |
+    # hanthor — personal-account apps hive. Split out from reef/tuna-os
+    # because the GitHub App (hanthor-hive-agent, owned by tuna-os) only
+    # had one installation_id per hive.yaml, and these repos live under
+    # the hanthor personal account, not the tuna-os org. The App is now
+    # installed on all three accounts (tuna-os, hanthor, indiafoss-community)
+    # but each spoke still only points at one.
+    #
+    # NOTE: this ConfigMap is only the *seed*. The hive persists its live
+    # config to /data/hive.yaml.runtime and restores that over the seed on
+    # every restart, so changes made in the dashboard/API win. This file was
+    # re-synced to the runtime roster + level on 2026-09-24; keep it in step
+    # (kubectl -n hive-hanthor exec deploy/hive -- cat /data/hive.yaml.runtime).
+    #
+    # L5 = the hive merges its own PRs only once labelled `lgtm`; agent PRs
+    # open with `hold`. Repo-side guardrails decide the rest.
+    acmm_level: 5
+    project:
+      org: hanthor
+      name: hanthor
+      repos:
+        - indiafoss-companion
+        - indiafoss-chat-android
+        # dotfiles: auto-merge is gated repo-side (branch protection + deny-by-
+        # default CODEOWNERS + agent-automerge.yml), not by acmm_level.
+        # See docs/src/automation.md.
+        - dotfiles
+        - hummingbird-github
+        - reilly.asia
+        - homebrew-tap
+        - shrimply
+        - rust-wayland-desktop
+      ai_author: hanthor
+      primary_repo: indiafoss-companion
+
+    hub:
+      enabled: true
+      url: https://hub.tunaos.org
+
+    agents:
+      supervisor:
+        enabled: true
+        backend: agy
+        model: gemini-3.8-flash-low
+        beads_dir: /data/beads/supervisor
+        clear_on_kick: false
+        caveman_mode: full
+      scanner:
+        enabled: true
+        backend: agy
+        model: gemini-3.8-flash-low
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/scanner
+        caveman_mode: full
+      quality:
+        enabled: true
+        backend: agy
+        model: gemini-3.8-flash-low
+        mode: ISSUES_AND_PRS
+        beads_dir: /data/beads/quality
+        caveman_mode: full
+      guide:
+        enabled: true
+        backend: agy
+        model: gemini-3.8-flash-low
+        beads_dir: /data/beads/guide
+        clear_on_kick: false
+        caveman_mode: full
+
+    governor:
+      eval_interval_s: 300
+      modes:
+        surge:
+          threshold: 70
+          supervisor: 10m
+          scanner: 30m
+          quality: 1h
+          guide: 2h
+        busy:
+          threshold: 10
+          supervisor: 15m
+          scanner: 1h
+          quality: 2h
+          guide: 4h
+        quiet:
+          threshold: 2
+          supervisor: 30m
+          scanner: 2h
+          quality: 4h
+          guide: 6h
+        idle:
+          threshold: 0
+          supervisor: 1h
+          scanner: 4h
+          quality: 6h
+          guide: 8h
+
+    github:
+      app_id: 3942065
+      installation_id: 158987150
+      key_file: /secrets/gh-app-key.pem
+
+    dashboard:
+      port: 3002
+      authorized_users:
+        - hanthor:owner
+kind: ConfigMap
+metadata:
+  name: hive-config
+  namespace: hive-hanthor
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+    - kubernetes.io/pvc-protection
+  labels:
+    app.kubernetes.io/name: hive
+  name: hive-data
+  namespace: hive-hanthor
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: local-path
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+    - kubernetes.io/pvc-protection
+  labels:
+    app.kubernetes.io/name: hive
+  name: shared-claude
+  namespace: hive-hanthor
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: ""
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+    - kubernetes.io/pvc-protection
+  name: shared-codex
+  namespace: hive-hanthor
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: ""
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+    - kubernetes.io/pvc-protection
+  labels:
+    app.kubernetes.io/name: hive
+  name: shared-gemini
+  namespace: hive-hanthor
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: ""
+  volumeMode: Filesystem

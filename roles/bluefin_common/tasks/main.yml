@@ -74,7 +74,7 @@
         - "~/.local/share/icons/hicolor"
         - "~/.local/share/ublue-os"
 
-    - name: Install Bluefin branding assets locally
+    - name: Install Bluefin branding assets locally  # noqa: risky-shell-pipe (the | is sed's delimiter, not a pipe)
       ansible.builtin.shell: |
         cp -r {{ bluefin_temp.path }}/backgrounds/* ~/.local/share/backgrounds/bluefin/
         cp -r {{ bluefin_temp.path }}/icons/* ~/.local/share/icons/hicolor/
