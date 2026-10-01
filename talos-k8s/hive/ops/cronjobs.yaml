@@ -13,7 +13,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -108,7 +107,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -203,7 +201,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -298,7 +295,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 2400
       backoffLimit: 0
@@ -393,7 +389,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -488,7 +483,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -619,7 +613,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -714,7 +707,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -809,7 +801,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 900
       backoffLimit: 0
@@ -914,7 +905,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 900
       backoffLimit: 0
@@ -1022,7 +1012,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 900
       backoffLimit: 0
@@ -1129,7 +1118,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -1224,7 +1212,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -1325,7 +1312,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 280
       backoffLimit: 0
@@ -1354,6 +1340,10 @@ spec:
                   value: /tmp
                 - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
                   value: "false"
+                - name: HIVE_ROTATE_PIN
+                  value: supervisor
+                - name: HIVE_ROTATE_HOLD
+                  value: reviewer
               image: alpine/k8s:1.37.1
               imagePullPolicy: IfNotPresent
               name: ops
@@ -1426,7 +1416,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 280
       backoffLimit: 0
@@ -1459,6 +1448,8 @@ spec:
                   value: /tmp
                 - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
                   value: "false"
+                - name: HIVE_ROTATE_HOLD
+                  value: reviewer
               image: alpine/k8s:1.37.1
               imagePullPolicy: IfNotPresent
               name: ops
@@ -1531,7 +1522,6 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
-    metadata: {}
     spec:
       activeDeadlineSeconds: 280
       backoffLimit: 0
