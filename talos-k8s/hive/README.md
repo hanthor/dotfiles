@@ -1,139 +1,69 @@
-# Hive — 24/7 AI Agent Supervisor on Talos K8s
+# Hive fleet on the AWS Talos cluster
 
-Based on upstream [kubestellar/hive](https://github.com/kubestellar/hive) v2 with goose CLI + DeepSeek backend.
+Three [hivecommons/hive](https://github.com/hivecommons/hive) spokes plus the
+hub, all on upstream **v6** (`ghcr.io/hivecommons/hive:v6-latest`, pinned by
+digest). `KUBECONFIG=~/.kube/config-aws-migration`.
 
-## Changes from upstream
+| Spoke | Namespace | Hostname | Org |
+|---|---|---|---|
+| school (primary) | `hive` | school.tunaos.org (alias hive.tunaos.org) | tuna-os |
+| reef | `hive-reef` | reef.tunaos.org | tuna-os (shares school's App installation) |
+| hanthor | `hive-hanthor` | hive.reilly.asia | hanthor |
+| hub | `hive-hub` | hub.tunaos.org | — |
 
-| Item | Upstream | Ours |
-|------|----------|------|
-| Agent backend | Claude / Copilot | **Goose** (open-source, DeepSeek-native) |
-| Dockerfile | Installs Claude + Copilot | **+ Goose binary + DeepSeek config** |
-| Config file | `goose-config.yaml` | Pre-seeded DeepSeek provider |
+## Who manages what
 
-Everything else (Go binary, entrypoint, proxy, ttyd, agent manager, governor) is straight upstream.
+The goal is one control plane: the **[hive-operator](https://github.com/tuna-os/hive-operator)**
+(ns `hive-system`). Each responsibility moves from a bash CronJob to an
+operator controller in a single change that promotes the controller to
+`Enforce` **and** deletes the CronJob. Two writers on one field is how the
+fleet got rolled back to v5 every night.
 
-## Architecture
+| Responsibility | Owner today | Target |
+|---|---|---|
+| Image version / upgrades | **operator** — `HiveRelease hive`, Enforce since 2026-10-01 (`hive-upgrade` deleted) | done |
+| Backend/model rotation, stranding, auto-resume | `hive-rotate*` CronJobs | `HiveSpoke` rotation (Shadow now) |
+| Quota / credit starvation, pacing | `hive-pace`, ccleft | `UsagePool` + rotation pacer |
+| Liveness (watchdog, nudge) | `hive-watchdog*`, `hive-nudge` | operator watchdog |
+| Shared auth store | `hive-shared-auth` | `SharedAuth` (Shadow now) |
+| Housekeeping (tiers, inventory, pi-kiro, cli-update, repo-sync, metrics, activity) | CronJobs in [`ops/`](ops/README.md) | CronJobs owned by the operator |
 
-```
-┌──────────────────────────────────────────────────────┐
-│ pod: hive (bihar)                                    │
-│                                                      │
-│  ┌─────────┐  ┌──────────┐  ┌────────────────────┐  │
-│  │ hive    │  │ proxy    │  │ 9x goose agents    │  │
-│  │ Go bin  │  │ node.js  │  │ (tmux sessions)    │  │
-│  │ :3002   │  │ :3001    │  │                    │  │
-│  │ (API)   │  │ (web UI) │  │ supervisor ADVISORY│  │
-│  └────┬────┘  └────┬─────┘  │ scanner  ISSUES_PRS│  │
-│       │            │        │ ci-maint ISSUES_PRS│  │
-│       └────────────┘        │ quality  ISSUES_PRS│  │
-│                              │ guide    ADVISORY  │  │
-│                              │ sec-check ISSUES_PRS│ │
-│                              │ architect ISSUES_PRS│ │
-│                              │ strategist ISSUES_PRS││
-│                              │ outreach ISSUES_PRS│  │
-│                              └────────┬───────────┘  │
-│                                       │              │
-│  ┌────────────────────────────────────┘              │
-│  │  goose → DeepSeek API (custom_deepseek provider)  │
-│  │  GitHub App (tuna-os) → gh CLI for issues/PRs     │
-│  └───────────────────────────────────────────────────┘│
-└──────────────────────────────────────────────────────┘
-         │
-    ┌────▼────┐     ┌──────────────────┐
-    │ GitHub  │     │ Tailscale Ingress │
-    │ tuna-os │     │ hive.manatee-     │
-    │ repos   │     │ basking.ts.net    │
-    └─────────┘     └──────────────────┘
-```
-
-## Components
-
-| Component | Purpose | Source |
-|-----------|---------|--------|
-| **hive** (Go binary) | Agent manager, governor, scheduler | kubestellar/hive v2 (unmodified) |
-| **proxy** (Node.js) | Dashboard web UI + SSE | kubestellar/hive v2 (unmodified) |
-| **goose** (Rust CLI) | AI agent backend | block/goose v1.x |
-| **DeepSeek** | Model provider | deepseek-v4-pro via custom provider |
-
-## Agents
-
-| Agent | Mode | Role |
-|-------|------|------|
-| supervisor | ADVISORY | Orchestrates agents, sweeps, enforces cadence |
-| scanner | ISSUES_AND_PRS | Triages issues, fixes bugs, auto-merges |
-| ci-maintainer | ISSUES_AND_PRS | CI health, coverage, post-merge gates |
-| quality | ISSUES_AND_PRS | Test coverage analysis, testing gaps |
-| guide | ADVISORY | Documentation audit, contributor guides |
-| sec-check | ISSUES_AND_PRS | Supply chain, secrets, dependency audit |
-| architect | ISSUES_AND_PRS | Structural analysis, design recommendations |
-| strategist | ISSUES_AND_PRS | Roadmap, milestone tracking, competitive analysis |
-| outreach | ISSUES_AND_PRS | Ecosystem engagement, community PRs |
-
-## Configuration
-
-- **Repos**: tuna-os/tunaos
-- **ACMM Level**: 6 (Full autonomy — issues + PRs + auto-merge)
-- **Governor**: SURGE(50) → BUSY(10) → QUIET(2) → IDLE(0)
-- **Goose config**: `goose-config.yaml` (DeepSeek custom provider)
-- **K8s manifest**: `hive.yaml`
-
-## Build & Deploy
+Check where each stands before changing anything:
 
 ```bash
-# CI builds on push to dotfiles master
-# .github/workflows/hive-build.yml:
-#   1. Checks out kubestellar/hive v2 source
-#   2. Copies our Dockerfile + goose-config.yaml
-#   3. Builds image with upstream + goose + DeepSeek
-#   4. Pushes to ghcr.io/hanthor/hive:latest
-
-# Deploy:
-kubectl apply -f talos-k8s/hive/hive.yaml
-kubectl rollout restart deploy/hive -n hive
+kubectl get hivespokes,modelladders,sharedauths,hivereleases
+kubectl -n hive get cronjobs
 ```
 
-## Secrets
+## Layout
 
-```bash
-kubectl create secret generic hive-secrets -n hive \
-  --from-literal=DEEPSEEK_API_KEY=sk-... \
-  --from-literal=HIVE_GITHUB_TOKEN=ghp_... \
-  --from-literal=NTFY_TOPIC=your-ntfy-topic \
-  --dry-run=client -o yaml | kubectl apply -f -
+- [`spokes/`](spokes/): each spoke's Deployment, Service, Ingress, config
+  ConfigMaps and PVCs, exported from the cluster. Secrets are created out of
+  band and are not in git. **The `hive` container image in these files is not
+  authoritative**: the operator owns it. Applying a file with an older image
+  is a rollback.
+- [`ops/`](ops/README.md): the bash CronJobs and their scripts. They shrink as
+  the operator takes over.
+- [`upgrade/`](upgrade/README.md): the retired `hive-upgrade` script, kept for
+  reference. Its CronJob is deleted; the `HiveRelease` controller replaced it
+  (tracks `v6-latest` by digest, rolls hanthor → reef → school in the
+  04:30–06:30 New York window with soak and rollback).
+- [`ccleft/`](ccleft/README.md): remaining-quota readings for every account.
+- [`discord/`](discord/README.md), [`kiro/`](kiro/): integrations.
+- [`history/`](history/): the v2 (goose/DeepSeek) era docs and handoffs.
 
-# GitHub App (post-setup):
-kubectl create secret generic hive-secrets -n hive \
-  --from-literal=GH_APP_ID=3942065 \
-  --from-literal=GH_APP_INSTALLATION_ID=137498420 \
-  --from-file=gh-app-key.pem=/path/to/key.pem \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
+## Auth
 
-## Monitoring
+Automation authenticates with the spoke's dashboard token (Secret
+`hive-secrets`, key `HIVE_DASHBOARD_TOKEN`) in the `X-Hive-Internal` header,
+against the pod's `:3002`. On v6 that is owner-equivalent when no session
+cookie accompanies it (hivecommons/hive#4134), so pause, resume, kick and
+`PUT /api/config/agent/{name}/models` need no browser login. Browsers still
+sign in with GitHub device flow.
 
-```bash
-# Agent status
-kubectl exec -n hive deploy/hive -- curl -s localhost:3001/api/status
+## Changing an agent's model
 
-# Logs
-kubectl logs -n hive -l app.kubernetes.io/name=hive -f
-
-# Dashboard
-open https://hive.manatee-basking.ts.net
-
-# Tmux sessions (debug)
-kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-0/default ls
-kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-0/default capture-pane -t hive-scanner -p
-```
-
-## Troubleshooting
-
-| Symptom | Check |
-|---------|-------|
-| ImagePullBackOff | `/etc/hosts` on bihar has `ghcr.io` entry |
-| Agents not kicking | `kubectl logs -n hive deploy/hive \| grep "failed to send kick"` |
-| DeepSeek API errors | `kubectl exec -n hive deploy/hive -- env \| grep DEEPSEEK` |
-| Goose not starting | `kubectl exec -n hive deploy/hive -- goose --version` |
-| Dashboard 404 | Tailscale ingress `ts-hive-*` pod running? |
-
-See [SKILL.md](SKILL.md) for detailed debugging procedures.
+Through the API, never by editing `hive-config`: the ACMM pack re-asserts
+defaults on restart unless a field is operator-owned, and the models PUT marks
+it so. While rotation is still bash-owned, a pin must also be added to the
+rotate CronJob's `HIVE_ROTATE_PIN` or rotation will move the agent again.

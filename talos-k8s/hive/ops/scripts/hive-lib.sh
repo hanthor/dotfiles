@@ -28,10 +28,10 @@
 #     while a plain curl to the same API server answers in under a second.
 #
 # So: in-cluster, talk to the hive's own Service (http://hive.<ns>.svc:3002)
-# with the owner session cookie, and to the Kubernetes API with curl + the
+# with the dashboard token (X-Hive-Internal, owner-equivalent on v6), and to the Kubernetes API with curl + the
 # ServiceAccount token (k8s_get/k8s_put_cm/k8s_scale) — kubectl only for
-# `exec`, which has no curl equivalent. The session cookie is cached so a
-# normal run needs no exec at all. /api/status is trimmed to the fields the
+# `exec`, which has no curl equivalent. The token is cached so a normal run
+# needs no exec at all. /api/status is trimmed to the fields the
 # scripts read. Outside the cluster (a workstation) Service DNS is not
 # resolvable, so everything falls back to kubectl, and /api/status is trimmed
 # INSIDE the pod with the pod's jq before anything crosses the exec stream.
@@ -111,32 +111,41 @@ hive_pod() {
              | .[0].metadata.name // empty' 2>/dev/null
 }
 
-# hive_sid <ns> <pod>: newest owner session from the dashboard's own store
-# (one exec). Deliberately NO local expiry comparison: the store writes the
-# pod's UTC offset and a string compare against the caller's `date` is only
-# accidentally right. The server is the authority.
+# hive_sid <ns>: the spoke's shared dashboard token (Secret hive-secrets,
+# key HIVE_DASHBOARD_TOKEN), sent as X-Hive-Internal.
+#
+# On hive v6 that header is owner-equivalent when no session cookie rides
+# along with it (hivecommons/hive#4134), so every mutation works headlessly.
+# This replaced the owner session cookie scraped from
+# /data/dashboard-sessions.json (2026-10-01): those sessions are minted only by
+# a GitHub device-flow login and expire, and every write silently stopped the
+# day the newest one did. The name is kept so callers did not change.
+# Do NOT also send a hive_session cookie: it scopes the request down to that
+# user's live allowlist role.
 hive_sid() {
-  timeout "${HIVE_EXEC_TIMEOUT:-90}" kubectl exec -n "$1" "$2" -- \
-      cat /data/dashboard-sessions.json 2>/dev/null \
-    | jq -r 'to_entries | map(select(.value.Role=="owner"))
-             | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null
+  local ns="$1"
+  if _k8s_direct; then
+    k8s_get "/api/v1/namespaces/$ns/secrets/hive-secrets"       | jq -r '.data.HIVE_DASHBOARD_TOKEN // empty | @base64d' 2>/dev/null
+  else
+    timeout "${HIVE_KUBECTL_TIMEOUT:-60}" kubectl get secret -n "$ns" hive-secrets       -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' 2>/dev/null | base64 -d 2>/dev/null
+  fi
 }
 
-# Session cache. Reading the store costs an exec (10-35 s on the loaded node)
-# and sessions live for weeks, so the cookie is cached (mode 600, in the ops
-# state volume, which only hive-ops jobs mount). A rejected cookie is dropped
-# and re-read — see hive_open.
+# Token cache: reading the Secret costs a kubectl start on the loaded node when
+# the API is not reachable directly. Mode 600, in the ops state volume, which
+# only hive-ops jobs mount. A refused token is re-read — see hive_open. The
+# .token suffix keeps an old cached .sid cookie from ever being sent as one.
 _sid_cache() {
   local d="${HIVE_SID_CACHE_DIR:-}"
   if [ -z "$d" ]; then
     if [ -d /state ] && [ -w /state ]; then d=/state/sessions; else d="$HOME/.local/state/hive-ops/sessions"; fi
   fi
-  printf '%s/%s.sid' "$d" "$1"
+  printf '%s/%s.token' "$d" "$1"
 }
 hive_session() {  # <ns> <pod> [fresh]
   local f sid; f=$(_sid_cache "$1")
   if [ "${3:-}" != fresh ] && [ -s "$f" ]; then cat "$f"; return 0; fi
-  sid=$(hive_sid "$1" "$2")
+  sid=$(hive_sid "$1")
   [ -n "$sid" ] || return 1
   ( umask 077; mkdir -p "$(dirname "$f")" && printf '%s' "$sid" > "$f" ) 2>/dev/null
   printf '%s' "$sid"
@@ -163,11 +172,11 @@ hive_call() {
   [ -z "$mt" ] && { [ "$method" = GET ] && mt=60 || mt=150; }
   [ -n "$data" ] && extra=(-H "Content-Type: application/json" --data "$data")
   if [ "$(hive_via)" = svc ]; then
-    body=$(curl -sS -X "$method" --max-time "$mt" -H "Cookie: hive_session=$sid" "${extra[@]}" \
+    body=$(curl -sS -X "$method" --max-time "$mt" -H "X-Hive-Internal: $sid" "${extra[@]}" \
              "http://hive.$ns.svc:$HIVE_API_PORT$upath" 2>&1); rc=$?
   else
     body=$(timeout $((mt + 30)) kubectl exec -n "$ns" "$pod" -- \
-             curl -sS -X "$method" --max-time "$mt" -H "Cookie: hive_session=$sid" "${extra[@]}" \
+             curl -sS -X "$method" --max-time "$mt" -H "X-Hive-Internal: $sid" "${extra[@]}" \
              "http://127.0.0.1:$HIVE_API_PORT$upath" 2>&1); rc=$?
   fi
   _hive_json_or_error "$body" "$rc"
@@ -197,7 +206,7 @@ hive_placement_ok() {
 
 # The fields any ops script reads. `liveSummary` is the hive's own last pane
 # capture, which lets the watchdog classify panes without a tmux exec per agent.
-# `.agents[]` (no `?`) on purpose: a refused cookie answers {"error":...}, and
+# `.agents[]` (no `?`) on purpose: a refused token answers {"error":...}, and
 # that must FAIL here (so hive_open re-reads the session) rather than become a
 # successful-looking hive with zero agents.
 HIVE_STATUS_SLIM_JQ='{
@@ -218,7 +227,7 @@ HIVE_STATUS_SLIM_JQ='{
 hive_status() {
   local ns="$1" pod="$2" sid="$3" out rc
   if [ "$(hive_via)" = svc ]; then
-    out=$(curl -sS --max-time "${HIVE_STATUS_TIMEOUT:-90}" -H "Cookie: hive_session=$sid" \
+    out=$(curl -sS --max-time "${HIVE_STATUS_TIMEOUT:-90}" -H "X-Hive-Internal: $sid" \
             "http://hive.$ns.svc:$HIVE_API_PORT/api/status" 2>&1 \
           | jq -c "$HIVE_STATUS_SLIM_JQ" 2>&1); rc=$?
   else
@@ -226,7 +235,7 @@ hive_status() {
     # Arguments go positionally to `sh -c`, never interpolated into the script.
     # shellcheck disable=SC2016
     out=$(timeout $(( ${HIVE_STATUS_TIMEOUT:-90} + 30 )) kubectl exec -n "$ns" "$pod" -- sh -c '
-        curl -sS --max-time "$1" -H "Cookie: hive_session=$2" \
+        curl -sS --max-time "$1" -H "X-Hive-Internal: $2" \
           "http://127.0.0.1:$3/api/status" | jq -c "$4"' \
         sh "${HIVE_STATUS_TIMEOUT:-90}" "$sid" "$HIVE_API_PORT" "$HIVE_STATUS_SLIM_JQ" 2>&1); rc=$?
   fi
@@ -239,14 +248,14 @@ hive_status() {
 }
 
 # hive_open <ns>: resolve POD, SID and STATUS_JSON (globals) for one hive,
-# retrying once with a freshly read session when the cached cookie is refused.
+# retrying once with a freshly read token when the cached one is refused.
 # Returns 1 with a reason on stderr when the hive cannot be read.
 # shellcheck disable=SC2034  # POD/SID/STATUS_JSON are this function's outputs
 hive_open() {
   POD=$(hive_pod "$1")
   [ -n "$POD" ] || { echo "no running hive pod in $1" >&2; return 1; }
   SID=$(hive_session "$1" "$POD") \
-    || { echo "no owner session in $1's session store — log in to that dashboard" >&2; return 1; }
+    || { echo "no dashboard token in $1/hive-secrets" >&2; return 1; }
   if STATUS_JSON=$(hive_status "$1" "$POD" "$SID"); then return 0; fi
   SID=$(hive_session "$1" "$POD" fresh) || return 1
   STATUS_JSON=$(hive_status "$1" "$POD" "$SID")
@@ -389,20 +398,60 @@ rung_down() {
       echo "kiro-api-key/gpt-5-6-luna${1#kiro-api-key/gpt-5-6-sol}" ;;
     kiro-api-key/gpt-5-6-terra|kiro-api-key/gpt-5-6-terra:*)
       echo "kiro-api-key/gpt-5-6-luna${1#kiro-api-key/gpt-5-6-terra}" ;;
+    # Second notch (2026-09-25, Kiro budget pacing): sonnet-5 1.3 / luna 1.1
+    # -> haiku-4.5 0.4, the bottom of the Kiro ladder. Always `:low` — the
+    # exact T3 rung (launch-verified under pi), whatever the upper suffix was.
+    kiro-api-key/claude-sonnet-5|kiro-api-key/claude-sonnet-5:*|kiro-api-key/gpt-5-6-luna|kiro-api-key/gpt-5-6-luna:*)
+      echo "kiro-api-key/claude-haiku-4-5:low" ;;
     *)                      echo "" ;;
   esac
 }
 
+# rung_chain <model>: the model, then every rung_down below it (one per line).
+rung_chain() {
+  local m="$1" i=0
+  while [ -n "$m" ] && [ "$i" -lt 6 ]; do echo "$m"; m=$(rung_down "$m"); i=$((i + 1)); done
+}
+
+# rung_up_toward <original> <current>: the rung one notch ABOVE <current> on
+# <original>'s demotion chain (== <original> after the first notch), or
+# nothing when <current> is not below <original> on that chain.
+rung_up_toward() {
+  local prev="" m
+  while IFS= read -r m; do
+    [ "$m" = "$2" ] && { [ -n "$prev" ] && echo "$prev"; return 0; }
+    prev=$m
+  done <<< "$(rung_chain "$1")"
+  return 0
+}
+
+# kiro_credit_mult <model>: Kiro credits per request (rateMultiplier from
+# ListAvailableModels, 2026-09-24). Unknown kiro models count as 1.0.
+kiro_credit_mult() {
+  case "$1" in
+    *gpt-5-6-sol*)   echo 4.4 ;;
+    *gpt-5-6-terra*) echo 2.2 ;;
+    *gpt-5-6-luna*)  echo 1.1 ;;
+    *claude-opus-*)  echo 2.2 ;;
+    *claude-sonnet-*) echo 1.3 ;;
+    *claude-haiku-*) echo 0.4 ;;
+    *)               echo 1.0 ;;
+  esac
+}
+
 # pace_demoted_from <demoted-file> <ns> <agent> <current-model>: when the
-# pacer demoted this agent and it is still sitting on exactly that cheaper
-# rung, print the "backend|model" it was demoted FROM; else nothing.
+# pacer demoted this agent and it is still sitting on a rung of that demotion
+# chain, print the ORIGINAL "backend|model" it was demoted from; else nothing.
 pace_demoted_from() {
   local f="$1" key="$2/$3" cur="$4" line ob om
   [ -s "$f" ] || return 0
   line=$(grep -F "$key|" "$f" 2>/dev/null | tail -1)
   [ -n "$line" ] || return 0
   ob=$(printf '%s' "$line" | cut -d'|' -f2); om=$(printf '%s' "$line" | cut -d'|' -f3)
-  [ "$(rung_down "$om")" = "$cur" ] && echo "$ob|$om"
+  # Any notch BELOW the original counts (the Kiro ladder has two:
+  # opus -> sonnet -> haiku). The row keeps the ORIGINAL rung however many
+  # notches the pacer has taken, so rotate still sees the tier it came from.
+  rung_chain "$om" | tail -n +2 | grep -qxF -- "$cur" && echo "$ob|$om"
   return 0
 }
 
@@ -428,4 +477,201 @@ pane_stalled() {
     return 1
   fi
   [ $(( now - pf )) -ge $(( min * 60 )) ]
+}
+
+# ── Provider readings from ccleft (2026-09-25) ────────────────────────────
+# ccleft (talos-k8s/hive/ccleft) is the ONE poller of every provider's quota
+# endpoint: single-flight, per-provider min interval, backoff on 429, and a
+# last-good reading marked stale:true. The ops scripts used to poll the same
+# accounts themselves (rotate's probe_all), and because busybox `date` cannot
+# parse the ISO timestamps the "reuse a fresh publication" path always failed,
+# so every rotate AND every watchdog (3 hives x every 5 min) hit Anthropic's
+# OAuth usage endpoint — which then 429'd ccleft's own calls.
+#
+# HIVE_PROBE_SOURCE=ccleft (default) reads GET /readings and translates each
+# reading into the exact "<pct_used> <note>" the direct parsers produce, so
+# every decision downstream is unchanged. HIVE_PROBE_SOURCE=direct, or ccleft
+# being unreachable, uses the old direct probes (kept, logged loudly).
+HIVE_CCLEFT_DEFAULT_URL="http://ccleft.hive.svc:9464"
+
+hive_probe_source() {
+  case "${HIVE_PROBE_SOURCE:-ccleft}" in direct) echo direct ;; *) echo ccleft ;; esac
+}
+
+# iso_to_epoch <ISO-8601>: epoch seconds, or nothing. jq, not `date -d`: the
+# ops image's busybox date rejects "2026-09-25T13:40:20Z" (that bug silently
+# disabled published-usage reuse and the renewal wake-up).
+iso_to_epoch() {
+  jq -rn --arg t "$1" 'try ($t | sub("\\.[0-9]+"; "") | sub("(\\+00:00|\\+0000)$"; "Z") | fromdateiso8601) catch empty' 2>/dev/null
+}
+
+# ccleft_fetch: the /readings JSON on stdout; rc 1 (reason on stderr) when
+# ccleft cannot be read. In-cluster (or with HIVE_CCLEFT_URL set) over the
+# Service; from a workstation through `kubectl exec deploy/ccleft`.
+ccleft_fetch() {
+  local body rc
+  if [ -n "${HIVE_CCLEFT_URL:-}" ] || [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then
+    body=$(curl -sS --max-time "${HIVE_CCLEFT_TIMEOUT:-15}" "${HIVE_CCLEFT_URL:-$HIVE_CCLEFT_DEFAULT_URL}/readings" 2>&1); rc=$?
+  else
+    body=$(timeout "${HIVE_KUBECTL_TIMEOUT:-60}" kubectl -n "${HIVE_CCLEFT_NS:-hive}" exec deploy/ccleft -- \
+             curl -sS --max-time "${HIVE_CCLEFT_TIMEOUT:-15}" http://127.0.0.1:9464/readings 2>&1); rc=$?
+  fi
+  if [ "$rc" = 0 ] && printf '%s' "$body" | jq -e '(.readings | type) == "array" and (.readings | length) > 0' >/dev/null 2>&1; then
+    printf '%s' "$body"; return 0
+  fi
+  echo "ccleft unreadable (rc=$rc): $(printf '%s' "$body" | head -c 200)" >&2
+  return 1
+}
+
+# The hive-ops provider pool -> ccleft's provider name.
+ccleft_provider_name() {
+  case "$1" in
+    anthropic) echo claude ;; openai) echo codex ;; google) echo agy ;;
+    meta) echo muse ;; github) echo copilot ;; *) echo "$1" ;;
+  esac
+}
+
+# Shared jq definitions. A reading is USABLE when it has a fetched_at and is
+# not too old: a stale (last-good) reading counts for $maxstale seconds, a
+# fresh one for $maxfresh (a wedged ccleft must not serve yesterday forever).
+# shellcheck disable=SC2016
+_CCLEFT_JQ_DEFS='
+def ep: sub("\\.[0-9]+"; "") | sub("(\\+00:00|\\+0000)$"; "Z") | fromdateiso8601;
+def sec: sub("\\.[0-9]+"; "") | sub("(\\+00:00|\\+0000)$"; "Z");
+def reading($cp): [.readings[]? | select(.provider == $cp)]
+                  | sort_by(-((.homes // []) | length)) | first;
+def age: if .fetched_at then ($now - (.fetched_at | ep)) else null end;
+def usable: age as $a | $a != null
+            and (if .stale == true then $a <= $maxstale else $a <= $maxfresh end);
+def pctwins: [.windows[]? | select(.unit == "percent" and .used_pct != null)];
+def upct: [[(.used_pct | ceil), 0] | max, 100] | min;
+'
+
+# ccleft_probe <hive-provider> [now-epoch]: stdin /readings JSON; prints
+# "<pct_used> <note>" exactly like the parse_probe_* functions:
+#   ok/limited with windows -> the worst binding window, as the direct probe
+#                              collapsed it (anthropic: unscoped limits only;
+#                              google: the Gemini windows only; kiro: the
+#                              exact credit count in the note)
+#   limited/exhausted, no window  -> 100
+#   auth_required                 -> 100 no-credential (like an empty token)
+#   unsupported                   -> -1 no-usage-api (entry allowed, as muse today)
+#   error/rate_limited, no window -> -1 (unmeasured: never "exhausted")
+#   stale older than HIVE_CCLEFT_MAX_STALE_S (1800) or absent -> -1 (unmeasured)
+ccleft_probe() {
+  local p="$1" now="${2:-$(date -u +%s)}"
+  jq -r --arg cp "$(ccleft_provider_name "$p")" --arg p "$p" --argjson now "$now" \
+     --argjson maxstale "${HIVE_CCLEFT_MAX_STALE_S:-1800}" \
+     --argjson maxfresh "${HIVE_CCLEFT_MAX_AGE_S:-3600}" "$_CCLEFT_JQ_DEFS"'
+    reading($cp) as $r
+    | if $r == null then "-1 ccleft-no-reading"
+      else ($r | age) as $age | ($r.cause // "") as $cause
+      | (if $cause != "" then " cause=\($cause)" else "" end) as $cn
+      | (if $r.stale == true then " (ccleft stale \($age / 60 | floor)m\($cn))" else "" end) as $st
+      | if $age == null then "-1 ccleft-unmeasured state=\($r.state // "?")"
+        elif ($r | usable | not) then "-1 ccleft-stale age=\($age / 60 | floor)m\($cn)"
+        elif $r.state == "unsupported" then "-1 no-usage-api (ccleft unsupported\($cn))"
+        elif $r.state == "auth_required" then "100 no-credential (ccleft auth_required\($cn): needs an interactive login)"
+        else
+          ( if $p == "kiro" then
+              ([$r.windows[]? | select(.unit == "credits" and (.limit // 0) > 0)] | first) as $w
+              | if $w == null then null else
+                  { pct: ([(($w.used / $w.limit * 100) | floor), 100] | min),
+                    note: ("credits=\(($w.used * 100 | round) / 100)/\($w.limit) resets=\($w.resets_at | sec)") }
+                end
+            else
+              ($r | pctwins) as $all
+              | (if $p == "anthropic" then [$all[] | select(.scope == null)]
+                 elif $p == "google" then ([$all[] | select(.scope == "gemini")] | if length > 0 then . else $all end)
+                 else $all end) as $ws
+              | if ($ws | length) == 0 then null else
+                  ($ws | max_by(.used_pct)) as $b
+                  | { pct: ($b | upct),
+                      note: ( (if $p == "openai" then
+                                 ($ws | map((if .kind == "five_hour" then "5h" else (.kind // .id) end)
+                                            + "=\(upct)%") | join(" ")) + " "
+                               else "" end)
+                              + (if $b.resets_at then "resets=\($b.resets_at | sec)" else "" end)
+                              + (if $p == "anthropic" then
+                                   ([$all[] | select(.scope != null and .used_pct >= 100) | .scope] | join(","))
+                                   | if . != "" then " capped-models=\(.)" else "" end
+                                 else "" end) ) }
+                end
+            end ) as $m
+          | if $m != null then
+              (if ($r.state == "exhausted" or $r.state == "limited") and $m.pct < 100
+               then "100" else "\($m.pct)" end) + " " + ($m.note | ltrimstr(" ")) + $st
+            elif $r.state == "exhausted" or $r.state == "limited" then
+              "100 ccleft \($r.state)\($cn)" + (if $r.message then ": \($r.message | .[0:80])" else "" end)
+            else "-1 ccleft-\($r.state // "unknown")\($cn)" end
+        end
+      end' 2>/dev/null | head -1 | grep . || echo "-1 ccleft-unparsed"
+}
+
+# ccleft_anthropic_limits [now-epoch]: stdin /readings; the unscoped Claude
+# limits as the pacer's anthropic_limits array ([{slot,percent,resets_at}],
+# sorted by reset so slot indexes are stable), or nothing when the Claude
+# reading is not usable.
+ccleft_anthropic_limits() {
+  jq -c --argjson now "${1:-$(date -u +%s)}" \
+     --argjson maxstale "${HIVE_CCLEFT_MAX_STALE_S:-1800}" \
+     --argjson maxfresh "${HIVE_CCLEFT_MAX_AGE_S:-3600}" "$_CCLEFT_JQ_DEFS"'
+    reading("claude") as $r
+    | if $r == null or ($r | usable | not) then empty else
+        [$r | pctwins[] | select(.scope == null and .resets_at != null)]
+        | sort_by(.resets_at | ep)
+        | to_entries | map({slot: "slot\(.key)", percent: (.value | upct), resets_at: (.value.resets_at | sec)})
+        | if length == 0 then empty else . end
+      end' 2>/dev/null
+}
+
+# ccleft_measured_at <hive-provider>: stdin /readings; epoch of that
+# provider's reading (its fetched_at), or nothing.
+ccleft_measured_at() {
+  jq -r --arg cp "$(ccleft_provider_name "$1")" --argjson now 0 --argjson maxstale 0 --argjson maxfresh 0 \
+     "$_CCLEFT_JQ_DEFS"'reading($cp) | if . == null or .fetched_at == null then empty else (.fetched_at | ep) end' 2>/dev/null
+}
+
+# ccleft_kiro_sample [now-epoch]: stdin /readings; one pace-history row for the
+# Kiro credit pool, stamped with ccleft's FETCH time (not the caller's clock,
+# so a reading seen by several jobs is one sample), or nothing.
+ccleft_kiro_sample() {
+  jq -c --argjson now "${1:-$(date -u +%s)}" \
+     --argjson maxstale "${HIVE_CCLEFT_MAX_STALE_S:-1800}" \
+     --argjson maxfresh "${HIVE_CCLEFT_MAX_AGE_S:-3600}" "$_CCLEFT_JQ_DEFS"'
+    reading("kiro") as $r
+    | if $r == null or ($r | usable | not) then empty else
+        ([$r.windows[]? | select(.unit == "credits" and (.limit // 0) > 0)] | first) as $w
+        | if $w == null then empty else
+            {ts: ($r.fetched_at | ep), provider: "kiro", slot: "slot0",
+             pct: (($w.used / $w.limit * 100000 | round) / 1000),
+             reset: (if $w.resets_at then ($w.resets_at | ep) else null end),
+             used: (($w.used * 100 | round) / 100), limit: $w.limit}
+          end
+      end' 2>/dev/null
+}
+
+# pace_history_add <history-file> <row-json>: append a sample unless a row for
+# the same provider/slot/ts is already there (several jobs see one reading).
+pace_history_add() {
+  local f="$1" row="$2" key
+  [ -n "$row" ] || return 0
+  key=$(printf '%s' "$row" | jq -r '"\"ts\":\(.ts),\"provider\":\"\(.provider)\",\"slot\":\"\(.slot)\""' 2>/dev/null) || return 0
+  [ -n "$key" ] || return 0
+  tail -n 400 "$f" 2>/dev/null | grep -qF -- "$key" && return 0
+  printf '%s\n' "$row" >> "$f"
+}
+
+# kiro_evict_targets <evict-file> <ns> <agent> [now-epoch]: when hive-pace has
+# asked for this agent to leave Kiro (budget cap, see hive-pace.sh) and the
+# request has not expired, print the target pools it judged to have headroom
+# (space-separated); else nothing. Row: "<ns>/<agent>|<expiry-epoch>|<p1,p2>".
+kiro_evict_targets() {
+  local f="$1" key="$2/$3" now="${4:-$(date -u +%s)}" line exp tg
+  [ -s "$f" ] || return 0
+  line=$(grep -F "$key|" "$f" 2>/dev/null | tail -1)
+  [ -n "$line" ] || return 0
+  exp=$(printf '%s' "$line" | cut -d'|' -f2); tg=$(printf '%s' "$line" | cut -d'|' -f3)
+  [ "${exp:-0}" -gt "$now" ] 2>/dev/null || return 0
+  printf '%s' "$tg" | tr ',' ' '
 }

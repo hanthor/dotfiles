@@ -1,3 +1,7 @@
+> **Retired 2026-10-01.** The CronJob is deleted. Image versions are owned by the
+> hive-operator `HiveRelease` controller (tuna-os/hive-operator, `docs/release.md`).
+> This job only ever tracked `^v5\.` and rolled the v6 fleet back every night.
+
 # hive-upgrade: keep the Hives on upstream's latest release
 
 A daily CronJob in the **AWS Talos cluster** (`export KUBECONFIG=~/.kube/config-aws-migration`) that moves our Hive deployments to upstream's newest v5 release. It goes one target at a time, soaks between targets, and rolls back and blocklists a release that fails.

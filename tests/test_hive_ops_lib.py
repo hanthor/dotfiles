@@ -78,10 +78,11 @@ def test_effort_change(backend, model, recorded, want):
     ("gemini-3.6-flash-low", ""),
     ("kiro-api-key/claude-opus-5", "kiro-api-key/claude-sonnet-5"),
     ("kiro-api-key/gpt-5-6-sol", "kiro-api-key/gpt-5-6-luna"),
-    ("kiro-api-key/claude-sonnet-5", ""),
+    # second notch (2026-09-25, Kiro budget pacing): the bottom of the Kiro ladder
+    ("kiro-api-key/claude-sonnet-5", "kiro-api-key/claude-haiku-4-5:low"),
     ("kiro-api-key/claude-opus-5:high", "kiro-api-key/claude-sonnet-5:high"),
     ("kiro-api-key/gpt-5-6-sol:high", "kiro-api-key/gpt-5-6-luna:high"),
-    ("kiro-api-key/claude-sonnet-5:medium", ""),
+    ("kiro-api-key/claude-sonnet-5:medium", "kiro-api-key/claude-haiku-4-5:low"),
 ])
 def test_rung_down(model, want):
     assert out(f"rung_down {model}") == want
@@ -280,17 +281,16 @@ def test_probe_section():
     assert rotate_fn(["probe_section"], f"probe_section '{raw}' meta") == "M"
 
 
-# ── hive_open over the exec path, with a stale cached session ─────────────
+# ── hive_open over the exec path, with a stale cached token ───────────────
 
 KUBECTL_STUB = r'''
 case "$1 $2" in
   "get --raw") echo '{"items":[{"metadata":{"name":"hive-0"},"status":{"phase":"Running"}}]}'; exit 0 ;;
+  "get secret") printf '%s' "$(printf good | base64)"; exit 0 ;;
 esac
 # exec -n NS POD -- CMD...
 shift 5
 case "$1" in
-  cat) echo '{"old":{"Role":"owner","ExpiresAt":"2026-01-01T00:00:00Z"},
-              "good":{"Role":"owner","ExpiresAt":"2026-12-01T00:00:00Z"}}' ;;
   sh)  # sh -c SCRIPT sh MAXTIME SID PORT FILTER
        echo "$6" >> "$STUB_SIDS"
        if [ "$6" = good ]; then jq -c "$8" "$STUB_STATUS"
@@ -299,7 +299,7 @@ esac
 '''
 
 
-def test_hive_open_refreshes_a_refused_cached_session(stub_env, tmp_path):
+def test_hive_open_refreshes_a_refused_cached_token(stub_env, tmp_path):
     bindir, env = stub_env
     write_stub(bindir, "kubectl", KUBECTL_STUB)
     status = {"timestamp": "t", "hiveId": "h", "repos": ["x" * 100],
@@ -308,7 +308,7 @@ def test_hive_open_refreshes_a_refused_cached_session(stub_env, tmp_path):
     (tmp_path / "status.json").write_text(json.dumps(status))
     cache = tmp_path / "sessions"
     cache.mkdir()
-    (cache / "hive.sid").write_text("stale")
+    (cache / "hive.token").write_text("stale")
     env.update(STUB_STATUS=str(tmp_path / "status.json"), STUB_SIDS=str(tmp_path / "sids"),
                HIVE_SID_CACHE_DIR=str(cache), HIVE_API_VIA="exec")
     env.pop("KUBERNETES_SERVICE_HOST", None)
@@ -320,7 +320,7 @@ def test_hive_open_refreshes_a_refused_cached_session(stub_env, tmp_path):
     assert "repos" not in slim and slim["agents"][0]["liveSummary"] == "pane"
     assert "statsConfig" not in slim["agents"][0]
     assert (tmp_path / "sids").read_text().split() == ["stale", "good"]
-    assert (cache / "hive.sid").read_text() == "good"
+    assert (cache / "hive.token").read_text() == "good"
 
 
 def test_tier_members_inventory_gate_ignores_pi_thinking_suffix(tmp_path):

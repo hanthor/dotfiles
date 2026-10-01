@@ -97,8 +97,8 @@ for ns in $NAMESPACES; do
       END { for (a in max) print a, max[a] }')
   [ -n "$cad" ] || { printf '%-14s could not read cadences — skipped\n' "$ns"; continue; }
 
-  sid=$(hive_sid "$ns" "$pod")
-  [ -n "$sid" ] || { printf '%-14s no owner session — log in at this spoke\n' "$ns"; continue; }
+  sid=$(hive_sid "$ns")
+  [ -n "$sid" ] || { printf '%-14s no dashboard token — check $ns/hive-secrets\n' "$ns"; continue; }
   live=$(hive_status "$ns" "$pod" "$sid") \
     || { printf '%-14s /api/status unreadable — skipped\n' "$ns"; continue; }
 
