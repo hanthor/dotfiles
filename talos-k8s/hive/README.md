@@ -21,7 +21,7 @@ fleet got rolled back to v5 every night.
 
 | Responsibility | Owner today | Target |
 |---|---|---|
-| Image version / upgrades | nobody (`hive-upgrade` suspended 2026-10-01) | `HiveRelease` controller |
+| Image version / upgrades | **operator** — `HiveRelease hive`, Enforce since 2026-10-01 (`hive-upgrade` deleted) | done |
 | Backend/model rotation, stranding, auto-resume | `hive-rotate*` CronJobs | `HiveSpoke` rotation (Shadow now) |
 | Quota / credit starvation, pacing | `hive-pace`, ccleft | `UsagePool` + rotation pacer |
 | Liveness (watchdog, nudge) | `hive-watchdog*`, `hive-nudge` | operator watchdog |
@@ -44,8 +44,10 @@ kubectl -n hive get cronjobs
   is a rollback.
 - [`ops/`](ops/README.md): the bash CronJobs and their scripts. They shrink as
   the operator takes over.
-- [`upgrade/`](upgrade/README.md): the retired `hive-upgrade` job, kept
-  suspended until the `HiveRelease` controller is in Enforce.
+- [`upgrade/`](upgrade/README.md): the retired `hive-upgrade` script, kept for
+  reference. Its CronJob is deleted; the `HiveRelease` controller replaced it
+  (tracks `v6-latest` by digest, rolls hanthor → reef → school in the
+  04:30–06:30 New York window with soak and rollback).
 - [`ccleft/`](ccleft/README.md): remaining-quota readings for every account.
 - [`discord/`](discord/README.md), [`kiro/`](kiro/): integrations.
 - [`history/`](history/): the v2 (goose/DeepSeek) era docs and handoffs.
