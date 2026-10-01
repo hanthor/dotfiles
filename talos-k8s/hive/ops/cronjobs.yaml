@@ -13,6 +13,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -23,44 +24,44 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-activity.sh
-            - publish
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ACTIVITY_STATE
-              value: /state/hive-activity
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-activity.sh
+                - publish
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_ACTIVITY_STATE
+                  value: /state/hive-activity
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -77,19 +78,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: '*/5 * * * *'
   startingDeadlineSeconds: 120
   successfulJobsHistoryLimit: 2
@@ -107,6 +108,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -117,44 +119,44 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-cli-update.sh
-            - update
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-cli-update.sh
+                - update
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -171,495 +173,23 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 10 5 * * *
   startingDeadlineSeconds: 600
   successfulJobsHistoryLimit: 2
   suspend: false
----
-apiVersion: batch/v1
-kind: CronJob
-# Keeps pi-kiro-api (Kiro provider for the pi backend) installed on each
-# hive PVC and registered in every agent's ~/.pi — see scripts/hive-pi-kiro.sh.
-metadata:
-  labels:
-    app.kubernetes.io/component: pi-kiro
-    app.kubernetes.io/name: hive-ops
-  name: hive-pi-kiro
-  namespace: hive
-spec:
-  concurrencyPolicy: Forbid
-  failedJobsHistoryLimit: 3
-  jobTemplate:
-    spec:
-      activeDeadlineSeconds: 600
-      backoffLimit: 0
-      template:
-        metadata:
-          labels:
-            app.kubernetes.io/component: pi-kiro
-            app.kubernetes.io/name: hive-ops
-        spec:
-          containers:
-          - command:
-            - bash
-            - /scripts/hive-pi-kiro.sh
-            - reconcile
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
-          dnsPolicy: ClusterFirst
-          nodeSelector:
-            workload-role: hive
-          restartPolicy: Never
-          schedulerName: default-scheduler
-          securityContext:
-            fsGroup: 1000
-            runAsGroup: 1000
-            runAsNonRoot: true
-            runAsUser: 1000
-            seccompProfile:
-              type: RuntimeDefault
-          serviceAccount: hive-ops
-          serviceAccountName: hive-ops
-          terminationGracePeriodSeconds: 30
-          tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
-          volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
-  schedule: 37 * * * *
-  startingDeadlineSeconds: 600
-  successfulJobsHistoryLimit: 2
-  suspend: false
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  labels:
-    app.kubernetes.io/component: fork-ai-check
-    app.kubernetes.io/name: hive-ops
-  name: hive-fork-ai-check
-  namespace: hive
-spec:
-  concurrencyPolicy: Forbid
-  failedJobsHistoryLimit: 3
-  jobTemplate:
-    spec:
-      activeDeadlineSeconds: 900
-      backoffLimit: 0
-      template:
-        metadata:
-          labels:
-            app.kubernetes.io/component: fork-ai-check
-            app.kubernetes.io/name: hive-ops
-        spec:
-          containers:
-          - command:
-            - bash
-            - /scripts/hive-fork-ai-check.sh
-            - check
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
-          dnsPolicy: ClusterFirst
-          nodeSelector:
-            workload-role: hive
-          restartPolicy: Never
-          schedulerName: default-scheduler
-          securityContext:
-            fsGroup: 1000
-            runAsGroup: 1000
-            runAsNonRoot: true
-            runAsUser: 1000
-            seccompProfile:
-              type: RuntimeDefault
-          serviceAccount: hive-ops
-          serviceAccountName: hive-ops
-          terminationGracePeriodSeconds: 30
-          tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
-          volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
-  schedule: 20 6 * * 1
-  startingDeadlineSeconds: 900
-  successfulJobsHistoryLimit: 2
-  suspend: true
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  labels:
-    app.kubernetes.io/component: fork-drift
-    app.kubernetes.io/name: hive-ops
-  name: hive-fork-drift
-  namespace: hive
-spec:
-  concurrencyPolicy: Forbid
-  failedJobsHistoryLimit: 3
-  jobTemplate:
-    spec:
-      activeDeadlineSeconds: 900
-      backoffLimit: 0
-      template:
-        metadata:
-          labels:
-            app.kubernetes.io/component: fork-drift
-            app.kubernetes.io/name: hive-ops
-        spec:
-          containers:
-          - command:
-            - bash
-            - /scripts/hive-fork-drift.sh
-            - check
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
-          dnsPolicy: ClusterFirst
-          nodeSelector:
-            workload-role: hive
-          restartPolicy: Never
-          schedulerName: default-scheduler
-          securityContext:
-            fsGroup: 1000
-            runAsGroup: 1000
-            runAsNonRoot: true
-            runAsUser: 1000
-            seccompProfile:
-              type: RuntimeDefault
-          serviceAccount: hive-ops
-          serviceAccountName: hive-ops
-          terminationGracePeriodSeconds: 30
-          tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
-          volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
-  schedule: 41 4 * * *
-  startingDeadlineSeconds: 300
-  successfulJobsHistoryLimit: 2
-  suspend: true
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  labels:
-    app.kubernetes.io/component: fork-switch
-    app.kubernetes.io/name: hive-ops
-  name: hive-fork-switch
-  namespace: hive
-spec:
-  concurrencyPolicy: Forbid
-  failedJobsHistoryLimit: 3
-  jobTemplate:
-    spec:
-      activeDeadlineSeconds: 1800
-      backoffLimit: 0
-      template:
-        metadata:
-          labels:
-            app.kubernetes.io/component: fork-switch
-            app.kubernetes.io/name: hive-ops
-        spec:
-          containers:
-          - command:
-            - bash
-            - /scripts/hive-fork-switch.sh
-            - reconcile
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
-          dnsPolicy: ClusterFirst
-          nodeSelector:
-            workload-role: hive
-          restartPolicy: Never
-          schedulerName: default-scheduler
-          securityContext:
-            fsGroup: 1000
-            runAsGroup: 1000
-            runAsNonRoot: true
-            runAsUser: 1000
-            seccompProfile:
-              type: RuntimeDefault
-          serviceAccount: hive-ops
-          serviceAccountName: hive-ops
-          terminationGracePeriodSeconds: 30
-          tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
-          volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
-  schedule: 50 6 * * 1
-  startingDeadlineSeconds: 900
-  successfulJobsHistoryLimit: 2
-  suspend: true
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  labels:
-    app.kubernetes.io/component: fork-verify
-    app.kubernetes.io/name: hive-ops
-  name: hive-fork-verify
-  namespace: hive
-spec:
-  concurrencyPolicy: Forbid
-  failedJobsHistoryLimit: 3
-  jobTemplate:
-    spec:
-      activeDeadlineSeconds: 1800
-      backoffLimit: 0
-      template:
-        metadata:
-          labels:
-            app.kubernetes.io/component: fork-verify
-            app.kubernetes.io/name: hive-ops
-        spec:
-          containers:
-          - command:
-            - bash
-            - /scripts/hive-fork-switch.sh
-            - verify
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
-          dnsPolicy: ClusterFirst
-          nodeSelector:
-            workload-role: hive
-          restartPolicy: Never
-          schedulerName: default-scheduler
-          securityContext:
-            fsGroup: 1000
-            runAsGroup: 1000
-            runAsNonRoot: true
-            runAsUser: 1000
-            seccompProfile:
-              type: RuntimeDefault
-          serviceAccount: hive-ops
-          serviceAccountName: hive-ops
-          terminationGracePeriodSeconds: 30
-          tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
-          volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
-  schedule: 10 7 * * *
-  startingDeadlineSeconds: 900
-  successfulJobsHistoryLimit: 2
-  suspend: true
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -673,6 +203,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -683,44 +214,44 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-inventory.sh
-            - collect
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-inventory.sh
+                - collect
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -737,19 +268,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 40 5 * * *
   startingDeadlineSeconds: 600
   successfulJobsHistoryLimit: 2
@@ -767,6 +298,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 2400
       backoffLimit: 0
@@ -777,44 +309,44 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-metrics.sh
-            - collect
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-metrics.sh
+                - collect
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -831,19 +363,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 23 * * * *
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 2
@@ -861,6 +393,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -871,44 +404,44 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-nudge.sh
-            - nudge
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-nudge.sh
+                - nudge
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -925,19 +458,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 13,43 * * * *
   startingDeadlineSeconds: 600
   successfulJobsHistoryLimit: 2
@@ -955,6 +488,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -965,46 +499,80 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-pace.sh
-            - apply
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_PACE_STATE
-              value: /state/hive-rotate
-            - name: HIVE_PACE_NAMESPACES
-              value: hive hive-reef hive-hanthor
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-pace.sh
+                - apply
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_PROBE_SOURCE
+                  value: ccleft
+                - name: HIVE_CCLEFT_URL
+                  value: http://ccleft.hive.svc:9464
+                - name: HIVE_CCLEFT_MAX_STALE_S
+                  value: "1800"
+                - name: HIVE_PACE_PIN
+                  value: hive/supervisor
+                - name: HIVE_PACE_KIRO_BUDGET
+                  value: "1"
+                - name: HIVE_PACE_KIRO_SAFETY
+                  value: "0.85"
+                - name: HIVE_PACE_KIRO_HOT
+                  value: "1.0"
+                - name: HIVE_PACE_KIRO_COLD
+                  value: "0.6"
+                - name: HIVE_PACE_KIRO_PROMOTE_MAX
+                  value: "0.8"
+                - name: HIVE_PACE_KIRO_WINDOW_S
+                  value: "3600"
+                - name: HIVE_PACE_KIRO_MIN_SAMPLES
+                  value: "3"
+                - name: HIVE_PACE_KIRO_MIN_SPAN_S
+                  value: "1200"
+                - name: HIVE_PACE_KIRO_MAX_DEMOTE
+                  value: "4"
+                - name: HIVE_PACE_KIRO_MAX_PROMOTE
+                  value: "1"
+                - name: HIVE_PACE_KIRO_MAX_EVICT
+                  value: "2"
+                - name: HIVE_PACE_KIRO_EVICT_TTL_S
+                  value: "21600"
+                - name: HIVE_PACE_EVICT_TARGET_MAX_PCT
+                  value: "85"
+                - name: HIVE_PACE_STATE
+                  value: /state/hive-rotate
+                - name: HIVE_PACE_NAMESPACES
+                  value: hive hive-reef hive-hanthor
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -1021,19 +589,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 5,25,45 * * * *
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 2
@@ -1043,62 +611,63 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   labels:
-    app.kubernetes.io/component: peak-pause
+    app.kubernetes.io/component: pi-kiro
     app.kubernetes.io/name: hive-ops
-  name: hive-peak-pause
+  name: hive-pi-kiro
   namespace: hive
 spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
       template:
         metadata:
           labels:
-            app.kubernetes.io/component: peak-pause
+            app.kubernetes.io/component: pi-kiro
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-peak.sh
-            - pause
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-pi-kiro.sh
+                - reconcile
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -1115,117 +684,23 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
-  schedule: 0 1,6 * * 1-5
-  startingDeadlineSeconds: 300
-  successfulJobsHistoryLimit: 2
-  suspend: true  # 2026-09-24: DeepSeek dropped — nothing is peak-priced
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  labels:
-    app.kubernetes.io/component: peak-resume
-    app.kubernetes.io/name: hive-ops
-  name: hive-peak-resume
-  namespace: hive
-spec:
-  concurrencyPolicy: Forbid
-  failedJobsHistoryLimit: 3
-  jobTemplate:
-    spec:
-      activeDeadlineSeconds: 600
-      backoffLimit: 0
-      template:
-        metadata:
-          labels:
-            app.kubernetes.io/component: peak-resume
-            app.kubernetes.io/name: hive-ops
-        spec:
-          containers:
-          - command:
-            - bash
-            - /scripts/hive-peak.sh
-            - resume
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
               name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
               name: tmp
-          dnsPolicy: ClusterFirst
-          nodeSelector:
-            workload-role: hive
-          restartPolicy: Never
-          schedulerName: default-scheduler
-          securityContext:
-            fsGroup: 1000
-            runAsGroup: 1000
-            runAsNonRoot: true
-            runAsUser: 1000
-            seccompProfile:
-              type: RuntimeDefault
-          serviceAccount: hive-ops
-          serviceAccountName: hive-ops
-          terminationGracePeriodSeconds: 30
-          tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
-          volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
-  schedule: 0 4,10 * * 1-5
-  startingDeadlineSeconds: 300
+  schedule: 37 * * * *
+  startingDeadlineSeconds: 600
   successfulJobsHistoryLimit: 2
-  suspend: true  # 2026-09-24: DeepSeek dropped — nothing is peak-priced
+  suspend: false
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -1239,6 +714,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -1249,44 +725,44 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-repo-sync.sh
-            - apply
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-repo-sync.sh
+                - apply
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -1303,19 +779,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 17 3 * * *
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 2
@@ -1333,6 +809,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 900
       backoffLimit: 0
@@ -1343,48 +820,54 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-rotate.sh
-            - apply
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: HIVE_ROTATE_HOLD
-              value: reviewer
-            - name: HIVE_ROTATE_PIN
-              value: supervisor
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-rotate.sh
+                - apply
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_PROBE_SOURCE
+                  value: ccleft
+                - name: HIVE_CCLEFT_URL
+                  value: http://ccleft.hive.svc:9464
+                - name: HIVE_CCLEFT_MAX_STALE_S
+                  value: "1800"
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate
+                - name: HOME
+                  value: /tmp
+                - name: HIVE_ROTATE_HOLD
+                  value: reviewer
+                - name: HIVE_ROTATE_PIN
+                  value: supervisor
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -1401,19 +884,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: '*/20 * * * *'
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 2
@@ -1431,6 +914,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 900
       backoffLimit: 0
@@ -1441,51 +925,57 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-rotate.sh
-            - apply
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_NS
-              value: hive-hanthor
-            - name: HIVE_PRIMARY_NS
-              value: hive
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate-hanthor
-            - name: HOME
-              value: /tmp
-            - name: HIVE_ROTATE_HOLD
-              value: reviewer
-            - name: HIVE_ROTATE_PIN
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-rotate.sh
+                - apply
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_PROBE_SOURCE
+                  value: ccleft
+                - name: HIVE_CCLEFT_URL
+                  value: http://ccleft.hive.svc:9464
+                - name: HIVE_CCLEFT_MAX_STALE_S
+                  value: "1800"
+                - name: HIVE_NS
+                  value: hive-hanthor
+                - name: HIVE_PRIMARY_NS
+                  value: hive
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate-hanthor
+                - name: HOME
+                  value: /tmp
+                - name: HIVE_ROTATE_HOLD
+                  value: reviewer
+                - name: HIVE_ROTATE_PIN
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -1502,19 +992,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 14-59/20 * * * *
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 2
@@ -1532,6 +1022,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 900
       backoffLimit: 0
@@ -1542,50 +1033,56 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-rotate.sh
-            - apply
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_NS
-              value: hive-reef
-            - name: HIVE_PRIMARY_NS
-              value: hive
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate-reef
-            - name: HOME
-              value: /tmp
-            - name: HIVE_ROTATE_HOLD
-            - name: HIVE_ROTATE_PIN
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-rotate.sh
+                - apply
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_PROBE_SOURCE
+                  value: ccleft
+                - name: HIVE_CCLEFT_URL
+                  value: http://ccleft.hive.svc:9464
+                - name: HIVE_CCLEFT_MAX_STALE_S
+                  value: "1800"
+                - name: HIVE_NS
+                  value: hive-reef
+                - name: HIVE_PRIMARY_NS
+                  value: hive
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate-reef
+                - name: HOME
+                  value: /tmp
+                - name: HIVE_ROTATE_HOLD
+                - name: HIVE_ROTATE_PIN
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -1602,19 +1099,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 7-59/20 * * * *
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 2
@@ -1632,6 +1129,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -1642,44 +1140,44 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-shared-auth.sh
-            - reconcile
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-shared-auth.sh
+                - reconcile
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -1696,19 +1194,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: '*/30 * * * *'
   startingDeadlineSeconds: 600
   successfulJobsHistoryLimit: 2
@@ -1726,6 +1224,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 600
       backoffLimit: 0
@@ -1736,50 +1235,50 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-tiers.sh
-            - refresh
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: AA_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  key: AA_API_KEY
-                  name: hive-secrets
-                  optional: true
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 25m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-tiers.sh
+                - refresh
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate
+                - name: HOME
+                  value: /tmp
+                - name: AA_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      key: AA_API_KEY
+                      name: hive-secrets
+                      optional: true
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -1796,19 +1295,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 50 5 * * *
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 2
@@ -1826,6 +1325,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 280
       backoffLimit: 0
@@ -1836,44 +1336,50 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-rotate.sh
-            - watchdog
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-rotate.sh
+                - watchdog
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_PROBE_SOURCE
+                  value: ccleft
+                - name: HIVE_CCLEFT_URL
+                  value: http://ccleft.hive.svc:9464
+                - name: HIVE_CCLEFT_MAX_STALE_S
+                  value: "1800"
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -1890,19 +1396,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: '*/5 * * * *'
   startingDeadlineSeconds: 120
   successfulJobsHistoryLimit: 2
@@ -1920,6 +1426,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 280
       backoffLimit: 0
@@ -1930,48 +1437,54 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-rotate.sh
-            - watchdog
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_NS
-              value: hive-hanthor
-            - name: HIVE_PRIMARY_NS
-              value: hive
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate-hanthor
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-rotate.sh
+                - watchdog
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_PROBE_SOURCE
+                  value: ccleft
+                - name: HIVE_CCLEFT_URL
+                  value: http://ccleft.hive.svc:9464
+                - name: HIVE_CCLEFT_MAX_STALE_S
+                  value: "1800"
+                - name: HIVE_NS
+                  value: hive-hanthor
+                - name: HIVE_PRIMARY_NS
+                  value: hive
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate-hanthor
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -1988,19 +1501,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 4-59/5 * * * *
   startingDeadlineSeconds: 120
   successfulJobsHistoryLimit: 2
@@ -2018,6 +1531,7 @@ spec:
   concurrencyPolicy: Forbid
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata: {}
     spec:
       activeDeadlineSeconds: 280
       backoffLimit: 0
@@ -2028,48 +1542,54 @@ spec:
             app.kubernetes.io/name: hive-ops
         spec:
           containers:
-          - command:
-            - bash
-            - /scripts/hive-rotate.sh
-            - watchdog
-            env:
-            - name: KUBECONFIG
-            - name: HIVE_NS
-              value: hive-reef
-            - name: HIVE_PRIMARY_NS
-              value: hive
-            - name: HIVE_ROTATE_STATE
-              value: /state/hive-rotate-reef
-            - name: HOME
-              value: /tmp
-            - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
-              value: "false"
-            image: alpine/k8s:1.37.1
-            imagePullPolicy: IfNotPresent
-            name: ops
-            resources:
-              limits:
-                cpu: "1"
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 64Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
-            terminationMessagePath: /dev/termination-log
-            terminationMessagePolicy: File
-            volumeMounts:
-            - mountPath: /scripts
-              name: scripts
-              readOnly: true
-            - mountPath: /state
-              name: state
-            - mountPath: /tmp
-              name: tmp
+            - command:
+                - bash
+                - /scripts/hive-rotate.sh
+                - watchdog
+              env:
+                - name: KUBECONFIG
+                - name: HIVE_PROBE_SOURCE
+                  value: ccleft
+                - name: HIVE_CCLEFT_URL
+                  value: http://ccleft.hive.svc:9464
+                - name: HIVE_CCLEFT_MAX_STALE_S
+                  value: "1800"
+                - name: HIVE_NS
+                  value: hive-reef
+                - name: HIVE_PRIMARY_NS
+                  value: hive
+                - name: HIVE_ROTATE_STATE
+                  value: /state/hive-rotate-reef
+                - name: HOME
+                  value: /tmp
+                - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
+                  value: "false"
+              image: alpine/k8s:1.37.1
+              imagePullPolicy: IfNotPresent
+              name: ops
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /scripts
+                  name: scripts
+                  readOnly: true
+                - mountPath: /state
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
           dnsPolicy: ClusterFirst
           nodeSelector:
             workload-role: hive
@@ -2086,19 +1606,19 @@ spec:
           serviceAccountName: hive-ops
           terminationGracePeriodSeconds: 30
           tolerations:
-          - effect: NoSchedule
-            key: node-role.kubernetes.io/control-plane
-            operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
-          - configMap:
-              defaultMode: 493
-              name: hive-ops-scripts
-            name: scripts
-          - name: state
-            persistentVolumeClaim:
-              claimName: hive-ops-state
-          - emptyDir: {}
-            name: tmp
+            - configMap:
+                defaultMode: 493
+                name: hive-ops-scripts
+              name: scripts
+            - name: state
+              persistentVolumeClaim:
+                claimName: hive-ops-state
+            - emptyDir: {}
+              name: tmp
   schedule: 2-59/5 * * * *
   startingDeadlineSeconds: 120
   successfulJobsHistoryLimit: 2

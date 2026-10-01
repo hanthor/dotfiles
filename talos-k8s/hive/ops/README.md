@@ -1,7 +1,7 @@
 # hive-ops — in-cluster operations for the tuna-os Hives
 
 Bash scripts run as CronJobs in namespace `hive` on the AWS Talos cluster
-(`KUBECONFIG=~/.kube/config-aws-migration`). They keep the three upstream-v5
+(`KUBECONFIG=~/.kube/config-aws-migration`). They keep the three upstream-v6
 Hives working: move agents between providers as quota runs out, pick model rungs by
 capability tier, pace spending, keep the Kiro provider for `pi` installed, and heal
 agents that get stuck.
@@ -15,8 +15,13 @@ agents that get stuck.
 - `scripts/`: the contents of ConfigMap `hive-ops-scripts`, mounted at `/scripts`.
   This directory is the source of truth. The older copies in `roles/hive_ops/files/bin/`
   are no longer used (the role is disabled on every host).
-- `cronjobs.yaml`: the 22 CronJobs, exported from the cluster with status and managed fields removed.
-- Every job runs `alpine/k8s:1.31.0` as ServiceAccount `hive-ops`, with the state
+- `cronjobs.yaml`: the 16 CronJobs, exported from the cluster with status and managed fields removed.
+  Re-export after any live change: git drifted behind the cluster once already.
+- These jobs are being replaced one by one by the [hive-operator](https://github.com/tuna-os/hive-operator);
+  see [../README.md](../README.md#who-manages-what) for which ones are still authoritative.
+- Auth: the spoke's dashboard token in `X-Hive-Internal` (`hive_sid` in `hive-lib.sh`), owner-equivalent
+  on hive v6. The owner session cookie the scripts used until 2026-10-01 expired with its browser login.
+- Every job runs `alpine/k8s:1.37.1` as ServiceAccount `hive-ops`, with the state
   PVC `hive-ops-state` mounted at `/state`. That PVC is local-path storage on
   `ip-10-20-1-10`, so the jobs have to run on that node.
 
@@ -47,7 +52,6 @@ kubectl -n hive logs -f job/hive-rotate-manual-...
 | `hive-pace` | :05 :25 :45 | `hive-pace.sh apply` | **Burn-rate pacing.** Fits the burn rate per limit against the time left until reset. When a provider is `hot` it demotes one agent one notch (for example fable/opus → sonnet, gemini-…-high → -low). When `cold` it restores only agents it demoted itself. Covers all 3 hives. |
 | `hive-tiers` | 05:50 daily | `hive-tiers.sh refresh` | Rebuilds the **model tier** cache (`tiers.tsv`) from the Artificial Analysis agentic index. rotate merges it with its built-in table. |
 | `hive-inventory` | 05:40 daily | `hive-inventory.sh collect` | Lists the models each backend really offers (`inventory.tsv`), so rungs naming unavailable models are dropped. |
-| `hive-peak-pause` / `-resume` | suspended | `hive-peak.sh pause\|resume` | Paused agents on **DeepSeek** during its weekday peak-price windows. Suspended 2026-09-24: DeepSeek is no longer used and nothing else is peak-priced. |
 | `hive-pi-kiro` | :37 hourly | `hive-pi-kiro.sh reconcile` | Keeps the pinned, patched pi-kiro-api checkout at `/data/pi-packages/pi-kiro-api` on each hive PVC and registers it in every agent's `~/.pi/agent/settings.json`. See [Kiro](#kiro-pi--pi-kiro-api). |
 | `hive-nudge` | :13 :43 | `hive-nudge.sh nudge` | Kicks agents idle for more than 2× their slowest cadence (at most 4 per hive, 30 s per kick, 420 s per run). Never kicks when the hive's budget is exhausted. |
 | `hive-shared-auth` | every 30 min | `hive-shared-auth.sh reconcile` | Checks that `.claude`, `.gemini` and `.codex` really are one store across all hives (write-through test). Repairs group permissions, an unset Claude theme, and a broken agy `statusLine`. |
@@ -55,7 +59,6 @@ kubectl -n hive logs -f job/hive-rotate-manual-...
 | `hive-metrics` | :23 hourly | `hive-metrics.sh collect` | Publishes a 14-day PR/issue series from GitHub search. Slow by design because of rate-limit pacing, so the deadline is 2400 s. |
 | `hive-cli-update` | 05:10 daily | `hive-cli-update.sh update` | Updates the agent CLIs inside the hive pods. |
 | `hive-repo-sync` | 03:17 daily | `hive-repo-sync.sh apply` | Syncs the governor repo lists with the GitHub App installation. |
-| `hive-fork-*` | suspended | `hive-fork-*.sh` | Legacy v4-fork drift and switch tooling. Suspended since the move to upstream v5. |
 
 Published outputs (ns `hive`):
 
@@ -75,7 +78,6 @@ HIVE_NS=hive-reef ./hive-rotate.sh plan     # another hive
 HIVE_ROTATE_DRYRUN=1 ./hive-rotate.sh watchdog   # classify and report; no heals
 HIVE_PACE_DRYRUN=1 ./hive-pace.sh apply     # verdicts; no demotions
 ./hive-nudge.sh check                       # who is overdue; no kicks
-./hive-peak.sh status
 ./hive-shared-auth.sh check
 ```
 

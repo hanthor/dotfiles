@@ -48,8 +48,9 @@ that file on every machine.
 
 hive.reilly.asia persists its live config to `/data/hive.yaml.runtime` and
 restores it over the ConfigMap seed on every restart. Roster or level changes
-made in its dashboard win. [`talos-k8s/hive-hanthor/hive.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/hive-hanthor/hive.yaml)
-is the seed, re-synced to the runtime state on 2026-09-24. Before trusting it,
+made in its dashboard win. The `hive-config` ConfigMap in
+[`talos-k8s/hive/spokes/hanthor/manifest.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/hive/spokes/hanthor/manifest.yaml)
+is the seed, exported from the cluster on 2026-10-01. Before trusting it,
 check the runtime file:
 
 ```bash

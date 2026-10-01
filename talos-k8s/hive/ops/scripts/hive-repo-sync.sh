@@ -67,19 +67,17 @@ case "$ACTION" in plan|apply) ;; *) echo "usage: $0 plan|apply" >&2; exit 2;; es
 POD=$(kubectl get pods -n "$NS" -l "$LABEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
 [ -n "$POD" ] || { echo "ERROR: no hive pod found" >&2; exit 1; }
 
-SID=$(kubectl exec -n "$NS" "$POD" -- cat /data/dashboard-sessions.json 2>/dev/null \
-      | jq -r '
-          to_entries | map(select(.value.Role=="owner"))
-          | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null)
+# The dashboard token in X-Hive-Internal is owner-equivalent on hive v6
+# (hivecommons/hive#4134); it replaced the expiring owner session cookie.
+SID=$(kubectl get secret -n "$NS" hive-secrets -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' 2>/dev/null | base64 -d)
 if [ -z "$SID" ]; then
-  echo "ERROR: no unexpired owner session in the dashboard session store." >&2
-  echo "       Log in at https://hive.tunaos.org as an authorized_users member." >&2
+  echo "ERROR: no HIVE_DASHBOARD_TOKEN in $NS/hive-secrets." >&2
   exit 1
 fi
 
 hive_api() {
   kubectl exec -n "$NS" "$POD" -- \
-    curl -sS -X "$1" --max-time 25 -H "Cookie: hive_session=$SID" -H 'Content-Type: application/json' "$API$2" ${3:+-d "$3"} 2>&1
+    curl -sS -X "$1" --max-time 25 -H "X-Hive-Internal: $SID" -H 'Content-Type: application/json' "$API$2" ${3:+-d "$3"} 2>&1
 }
 
 # The App's own view of what it can act on — see header comment for why this
@@ -116,15 +114,13 @@ installation_repos() {
 # ── Per-hive helpers (the API lives in each hive's own pod) ─────────────
 pod_for() { kubectl get pods -n "$1" -l "$LABEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null; }
 
-sid_for() {
-  kubectl exec -n "$1" "$2" -- cat /data/dashboard-sessions.json 2>/dev/null \
-    | jq -r 'to_entries | map(select(.value.Role=="owner"))
-             | sort_by(.value.ExpiresAt) | reverse | .[0].key // empty' 2>/dev/null
+sid_for() {  # <ns> <pod>: the dashboard token, owner-equivalent on hive v6
+  kubectl get secret -n "$1" hive-secrets -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' 2>/dev/null | base64 -d
 }
 
 api_for() {  # <ns> <pod> <sid> <METHOD> <path> [body]
   kubectl exec -n "$1" "$2" -- curl -sS -X "$4" --max-time 30 \
-    -H "Cookie: hive_session=$3" -H 'Content-Type: application/json' \
+    -H "X-Hive-Internal: $3" -H 'Content-Type: application/json' \
     "$API$5" ${6:+-d "$6"} 2>&1
 }
 
@@ -189,8 +185,7 @@ for h in $(hive_names); do
   ns=$(hive_ns "$h")
   pod=$(pod_for "$ns"); [ -z "$pod" ] && { echo "WARN: no pod for hive '$h' (ns $ns) — skipping" >&2; continue; }
   sid=$(sid_for "$ns" "$pod")
-  # READ with the internal token, which every hive accepts and which needs no
-  # browser login. Only WRITES need an owner cookie.
+  # The same token reads and (on hive v6) writes; no browser login needed.
   #
   # Skipping a session-less hive entirely was actively dangerous: its repos
   # then looked unmanaged, and the router would have "discovered" all 18 of
@@ -200,7 +195,7 @@ for h in $(hive_names); do
   cfg=$(kubectl exec -n "$ns" "$pod" -- curl -sS --max-time 30 -H "X-Hive-Internal: $tok" "$API/api/config" 2>&1)
   printf '%s' "$cfg" | jq -e '.repos' >/dev/null 2>&1 || { echo "WARN: could not read config for '$h'" >&2; continue; }
   HPOD[$h]=$pod; HSID[$h]=$sid
-  [ -z "$sid" ] && echo "  (read-only: no owner session for '$h'; it will be counted but not written to)" >&2
+  [ -z "$sid" ] && echo "  (read-only: no dashboard token for '$h'; it will be counted but not written to)" >&2
   HREPOS[$h]=$(printf '%s' "$cfg" | jq -r '.repos[]')
   ALL_MANAGED="$ALL_MANAGED"$'\n'"${HREPOS[$h]}"
   printf '%-8s %s repos\n' "$h" "$(printf '%s' "${HREPOS[$h]}" | grep -c . )"

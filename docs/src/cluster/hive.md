@@ -171,9 +171,13 @@ kubectl create secret generic hive-secrets -n hive \
 
 ### Deploy
 
+Each spoke's manifests live in `talos-k8s/hive/spokes/<spoke>/manifest.yaml`
+(exported from the cluster; secrets are out of band). The hive container
+image is owned by the hive-operator `HiveRelease` controller, so do not roll
+images by applying these files. See `talos-k8s/hive/README.md`.
+
 ```bash
-kubectl apply -f talos-k8s/hive/hive.yaml
-kubectl rollout restart deploy/hive -n hive
+kubectl apply -f talos-k8s/hive/spokes/school/manifest.yaml
 ```
 
 Access: **https://school.tunaos.org** (AWS cluster; legacy alias `hive.tunaos.org`). Fleet-wide view of every Hive: **https://hub.tunaos.org**. The old home-cluster URL was `https://hive.manatee-basking.ts.net`.

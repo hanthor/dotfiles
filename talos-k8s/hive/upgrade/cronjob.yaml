@@ -9,6 +9,13 @@ metadata:
   labels:
     app.kubernetes.io/name: hive-upgrade
 spec:
+  # SUSPENDED 2026-10-01 and being retired. It tracked only HIVE_UPGRADE_LINE
+  # '^v5\.' and read the version from the stale hive.tunaos.org/version
+  # annotation, so every night it "upgraded" the v6 spokes back to the newest
+  # v5. Image version is now owned by the hive-operator HiveRelease
+  # controller (tuna-os/hive-operator). Delete this CronJob in the same
+  # change that sets the HiveRelease to Enforce; do not unsuspend it.
+  suspend: true
   # 04:30 New York: low traffic, after the 04:10 fork-drift slot, before the
   # 05:10 hive-cli-update and 06:00 peak-pause jobs.
   schedule: "30 4 * * *"
