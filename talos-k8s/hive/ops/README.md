@@ -15,7 +15,9 @@ agents that get stuck.
 - `scripts/`: the contents of ConfigMap `hive-ops-scripts`, mounted at `/scripts`.
   This directory is the source of truth. The older copies in `roles/hive_ops/files/bin/`
   are no longer used (the role is disabled on every host).
-- `cronjobs.yaml`: the 16 CronJobs, exported from the cluster with status and managed fields removed.
+- `cronjobs.yaml`: only the hive-ops CronJobs the operator does not own (school's suspended
+  rotate/watchdog/pace/nudge, kept for rollback). The rest are rendered by `HiveHousekeeping/fleet`
+  in tuna-os/hive-operator (`config/samples/housekeeping.yaml`); `kubectl apply` of an old copy is drift.
   Re-export after any live change: git drifted behind the cluster once already.
 - These jobs are being replaced one by one by the [hive-operator](https://github.com/tuna-os/hive-operator);
   see [../README.md](../README.md#who-manages-what) for which ones are still authoritative.
@@ -33,8 +35,10 @@ cd talos-k8s/hive/ops
 # The ConfigMap is too large for client-side apply's last-applied annotation. Use replace:
 kubectl -n hive create configmap hive-ops-scripts --from-file=scripts/ \
   --dry-run=client -o yaml | kubectl -n hive replace -f -
-kubectl apply -f cronjobs.yaml
+kubectl apply -f cronjobs.yaml   # only the non-operator jobs
 ```
+
+The scripts ConfigMap is still deployed from here; the operator only hashes it.
 
 Then trigger one run and read its log:
 
