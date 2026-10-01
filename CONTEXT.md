@@ -15,7 +15,7 @@
 ## Secrets
 
 - **BW item** — a Bitwarden vault entry (login, secure note, SSH key) consumed by a role. Named items (e.g. `tailscale-apikey`, `atuin.sh`, `accounts.firefox.com`).
-- **BW credential** — a single field extracted from a BW item (password, username, notes, TOTP, SSH key, custom field). The `bw_credential` Ansible module fetches these.
+- **BW credential** — a single field extracted from a BW item (password, username, notes, TOTP, SSH key, custom field). Roles fetch these with `ansible.builtin.command: bw get <field> <item>`, gated on `bw_unlocked`.
 - **BW session** — the `BW_SESSION` environment variable that unlocks the vault for the current playbook run. Resolved from env → `/tmp/bw_session` cache → interactive unlock.
 
 ## Playbook
