@@ -1,6 +1,6 @@
 # browser_fxa
 
-**Tags:** `desktop`, `browser`, `browser_fxa`  
+**Tags:** none of its own — pulled in by `zen_browser` via `include_role`, so it runs under `desktop`, `browser`, `zen_browser`  
 **Secrets needed:** Yes (Firefox Account credentials from Bitwarden)  
 **Runs on:** Desktop group only
 
@@ -17,7 +17,7 @@ Automates Firefox Account sign-in for Zen Browser (and optionally Firefox).
 ```yaml
 # group_vars/all.yml
 fxa_bw_item: "accounts.firefox.com"
-fxa_bw_username: "jreilly1821@gmail.com"
+fxa_bw_username: "<your-fxa-email>"
 fxa_browsers:
   - zen
   - firefox

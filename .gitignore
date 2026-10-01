@@ -2,3 +2,8 @@ target/
 *.retry
 .ansible/
 __pycache__/
+
+# Stray artifacts that should never land in this public repo
+pi-session-*.html
+support.zip
+*.zip

@@ -1,16 +1,9 @@
 ---
+# The unit is `ssh` on Debian/Ubuntu and `sshd` everywhere else (Fedora, Arch).
+# ignore_errors covers non-systemd hosts (postmarketOS/OpenRC, Termux).
 - name: Reload sshd
   ansible.builtin.systemd:
-    name: sshd
+    name: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"
     state: reloaded
   become: true
   ignore_errors: true
-  register: sshd_reload
-
-- name: Reload ssh
-  ansible.builtin.systemd:
-    name: ssh
-    state: reloaded
-  become: true
-  ignore_errors: true
-  when: sshd_reload is failed

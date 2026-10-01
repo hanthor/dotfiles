@@ -10,15 +10,13 @@
 - [Onboarding a New Machine](onboarding.md)
 - [QR Secret Onboarding](qr-onboarding.md)
 - [Operational Runbook](runbook.md)
+- [Bots, Agents & Guardrails](automation.md)
+- [Utility Scripts](scripts.md)
 
 # Fleet Reference
 
 - [Network](network.md)
   - [Gateway](network/gateway/README.md)
-  - [Phone](network/phone/README.md)
-  - [Printer](network/printer/README.md)
-  - [ESP32](network/esp32/README.md)
-  - [MacBook](network/macbook/README.md)
   - [KVM](network/kvm/README.md)
 - [Desktops]()
   - [Dilli](desktop/dilli/README.md)
@@ -27,13 +25,19 @@
   - [Kerala](desktop/kerala/README.md)
 - [Servers]()
   - [Goa](servers/goa/README.md)
-  - [Talos K8s Cluster](servers/talos-k8s/cluster.md)
+  - [Talos K8s Cluster (offline)](servers/talos-k8s/cluster.md)
     - [Bihar](servers/talos-k8s/bihar/README.md)
     - [Karnataka](servers/talos-k8s/karnataka/README.md)
-  - [AWS Talos Cluster](servers/aws-k8s/cluster.md)
 - [VPS]()
-  - [lkofoss](vps/lkofoss/README.md)
-  - [Matrix](vps/matrix/README.md)
+  - [Matrix (retired)](vps/matrix/README.md)
+  - [Telengana (retired)](vps/telengana/README.md)
+
+# TunaOS Infrastructure
+
+- [TunaOS AWS Account & IaC](servers/aws/README.md)
+  - [Talos Cluster (eu-north-1)](servers/aws-k8s/cluster.md)
+  - [Hive Agent Fleet](cluster/hive.md)
+  - [Punjab (agent box)](servers/punjab/README.md)
 
 # Roles Reference
 
@@ -43,14 +47,20 @@
 - [sudo](roles/sudo.md)
 - [apk_packages](roles/apk_packages.md)
 - [server_hardening](roles/server_hardening.md)
+- [fleet_facts](roles/fleet_facts.md)
 
 ## Packages
 
 - [homebrew](roles/homebrew.md)
 - [flatpak](roles/flatpak.md)
+- [termux_packages](roles/termux_packages.md)
 
 ## Dotfiles
 
+- [shell_fonts](roles/shell_fonts.md)
+- [shell_dotfiles](roles/shell_dotfiles.md)
+- [shell_atuin](roles/shell_atuin.md)
+- [shell_ai](roles/shell_ai.md)
 - [pi](roles/pi.md)
 - [hive_ops](roles/hive_ops.md)
 - [git](roles/git.md)
@@ -64,6 +74,7 @@
 - [github](roles/github.md)
 - [tailscale](roles/tailscale.md)
 - [kube](roles/kube.md)
+- [forgejo_registry](roles/forgejo_registry.md)
 
 ## Desktop
 
@@ -78,11 +89,11 @@
 - [syncthing](roles/syncthing.md)
 - [systemd](roles/systemd.md)
 - [proxy (Caddy)](roles/proxy.md)
-- [cockpit](roles/cockpit.md)
 - [tailscale_cert](roles/tailscale_cert.md)
 - [bst_dashboard](roles/bst_dashboard.md)
+- [kirocrew](roles/kirocrew.md)
 
-## Server Applications
+## Removed / migrated
 
 - [appflowy](roles/appflowy.md)
 - [authentik](roles/authentik.md)
@@ -91,4 +102,3 @@
 # Cluster
 
 - [Talos Kubernetes](talos-k8s.md)
-- [Hive Agent Supervisor](cluster/hive.md)

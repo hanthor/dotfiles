@@ -262,7 +262,7 @@ open(path, "w").write(content)
 PYEOF
 
   if [ ! -f "$DOTFILES_DIR/host_vars/$MACHINE_NAME.yml" ]; then
-    echo "is_arm: false" > "$DOTFILES_DIR/host_vars/$MACHINE_NAME.yml"
+    echo "---" > "$DOTFILES_DIR/host_vars/$MACHINE_NAME.yml"
   fi
 
   INVENTORY_MODIFIED=true
@@ -327,6 +327,8 @@ run_phase1() {
     --connection=local \
     -l "$MACHINE_NAME" \
     -e "target=$MACHINE_NAME" \
+    -e ansible_connection=local \
+    -e ansible_host=127.0.0.1 \
     -e "is_desktop=$is_desktop" \
     --skip-tags secrets \
     site.yml
@@ -385,6 +387,8 @@ run_phase2() {
     --connection=local \
     -l "$MACHINE_NAME" \
     -e "target=$MACHINE_NAME" \
+    -e ansible_connection=local \
+    -e ansible_host=127.0.0.1 \
     -e "is_desktop=$is_desktop" \
     -e "bw_session=${BW_SESSION:-}" \
     --tags secrets \

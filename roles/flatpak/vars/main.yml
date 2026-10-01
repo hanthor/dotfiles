@@ -49,4 +49,3 @@ system_flatpaks:
   - com.belmoussaoui.Obfuscate
   - org.nickvision.money
 
-user_flatpaks: []

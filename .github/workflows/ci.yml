@@ -7,6 +7,10 @@ on:
     branches: [master]
   workflow_dispatch:
 
+# PRs (including agent PRs) run with a read-only token.
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -41,6 +45,39 @@ jobs:
             python3 -m json.tool "$f" > /dev/null && echo "$f: OK" || { echo "$f: INVALID"; exit 1; }
           done
 
+      - name: Compile Python scripts
+        run: git ls-files '*.py' | xargs python3 -m py_compile
+
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: pytest
+        run: uvx --with pyyaml pytest -q tests
+
+  # Renovate may bump pi's npm deps unreviewed (CODEOWNERS carve-out); this
+  # makes sure a PR can't *add* or remove one without a human.
+  deps-guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: package.json dependency set unchanged
+        run: |
+          f=roles/pi/files/package.json
+          base="origin/${{ github.base_ref }}"
+          git diff --quiet "$base"...HEAD -- "$f" && { echo "untouched"; exit 0; }
+          keys() { python3 -c 'import json,sys; d=json.load(sys.stdin); print(sorted({k for s in ("dependencies","devDependencies","optionalDependencies","peerDependencies") for k in d.get(s,{})}))'; }
+          before=$(git show "$base:$f" | keys); after=$(keys < "$f")
+          echo "before: $before"; echo "after:  $after"
+          [ "$before" = "$after" ] || { echo "::error::$f dependency set changed — needs a human-authored PR"; exit 1; }
 
   justfile:
     runs-on: ubuntu-latest
@@ -48,10 +85,29 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install just
-        uses: extractions/setup-just@v2
+        uses: extractions/setup-just@v4
 
       - name: Validate Justfile
         run: just --justfile Justfile --list
+
+  tofu:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aws
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+
+      - name: fmt
+        run: tofu fmt -check -recursive
+
+      - name: validate
+        run: tofu init -backend=false -input=false && tofu validate
+
+      - name: test (mock provider, no AWS access)
+        run: tests/run.sh
 
   broker:
     runs-on: ubuntu-latest

@@ -11,11 +11,11 @@ Host *
   HashKnownHosts no
   # Compression on slow links; negligible on LAN/Tailscale
   Compression yes
-  SendEnv BW_SESSION
 
 {% for name, info in machines.items() %}
 Host {{ name }}
   HostName {{ info.hostname }}
   User {{ user_login }}
+  SendEnv BW_SESSION
 
 {% endfor %}

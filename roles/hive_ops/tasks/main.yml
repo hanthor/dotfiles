@@ -74,3 +74,46 @@
         enabled: true
         state: started
       loop: "{{ hive_ops_timers }}"
+
+# ── Retire on hosts that are no longer opted in ────────────────────────
+# Flipping hive_ops_enabled off must actually stop the timers, or the old host
+# keeps rotating/pausing agents alongside the in-cluster CronJobs.
+- name: Check for leftover hive timers
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/hive-watchdog.timer"
+  register: hive_ops_leftover
+  when: not (hive_ops_enabled | bool)
+
+- name: Remove hive operations from this host
+  when:
+    - not (hive_ops_enabled | bool)
+    - hive_ops_leftover.stat.exists | default(false)
+  block:
+    - name: Stop and disable hive timers
+      ansible.builtin.systemd:
+        name: "{{ item }}.timer"
+        scope: user
+        enabled: false
+        state: stopped
+      loop: "{{ hive_ops_timers }}"
+      failed_when: false
+
+    - name: Remove hive units and drop-ins
+      ansible.builtin.file:
+        path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/{{ item.0 }}{{ item.1 }}"
+        state: absent
+      loop: "{{ hive_ops_timers | product(['.timer', '.service', '.service.d']) | list }}"
+
+    - name: Remove hive helper scripts
+      ansible.builtin.file:
+        path: "{{ ansible_facts['env']['HOME'] }}/.local/bin/{{ item }}"
+        state: absent
+      loop:
+        - hive-peak.sh
+        - hive-rotate.sh
+        - hive-tiers.sh
+
+    - name: Reload user systemd after removing hive units
+      ansible.builtin.systemd:
+        scope: user
+        daemon_reload: true

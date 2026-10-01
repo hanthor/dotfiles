@@ -1,12 +1,12 @@
 ---
 name: tunaos-hive-checkin
-description: Check the health of the self-hosted tuna-os Hive at hive.tunaos.org (AWS Talos cluster) — whether the governor and agents are actually producing PRs/issues, whether config changes really took effect, and where its known landmines are. Use when asked to "check on the hive", "is the hive working", "is it opening PRs", or when changing agent models/repos/config on hive.tunaos.org.
+description: Check the health of the self-hosted tuna-os Hive at school.tunaos.org (legacy alias hive.tunaos.org; all Hives on hub.tunaos.org) (AWS Talos cluster) — whether the governor and agents are actually producing PRs/issues, whether config changes really took effect, and where its known landmines are. Use when asked to "check on the hive", "is the hive working", "is it opening PRs", or when changing agent models/repos/config on hive.tunaos.org.
 ---
 
 # tuna-os Hive check-in
 
 The tuna-os Hive is a **self-hosted spoke** (`kubestellar/hive` v4) running on
-the AWS Talos cluster, served publicly at `https://hive.tunaos.org`
+the AWS Talos cluster, served publicly at `https://school.tunaos.org` (legacy alias `hive.tunaos.org`; the hub at `https://hub.tunaos.org` shows every Hive)
 (Cloudflare-proxied to the cluster's Traefik ingress).
 
 It runs its own agents; contributor CLIs are a separate thing
@@ -18,16 +18,22 @@ All `kubectl` below needs that cluster's kubeconfig:
 export KUBECONFIG=~/.kube/config-aws-migration
 ```
 
-Image: `ghcr.io/hanthor/hive:v4-hotfix` — upstream v4 + the fork's fixes
-(proxy egress timeouts + pi backend, upstreamed in kubestellar/hive#3406 and
-#3456). Built locally with podman and pushed manually; NOT built by CI.
+Image: upstream **v6**, `ghcr.io/hivecommons/hive:v6-latest@sha256:…` on all three
+spokes (school `hive`, reef `hive-reef`, hanthor `hive-hanthor`). The version is
+owned by the **hive-operator** (`tuna-os/hive-operator`, ns `hive-system`,
+`HiveRelease` controller) — never `kubectl set image` by hand: a second writer is
+exactly how the fleet was rolled back to v5 every night until 2026-10-01 (the old
+`hive-upgrade` CronJob, now suspended). Current version is in the Deployment
+annotation `hive.tunaos.org/version`.
 
-Manifest (source of truth, edit then re-apply):
-`~/.local/share/dotfiles/talos-k8s/hive/hive.yaml`
+Manifests: `~/.local/share/dotfiles/talos-k8s/hive/spokes/<spoke>/manifest.yaml`
+(exported from the cluster; secrets out of band). Who owns each job (bash
+CronJob vs operator controller): `talos-k8s/hive/README.md`.
 
 ```bash
 kubectl -n hive get pods
-kubectl apply -f ~/.local/share/dotfiles/talos-k8s/hive/hive.yaml
+kubectl get hivespokes,hivereleases,modelladders,sharedauths
+kubectl -n hive get cronjobs
 ```
 
 ## Fast health sweep
@@ -38,7 +44,7 @@ POD=$(kubectl get pods -n hive -l app.kubernetes.io/name=hive \
 
 kubectl -n hive get pods                       # Running? restarts?
 kubectl logs -n hive $POD --tail=50            # crash loop? panics?
-curl -s -o /dev/null -w '%{http_code}\n' https://hive.tunaos.org/api/health   # 200?
+curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/api/health   # 200?
 # the dashboard / itself returns 401 (login-gated) — that is NORMAL, see below
 ```
 
@@ -70,8 +76,8 @@ don't stop at "pod is Running".
 
 ```bash
 kubectl -n hive get pods
-curl -s -o /dev/null -w '%{http_code}\n' https://hive.tunaos.org/api/health   # 200
-curl -s -o /dev/null -w '%{http_code}\n' https://hive.tunaos.org/             # 401 = login gate, NORMAL
+curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/api/health   # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/             # 401 = login gate, NORMAL
 ```
 
 ### 2. No agent silently paused
@@ -85,28 +91,22 @@ kubectl exec -n hive $POD -- curl -sS -H "X-Hive-Internal: $TOKEN" \
   http://127.0.0.1:3002/api/status | jq -r '.agents[] | select(.paused) | .name'
 ```
 
-Empty output is what you want. `hive-peak.sh status` prints the same as a table.
+Empty output is what you want (brainstorm is on-demand and normally paused).
 
-### 3. Rotation + peak timers are actually firing
+### 3. Rotation is actually running
 
-These live on **himachal** (user units, `hive_ops` role), *not* in the cluster —
-so a powered-off desktop silently stops rotation and peak windows.
+Rotation/pacing/watchdog run as in-cluster CronJobs in ns `hive` (the himachal
+systemd timers were retired 2026-09-24) until the operator takes each one over.
+A job promoted to the operator is DELETED, so check both places:
 
 ```bash
-systemctl --user list-timers --all | grep -E 'hive|pi-peak'    # 7 timers
-systemctl --user show hive-rotate.service -p Result            # Result=success
-journalctl --user -u hive-rotate.service -n 20 --no-pager
+kubectl -n hive get cronjobs | grep -E 'rotate|watchdog|pace|nudge'
+kubectl -n hive logs job/$(kubectl -n hive get jobs --sort-by=.metadata.creationTimestamp -o name | grep hive-rotate- | tail -1 | cut -d/ -f2) | tail -20
+kubectl get hivespokes -o custom-columns=NAME:.metadata.name,MODE:.spec.rotationMode,REACHABLE:.status.reachable
+kubectl -n hive-system logs deploy/hive-operator --since=30m | tail -20
 ```
 
-Two failure modes worth knowing:
-
-- `ERROR: no hive pod found` almost always means **kubectl or KUBECONFIG is
-  missing from the unit's environment**, not that the hive is down — the
-  scripts swallow kubectl's stderr. The `hive_ops` role ships a
-  `.service.d/kubeconfig.conf` drop-in pinning `KUBECONFIG` and a PATH that
-  includes Homebrew. Confirm with `systemctl --user show <unit> -p Environment`.
-- `hive-rotate.sh apply` legitimately takes **~2 minutes**. A short timeout
-  looks like a hang.
+`hive-rotate.sh apply` legitimately takes about two minutes on the loaded node.
 
 ### 4. Discord bot (`hive-discord-realtime`)
 
@@ -187,7 +187,9 @@ for a in $(kubectl exec -n hive $POD -- curl -sS \
 done
 ```
 
-Then **restart and re-read `/api/status`** to confirm it stuck. Anything else
+Then **restart and re-read `/api/status`** to confirm it stuck. While rotation is
+still bash-owned, also add the agent to the rotate CronJob's `HIVE_ROTATE_PIN`,
+or rotation moves it again within 20 minutes. Anything else
 is assuming.
 
 **The public URL is login-gated, not read-only.** The old
@@ -204,7 +206,7 @@ still register and reconnect through the public URL.
 users too. If you ever want to harden the public hostname further, the lever
 is Traefik-level auth (BasicAuth/forwardAuth), not the read-role middleware.
 
-**v4 specifics (image `ghcr.io/hanthor/hive:v4-hotfix`).**
+**Historical v4 notes (image `ghcr.io/hanthor/hive:v4-hotfix`, retired).**
 - `HIVE_PROXY_ADVISORY_OK=true` is set because the pod has no NET_ADMIN and
   v4's entrypoint FATALs without the iptables forced-egress (v2 was tolerant).
   Agents still route through the MITM proxy via the HTTPS_PROXY env the Go
@@ -254,69 +256,40 @@ in #2848. Do not "fix" this locally — the 401 is expected.
 ## Pausing / resuming agents
 
 Routes are `POST /api/pause/{agent}` and `POST /api/resume/{agent}` — **not**
-`/api/agents/{agent}/resume`, which returns 405. Verified in
-`v2/pkg/dashboard/api.go`.
+`/api/agents/{agent}/resume`, which returns 405.
 
-Must go through the pod: the public hostname 401s without a session, and the
-Bearer path is disabled on this direct-route spoke.
-
-**`X-Hive-Internal` is READ-ONLY — it does not work for pause/resume.** It
-authenticates `GET /api/status` fine, but every mutation returns
-`{"error":"owner access required","ok":false}`. Forged `X-Hive-User` /
-`X-Hive-Role: owner` headers are rejected too (all four combinations tested
-2026-08-14). Mutations need a real **owner session cookie**, which the
-dashboard persists in the pod:
+On v6, `X-Hive-Internal` with the dashboard token and **no** session cookie is
+owner-equivalent (hivecommons/hive#4134), so mutations work headlessly. Verified
+2026-10-01 (`{"ok":true,"status":"paused"}`). Do not add a `hive_session` cookie
+alongside it — that scopes the request down to that user's role.
 
 ```bash
-POD=$(kubectl get pods -n hive -l app.kubernetes.io/name=hive \
+NS=hive
+POD=$(kubectl get pods -n $NS -l app.kubernetes.io/name=hive \
       -o jsonpath='{.items[0].metadata.name}')
-
-# Newest unexpired owner session from the dashboard's own store.
-SID=$(kubectl exec -n hive $POD -- cat /data/dashboard-sessions.json \
-      | jq -r --arg now "$(date -Is)" '
-          to_entries | map(select(.value.Role=="owner" and .value.ExpiresAt > $now))
-          | sort_by(.value.ExpiresAt) | reverse | .[0].key')
-
-kubectl exec -n hive $POD -- curl -sS -X POST \
-  -H "Cookie: hive_session=$SID" http://127.0.0.1:3002/api/resume/<agent>
-# → {"agent":"…","ok":true,"status":"resumed"}
+TOKEN=$(kubectl get secret -n $NS hive-secrets -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' | base64 -d)
+kubectl exec -n $NS $POD -- curl -sS -X POST \
+  -H "X-Hive-Internal: $TOKEN" http://127.0.0.1:3002/api/resume/<agent>
 ```
 
-**The cookie name is `hive_session` (underscore).** `hive-session-v1` appears
-in the binary and looks right, but is not the cookie name and returns
-`unauthorized`. `hive-session` also fails.
+(On v5 the header was read-only and every write needed an owner session cookie
+`hive_session` scraped from `/data/dashboard-sessions.json`; those expire with
+the browser login. That path is gone from the ops scripts and the operator.)
 
-Sessions expire (the current one runs to 2026-09-09). When the store has no
-unexpired owner session, someone must log in at https://hive.tunaos.org via
-GitHub device flow as an `authorized_users` member — there is no headless way
-to mint one. Read the session at runtime rather than hardcoding it, so a fresh
-login is picked up automatically.
-
-`~/.local/bin/hive-peak.sh` already implements all of the above; prefer it
-(`hive-peak.sh status|pause|resume`) over hand-rolled curl.
+Undeclared pauses are resumed automatically by rotation; to keep an agent paused,
+declare it as a hold (rotate CronJob `HIVE_ROTATE_HOLD`, or `HiveSpoke.spec.holds`
+once rotation is operator-owned).
 
 Pass the curl straight to `kubectl exec` — wrapping it in `sh -c "…"` with an
-interpolated token has produced bogus responses (a 200 carrying an unrelated
-error body). If a response looks nonsensical, re-run it plainly before
-believing it, and confirm against `/api/status` rather than the response body.
+interpolated token has produced bogus responses. Confirm against `/api/status`
+rather than the response body.
 
 **A paused agent is invisible in the happy path but costs real cycles.** The
-governor still computes it as due and then silently skips it:
-
-```
-governor eval complete  mode=SURGE  agents_due=["sec-check","supervisor"]
-   ← no "audit: governor kicking agent" line follows
-```
-
-When only paused agents are due, the whole cycle is a no-op. Pause state
-persists in `/data/hive-state.json` across restarts and records no reason or
-timestamp, so it survives silently and is easy to miss. Check for it whenever
-the hive looks alive but under-productive:
+governor still computes it as due and then silently skips it. Pause state
+persists in `/data/hive-state.json` across restarts with no reason recorded:
 
 ```bash
-POD=$(kubectl get pods -n hive -l app.kubernetes.io/name=hive \
-      -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n hive $POD -- curl -sS \
+kubectl exec -n $NS $POD -- curl -sS \
   -H "X-Hive-Internal: $TOKEN" http://127.0.0.1:3002/api/status \
   | jq -r '.agents[] | select(.paused) | .name'
 ```

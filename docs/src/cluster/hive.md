@@ -1,5 +1,20 @@
 # Hive — 24/7 AI Agent Supervisor
 
+> **TunaOS infrastructure.** This runs in the TunaOS AWS account and serves
+> the TunaOS project (Hive, Matrix, CI), not James's personal fleet. See
+> [TunaOS AWS Account & IaC](../servers/aws/README.md).
+
+> **Now runs on the [AWS Talos cluster](../servers/aws-k8s/cluster.md)** at
+> **https://school.tunaos.org** (namespace `hive`, Cloudflare-proxied, on the
+> control-plane node; `hive.tunaos.org` is a legacy alias). Every Hive — school,
+> reef, hive.reilly.asia — reports to **https://hub.tunaos.org**, the one place to
+> see them all. Point `kubectl` at it with
+> `export KUBECONFIG=~/.kube/config-aws-migration`. Operator timers (rotation,
+> watchdog, peak windows) live in the [`hive_ops`](../roles/hive_ops.md) role on
+> himachal. The architecture below was written for the home cluster (bihar,
+> Tailscale ingress `hive.manatee-basking.ts.net`), which is powered down —
+> treat node names and the Tailscale URL as historical.
+
 > **Hive** is an open-source AI agent orchestration system running on the Talos K8s cluster. A fleet of specialized agents autonomously maintain the `tuna-os/tunaos` repository — triaging issues, analyzing code, and creating PRs. A governor dynamically adjusts agent pace based on issue queue depth.
 
 ## Table of contents
@@ -149,19 +164,23 @@ talos-k8s/hive/
 ```bash
 kubectl create secret generic hive-secrets -n hive \
   --from-literal=DEEPSEEK_API_KEY=sk-... \
-  --from-literal=GH_APP_ID=3942065 \
-  --from-literal=GH_APP_INSTALLATION_ID=137498420 \
+  --from-literal=GH_APP_ID=<app-id> \
+  --from-literal=GH_APP_INSTALLATION_ID=<installation-id> \
   --from-file=gh-app-key.pem=/path/to/key.pem
 ```
 
 ### Deploy
 
+Each spoke's manifests live in `talos-k8s/hive/spokes/<spoke>/manifest.yaml`
+(exported from the cluster; secrets are out of band). The hive container
+image is owned by the hive-operator `HiveRelease` controller, so do not roll
+images by applying these files. See `talos-k8s/hive/README.md`.
+
 ```bash
-kubectl apply -f talos-k8s/hive/hive.yaml
-kubectl rollout restart deploy/hive -n hive
+kubectl apply -f talos-k8s/hive/spokes/school/manifest.yaml
 ```
 
-Access: **https://hive.manatee-basking.ts.net**
+Access: **https://school.tunaos.org** (AWS cluster; legacy alias `hive.tunaos.org`). Fleet-wide view of every Hive: **https://hub.tunaos.org**. The old home-cluster URL was `https://hive.manatee-basking.ts.net`.
 
 ---
 
@@ -430,11 +449,12 @@ kubectl logs -n hive -f job/hive-build
 ### Check agent status
 
 ```bash
-# Dashboard API
-curl -sk https://hive.manatee-basking.ts.net/api/status | jq .
+# Public health check (the dashboard itself is login-gated — 401 is normal)
+curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/api/health
 
-# Or from within the pod
-kubectl exec -n hive deploy/hive -- curl -s localhost:3001/api/status
+# Full status: authenticated, from inside the pod (see the tunaos-hive-checkin skill)
+TOKEN=$(kubectl get secret -n hive hive-secrets -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' | base64 -d)
+kubectl exec -n hive deploy/hive -- curl -sS -H "X-Hive-Internal: $TOKEN" http://127.0.0.1:3002/api/status | jq
 ```
 
 ### View agent terminal
@@ -482,7 +502,7 @@ kubectl rollout restart deploy/hive -n hive
 
 | Symptom | Check |
 |---------|-------|
-| ImagePullBackOff | IPv6 timeouts on ghcr.io. Verify `/etc/hosts` on bihar has `20.207.73.86 ghcr.io` |
+| ImagePullBackOff | IPv6 timeouts on ghcr.io. Verify `/etc/hosts` on bihar has a pinned IPv4 entry for `ghcr.io` (`<ghcr-ipv4> ghcr.io`, from `dig +short A ghcr.io`) |
 | Agent CLI crashed | Check `ps aux \| grep pi` — should see 9 pi processes |
 | Agent stuck in ADVISORY mode | Check ACMM level in state file. May need state nuke |
 | Dashboard shows old backend/model | Stale overrides in `/data/agent-configs/*.yaml`. Fix with sed + state nuke |
@@ -513,7 +533,7 @@ kubectl rollout restart deploy/hive -n hive
 
 ## 12. GitHub App
 
-Hive authenticates to GitHub via a GitHub App (ID **3942065**) installed on `tuna-os`.
+Hive authenticates to GitHub via a GitHub App installed on `tuna-os` (App and installation IDs are in the `hive-secrets` Secret).
 
 ### Token generation
 
@@ -543,3 +563,35 @@ The App gives Hive its own rate limit pool, separate from personal API usage.
 2. Add the needed permissions
 3. Re-accept on the installation page
 4. Restart hive: `kubectl rollout restart deploy/hive -n hive`
+
+## Images and upgrades
+
+As of 2026-09-24 every Hive runs **stock upstream images**
+(`ghcr.io/hivecommons/hive`, `hive-hub`), not the `tuna-os/hive` fork. The fork's
+remaining delta was CI/registry plumbing plus two ACMM tweaks nothing here uses,
+and it had fallen a major version behind (v4 vs upstream's v5).
+
+| Hive | Namespace | Branding |
+|---|---|---|
+| hive.reilly.asia (canary) | `hive-hanthor` | none |
+| reef.tunaos.org | `hive-reef` | REEF |
+| school.tunaos.org (legacy alias hive.tunaos.org) | `hive` | SCHOOL |
+| hub.tunaos.org | `hive-hub` | — |
+
+**`hive-upgrade`** (CronJob in ns `hive`, daily 04:30 America/New_York) keeps
+them on upstream's newest `v5.x.y` release. It resolves the release to a
+digest, checks the amd64 image exists, and upgrades one Hive at a time, in the
+order in the table above. Each target soaks for 10 minutes. A health, branding
+or crash failure rolls that target back to its recorded digest, blocklists the
+version and stops the run. "Could not measure" (an RBAC or API error) aborts
+without rolling back. Results go to Discord. Details, dry-run, pin/block:
+[`talos-k8s/hive/upgrade/README.md`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/hive/upgrade/README.md).
+
+It checks once a day, not on every release: upstream cuts several releases an
+hour, and each Hive restart costs a boot-time GitHub rescan against a shared
+App rate limit. Restarting `hive` and `hive-reef` back-to-back exhausted it on
+2026-09-24.
+
+The old `hive-fork-{switch,verify,drift,ai-check}` CronJobs are **suspended**
+(annotated with the reason). They targeted the fork and never had the RBAC to
+act.

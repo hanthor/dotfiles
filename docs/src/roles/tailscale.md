@@ -21,7 +21,7 @@ Installs Tailscale, fetches a reusable auth key from BW, joins the network, conf
 | Role aborts with "vault locked" warning, host is not on tailnet | First-time apply on this host without BW unlocked | Unlock BW (`bw unlock --raw | tee /tmp/bw_session > /dev/null`), then `just apply-tags tailscale` |
 | Tailscale connected but MagicDNS names don't resolve | `systemd-resolved` link to `/etc/resolv.conf` was overwritten by NetworkManager / DHCP client | The role re-applies it; just re-run `dots-apply`. To make it sticky, check `network-manager` settings (Bluefin does this correctly out of the box) |
 | Duplicate device entries in admin console after rebuild | API-key device cleanup didn't run (vault locked at the time) | Manually delete in [tailscale admin console](https://login.tailscale.com/admin/machines) or unlock vault and re-apply |
-| Joins but no routes advertised | `tailscale_advertise_routes` not set in `host_vars` | Add it: `tailscale_advertise_routes: "192.168.0.0/24"` (or similar) |
+| Joins but no routes advertised | `tailscale_advertise_routes` not set in `host_vars` | Add it: `tailscale_advertise_routes: "<lan-cidr>"` |
 
 ## How to verify
 

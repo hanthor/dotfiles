@@ -6,8 +6,7 @@ Home server / Ansible control node for the hanthor fleet.
 
 - Arch: aarch64 (ARM Cortex-A76)
 - Board: [Raspberry Pi 5](https://www.raspberrypi.com/products/raspberry-pi-5/)
-- MAC: `D8:3A:DD:E9:C7:1D`
-- Tailscale IP: `100.69.238.116`
+- Tailscale: `goa` (MagicDNS)
 
 ## OS
 

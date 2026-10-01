@@ -19,7 +19,7 @@ fi
 {% endfor %}
 # ── Shell-specific aliases (syntax differs from fish; not in the shared source) ──
 alias -- -='cd -'
-alias dots='cd ~/.local/share/dotfiles && git pull --ff-only && just apply --skip-tags secrets'
+alias dots='cd ~/.local/share/dotfiles && just apply-nosecrets'
 alias dots-apply='cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
 alias dots-edit='cd ~/.local/share/dotfiles && ${EDITOR:-nvim} .'
 alias reload='exec $SHELL -l'
