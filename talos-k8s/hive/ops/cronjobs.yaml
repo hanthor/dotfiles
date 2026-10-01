@@ -411,6 +411,8 @@ spec:
                   value: /tmp
                 - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
                   value: "false"
+                - name: HIVE_NUDGE_NAMESPACES
+                  value: hive hive-reef
               image: alpine/k8s:1.37.1
               imagePullPolicy: IfNotPresent
               name: ops
@@ -536,7 +538,7 @@ spec:
                 - name: HIVE_PACE_STATE
                   value: /state/hive-rotate
                 - name: HIVE_PACE_NAMESPACES
-                  value: hive hive-reef hive-hanthor
+                  value: hive hive-reef
                 - name: HOME
                   value: /tmp
                 - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
@@ -998,7 +1000,7 @@ spec:
   schedule: 14-59/20 * * * *
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 2
-  suspend: false
+  suspend: true
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -1508,7 +1510,7 @@ spec:
   schedule: 4-59/5 * * * *
   startingDeadlineSeconds: 120
   successfulJobsHistoryLimit: 2
-  suspend: false
+  suspend: true
 ---
 apiVersion: batch/v1
 kind: CronJob

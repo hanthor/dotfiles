@@ -22,11 +22,16 @@ fleet got rolled back to v5 every night.
 | Responsibility | Owner today | Target |
 |---|---|---|
 | Image version / upgrades | **operator** — `HiveRelease hive`, Enforce since 2026-10-01 (`hive-upgrade` deleted) | done |
-| Backend/model rotation, stranding, auto-resume | `hive-rotate*` CronJobs | `HiveSpoke` rotation (Shadow now) |
-| Quota / credit starvation, pacing | `hive-pace`, ccleft | `UsagePool` + rotation pacer |
-| Liveness (watchdog, nudge) | `hive-watchdog*`, `hive-nudge` | operator watchdog |
+| Backend/model rotation, stranding, auto-resume | **operator** on hanthor (Enforce 2026-10-01, `hive-rotate-hanthor` suspended); `hive-rotate`, `hive-rotate-reef` on school/reef | `HiveSpoke.spec.rotationMode: Enforce` per spoke |
+| Quota / credit starvation, pacing | **operator** on hanthor (`UsagePool` + pacer); `hive-pace` for `hive hive-reef` | drop each spoke from `HIVE_PACE_NAMESPACES` as it is promoted; suspend with school |
+| Liveness (watchdog, nudge) | **operator** on hanthor (`livenessMode: Enforce`, `hive-watchdog-hanthor` suspended); `hive-watchdog`, `hive-watchdog-reef`, `hive-nudge` for `hive hive-reef` | `spec.livenessMode: Enforce` per spoke |
 | Shared auth store | `hive-shared-auth` | `SharedAuth` (Shadow now) |
 | Housekeeping (tiers, inventory, pi-kiro, cli-update, repo-sync, metrics, activity) | CronJobs in [`ops/`](ops/README.md) | CronJobs owned by the operator |
+
+Promotion order is hanthor → reef → school, each after at least 24 h with a
+clean `go run ./cmd/hive-shadow-diff --live [--liveness]` (in the operator
+repo). Runbooks: `docs/rotation-promotion.md`, `docs/liveness-promotion.md`.
+Re-export `ops/cronjobs.yaml` in the same change, or the next apply undoes it.
 
 Check where each stands before changing anything:
 
