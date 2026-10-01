@@ -1,0 +1,445 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Utility Scripts - Infrastructure Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="James Reilly&#x27;s personal fleet (Ansible dotfiles) and the TunaOS infrastructure it administers">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Infrastructure Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/scripts.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="utility-scripts"><a class="header" href="#utility-scripts">Utility Scripts</a></h1>
+<p>The <code>scripts/</code> directory contains helper utilities for inventory management, Bitwarden integration, and operational tasks. They are not deployed to machines — they run on your local development machine or during CI.</p>
+<h2 id="inventory-management"><a class="header" href="#inventory-management">Inventory Management</a></h2>
+<h3 id="register-machinepy"><a class="header" href="#register-machinepy"><code>register-machine.py</code></a></h3>
+<p>Register a new machine in <code>inventory.yml</code> and create its <code>host_vars</code> file.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">python3 scripts/register-machine.py &lt;name&gt; [type] [path-to-inventory.yml]
+</code></pre>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>&lt;name&gt;</code> — machine name (e.g., <code>kanpur</code>, <code>goa</code>)</li>
+<li><code>[type]</code> — group/machine type: <code>desktop</code>, <code>server</code>, <code>vps</code>, <code>termux_hosts</code> (default: <code>desktop</code>)</li>
+<li><code>[path-to-inventory.yml]</code> — inventory file path (default: <code>inventory.yml</code>)</li>
+</ul>
+<p><strong>What it does:</strong></p>
+<ul>
+<li>Adds the machine to the <code>all.hosts</code> section</li>
+<li>Adds it to the specified group under <code>all.children</code></li>
+<li>Sets <code>ansible_host: localhost</code> and <code>ansible_connection: local</code></li>
+<li>Creates <code>host_vars/&lt;name&gt;.yml</code> with a template</li>
+</ul>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash">python3 scripts/register-machine.py goa server
+</code></pre>
+<h3 id="purge-machinepy"><a class="header" href="#purge-machinepy"><code>purge-machine.py</code></a></h3>
+<p>Remove a machine from <code>inventory.yml</code> and its <code>host_vars</code> file. Mirror of <code>register-machine.py</code>.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">python3 scripts/purge-machine.py &lt;name&gt; [path-to-inventory.yml]
+</code></pre>
+<p><strong>Important:</strong> Does NOT delete the corresponding Bitwarden SSH key item — you can re-onboard the machine later using the same name.</p>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash">python3 scripts/purge-machine.py matrix
+</code></pre>
+<h3 id="nmap-inventorysh"><a class="header" href="#nmap-inventorysh"><code>nmap-inventory.sh</code></a></h3>
+<p>Scan the LAN using <code>nmap</code> and cross-reference with Tailscale to show network status.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">./scripts/nmap-inventory.sh [CIDR]
+</code></pre>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[CIDR]</code> — network range to scan (default: <code>192.168.0.0/24</code>). Override with a different subnet.</li>
+</ul>
+<p><strong>Output columns:</strong></p>
+<ul>
+<li>IP address</li>
+<li>MAC address</li>
+<li>Hostname (reverse DNS or nmap service detection)</li>
+<li>Tailscale status (online/offline)</li>
+</ul>
+<p><strong>Prerequisites:</strong></p>
+<ul>
+<li><code>nmap</code> installed</li>
+<li>Tailscale running and authenticated</li>
+<li>Network access to the scanned range</li>
+</ul>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash">./scripts/nmap-inventory.sh 10.0.0.0/24
+</code></pre>
+<h2 id="bitwarden-integration"><a class="header" href="#bitwarden-integration">Bitwarden Integration</a></h2>
+<h3 id="bw-resolvesh"><a class="header" href="#bw-resolvesh"><code>bw-resolve.sh</code></a></h3>
+<p>Resolve a usable <code>BW_SESSION</code> for local and remote operations. Tries multiple fallback tiers.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">./scripts/bw-resolve.sh local
+./scripts/bw-resolve.sh remote &lt;host&gt;
+</code></pre>
+<p><strong>Modes:</strong></p>
+<ul>
+<li>
+<p><strong><code>local</code></strong> — Resolve a session on your local machine. Returns <code>export BW_SESSION=...</code> on stdout or exits 1 if unlock fails.</p>
+</li>
+<li>
+<p><strong><code>remote &lt;host&gt;</code></strong> — Unlock Bitwarden on a remote machine, export that session inline over <code>ssh -t</code>, and return it. Used by <code>just apply-remote</code> to drive secret-dependent tasks on the target.</p>
+</li>
+</ul>
+<p><strong>Session resolution order:</strong></p>
+<ol>
+<li>Existing <code>BW_SESSION</code> environment variable (if still valid)</li>
+<li>Cached session in <code>/tmp/bw_session</code> (if not expired)</li>
+<li>Interactive <code>bw unlock</code> prompt (asks for master password)</li>
+</ol>
+<p><strong>Example — local:</strong></p>
+<pre><code class="language-bash">eval "$(./scripts/bw-resolve.sh local)"
+bw list items  # Now BW_SESSION is set
+</code></pre>
+<p><strong>Example — remote:</strong></p>
+<pre><code class="language-bash">./scripts/bw-resolve.sh remote himachal
+# Executes commands on himachal with Bitwarden access
+</code></pre>
+<h3 id="bw-unlocksh"><a class="header" href="#bw-unlocksh"><code>bw-unlock.sh</code></a></h3>
+<p>Simpler variant of <code>bw-resolve.sh</code> — resolves a session on the local machine only.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">./scripts/bw-unlock.sh
+</code></pre>
+<p><strong>Output:</strong> Prints <code>&lt;session-token&gt;</code> on stdout, or exits 1 if all tiers fail.</p>
+<h3 id="bw-seed-ssh-keyssh"><a class="header" href="#bw-seed-ssh-keyssh"><code>bw-seed-ssh-keys.sh</code></a></h3>
+<p>Pull SSH public keys from all online machines and seed them into a Bitwarden collection.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">./scripts/bw-seed-ssh-keys.sh
+</code></pre>
+<p><strong>What it does:</strong></p>
+<ul>
+<li>Connects to each machine in the online fleet</li>
+<li>Retrieves their <code>~/.ssh/id_ed25519.pub</code></li>
+<li>Creates Bitwarden login items named <code>james@&lt;hostname&gt;</code> with the public key in the password field</li>
+<li>Updates existing items in place (safe to re-run)</li>
+</ul>
+<p><strong>Prerequisites:</strong></p>
+<ul>
+<li>SSH access to all machines (keys already in <code>~/.ssh/authorized_keys</code>)</li>
+<li>Bitwarden CLI (<code>bw</code>) authenticated</li>
+<li>Tailscale or direct network access to all machines</li>
+</ul>
+<p><strong>Run once:</strong> Before onboarding a new machine, so their SSH keys are available in Bitwarden during setup.</p>
+<h3 id="bw-seed-kubesh"><a class="header" href="#bw-seed-kubesh"><code>bw-seed-kube.sh</code></a></h3>
+<p>Seed kubeconfig and talosconfig from this machine into Bitwarden.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">./scripts/bw-seed-kube.sh
+</code></pre>
+<p><strong>What it does:</strong></p>
+<ul>
+<li>Exports your local <code>~/.kube/config</code> to Bitwarden as a secure note</li>
+<li>Exports your local <code>~/.talos/config</code> to Bitwarden</li>
+<li>Updates existing items in place</li>
+</ul>
+<p><strong>Prerequisites:</strong></p>
+<ul>
+<li>kubectl configured with cluster access</li>
+<li>talosctl configured with cluster access</li>
+<li>Bitwarden CLI (<code>bw</code>) authenticated</li>
+</ul>
+<p><strong>Use when:</strong> You've set up cluster access locally and want to share it to other machines.</p>
+<h2 id="apply-and-status"><a class="header" href="#apply-and-status">Apply and Status</a></h2>
+<h3 id="record-applypy"><a class="header" href="#record-applypy"><code>record-apply.py</code></a></h3>
+<p>Record the outcome of a <code>just apply</code> run for tracking and status checks.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">python3 scripts/record-apply.py &lt;exit-code&gt; [label] [skip-tags]
+</code></pre>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>&lt;exit-code&gt;</code> — exit code from the Ansible apply (0 = success, non-zero = failure)</li>
+<li><code>[label]</code> — optional descriptive label (default: inferred from context)</li>
+<li><code>[skip-tags]</code> — optional comma-separated skip tags (for partial applies)</li>
+</ul>
+<p><strong>Output:</strong> Writes to <code>~/.cache/dotfiles/last-apply.json</code> with:</p>
+<ul>
+<li>Timestamp</li>
+<li>Exit code (0 = success, 1 = failure)</li>
+<li>Label and skip tags (if provided)</li>
+</ul>
+<p><strong>Used by:</strong> <code>just doctor</code> to check health status and flag old or failed applies.</p>
+<h3 id="last-apply-statuspy"><a class="header" href="#last-apply-statuspy"><code>last-apply-status.py</code></a></h3>
+<p>Pretty-print the last recorded apply status. Used by <code>just doctor</code>.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">python3 scripts/last-apply-status.py
+</code></pre>
+<p><strong>Exit codes:</strong></p>
+<ul>
+<li><code>0</code> — apply succeeded and timestamp is recent (&lt; 48 hours)</li>
+<li><code>1</code> — apply failed OR timestamp is stale (≥ 48 hours)</li>
+</ul>
+<p><strong>Output:</strong> Human-readable status with timestamp, result, and any tags.</p>
+<h3 id="online_hostspy"><a class="header" href="#online_hostspy"><code>online_hosts.py</code></a></h3>
+<p>Print the list of online fleet hosts (intersection of Tailscale peers and inventory), excluding VPS machines and localhost.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">python3 scripts/online_hosts.py
+</code></pre>
+<p><strong>Output:</strong> One hostname per line.</p>
+<p><strong>Used by:</strong> <code>just _online_hosts</code> and bulk apply operations to target only reachable machines.</p>
+<p><strong>Silently fails:</strong> If Tailscale is not running, returns empty output (so scripts gracefully degrade).</p>
+<h2 id="cluster-and-infrastructure"><a class="header" href="#cluster-and-infrastructure">Cluster and Infrastructure</a></h2>
+<h3 id="kubevirt-node"><a class="header" href="#kubevirt-node"><code>kubevirt-node</code></a></h3>
+<p>Operations on KubeVirt nodes for the test cluster.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">./scripts/kubevirt-node [command] [node-name]
+</code></pre>
+<p><strong>Supported commands:</strong></p>
+<ul>
+<li><code>list</code> — List all KubeVirt test nodes</li>
+<li><code>start &lt;node&gt;</code> — Power on a node</li>
+<li><code>stop &lt;node&gt;</code> — Power off a node</li>
+<li><code>status &lt;node&gt;</code> — Show node status</li>
+</ul>
+<p><strong>Prerequisites:</strong></p>
+<ul>
+<li><code>kubectl</code> configured with cluster access</li>
+<li>Permission to manage VirtualMachine resources</li>
+</ul>
+<h3 id="sync-brewssh"><a class="header" href="#sync-brewssh"><code>sync-brews.sh</code></a></h3>
+<p>Sync the Homebrew package state: fetch the current installed packages from Homebrew and update <code>group_vars/all.yml</code> with the new list.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">./scripts/sync-brews.sh
+</code></pre>
+<p><strong>What it does:</strong></p>
+<ol>
+<li>Runs <code>brew list --formulae</code> and <code>brew list --casks</code></li>
+<li>Extracts the current package list</li>
+<li>Updates the <code>homebrew_packages</code> and <code>homebrew_casks</code> sections in <code>group_vars/all.yml</code></li>
+<li>Prints a diff so you can review changes</li>
+</ol>
+<p><strong>Use when:</strong> You've manually installed packages with <code>brew install</code> and want to record them in the inventory for automated management.</p>
+<h3 id="ess-render-valuespy"><a class="header" href="#ess-render-valuespy"><code>ess-render-values.py</code></a></h3>
+<p>Render Helm values for the AWS Talos cluster (ESS) by applying substitution rules from Bitwarden.</p>
+<p><strong>Usage:</strong></p>
+<pre><code class="language-bash">python3 scripts/ess-render-values.py &lt; ess-helm-values-template.yml &gt; values.yml
+</code></pre>
+<p><strong>What it does:</strong></p>
+<ol>
+<li>Reads the <code>ess-helm-values</code> secure note from Bitwarden</li>
+<li>Applies environment and variable substitutions (e.g., <code>${DOMAIN}</code>)</li>
+<li>Outputs the rendered Helm values to stdout</li>
+</ol>
+<p><strong>Used by:</strong> Cluster deployment pipelines to generate final Helm configurations.</p>
+<p><strong>Prerequisites:</strong></p>
+<ul>
+<li><code>bw</code> CLI authenticated with Bitwarden vault access</li>
+<li>The <code>ess-helm-values</code> secure note exists in Bitwarden</li>
+</ul>
+<h2 id="prerequisites-and-setup"><a class="header" href="#prerequisites-and-setup">Prerequisites and Setup</a></h2>
+<p>All scripts assume:</p>
+<ul>
+<li><strong>Python 3</strong> (for <code>.py</code> scripts)</li>
+<li><strong>Bash</strong> (for <code>.sh</code> scripts)</li>
+<li><strong>Bitwarden CLI</strong> (<code>bw</code>) installed and configured when BW scripts are used</li>
+<li><strong>SSH access</strong> to target machines (for remote operations)</li>
+<li><strong>Tailscale</strong> installed for machine discovery (for inventory scripts)</li>
+</ul>
+<p>Set up Bitwarden CLI once:</p>
+<pre><code class="language-bash">brew install bitwarden-cli  # macOS
+# or: apt-get install bw   # Linux
+
+bw login &lt;email&gt;
+</code></pre>
+<p>Session tokens are cached locally in <code>/tmp/</code> for convenience; they expire and are renewed automatically.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="automation.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="network.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="automation.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="network.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
