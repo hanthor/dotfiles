@@ -112,6 +112,7 @@ spec:
             requests:
               cpu: 300m
               memory: 1Gi
+              ephemeral-storage: 4Gi
           securityContext:
             capabilities:
               add:

@@ -19,19 +19,21 @@ operator controller in a single change that promotes the controller to
 `Enforce` **and** deletes the CronJob. Two writers on one field is how the
 fleet got rolled back to v5 every night.
 
-| Responsibility | Owner today | Target |
+| Responsibility | Owner | Notes |
 |---|---|---|
-| Image version / upgrades | **operator** — `HiveRelease hive`, Enforce since 2026-10-01 (`hive-upgrade` deleted) | done |
-| Backend/model rotation, stranding, auto-resume | **operator** on hanthor (Enforce 2026-10-01, `hive-rotate-hanthor` suspended); `hive-rotate`, `hive-rotate-reef` on school/reef | `HiveSpoke.spec.rotationMode: Enforce` per spoke |
-| Quota / credit starvation, pacing | **operator** on hanthor (`UsagePool` + pacer); `hive-pace` for `hive hive-reef` | drop each spoke from `HIVE_PACE_NAMESPACES` as it is promoted; suspend with school |
-| Liveness (watchdog, nudge) | **operator** on hanthor (`livenessMode: Enforce`, `hive-watchdog-hanthor` suspended); `hive-watchdog`, `hive-watchdog-reef`, `hive-nudge` for `hive hive-reef` | `spec.livenessMode: Enforce` per spoke |
-| Shared auth store | `hive-shared-auth` | `SharedAuth` (Shadow now) |
-| Housekeeping (tiers, inventory, pi-kiro, cli-update, repo-sync, metrics, activity) | CronJobs in [`ops/`](ops/README.md) | CronJobs owned by the operator |
+| Image version / upgrades | **operator** `HiveRelease hive` (Enforce) | `hive-upgrade` deleted 2026-10-01 |
+| Backend/model rotation, stranding, auto-resume | **operator** `HiveSpoke.spec.rotationMode: Enforce` on all three | `hive-rotate*` suspended (rollback: unsuspend + set Shadow) |
+| Quota / credit starvation, pacing | **operator** `UsagePool` + pacer | `hive-pace` suspended |
+| Liveness (watchdog, nudge) | **operator** `HiveSpoke.spec.livenessMode: Enforce` on all three | `hive-watchdog*`, `hive-nudge` suspended |
+| Shared auth store | `hive-shared-auth` CronJob | moving to `SharedAuth` |
+| Housekeeping (tiers, inventory, pi-kiro, cli-update, repo-sync, metrics, activity) | CronJobs in [`ops/`](ops/README.md) | moving under operator ownership |
 
-Promotion order is hanthor → reef → school, each after at least 24 h with a
-clean `go run ./cmd/hive-shadow-diff --live [--liveness]` (in the operator
-repo). Runbooks: `docs/rotation-promotion.md`, `docs/liveness-promotion.md`.
-Re-export `ops/cronjobs.yaml` in the same change, or the next apply undoes it.
+All three spokes were promoted on 2026-10-01 (hanthor, then reef, then
+school) after a clean `go run ./cmd/hive-shadow-diff --live [--liveness]` in
+the operator repo. The superseded CronJobs are kept suspended for rollback
+(runbooks: `docs/rotation-promotion.md`, `docs/liveness-promotion.md`).
+Re-export `ops/cronjobs.yaml` after any CronJob change, or the next apply
+undoes it.
 
 Check where each stands before changing anything:
 
