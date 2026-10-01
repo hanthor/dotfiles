@@ -22,24 +22,6 @@ fi
 
 scan_json=$($SUDO nmap -sn -oX - "$SUBNET" 2>/dev/null)
 
-# Build Tailscale lookup table (IP -> hostname:status) from `tailscale status --json`
-declare -A TS
-if command -v tailscale >/dev/null && tailscale status >/dev/null 2>&1; then
-  while IFS=$'\t' read -r ip name online; do
-    [ -n "$ip" ] && TS["$ip"]="$name:$online"
-  done < <(tailscale status --json 2>/dev/null | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-peers = list(d.get('Peer', {}).values()) + [d.get('Self', {})]
-for p in peers:
-    if not p: continue
-    name = (p.get('DNSName','').rstrip('.').split('.')[0] or p.get('HostName',''))
-    online = 'online' if p.get('Online') else 'offline'
-    for ip in p.get('TailscaleIPs', []) or []:
-        print(f'{ip}\t{name}\t{online}')
-")
-fi
-
 python3 - "$scan_json" <<'PY'
 import sys, xml.etree.ElementTree as ET, os, subprocess
 xml = sys.argv[1]
