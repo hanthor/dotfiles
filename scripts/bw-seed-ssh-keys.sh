@@ -40,7 +40,9 @@ declare -A COLLECTED_KEYS
 # `bw login`). Trying `bw login` speculatively here would be redundant with
 # that and would prompt twice on a genuinely unauthenticated vault.
 echo "Bitwarden: unlocking vault..."
-export BW_SESSION=$("$SCRIPT_DIR/bw-unlock.sh")
+# Assign then export: `export X=$(cmd)` would mask a failed unlock from set -e.
+BW_SESSION=$("$SCRIPT_DIR/bw-unlock.sh")
+export BW_SESSION
 echo "Bitwarden: unlocked."
 echo ""
 

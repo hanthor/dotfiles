@@ -7,7 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/bw-item.sh"
 
 if [ -z "${BW_SESSION:-}" ]; then
-  export BW_SESSION=$("$SCRIPT_DIR/bw-unlock.sh")
+  # Assign then export: `export X=$(cmd)` would mask a failed unlock from set -e.
+  BW_SESSION=$("$SCRIPT_DIR/bw-unlock.sh")
+  export BW_SESSION
 fi
 
 KUBECONFIG_PATH="${KUBECONFIG:-$HOME/.kube/config}"
