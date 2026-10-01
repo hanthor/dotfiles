@@ -971,6 +971,40 @@ spec:
             - apply
             env:
             - name: KUBECONFIG
+            - name: HIVE_PROBE_SOURCE
+              value: "ccleft"
+            - name: HIVE_CCLEFT_URL
+              value: "http://ccleft.hive.svc:9464"
+            - name: HIVE_CCLEFT_MAX_STALE_S
+              value: "1800"
+            - name: HIVE_PACE_PIN
+              value: "hive/supervisor"
+            - name: HIVE_PACE_KIRO_BUDGET
+              value: "1"
+            - name: HIVE_PACE_KIRO_SAFETY
+              value: "0.85"
+            - name: HIVE_PACE_KIRO_HOT
+              value: "1.0"
+            - name: HIVE_PACE_KIRO_COLD
+              value: "0.6"
+            - name: HIVE_PACE_KIRO_PROMOTE_MAX
+              value: "0.8"
+            - name: HIVE_PACE_KIRO_WINDOW_S
+              value: "3600"
+            - name: HIVE_PACE_KIRO_MIN_SAMPLES
+              value: "3"
+            - name: HIVE_PACE_KIRO_MIN_SPAN_S
+              value: "1200"
+            - name: HIVE_PACE_KIRO_MAX_DEMOTE
+              value: "4"
+            - name: HIVE_PACE_KIRO_MAX_PROMOTE
+              value: "1"
+            - name: HIVE_PACE_KIRO_MAX_EVICT
+              value: "2"
+            - name: HIVE_PACE_KIRO_EVICT_TTL_S
+              value: "21600"
+            - name: HIVE_PACE_EVICT_TARGET_MAX_PCT
+              value: "85"
             - name: HIVE_PACE_STATE
               value: /state/hive-rotate
             - name: HIVE_PACE_NAMESPACES
@@ -1349,6 +1383,12 @@ spec:
             - apply
             env:
             - name: KUBECONFIG
+            - name: HIVE_PROBE_SOURCE
+              value: "ccleft"
+            - name: HIVE_CCLEFT_URL
+              value: "http://ccleft.hive.svc:9464"
+            - name: HIVE_CCLEFT_MAX_STALE_S
+              value: "1800"
             - name: HIVE_ROTATE_STATE
               value: /state/hive-rotate
             - name: HOME
@@ -1447,6 +1487,12 @@ spec:
             - apply
             env:
             - name: KUBECONFIG
+            - name: HIVE_PROBE_SOURCE
+              value: "ccleft"
+            - name: HIVE_CCLEFT_URL
+              value: "http://ccleft.hive.svc:9464"
+            - name: HIVE_CCLEFT_MAX_STALE_S
+              value: "1800"
             - name: HIVE_NS
               value: hive-hanthor
             - name: HIVE_PRIMARY_NS
@@ -1548,6 +1594,12 @@ spec:
             - apply
             env:
             - name: KUBECONFIG
+            - name: HIVE_PROBE_SOURCE
+              value: "ccleft"
+            - name: HIVE_CCLEFT_URL
+              value: "http://ccleft.hive.svc:9464"
+            - name: HIVE_CCLEFT_MAX_STALE_S
+              value: "1800"
             - name: HIVE_NS
               value: hive-reef
             - name: HIVE_PRIMARY_NS
@@ -1842,6 +1894,12 @@ spec:
             - watchdog
             env:
             - name: KUBECONFIG
+            - name: HIVE_PROBE_SOURCE
+              value: "ccleft"
+            - name: HIVE_CCLEFT_URL
+              value: "http://ccleft.hive.svc:9464"
+            - name: HIVE_CCLEFT_MAX_STALE_S
+              value: "1800"
             - name: HIVE_ROTATE_STATE
               value: /state/hive-rotate
             - name: HOME
@@ -1936,6 +1994,12 @@ spec:
             - watchdog
             env:
             - name: KUBECONFIG
+            - name: HIVE_PROBE_SOURCE
+              value: "ccleft"
+            - name: HIVE_CCLEFT_URL
+              value: "http://ccleft.hive.svc:9464"
+            - name: HIVE_CCLEFT_MAX_STALE_S
+              value: "1800"
             - name: HIVE_NS
               value: hive-hanthor
             - name: HIVE_PRIMARY_NS
@@ -2034,6 +2098,12 @@ spec:
             - watchdog
             env:
             - name: KUBECONFIG
+            - name: HIVE_PROBE_SOURCE
+              value: "ccleft"
+            - name: HIVE_CCLEFT_URL
+              value: "http://ccleft.hive.svc:9464"
+            - name: HIVE_CCLEFT_MAX_STALE_S
+              value: "1800"
             - name: HIVE_NS
               value: hive-reef
             - name: HIVE_PRIMARY_NS

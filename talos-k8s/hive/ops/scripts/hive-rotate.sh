@@ -54,9 +54,14 @@
 #                          change: weekends are all-day off-peak)
 #   HIVE_ROTATE_METERED_FAILOVER=0  retain the old high-volume strand-on-exhaustion policy
 #   HIVE_ROTATE_DRYRUN=1   force plan-only (apply -> plan; watchdog reports only)
-#   HIVE_USAGE_MAX_AGE_S   reuse a published measurement younger than this
-#                          (default: primary apply 0, spoke apply 1200,
-#                          watchdog 1800; `probe` always measures)
+#   HIVE_USAGE_MAX_AGE_S   direct source only: reuse a published measurement
+#                          younger than this (default: primary apply 0, spoke
+#                          apply 1200, watchdog 1800; `probe` always measures)
+#   HIVE_PROBE_SOURCE      ccleft (default) | direct — where quota readings come
+#                          from (see "Gather headroom" and hive-lib.sh)
+#   HIVE_CCLEFT_URL        ccleft Service (default http://ccleft.hive.svc:9464)
+#   HIVE_CCLEFT_MAX_STALE_S  a stale (last-good) ccleft reading still counts as
+#                          a measurement up to this age (default 1800)
 
 
 # Shared plumbing (kubeconfig, API over the hive Service, slim /api/status,
@@ -778,6 +783,13 @@ PROVIDERS="${HIVE_ROTATE_PROVIDERS:-kiro anthropic openai google meta}"
 # ConfigMaps in their own namespaces anyway ("WARN: could not publish").
 USAGE_NS="${HIVE_PRIMARY_NS:-hive}"
 USAGE_CM=hive-provider-usage
+PROBE_SOURCE=$(hive_probe_source)
+USAGE_SOURCE=""       # what this run actually used: ccleft | direct
+CCLEFT_JSON=""
+# hive-pace's sample history (the PRIMARY rotate state dir): the primary hive's
+# rotate and watchdog add a Kiro credit sample from every ccleft reading they
+# see, so the pacer's burn fit gets ~5-minute resolution instead of 20.
+PACE_HISTORY="${HIVE_PACE_HISTORY:-$(dirname "$STATE_DIR")/hive-rotate/pace-history.jsonl}"
 
 # USAGE REUSE. Three rotates (every 20 min) and three watchdogs (every 5 min)
 # each probed every provider — ~40 hits/hour on api.anthropic.com's OAuth usage
@@ -803,7 +815,9 @@ load_published_usage() {
   cm=$(k8s_get "/api/v1/namespaces/$USAGE_NS/configmaps/$USAGE_CM") || return 1
   upd=$(printf '%s' "$cm" | jq -r '.data.updated_at // empty')
   [ -n "$upd" ] || return 1
-  age=$(( $(date -u +%s) - $(date -u -d "$upd" +%s 2>/dev/null || echo 0) ))
+  # iso_to_epoch, not `date -d`: busybox date (the ops image) cannot parse
+  # "…T…Z", so this age was always "now - 0" and reuse never happened.
+  age=$(( $(date -u +%s) - $(iso_to_epoch "$upd" | grep . || echo 0) ))
   [ "$age" -le "$USAGE_MAX_AGE" ] || return 1
   for p in $PROVIDERS; do
     v=$(printf '%s' "$cm" | jq -r --arg p "$p" '.data[$p] // "unknown unpublished"')
@@ -836,6 +850,34 @@ measure_usage() {
   MEASURED=1
 }
 
+# usage_from_ccleft: fill PCT/NOTE from ccleft's /readings (CCLEFT_JSON), in the
+# direct parsers' "<pct> <note>" shape (hive-lib.sh ccleft_probe). No provider
+# is contacted by this script; ccleft is the only poller.
+usage_from_ccleft() {
+  local p r c now lim row
+  now=$(date -u +%s)
+  for p in $PROVIDERS; do
+    r=$(printf '%s' "$CCLEFT_JSON" | ccleft_probe "$p" "$now")
+    # Same pane fallback as the direct path: a hard codex cap is announced in
+    # the pane even when no reading is usable.
+    if [ "$p" = openai ] && [ "${r%% *}" = -1 ]; then c=$(openai_pane_cap); [ -n "$c" ] && r=$c; fi
+    PCT[$p]=${r%% *}; NOTE[$p]=${r#* }
+  done
+  # The pacer's per-limit Anthropic view. Only written from a usable reading,
+  # so a stale-too-long one never replaces the last good limit set.
+  lim=$(printf '%s' "$CCLEFT_JSON" | ccleft_anthropic_limits "$now")
+  [ -n "$lim" ] && printf '%s' "$lim" > "$STATE_DIR/anthropic-limits.json"
+  USAGE_SOURCE=ccleft
+  MEASURED=1
+  echo "usage: from ccleft (generated $(printf '%s' "$CCLEFT_JSON" | jq -r '.generated_at // "?"' | cut -c1-19)Z)"
+  if [ "$NS" = "$USAGE_NS" ]; then
+    publish_usage
+    row=$(printf '%s' "$CCLEFT_JSON" | ccleft_kiro_sample "$now")
+    [ -n "$row" ] && { mkdir -p "$(dirname "$PACE_HISTORY")"; pace_history_add "$PACE_HISTORY" "$row"; } 2>/dev/null
+  fi
+  return 0
+}
+
 # publish_usage: mirror a FRESH measurement into $USAGE_NS/hive-provider-usage.
 # Read by hive-pace, hive-console, and every other rotate/watchdog run (see
 # USAGE REUSE above). Carries updated_at so a stale reading is visibly stale.
@@ -859,20 +901,31 @@ publish_usage() {
     lim=$(k8s_get "/api/v1/namespaces/$USAGE_NS/configmaps/$USAGE_CM" | jq -r '.data.anthropic_limits // empty' 2>/dev/null)
   fi
   data=$(printf '%s' "$data" | jq -c --arg lim "$lim" --arg u "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg by "$NS" \
-           '. + {updated_at:$u, measured_by:$by} + (if $lim != "" then {anthropic_limits:$lim} else {} end)')
+           --arg src "${USAGE_SOURCE:-direct}" \
+           '. + {updated_at:$u, measured_by:$by, source:$src} + (if $lim != "" then {anthropic_limits:$lim} else {} end)')
   k8s_put_cm "$USAGE_NS" "$USAGE_CM" "$data" || echo "WARN: could not publish $USAGE_NS/$USAGE_CM" >&2
 }
 
 gather() {
   local p when epoch
-  load_published_usage || { measure_usage; publish_usage; }
+  if [ "$PROBE_SOURCE" = ccleft ] && CCLEFT_JSON=$(ccleft_fetch); then
+    usage_from_ccleft
+  else
+    if [ "$PROBE_SOURCE" = ccleft ]; then
+      # LOUD: the direct path polls Anthropic's rate-limited usage API and
+      # competes with ccleft for it. One run is fine; a streak is a ccleft outage.
+      echo "!!! WARN: ccleft unreachable (${HIVE_CCLEFT_URL:-$HIVE_CCLEFT_DEFAULT_URL}) — FALLING BACK TO DIRECT PROVIDER PROBES for this run" | tee /dev/stderr
+    fi
+    USAGE_SOURCE=direct
+    load_published_usage || { measure_usage; publish_usage; }
+  fi
   for p in $PROVIDERS; do
     # Remember WHEN an exhausted provider comes back, so the watchdog can wake
     # the fleet at renewal instead of on the next 20-minute tick. Best-effort.
     if provider_exhausted "$p"; then
       when=$(printf '%s' "${NOTE[$p]}" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}' | head -1)
       if [ -n "$when" ]; then
-        epoch=$(date -u -d "$when" +%s 2>/dev/null)
+        epoch=$(iso_to_epoch "${when}Z")
         [ -n "$epoch" ] && { mkdir -p "$STATE_DIR/resets.d"; echo "$epoch" > "$STATE_DIR/resets.d/$p"; }
       fi
     else
@@ -1117,6 +1170,8 @@ choose_rung() {
   fi
   while IFS='|' read -r _ p b m; do
     [ -z "$p" ] && continue
+    # Kiro budget cap (below): only the pools hive-pace judged to have room.
+    [ -n "${RESTRICT_PROVIDERS:-}" ] && [[ " $RESTRICT_PROVIDERS " != *" $p "* ]] && continue
     provider_ok "$p" "$agent" "$allow_subscription" || continue
     local rankbit=0 peakbit=0 rankpct="${PCT[$p]:-99}"
     # A no-agent target is eligible (to avoid a permanent probe deadlock),
@@ -1470,6 +1525,7 @@ fi
 
 
 if [ "$ACTION" = probe ]; then
+  echo "source: ${USAGE_SOURCE:-?}"
   printf '%-11s %-9s %s\n' PROVIDER USED NOTE
   for p in $PROVIDERS; do
     v="${PCT[$p]}"; [ "$v" = "-1" ] && v="unknown" || v="${v}%"
@@ -1645,6 +1701,12 @@ fi
 # The pacer's demotion journal. hive-pace runs once for every hive and keeps
 # it in the PRIMARY state dir, keyed "<ns>/<agent>".
 PACE_DEMOTED="${HIVE_PACE_DEMOTED:-$(dirname "$STATE_DIR")/hive-rotate/pace-demoted}"
+# Kiro budget cap requests from hive-pace (same primary state dir): agents pace
+# wants OFF Kiro because the monthly credits would run out before the reset
+# even with every Kiro agent on the cheapest rung. Rotate owns placement, so it
+# enacts them — only onto the pools pace named as having headroom, and only
+# onto a rung of the agent's own tier.
+KIRO_EVICT="${HIVE_PACE_KIRO_EVICT:-$(dirname "$STATE_DIR")/hive-rotate/kiro-evict}"
 
 changed=0
 for a in $(agent_names); do
@@ -1680,6 +1742,23 @@ for a in $(agent_names); do
   # crash-looping. Pace owns the rung WITHIN a provider; rotate owns the
   # provider.
   demoted_from=$(pace_demoted_from "$PACE_DEMOTED" "$NS" "$a" "$curm")
+  if [ "$curp" = kiro ]; then
+    kb=$(kiro_evict_targets "$KIRO_EVICT" "$NS" "$a")
+    if [ -n "$kb" ]; then
+      RESTRICT_PROVIDERS="$kb"; want=$(choose_rung "$tier" "$a"); RESTRICT_PROVIDERS=""
+      if [ -n "$want" ]; then
+        IFS='|' read -r wp wb wm <<< "$want"
+        note_placement "$wp" "$a"
+        printf '%-14s %-9s %s  ->  %-9s %s  (kiro budget cap, hive-pace)\n' "$a" "$curp" "$curm" "$wp" "$wm"
+        changed=$((changed+1))
+        [ "$ACTION" = plan ] && continue
+        place_agent "$a" "$wb" "$wm" || continue
+        printf '%s|%s|%s|%s\n' "$a" "$curp" "$curb" "$curm" >> "$STATE_DIR/rotated"
+        continue
+      fi
+      printf '%-14s %-9s kiro budget cap requested, but no rung on [%s] in %s — stays\n' "$a" "$curp" "$kb" "$tier"
+    fi
+  fi
   # A high-cadence agent sitting on kiro is NOT sticky (KIRO_MIN_CADENCE_S).
   kiro_evict=0
   if [ "$curp" = kiro ]; then
@@ -1813,6 +1892,10 @@ if [ "${HIVE_ROTATE_CANARIES:-1}" = 1 ]; then
   # codex /status screen is readable only through a live pane.
   # shellcheck disable=SC2043  # one pool today; the loop is the extension point
   for p in openai; do
+    # ccleft reads codex headlessly from the shared home: no pane is needed,
+    # so a canary would only spend the protected pool. Still placed when the
+    # reading is unusable (the pane fallback is then the only signal).
+    [ "$USAGE_SOURCE" = ccleft ] && [ "${PCT[$p]:--1}" != -1 ] && continue
     [ -n "$(first_agent_on "$p")" ] && continue          # probe already has a pane
     provider_exhausted "$p" && continue                   # positively full: useless canary
     canary_cooled "$p" && continue                        # recently evicted from here
