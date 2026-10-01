@@ -25,12 +25,13 @@ fleet got rolled back to v5 every night.
 | Backend/model rotation, stranding, auto-resume | **operator** `HiveSpoke.spec.rotationMode: Enforce` on all three | `hive-rotate*` suspended (rollback: unsuspend + set Shadow) |
 | Quota / credit starvation, pacing | **operator** `UsagePool` + pacer | `hive-pace` suspended |
 | Liveness (watchdog, nudge) | **operator** `HiveSpoke.spec.livenessMode: Enforce` on all three | `hive-watchdog*`, `hive-nudge` suspended |
-| Shared auth store | `hive-shared-auth` CronJob | moving to `SharedAuth` |
-| Housekeeping (tiers, inventory, pi-kiro, cli-update, repo-sync, metrics, activity) | CronJobs in [`ops/`](ops/README.md) | moving under operator ownership |
+| Shared auth store | **operator** `SharedAuth fleet` (Enforce) | `hive-shared-auth` suspended (owned by `HiveHousekeeping`) |
+| Housekeeping (inventory, pi-kiro, cli-update, repo-sync, metrics, activity) | **operator** `HiveHousekeeping fleet` renders and owns these CronJobs (scripts still in ConfigMap `hive-ops-scripts` from [`ops/scripts`](ops/scripts)) | `hive-tiers` suspended (no reader); change jobs via the CR, not `kubectl patch` |
 
 All three spokes were promoted on 2026-10-01 (hanthor, then reef, then
 school) after a clean `go run ./cmd/hive-shadow-diff --live [--liveness]` in
-the operator repo. The superseded CronJobs are kept suspended for rollback
+the operator repo. reef's and hanthor's superseded rotate/watchdog CronJobs are deleted; school's
+are kept suspended for rollback
 (runbooks: `docs/rotation-promotion.md`, `docs/liveness-promotion.md`).
 Re-export `ops/cronjobs.yaml` after any CronJob change, or the next apply
 undoes it.
