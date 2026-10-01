@@ -30,7 +30,7 @@ def install_ext(uuid):
         # Fetch extension metadata to find the latest version
         url = f"https://extensions.gnome.org/extension-query/?search={uuid}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:
             data = json.loads(response.read().decode())
             ext_data = next(e for e in data['extensions'] if e['uuid'] == uuid)
             pk = ext_data['pk']
@@ -38,7 +38,7 @@ def install_ext(uuid):
         # Fetch download URL for the latest version
         url = f"https://extensions.gnome.org/extension-info/?pk={pk}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:
             ext_info = json.loads(response.read().decode())
             # Pick the highest version compatible with current shell
             try:
@@ -70,7 +70,7 @@ def install_ext(uuid):
         # Atomically create an owner-only archive instead of using a predictable
         # shared /tmp path that another local user could pre-create or replace.
         req = urllib.request.Request(download_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response, tempfile.NamedTemporaryFile(
+        with urllib.request.urlopen(req, timeout=30) as response, tempfile.NamedTemporaryFile(
             mode='wb', prefix='gnome-extension-', suffix='.zip', delete=False
         ) as out:
             tmp_zip = out.name
