@@ -8,30 +8,10 @@ import os
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from inventory_parser import parse_inventory  # noqa: E402  (re-exported for callers)
+
 INVENTORY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "inventory.yml")
-
-
-def parse_inventory(text):
-    """Return (all_hosts, vps_hosts) from inventory.yml text.
-
-    No PyYAML (not guaranteed on the system python): hosts are the 4-space keys
-    under all.hosts; vps members are the 8-space keys under children.vps.hosts.
-    """
-    all_hosts, vps, section, group = set(), set(), None, None
-    for line in text.splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        indent = len(line) - len(line.lstrip())
-        key = line.strip().rstrip(":")
-        if indent == 2:
-            section = key
-        elif indent == 4 and section == "hosts":
-            all_hosts.add(key)
-        elif indent == 4 and section == "children":
-            group = key
-        elif indent == 8 and section == "children" and group == "vps":
-            vps.add(key)
-    return all_hosts, vps
 
 
 def online_peers(status):

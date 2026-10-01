@@ -1,26 +1,22 @@
 #!/usr/bin/env python3
 """Register a new machine in inventory.yml and create its host_vars file."""
-import sys, re
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from inventory_parser import UnknownGroupError, register_host
 
 name = sys.argv[1]
 mtype = sys.argv[2] if len(sys.argv) > 2 else "desktop"
 inv_path = sys.argv[3] if len(sys.argv) > 3 else "inventory.yml"
 
-content = open(inv_path).read()
-
-if f"    {name}:" in content:
-    print(f"  {name} is already in inventory.")
-    sys.exit(0)
-
-group_marker = f"    {mtype}:\n      hosts:\n"
-if group_marker not in content:
+try:
+    added = register_host(name, mtype, inv_path)
+except UnknownGroupError:
     print(f"  Unknown machine type/group '{mtype}' in {inv_path} (e.g. desktop, server, vps)", file=sys.stderr)
     sys.exit(1)
 
-host_entry = f"    {name}:\n      ansible_host: localhost\n      ansible_connection: local\n"
-content = content.replace("all:\n  hosts:\n", f"all:\n  hosts:\n{host_entry}", 1)
-
-content = content.replace(group_marker, f"{group_marker}        {name}:\n", 1)
-
-open(inv_path, "w").write(content)
-print(f"  Added {name} to {mtype} group in {inv_path}")
+if added:
+    print(f"  Added {name} to {mtype} group in {inv_path}")
+else:
+    print(f"  {name} is already in inventory.")
