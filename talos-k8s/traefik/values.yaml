@@ -24,6 +24,13 @@
 deployment:
   kind: DaemonSet
 
+# Traefik is the only ingress (hostPorts on the matrix node). Without a
+# priority class it ran BestEffort, the first thing the kubelet evicts under
+# DiskPressure: on 2026-10-02 a full disk on that node took every public
+# hostname down (Matrix, the Hives) until it was rescheduled. The kubelet's
+# eviction manager never evicts critical-priority pods.
+priorityClassName: system-cluster-critical
+
 ports:
   web:
     hostPort: 80

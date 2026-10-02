@@ -1,0 +1,158 @@
+# Daily build-cache janitor for the hive contributor home PVCs (ns hive-contributors).
+#
+# Contributors clone a fresh checkout per PR under workspace/<org>/<repo>-<n> and
+# never clean up: Rust target/ dirs reached 82 GiB in claude-home and filled the
+# hive node (2026-10-02), evicting ~6.5k pods incl. Traefik and Matrix. local-path
+# does not enforce the PVC size. Only regenerable build output is removed:
+# target/ dirs untouched for 2 days and go-build cache entries older than 7 days.
+# One CronJob per PVC so each pod lands on the PVC's node (local-path is node-bound).
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: janitor-claude-home
+  namespace: hive-contributors
+  labels: {app.kubernetes.io/name: contributor-janitor}
+spec:
+  schedule: "17 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 1800
+      backoffLimit: 0
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: contributor-janitor}
+        spec:
+          restartPolicy: Never
+          # Same identity as the contributor pods (uid/gid 1000), which own these files;
+          # the namespace enforces PodSecurity "restricted".
+          securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+            - {key: node.kubernetes.io/disk-pressure, operator: Exists, effect: NoSchedule}
+          volumes:
+            - {name: home, persistentVolumeClaim: {claimName: claude-home}}
+          containers:
+            - name: janitor
+              image: alpine:3.22
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+              resources:
+                requests: {cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi}
+                limits: {memory: 256Mi}
+              volumeMounts: [{name: home, mountPath: /home}]
+              command:
+                - sh
+                - -c
+                - |
+                  cd /home || exit 1
+                  df -h . | tail -1
+                  for t in workspace/*/*/target; do
+                    [ -d "$t" ] || continue
+                    [ -n "$(find "$t" -maxdepth 2 -mmin -2880 -print -quit)" ] && continue
+                    echo "rm $t $(du -xsh "$t" | cut -f1)"; rm -rf "$t"
+                  done
+                  [ -d .cache/go-build ] && find .cache/go-build -type f -mtime +7 -delete
+                  df -h . | tail -1
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: janitor-agy-home
+  namespace: hive-contributors
+  labels: {app.kubernetes.io/name: contributor-janitor}
+spec:
+  schedule: "17 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 1800
+      backoffLimit: 0
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: contributor-janitor}
+        spec:
+          restartPolicy: Never
+          # Same identity as the contributor pods (uid/gid 1000), which own these files;
+          # the namespace enforces PodSecurity "restricted".
+          securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+            - {key: node.kubernetes.io/disk-pressure, operator: Exists, effect: NoSchedule}
+          volumes:
+            - {name: home, persistentVolumeClaim: {claimName: agy-home}}
+          containers:
+            - name: janitor
+              image: alpine:3.22
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+              resources:
+                requests: {cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi}
+                limits: {memory: 256Mi}
+              volumeMounts: [{name: home, mountPath: /home}]
+              command:
+                - sh
+                - -c
+                - |
+                  cd /home || exit 1
+                  df -h . | tail -1
+                  for t in workspace/*/*/target; do
+                    [ -d "$t" ] || continue
+                    [ -n "$(find "$t" -maxdepth 2 -mmin -2880 -print -quit)" ] && continue
+                    echo "rm $t $(du -xsh "$t" | cut -f1)"; rm -rf "$t"
+                  done
+                  [ -d .cache/go-build ] && find .cache/go-build -type f -mtime +7 -delete
+                  df -h . | tail -1
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: janitor-pi-codex-home
+  namespace: hive-contributors
+  labels: {app.kubernetes.io/name: contributor-janitor}
+spec:
+  schedule: "17 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 1800
+      backoffLimit: 0
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: contributor-janitor}
+        spec:
+          restartPolicy: Never
+          # Same identity as the contributor pods (uid/gid 1000), which own these files;
+          # the namespace enforces PodSecurity "restricted".
+          securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+          tolerations:
+            - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+            - {key: node.kubernetes.io/disk-pressure, operator: Exists, effect: NoSchedule}
+          volumes:
+            - {name: home, persistentVolumeClaim: {claimName: pi-codex-home}}
+          containers:
+            - name: janitor
+              image: alpine:3.22
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+              resources:
+                requests: {cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi}
+                limits: {memory: 256Mi}
+              volumeMounts: [{name: home, mountPath: /home}]
+              command:
+                - sh
+                - -c
+                - |
+                  cd /home || exit 1
+                  df -h . | tail -1
+                  for t in workspace/*/*/target; do
+                    [ -d "$t" ] || continue
+                    [ -n "$(find "$t" -maxdepth 2 -mmin -2880 -print -quit)" ] && continue
+                    echo "rm $t $(du -xsh "$t" | cut -f1)"; rm -rf "$t"
+                  done
+                  [ -d .cache/go-build ] && find .cache/go-build -type f -mtime +7 -delete
+                  df -h . | tail -1
