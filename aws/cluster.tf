@@ -184,7 +184,7 @@ resource "aws_instance" "controlplane" {
 
   root_block_device {
     volume_type = "gp3"
-    volume_size = 100
+    volume_size = 200 # grown live 2026-10-01 (DiskPressure); was 100
     tags = {
       Backup = "fleet-daily" # picked up by aws_dlm_lifecycle_policy.fleet_daily
     }
@@ -217,7 +217,7 @@ resource "aws_instance" "worker" {
 
   root_block_device {
     volume_type = "gp3"
-    volume_size = 100
+    volume_size = 200 # grown 2026-10-03: contributor build caches + Postgres left <20 GiB free
     tags = {
       Backup = "fleet-daily"
     }
