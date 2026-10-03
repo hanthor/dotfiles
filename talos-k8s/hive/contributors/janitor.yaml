@@ -1,10 +1,14 @@
-# Daily build-cache janitor for the hive contributor home PVCs (ns hive-contributors).
+# Hourly build-cache janitor for the hive contributor home PVCs (ns hive-contributors).
 #
 # Contributors clone a fresh checkout per PR under workspace/<org>/<repo>-<n> and
 # never clean up: Rust target/ dirs reached 82 GiB in claude-home and filled the
 # hive node (2026-10-02), evicting ~6.5k pods incl. Traefik and Matrix. local-path
 # does not enforce the PVC size. Only regenerable build output is removed:
-# target/ dirs untouched for 2 days and go-build cache entries older than 7 days.
+# target/ dirs untouched for 2 days and go-build cache entries older than 7 days;
+# when the home is over 30 GiB, target/ dirs idle for an hour go too (a single
+# spindle debug build reached 74 GiB in a day, 2026-10-03). Runs at
+# system-node-critical: the kubelet rejects ordinary pods while the node is in
+# DiskPressure, which is exactly when this has to run.
 # One CronJob per PVC so each pod lands on the PVC's node (local-path is node-bound).
 ---
 apiVersion: batch/v1
@@ -14,7 +18,7 @@ metadata:
   namespace: hive-contributors
   labels: {app.kubernetes.io/name: contributor-janitor}
 spec:
-  schedule: "17 4 * * *"
+  schedule: "17 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 2
@@ -27,6 +31,7 @@ spec:
           labels: {app.kubernetes.io/name: contributor-janitor}
         spec:
           restartPolicy: Never
+          priorityClassName: system-node-critical
           # Same identity as the contributor pods (uid/gid 1000), which own these files;
           # the namespace enforces PodSecurity "restricted".
           securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
@@ -49,9 +54,11 @@ spec:
                 - |
                   cd /home || exit 1
                   df -h . | tail -1
+                  idle=2880
+                  [ "$(du -xsm . | cut -f1)" -gt 30720 ] && idle=60
                   for t in workspace/*/*/target; do
                     [ -d "$t" ] || continue
-                    [ -n "$(find "$t" -maxdepth 2 -mmin -2880 -print -quit)" ] && continue
+                    [ -n "$(find "$t" -maxdepth 2 -mmin -$idle -print -quit)" ] && continue
                     echo "rm $t $(du -xsh "$t" | cut -f1)"; rm -rf "$t"
                   done
                   [ -d .cache/go-build ] && find .cache/go-build -type f -mtime +7 -delete
@@ -64,7 +71,7 @@ metadata:
   namespace: hive-contributors
   labels: {app.kubernetes.io/name: contributor-janitor}
 spec:
-  schedule: "17 4 * * *"
+  schedule: "17 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 2
@@ -77,6 +84,7 @@ spec:
           labels: {app.kubernetes.io/name: contributor-janitor}
         spec:
           restartPolicy: Never
+          priorityClassName: system-node-critical
           # Same identity as the contributor pods (uid/gid 1000), which own these files;
           # the namespace enforces PodSecurity "restricted".
           securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
@@ -99,9 +107,11 @@ spec:
                 - |
                   cd /home || exit 1
                   df -h . | tail -1
+                  idle=2880
+                  [ "$(du -xsm . | cut -f1)" -gt 30720 ] && idle=60
                   for t in workspace/*/*/target; do
                     [ -d "$t" ] || continue
-                    [ -n "$(find "$t" -maxdepth 2 -mmin -2880 -print -quit)" ] && continue
+                    [ -n "$(find "$t" -maxdepth 2 -mmin -$idle -print -quit)" ] && continue
                     echo "rm $t $(du -xsh "$t" | cut -f1)"; rm -rf "$t"
                   done
                   [ -d .cache/go-build ] && find .cache/go-build -type f -mtime +7 -delete
@@ -114,7 +124,7 @@ metadata:
   namespace: hive-contributors
   labels: {app.kubernetes.io/name: contributor-janitor}
 spec:
-  schedule: "17 4 * * *"
+  schedule: "17 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 2
@@ -127,6 +137,7 @@ spec:
           labels: {app.kubernetes.io/name: contributor-janitor}
         spec:
           restartPolicy: Never
+          priorityClassName: system-node-critical
           # Same identity as the contributor pods (uid/gid 1000), which own these files;
           # the namespace enforces PodSecurity "restricted".
           securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
@@ -149,9 +160,11 @@ spec:
                 - |
                   cd /home || exit 1
                   df -h . | tail -1
+                  idle=2880
+                  [ "$(du -xsm . | cut -f1)" -gt 30720 ] && idle=60
                   for t in workspace/*/*/target; do
                     [ -d "$t" ] || continue
-                    [ -n "$(find "$t" -maxdepth 2 -mmin -2880 -print -quit)" ] && continue
+                    [ -n "$(find "$t" -maxdepth 2 -mmin -$idle -print -quit)" ] && continue
                     echo "rm $t $(du -xsh "$t" | cut -f1)"; rm -rf "$t"
                   done
                   [ -d .cache/go-build ] && find .cache/go-build -type f -mtime +7 -delete
