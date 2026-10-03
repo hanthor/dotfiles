@@ -1,0 +1,480 @@
+# Hive contributor Deployments (ns hive-contributors), exported from the cluster.
+# Secrets are referenced, not stored. spec.replicas is omitted on purpose: the
+# hive-operator's rotation (primary spoke) scales contributors 0/1 by quota.
+# CARGO_* env (2026-10-03): one spindle debug build produced a 74 GiB target/ in
+# a day and put the hive and matrix nodes into DiskPressure; no incremental
+# cache and no debug info keep Rust builds a fraction of that size.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: agy-contributor
+    app.kubernetes.io/component: agy
+    app.kubernetes.io/name: hive-contributor
+  name: agy-contributor
+  namespace: hive-contributors
+spec:
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: agy-contributor
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: agy-contributor
+        app.kubernetes.io/component: agy
+        app.kubernetes.io/name: hive-contributor
+    spec:
+      containers:
+        - env:
+            - name: AGENT_BACKEND
+              value: agy
+            - name: AGENT_MODEL
+              value: gemini-3.7-flash-high
+            - name: HOME
+              value: /home/dev
+            - name: HIVE_HUB
+              valueFrom:
+                secretKeyRef:
+                  key: HIVE_HUB
+                  name: hive-contrib-agy
+            - name: HIVE_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: HIVE_REGISTRATION_TOKEN
+                  name: hive-contrib-agy
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: GH_TOKEN
+                  name: hive-contrib-agy
+            - name: CARGO_INCREMENTAL
+              value: "0"
+            - name: CARGO_PROFILE_DEV_DEBUG
+              value: "0"
+            - name: CARGO_PROFILE_TEST_DEBUG
+              value: "0"
+          image: ghcr.io/kubestellar/hive-contributor:latest
+          imagePullPolicy: Always
+          livenessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - |
+                  grep -q contributor-relay /proc/*/cmdline 2>/dev/null &&
+                  tmux has-session -t contributor 2>/dev/null &&
+                  [ "$(grep -l "^State:.*Z" /proc/*/status 2>/dev/null | wc -l)" -lt 50 ]
+            failureThreshold: 3
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            successThreshold: 1
+            timeoutSeconds: 15
+          name: contributor
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /home/dev
+              name: home
+            - mountPath: /tmp
+              name: tmp
+        - command:
+            - bash
+            - /etc/hive/contributor-watchdog.sh
+          env:
+            - name: WATCHDOG_INTERVAL_S
+              value: "60"
+            - name: WATCHDOG_MAX_WEDGED
+              value: "5"
+            - name: CARGO_INCREMENTAL
+              value: "0"
+            - name: CARGO_PROFILE_DEV_DEBUG
+              value: "0"
+            - name: CARGO_PROFILE_TEST_DEBUG
+              value: "0"
+          image: ghcr.io/kubestellar/hive-contributor:latest
+          imagePullPolicy: Always
+          name: watchdog
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /etc/hive
+              name: watchdog
+            - mountPath: /tmp
+              name: tmp
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+        - name: ghcr-auth
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      shareProcessNamespace: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: agy-home
+        - emptyDir: {}
+          name: tmp
+        - configMap:
+            defaultMode: 420
+            name: contributor-watchdog
+          name: watchdog
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: claude-contributor
+    app.kubernetes.io/component: claude
+    app.kubernetes.io/name: hive-contributor
+  name: claude-contributor
+  namespace: hive-contributors
+spec:
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: claude-contributor
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: claude-contributor
+        app.kubernetes.io/component: claude
+        app.kubernetes.io/name: hive-contributor
+    spec:
+      containers:
+        - env:
+            - name: AGENT_BACKEND
+              value: claude
+            - name: HOME
+              value: /home/dev
+            - name: HIVE_HUB
+              valueFrom:
+                secretKeyRef:
+                  key: HIVE_HUB
+                  name: hive-contrib-claude
+            - name: HIVE_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: HIVE_REGISTRATION_TOKEN
+                  name: hive-contrib-claude
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: GH_TOKEN
+                  name: hive-contrib-claude
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: ANTHROPIC_API_KEY
+                  name: hive-contrib-claude
+                  optional: true
+            - name: CARGO_INCREMENTAL
+              value: "0"
+            - name: CARGO_PROFILE_DEV_DEBUG
+              value: "0"
+            - name: CARGO_PROFILE_TEST_DEBUG
+              value: "0"
+          image: ghcr.io/kubestellar/hive-contributor:latest
+          imagePullPolicy: Always
+          livenessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - |
+                  grep -q contributor-relay /proc/*/cmdline 2>/dev/null &&
+                  tmux has-session -t contributor 2>/dev/null &&
+                  [ "$(grep -l "^State:.*Z" /proc/*/status 2>/dev/null | wc -l)" -lt 50 ]
+            failureThreshold: 3
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            successThreshold: 1
+            timeoutSeconds: 15
+          name: contributor
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /home/dev
+              name: home
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /home/dev/.claude
+              name: sharedclaude
+        - command:
+            - bash
+            - /etc/hive/contributor-watchdog.sh
+          env:
+            - name: WATCHDOG_INTERVAL_S
+              value: "60"
+            - name: WATCHDOG_MAX_WEDGED
+              value: "5"
+            - name: CARGO_INCREMENTAL
+              value: "0"
+            - name: CARGO_PROFILE_DEV_DEBUG
+              value: "0"
+            - name: CARGO_PROFILE_TEST_DEBUG
+              value: "0"
+          image: ghcr.io/kubestellar/hive-contributor:latest
+          imagePullPolicy: Always
+          name: watchdog
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /etc/hive
+              name: watchdog
+            - mountPath: /tmp
+              name: tmp
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+        - name: ghcr-auth
+      nodeSelector:
+        workload-role: hive
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      shareProcessNamespace: true
+      terminationGracePeriodSeconds: 30
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: claude-home
+        - emptyDir: {}
+          name: tmp
+        - configMap:
+            defaultMode: 420
+            name: contributor-watchdog
+          name: watchdog
+        - name: sharedclaude
+          persistentVolumeClaim:
+            claimName: shared-claude
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: pi-codex-contributor
+    app.kubernetes.io/component: pi-codex
+    app.kubernetes.io/name: hive-contributor
+  name: pi-codex-contributor
+  namespace: hive-contributors
+spec:
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: pi-codex-contributor
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: pi-codex-contributor
+        app.kubernetes.io/component: pi-codex
+        app.kubernetes.io/name: hive-contributor
+    spec:
+      containers:
+        - env:
+            - name: AGENT_BACKEND
+              value: pi
+            - name: AGENT_MODEL
+              value: openai-codex/gpt-5.6-sol
+            - name: HOME
+              value: /home/dev
+            - name: HIVE_HUB
+              valueFrom:
+                secretKeyRef:
+                  key: HIVE_HUB
+                  name: hive-contrib-pi-codex
+            - name: HIVE_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: HIVE_REGISTRATION_TOKEN
+                  name: hive-contrib-pi-codex
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: GH_TOKEN
+                  name: hive-contrib-pi-codex
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: OPENAI_API_KEY
+                  name: hive-contrib-pi-codex
+                  optional: true
+            - name: CARGO_INCREMENTAL
+              value: "0"
+            - name: CARGO_PROFILE_DEV_DEBUG
+              value: "0"
+            - name: CARGO_PROFILE_TEST_DEBUG
+              value: "0"
+          image: ghcr.io/kubestellar/hive-contributor:latest
+          imagePullPolicy: Always
+          livenessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - |
+                  grep -q contributor-relay /proc/*/cmdline 2>/dev/null &&
+                  tmux has-session -t contributor 2>/dev/null &&
+                  [ "$(grep -l "^State:.*Z" /proc/*/status 2>/dev/null | wc -l)" -lt 50 ]
+            failureThreshold: 3
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            successThreshold: 1
+            timeoutSeconds: 15
+          name: contributor
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /home/dev
+              name: home
+            - mountPath: /tmp
+              name: tmp
+        - command:
+            - bash
+            - /etc/hive/contributor-watchdog.sh
+          env:
+            - name: WATCHDOG_INTERVAL_S
+              value: "60"
+            - name: WATCHDOG_MAX_WEDGED
+              value: "5"
+            - name: CARGO_INCREMENTAL
+              value: "0"
+            - name: CARGO_PROFILE_DEV_DEBUG
+              value: "0"
+            - name: CARGO_PROFILE_TEST_DEBUG
+              value: "0"
+          image: ghcr.io/kubestellar/hive-contributor:latest
+          imagePullPolicy: Always
+          name: watchdog
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /etc/hive
+              name: watchdog
+            - mountPath: /tmp
+              name: tmp
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+        - name: ghcr-auth
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      shareProcessNamespace: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: pi-codex-home
+        - emptyDir: {}
+          name: tmp
+        - configMap:
+            defaultMode: 420
+            name: contributor-watchdog
+          name: watchdog
