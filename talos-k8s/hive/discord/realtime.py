@@ -460,7 +460,7 @@ def bead_loop():
 
 def connect():
     response = urlopen(Request(f"{DASHBOARD}/api/events", headers={"X-Hive-Internal": DASHBOARD_TOKEN, "Accept": "text/event-stream",
-                                                                    "Cache-Control": "no-cache"}), timeout=None)
+                                                                    "Cache-Control": "no-cache"}), timeout=120)
     if response.status != 200:
         response.close()
         raise RuntimeError(f"SSE HTTP {response.status}")
