@@ -1,0 +1,14 @@
+---
+# Handlers shared by every role that writes a unit into the user's
+# systemd directory. Ansible's handler names are a play-global namespace,
+# so defining one of these per role meant several definitions of the same
+# name in one play, only one of which the play actually resolved.
+#
+# Roles reach these by listing `systemd_handlers` in their meta
+# dependencies; the role has no tasks, so depending on it adds nothing to
+# the run but the handler definitions.
+
+- name: Reload systemd user daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+    scope: user

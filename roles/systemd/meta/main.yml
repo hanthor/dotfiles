@@ -1,0 +1,6 @@
+---
+# Pulls in the shared "Reload systemd user daemon" handler this role
+# notifies after writing each user unit. "Restart podman socket" stays in
+# this role's own handlers: it is notified from here only.
+dependencies:
+  - role: systemd_handlers
