@@ -17,7 +17,7 @@ def git(*args: str) -> str:
     repo = os.path.expanduser("~/.local/share/dotfiles")
     try:
         return subprocess.check_output(
-            ["git", "-C", repo, *args], text=True, stderr=subprocess.DEVNULL
+            ["git", "-C", repo, *args], text=True, stderr=subprocess.DEVNULL, timeout=10
         ).strip()
     except Exception:
         return "?"
