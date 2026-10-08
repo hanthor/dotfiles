@@ -47,7 +47,7 @@ rows.sort(key=lambda r: tuple(int(x) for x in r[0].split('.')) if r[0] else (0,)
 # Pull Tailscale table from env (passed below) — simpler: re-read tailscale here
 ts = {}
 try:
-    out = subprocess.run(['tailscale','status','--json'], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(['tailscale','status','--json'], capture_output=True, text=True, check=True, timeout=5).stdout
     import json
     d = json.loads(out)
     peers = list(d.get('Peer', {}).values()) + ([d.get('Self')] if d.get('Self') else [])

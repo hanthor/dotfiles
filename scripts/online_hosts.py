@@ -28,7 +28,7 @@ def online_peers(status):
 def main():
     try:
         status = json.loads(subprocess.run(["tailscale", "status", "--json"],
-                                           capture_output=True, text=True, timeout=10).stdout)
+                                           capture_output=True, text=True, timeout=5).stdout)
     except Exception:
         status = {}
     with open(os.environ.get("DOTFILES_INVENTORY", INVENTORY)) as f:
