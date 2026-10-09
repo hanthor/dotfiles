@@ -125,7 +125,7 @@ ensure_tailscale() {
     echo "Installing Tailscale..."
     local tmp_ts
     tmp_ts=$(mktemp)
-    if curl -fsSL https://tailscale.com/install.sh -o "$tmp_ts" && [ -s "$tmp_ts" ]; then
+    if curl -fsSL --max-time 30 https://tailscale.com/install.sh -o "$tmp_ts" && [ -s "$tmp_ts" ]; then
       sh "$tmp_ts"
     fi
     rm -f "$tmp_ts"
