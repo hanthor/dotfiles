@@ -1,0 +1,5 @@
+---
+galaxy_info:
+  description: >-
+    Detects libc flavor (musl, Termux/bionic, or glibc) once per run and
+    publishes is_musl / is_termux facts for other roles to gate on.

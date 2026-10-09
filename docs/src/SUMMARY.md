@@ -43,6 +43,7 @@
 
 ## System
 
+- [platform_detect](roles/platform_detect.md)
 - [sshd](roles/sshd.md)
 - [sudo](roles/sudo.md)
 - [apk_packages](roles/apk_packages.md)
