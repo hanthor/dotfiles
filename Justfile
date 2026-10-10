@@ -8,6 +8,14 @@ export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" +
 # Resolve online fleet hosts: intersect tailscale online peers with inventory (excluding vps + self)
 _online_hosts := shell('python3 "$1"', justfile_directory() / "scripts/online_hosts.py")
 
+# Every recipe below runs site.yml against THIS machine over the local
+# connection. The flags are not optional decoration: `-l`/`-e target` pin the
+# play to this host, and the ansible_connection/ansible_host overrides keep
+# Ansible from re-resolving the inventory address and SSHing to itself.
+# Defined once so a change to how the fleet addresses itself is a one-line
+# edit instead of eight.
+_play := "ansible-playbook --connection=local -l " + machine + " -e target=" + machine + " -e ansible_connection=local -e ansible_host=127.0.0.1"
+
 # Apply all config to this machine (unlocks BW interactively if needed)
 apply *args:
     #!/usr/bin/env bash
@@ -31,9 +39,9 @@ apply *args:
     fi
     rc=0
     if [ -n "$SKIP_TAGS" ]; then
-      ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags "$SKIP_TAGS" $BECOME_ARGS {{ args }} || rc=$?
+      {{ _play }} site.yml --skip-tags "$SKIP_TAGS" $BECOME_ARGS {{ args }} || rc=$?
     else
-      ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }} || rc=$?
+      {{ _play }} -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }} || rc=$?
     fi
     scripts/record-apply.py "$rc" apply "$SKIP_TAGS"
     exit $rc
@@ -44,7 +52,7 @@ apply-tags tags:
     set -uo pipefail
     cd {{ dotfiles_dir }}
     rc=0
-    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }} || rc=$?
+    {{ _play }} -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }} || rc=$?
     scripts/record-apply.py "$rc" apply-tags "{{ tags }}"
     exit $rc
 
@@ -55,7 +63,7 @@ apply-nosecrets *args:
     cd {{ dotfiles_dir }}
     git pull --ff-only || true
     rc=0
-    ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --skip-tags secrets {{ args }} || rc=$?
+    {{ _play }} site.yml --skip-tags secrets {{ args }} || rc=$?
     scripts/record-apply.py "$rc" apply-nosecrets secrets
     exit $rc
 
@@ -74,15 +82,15 @@ apply-remote-tags name tags:
 
 # Verify (and self-heal) passwordless SSH to all online fleet members
 mesh-check:
-    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --tags mesh_check
+    cd {{ dotfiles_dir }} && {{ _play }} site.yml --tags mesh_check
 
 # Apply only dotfile configs (shell, git, tmux, etc.)
 dotfiles:
-    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --tags dotfiles
+    cd {{ dotfiles_dir }} && {{ _play }} site.yml --tags dotfiles
 
 # Apply only packages (Homebrew + Flatpak)
 packages:
-    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --tags packages
+    cd {{ dotfiles_dir }} && {{ _play }} site.yml --tags packages
 
 # Apply to a remote machine, forwarding your local BW session over SSH
 apply-remote name *args:
@@ -414,7 +422,7 @@ lint:
 
 # Dry-run apply (no changes) — quick way to see what would change
 check *args:
-    cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --check --diff {{ args }}
+    cd {{ dotfiles_dir }} && {{ _play }} site.yml --check --diff {{ args }}
 
 # Health check: verify this machine is in a good state
 doctor:
