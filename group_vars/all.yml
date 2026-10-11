@@ -4,49 +4,50 @@ user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james
 brew_prefix: /home/linuxbrew/.linuxbrew
-# All machine names (for SSH config generation)
+# All machine names (for SSH config generation).
+# Source of truth: inventory.yml. Kept here for role consumption.
+# Talos nodes (bihar, karnataka) and port-forwarded test VMs are excluded.
 machines:
+  goa:
+    hostname: goa
   himachal:
     hostname: himachal
-  karnataka:
-    hostname: karnataka
+  kanpur:
+    hostname: kanpur
   kerala:
     hostname: kerala
   dilli:
     hostname: dilli
-  kanpur:
-    hostname: kanpur
-  goa:
-    hostname: goa
-  vm:
-    hostname: vm
-  bihar:
-    hostname: bihar
   matrix:
     hostname: matrix.reilly.asia
   telengana:
     hostname: telengana
-  test-fleet-fedora:
-    hostname: test-fleet-fedora
-  test-fleet-node2:
-    hostname: test-fleet-node2
+  mumbai:
+    hostname: 100.86.202.86
+  punjab:
+    hostname: 100.78.73.8
+  termux:
+    hostname: 100.115.116.35
+  vm:
+    hostname: vm
 
 # Fleet SSH public keys, committed to git (public keys only — safe in a
 # public repo). The ssh_mesh role merges these into authorized_keys on
 # every apply (incl. the daily no-secrets timer) so the mesh self-heals
 # without Bitwarden. Each machine warns on apply if its own key is
 # missing/stale here.
+#
+# All Ansible-managed hosts from inventory.yml should have entries here.
 machine_pubkeys:
-  goa: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP9VKRfO6q+mk43mJ1BYn2omRyKJcieTgZem0jGGEtN2 goa
-  punjab: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKTteKkOac3kryqONYQB91nN9tuVTxogiiRG5LRmiiIH punjab
   dilli: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPOZx220I8Av7KmEAOib4iAKZFCzPp8cwtzvteJJ7VB
-  kanpur: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGR7ZHHHguM8yl4vbDsSMlk5VFg+PaLA4+kNtYLJwBxc james@kanpur
+  goa: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP9VKRfO6q+mk43mJ1BYn2omRyKJcieTgZem0jGGEtN2 goa
   himachal: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPelaWkNsfwqnceB/5gftUcnprfnflCsDlMDeQkm0Hps himachal
+  kanpur: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGR7ZHHHguM8yl4vbDsSMlk5VFg+PaLA4+kNtYLJwBxc james@kanpur
   kerala: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMbH9ulPQ0TFZAEMH86P9O17xqxgjpOqEYGfpLPfglwW james@Kerala
-  vm: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIISpsmEf1I6nKchkatNY08OInckBvQCGm0L3rDse6nBy james@Jamess-MacBook-Air.local
-  termux: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyFPxxcqd3bA+SPDL5eGlYzS5mDV2gJcp6vuDpx+spR u0_a372@localhost
   mumbai: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN059d8p5GeXivRywaeJwvx+pAcLdsebGaj7ypalFCuO pixel-9a
-  nothing: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIDWQMpTXLLE8z3sxeCFpW7RBURRuNEOdxbe5XBCG2eT u0_a266@localhost
+  punjab: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKTteKkOac3kryqONYQB91nN9tuVTxogiiRG5LRmiiIH punjab
+  termux: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyFPxxcqd3bA+SPDL5eGlYzS5mDV2gJcp6vuDpx+spR u0_a372@localhost
+  vm: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIISpsmEf1I6nKchkatNY08OInckBvQCGm0L3rDse6nBy james@Jamess-MacBook-Air.local
 
 # Machines never probed by the ssh_mesh check: Talos nodes (no user SSH)
 # and port-forwarded test VMs.
