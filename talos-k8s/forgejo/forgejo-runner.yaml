@@ -138,7 +138,7 @@ spec:
       containers:
         # Docker-in-Docker sidecar
         - name: dind
-          image: docker:28-dind
+          image: docker:29-dind
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
