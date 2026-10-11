@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-curl -s -X POST "$API_URL" \
+curl -s --max-time 30 -X POST "$API_URL" \
   -H "Content-Type: application/json" \
   -d "$(jq -n \
     --arg q "$QUERY" \
