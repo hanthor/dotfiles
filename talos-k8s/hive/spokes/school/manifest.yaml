@@ -79,7 +79,7 @@ spec:
                   key: KIRO_API_KEY
                   name: kiro-api
                   optional: true
-          image: ghcr.io/hivecommons/hive:v6-latest@sha256:f33662b37d2abf51816b81a04c05bfaba1ae63e38da8d062105d0e3283f23b16
+          image: ghcr.io/hivecommons/hive:v6-latest@sha256:740779e95a407ff2b1e80932b5ff4d7a88be8927bad05023a23be0f5f4b82e2c
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
