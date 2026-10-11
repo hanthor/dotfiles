@@ -1,38 +1,36 @@
 ---
-name: driving-pi
-description: Launch and supervise a `pi` agent session in tmux as a delegated worker — correct CLI invocation, briefing it in a file rather than a prompt, keeping two agents out of each other's way in one repo, and the babysitting loop. Use when delegating a workstream to pi, running several agents in parallel across the tuna-os repos, or when a spawned agent's messages are not landing.
+name: driving-omp
+description: Launch and supervise an Oh My Pi (`omp`) agent session in tmux as a delegated worker — correct CLI invocation, briefing it in a file rather than a prompt, keeping two agents out of each other's way in one repo, and the babysitting loop. Use when delegating a workstream to OMP, running several agents in parallel across the tuna-os repos, or when a spawned agent's messages are not landing.
 ---
 
-# Driving pi
+# Driving OMP
 
-`pi` is a second agent CLI (separate from Claude Code). Delegating to it is
+`omp` is a second agent CLI (separate from Claude Code). Delegating to it is
 useful when a workstream is long, mechanical and separable — but it is an
 *interactive TUI*, not a batch tool, so it needs a tmux window and periodic
 supervision.
 
 ## Launching it
 
-```bash
 tmux new-window -t 0: -n <name> -c /path/to/repo
-tmux send-keys -t 0:<name> 'pi --name <session-name> @BRIEF.md "First instruction."' Enter
-```
+tmux send-keys -t 0:<name> 'omp @BRIEF.md "First instruction."' Enter
 
 **`@file` must be its own argument.** This fails:
 
 ```bash
-pi "@BRIEF.md Read this first and start work."     # WRONG
+omp "@BRIEF.md Read this first and start work."     # WRONG
 # Error: File not found: /path/@BRIEF.md Read this first and start work.
 ```
 
-pi takes the whole quoted string as the filename. Correct form:
+`omp` takes the whole quoted string as the filename. Correct form:
 
 ```bash
-pi @BRIEF.md "Read this first and start work."     # RIGHT
+omp @BRIEF.md "Read this first and start work."     # RIGHT
 ```
 
-Useful flags: `--name` (display name), `-p` (non-interactive, process and
-exit), `-c` (continue), `--model`, `--no-session` (ephemeral).
-Pre-configured agents live in `~/.pi/agent/agents/*.md` — check for one
+Useful flags: `-p` (non-interactive, process and exit), `-c` (continue),
+`--model`, `--no-session` (ephemeral).
+Pre-configured agents live in `~/.omp/agent/agents/*.md` — check for one
 matching the domain before writing a brief from scratch.
 
 ## Brief in a file, not in the prompt
@@ -65,7 +63,7 @@ check is worth more than both finishing at once.
 
 > **Fleet-level concerns — reading session state, recovering a wedged
 > session, resuming by ID, splitting work between agents, durability — live in
-> `tmux-agent-fleet`. This file covers what is specific to `pi`.**
+> `tmux-agent-fleet`. This file covers what is specific to OMP.**
 
 ## Keystrokes do not always land
 
@@ -130,7 +128,7 @@ State the *narrower true* version rather than just retracting: "declared but
 never exercised — zero cells in the gate matrix" is actionable, "not a
 target" was not.
 
-## When not to use pi
+## When not to use OMP
 
 - One-shot mechanical edits — do them yourself, faster.
 - Anything needing your conversation context — a fresh agent does not have

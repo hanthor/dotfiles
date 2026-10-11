@@ -1,16 +1,5 @@
 ---
 # ── AI Coding Tools configuration ────────────────────────────────
-- name: Create pi-coding-agent directory
-  ansible.builtin.file:
-    path: "{{ ansible_facts['env']['HOME'] }}/.pi/agent"
-    state: directory
-    mode: "0755"
-
-- name: Deploy pi-coding-agent models config
-  ansible.builtin.copy:
-    src: pi-models.json
-    dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/models.json"
-    mode: "0644"
 
 # ── Per-host secrets from Bitwarden (DeepSeek + Forgejo) ─────────
 # Gated on `bw_unlocked` (set by the bitwarden role) so a locked vault
@@ -29,16 +18,6 @@
       changed_when: false
       failed_when: false
 
-    - name: Write pi-coding-agent auth.json
-      ansible.builtin.copy:
-        content: |
-          {
-            "deepseek": { "type": "api_key", "key": "{{ deepseek_key.stdout | trim }}" }
-          }
-        dest: "{{ ansible_facts['env']['HOME'] }}/.pi/agent/auth.json"
-        mode: "0600"
-      no_log: true
-      when: deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0
 
     - name: Fetch Forgejo API token from Bitwarden
       ansible.builtin.shell: |
@@ -49,11 +28,19 @@
       changed_when: false
       failed_when: false
 
-    # Consumed by the tavily-search pi skill, which reads $TAVILY_API_KEY
-    # rather than hardcoding a key (this repo is public).
+    # The OMP DeepSeek provider consumes this env var; the API key never lands
+    # in the agent config or this public repository.
     - name: Fetch Tavily API key from Bitwarden
       ansible.builtin.command: bw get password tavily-api-key
       register: tavily_key
+      no_log: true
+      changed_when: false
+      failed_when: false
+
+    # Meta Model API key (Muse Spark) lives in a Bitwarden secure note.
+    - name: Fetch Meta API key from Bitwarden
+      ansible.builtin.command: bw get notes meta-api-key
+      register: meta_key
       no_log: true
       changed_when: false
       failed_when: false
@@ -62,18 +49,26 @@
       ansible.builtin.copy:
         content: |
           # Managed by dotfiles playbook — DO NOT EDIT
+          {% if deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0 %}
+          export DEEPSEEK_API_KEY={{ deepseek_key.stdout | trim | quote }}
+          {% endif %}
           {% if forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0 %}
           export FORGEJO_TOKEN={{ forgejo_token.stdout | trim }}
           {% endif %}
           {% if tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0 %}
           export TAVILY_API_KEY={{ tavily_key.stdout | trim }}
           {% endif %}
+          {% if meta_key.rc == 0 and meta_key.stdout | trim | length > 0 %}
+          export META_API_KEY={{ meta_key.stdout | trim | quote }}
+          {% endif %}
         dest: "{{ ansible_facts['env']['HOME'] }}/.config/shell/secrets.sh"
         mode: "0600"
       no_log: true
       when: >-
-        (forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0)
+        (deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0)
+        or (forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0)
         or (tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0)
+        or (meta_key.rc == 0 and meta_key.stdout | trim | length > 0)
 
     # Fish doesn't source secrets.sh; give it the same values via conf.d.
     - name: Ensure fish conf.d directory exists
@@ -82,31 +77,41 @@
         state: directory
         mode: "0755"
       when: >-
-        (forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0)
+        (deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0)
+        or (forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0)
         or (tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0)
+        or (meta_key.rc == 0 and meta_key.stdout | trim | length > 0)
 
     - name: Write fish secrets file
       ansible.builtin.copy:
         content: |
           # Managed by dotfiles playbook — DO NOT EDIT
+          {% if deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0 %}
+          set -gx DEEPSEEK_API_KEY {{ deepseek_key.stdout | trim | quote }}
+          {% endif %}
           {% if forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0 %}
           set -gx FORGEJO_TOKEN {{ forgejo_token.stdout | trim | quote }}
           {% endif %}
           {% if tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0 %}
           set -gx TAVILY_API_KEY {{ tavily_key.stdout | trim | quote }}
           {% endif %}
+          {% if meta_key.rc == 0 and meta_key.stdout | trim | length > 0 %}
+          set -gx META_API_KEY {{ meta_key.stdout | trim | quote }}
+          {% endif %}
         dest: "{{ ansible_facts['env']['HOME'] }}/.config/fish/conf.d/secrets.fish"
         mode: "0600"
       no_log: true
       when: >-
-        (forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0)
+        (deepseek_key.rc == 0 and deepseek_key.stdout | trim | length > 0)
+        or (forgejo_token.rc == 0 and forgejo_token.stdout | trim | length > 0)
         or (tavily_key.rc == 0 and tavily_key.stdout | trim | length > 0)
+        or (meta_key.rc == 0 and meta_key.stdout | trim | length > 0)
 
 - name: Warn if deepseek-api-key not found in Bitwarden
   ansible.builtin.debug:
     msg: >-
-      Bitwarden item 'deepseek-api-key' not found — skipping pi auth config.
-      Run: bw create item ... or seed it manually.
+      Bitwarden item 'deepseek-api-key' not found — skipping DEEPSEEK_API_KEY.
+      OMP/Kiro OAuth can still be configured with `/login kiro`.
   when:
     - bw_unlocked | default(false)
     - (deepseek_key | default({})).rc | default(1) != 0

@@ -59,7 +59,7 @@
 - [shell_dotfiles](roles/shell_dotfiles.md)
 - [shell_atuin](roles/shell_atuin.md)
 - [shell_ai](roles/shell_ai.md)
-- [pi](roles/pi.md)
+- [omp](roles/omp.md)
 - [hive_ops](roles/hive_ops.md)
 - [git](roles/git.md)
 - [neovim](roles/neovim.md)

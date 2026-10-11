@@ -319,7 +319,7 @@ update Frappe records:
 
 ```bash
 # 1. Search for person
-bash ~/.pi/agent/skills/james/tavily-search/scripts/search.sh "Bodhish Thomas github" --max 3
+bash ~/.omp/agent/skills/james/tavily-search/scripts/search.sh "Bodhish Thomas github" --max 3
 
 # 2. Fetch GitHub profile for bio/blog (often has LinkedIn)
 curl -s https://api.github.com/users/bodhish | python3 -c "import json,sys; d=json.load(sys.stdin); print('login:', d.get('login')); print('blog:', d.get('blog')); print('bio:', (d.get('bio') or '')[:100])"
