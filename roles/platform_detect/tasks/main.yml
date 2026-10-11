@@ -1,0 +1,32 @@
+---
+# Sets is_musl / is_termux once, so apk_packages, homebrew and
+# termux_packages (and anything added later) can gate on them without each
+# re-implementing the same stat checks. Must run before any role that reads
+# these facts — site.yml includes it first, tagged always.
+
+- name: Detect musl libc
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    get_mime: false
+    get_checksum: false
+    get_attributes: false
+  register: _musl_stat
+  loop:
+    - /lib/ld-musl-x86_64.so.1
+    - /lib/ld-musl-aarch64.so.1
+  tags: always
+
+- name: Detect Termux (Android/bionic libc)
+  ansible.builtin.stat:
+    path: /data/data/com.termux/files/usr
+    get_mime: false
+    get_checksum: false
+    get_attributes: false
+  register: _termux_stat
+  tags: always
+
+- name: Set platform facts
+  ansible.builtin.set_fact:
+    is_musl: "{{ _musl_stat.results | selectattr('stat.exists') | list | length > 0 }}"
+    is_termux: "{{ _termux_stat.stat.exists }}"
+  tags: always
