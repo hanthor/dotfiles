@@ -49,7 +49,7 @@ spec:
                 secretKeyRef:
                   key: HIVE_DASHBOARD_TOKEN
                   name: hive-hub-secrets
-          image: ghcr.io/hivecommons/hive-hub:v5.105.10@sha256:797b4035b2bc9f9f3b6f344ce60cb7a5b3c6d638fa4988f6bdf2d7f12889db8a
+          image: ghcr.io/hivecommons/hive-hub:v5.161.0@sha256:3acb20ea43b8dce0b3fbb41253186db74b77feb112c614552eb9d0807f8282ea
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
@@ -156,7 +156,7 @@ spec:
         app.kubernetes.io/name: hub-front
     spec:
       containers:
-        - image: docker.io/library/nginx:1.27-alpine-slim
+        - image: docker.io/library/nginx:1.31-alpine-slim
           imagePullPolicy: IfNotPresent
           name: web
           ports:

@@ -44,7 +44,7 @@ spec:
         - name: ccleft
           # The Hive's own image, for its `agy` CLI (agy has no HTTP quota API).
           # Keep this digest in step with deploy/hive when the Hive is upgraded.
-          image: ghcr.io/hivecommons/hive:v5.102.0@sha256:6609bbce78dd541a89761a00e24664386e4758f8ea4e45070fb79cd05759d013
+          image: ghcr.io/hivecommons/hive:v5.161.0@sha256:0298e761ff5d3eec82c5e3b432f744b067bd24d6b7e6d1f3411e943a704cd5ee
           imagePullPolicy: IfNotPresent
           # ccleft itself comes from the image volume below (no copy step).
           command: [/opt/ccleft/usr/local/bin/ccleft, serve, --config, /etc/ccleft/ccleft.yaml]
