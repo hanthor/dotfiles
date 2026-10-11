@@ -13,6 +13,16 @@
   environment:
     PATH: "{{ ansible_env_path }}"
 
+- name: Warn that facts cannot be published without gh auth
+  ansible.builtin.debug:
+    msg: |
+      fleet_facts: gh is not authenticated on {{ inventory_hostname }}, so no device
+      facts were published. Run `just apply` once with Bitwarden unlocked (the daily
+      no-secrets timer cannot authenticate gh).
+  when:
+    - fleet_facts_publish | bool
+    - fleet_facts_gh.rc != 0
+
 - name: Publish device facts
   when:
     - fleet_facts_publish | bool
