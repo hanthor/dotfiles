@@ -78,7 +78,7 @@ ensure_uv() {
   local tmp_install
   tmp_install=$(mktemp)
   while [ $attempts -lt 3 ]; do
-    if curl -LsSf https://astral.sh/uv/install.sh -o "$tmp_install" && [ -s "$tmp_install" ] && sh "$tmp_install"; then
+    if curl -LsSf --max-time 30 https://astral.sh/uv/install.sh -o "$tmp_install" && [ -s "$tmp_install" ] && sh "$tmp_install"; then
       rm -f "$tmp_install"
       export PATH="$HOME/.local/bin:$PATH"
       return
