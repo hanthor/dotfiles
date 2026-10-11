@@ -1,0 +1,5 @@
+---
+# Pulls in the shared "Reload systemd user daemon" handler this role
+# notifies after writing its user unit.
+dependencies:
+  - role: systemd_handlers

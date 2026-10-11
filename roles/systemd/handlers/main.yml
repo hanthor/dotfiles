@@ -1,8 +1,7 @@
 ---
-- name: Reload systemd user daemon
-  ansible.builtin.systemd:
-    daemon_reload: true
-    scope: user
+# "Reload systemd user daemon" now lives in the shared systemd_handlers
+# role (a meta dependency of this one). This handler is notified only from
+# this role, so it stays here.
 
 - name: Restart podman socket
   ansible.builtin.systemd:
