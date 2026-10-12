@@ -65,6 +65,27 @@ The bootstrap script:
 4. Runs `site.yml` with `--skip-tags secrets` (installs [Homebrew](https://brew.sh/) and core packages among the rest)
 5. If the Bitwarden CLI is now available and unlocks, runs `site.yml --tags secrets` and pushes any inventory changes
 
+## After Bootstrap Completes
+
+Bootstrap ends with shell environment setup instructions. The critical next step is to start a new shell and run the first full apply:
+
+```bash
+# Start a fresh shell to load updated environment (e.g., Homebrew paths)
+exec zsh
+
+# Run the first full apply (with secrets)
+just apply
+```
+
+**Why this step matters:**
+- Bootstrap runs `site.yml --skip-tags secrets`, which skips Bitwarden integration
+- `just apply` runs the full playbook with secrets, unlocking Bitwarden and completing setup
+- This pull-in step distributes SSH keys across the fleet, registers with GitHub and Tailscale, and sets up daily/on-login automation
+
+Do **not** edit `host_vars/<name>.yml` before the first `just apply` — bootstrap sets sensible defaults, and `just apply` will pull in critical secrets (SSH keys, GitHub tokens, Tailscale auth). Any per-machine customizations can follow once the first apply succeeds.
+
+The details of what happens during this first apply are covered in the [Post-Onboarding](#post-onboarding) section below.
+
 ## Machine Types
 
 `<type>` is the inventory group to join. `bootstrap.sh` offers `desktop`, `server` and `vps`:
