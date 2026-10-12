@@ -416,6 +416,14 @@ lint:
 check *args:
     cd {{ dotfiles_dir }} && ansible-playbook --connection=local -l {{ machine }} -e target={{ machine }} -e ansible_connection=local -e ansible_host=127.0.0.1 site.yml --check --diff {{ args }}
 
+# Log omp into all providers (OAuth prompts only for missing ones)
+omp-login:
+    {{ dotfiles_dir }}/scripts/omp-login.sh
+
+# Smoke-test omp providers and show remaining quota (ccleft)
+omp-test:
+    {{ dotfiles_dir }}/scripts/omp-test.sh
+
 # Health check: verify this machine is in a good state
 doctor:
     #!/usr/bin/env bash

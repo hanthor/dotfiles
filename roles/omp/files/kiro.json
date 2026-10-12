@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "cliFallback": true,
+  "kiroCliPath": "kiro-cli",
+  "requestTimeoutMs": 600000
+}

@@ -1,6 +1,6 @@
 ---
 name: tmux-agent-fleet
-description: Run several agent sessions in parallel tmux windows and orchestrate them — splitting work so they don't collide, reading their state correctly, recovering wedged sessions, and keeping findings durable when a session dies. Use when driving multiple Claude Code or pi sessions at once, when a session stops responding to input, or when coordinating agents across several repositories. For pi's CLI specifics see `driving-pi`.
+description: Run several agent sessions in parallel tmux windows and orchestrate them — splitting work so they don't collide, reading their state correctly, recovering wedged sessions, and keeping findings durable when a session dies. Use when driving multiple Claude Code or OMP sessions at once, when a session stops responding to input, or when coordinating agents across several repositories. For OMP's CLI specifics see `driving-omp`.
 ---
 
 # Driving an agent fleet in tmux

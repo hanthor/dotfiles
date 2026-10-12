@@ -26,11 +26,11 @@ Where `<codepoint>` is the lowercase hex Unicode codepoint (without `U+`). For e
 
 ```bash
 # Get the GIF URL for a single emoji
-node ~/.pi/agent/skills/james/noto-emoji/scripts/emoji-url.mjs "🐟"
+node ~/.omp/agent/skills/james/noto-emoji/scripts/emoji-url.mjs "🐟"
 # → https://fonts.gstatic.com/s/e/notoemoji/latest/1f41f/512.gif
 
 # Get URLs for multiple emojis as JSON
-node ~/.pi/agent/skills/james/noto-emoji/scripts/emoji-url.mjs "🐟" "🧰" "📦"
+node ~/.omp/agent/skills/james/noto-emoji/scripts/emoji-url.mjs "🐟" "🧰" "📦"
 # → {"🐟":"https://...1f41f/512.gif","🧰":"https://...1f9f0/512.gif","📦":"https://...1f4e6/512.gif"}
 ```
 
@@ -47,9 +47,9 @@ import AnimatedEmoji from '@site/src/components/AnimatedEmoji';
 The component resolves the animated GIF URL at build time. Install it via:
 
 ```bash
-cp ~/.pi/agent/skills/james/noto-emoji/components/AnimatedEmoji.tsx \
+cp ~/.omp/agent/skills/james/noto-emoji/components/AnimatedEmoji.tsx \
   src/components/AnimatedEmoji/index.tsx
-cp ~/.pi/agent/skills/james/noto-emoji/components/AnimatedEmoji.module.css \
+cp ~/.omp/agent/skills/james/noto-emoji/components/AnimatedEmoji.module.css \
   src/components/AnimatedEmoji/styles.module.css
 ```
 
