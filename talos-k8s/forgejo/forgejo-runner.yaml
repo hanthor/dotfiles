@@ -100,7 +100,7 @@ spec:
       initContainers:
         # Register the runner with Forgejo if not already registered
         - name: register
-          image: data.forgejo.org/forgejo/runner:12.10.2
+          image: data.forgejo.org/forgejo/runner:13.2.0
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 1000
@@ -138,7 +138,7 @@ spec:
       containers:
         # Docker-in-Docker sidecar
         - name: dind
-          image: docker:28-dind
+          image: docker:29-dind
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -179,7 +179,7 @@ spec:
             periodSeconds: 10
         # Forgejo Runner daemon
         - name: runner
-          image: data.forgejo.org/forgejo/runner:12.10.2
+          image: data.forgejo.org/forgejo/runner:13.2.0
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 1000
