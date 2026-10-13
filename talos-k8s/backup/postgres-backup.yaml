@@ -52,7 +52,7 @@ spec:
             workload-role: matrix
           containers:
             - name: dump
-              image: postgres:16
+              image: postgres:18
               command: ["/bin/bash", "-c"]
               args:
                 - |
@@ -242,7 +242,7 @@ spec:
             workload-role: matrix
           containers:
             - name: check
-              image: postgres:16
+              image: postgres:18
               command: ["/bin/bash", "-c"]
               args:
                 - |
