@@ -41,17 +41,15 @@ themselves (`scripts/bw-resolve.sh remote`), but that can fail — e.g. no
 that host:
 
 ```bash
-ssh <host>
-bw unlock --raw | tee /tmp/bw_session > /dev/null
-chmod 600 /tmp/bw_session
-exit
-
-# Then from your laptop:
+# From your laptop, let bw-resolve.sh handle unlock internally:
 just apply-remote-tags <host> bitwarden,ssh_keys
 ```
 
-The `bitwarden` role on `<host>` will read `/tmp/bw_session`, confirm the
-vault is unlocked, and downstream secrets roles will run.
+The `scripts/bw-resolve.sh remote <host>` script (invoked internally) will
+SSH to the remote, ensure Bitwarden is logged in and unlocked (either via
+stored API key, master password from your local vault, or interactive prompt),
+and return the session token. The `bitwarden` role will then confirm the vault
+is unlocked, and downstream secrets roles will run.
 
 ---
 
@@ -94,9 +92,7 @@ Fix is to re-login (downloads a clean vault):
 ```bash
 bw logout
 bw login              # email + master password + 2FA
-export BW_SESSION=$(bw unlock --raw)
-printf '%s' "$BW_SESSION" > /tmp/bw_session
-chmod 600 /tmp/bw_session
+export BW_SESSION=$(scripts/bw-resolve.sh local)
 ```
 
 The `bitwarden` role now has a 15 s timeout on `bw sync`, which prevents the
@@ -116,7 +112,7 @@ curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.s
 
 # 3. After bootstrap finishes, on the new machine, get BW into a usable state:
 bw login                            # if not logged in
-bw unlock --raw | tee /tmp/bw_session > /dev/null
+export BW_SESSION=$(scripts/bw-resolve.sh local)  # unlocks vault
 
 # 4. Run the full apply (this pushes the new machine's pubkey to BW):
 dots-apply
