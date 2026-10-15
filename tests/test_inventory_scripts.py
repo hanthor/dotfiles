@@ -4,6 +4,7 @@
 import os
 import tempfile
 import unittest
+import yaml
 from pathlib import Path
 
 # Add scripts directory to path
@@ -215,6 +216,25 @@ class TestPurgeHost(unittest.TestCase):
         self.assertTrue(result)
         content = self.inv_path.read_text()
         self.assertIn("    host1:", content)
+
+    def test_purge_last_host_does_not_leak_vars_into_previous(self) -> None:
+        """Purging the host right before `children:` takes its vars with it.
+
+        Its last var line has no newline once the file is split at
+        `children:`; leaving it behind would hand host1 host2's address.
+        """
+        purge_host("host2", str(self.inv_path))
+        inv = yaml.safe_load(self.inv_path.read_text())
+        self.assertEqual(inv["all"]["hosts"], {"host1": {"ansible_host": "localhost"}})
+        self.assertIsNone(inv["all"]["children"]["vps"]["hosts"])
+
+    def test_purge_group_ref_on_last_line_without_newline(self) -> None:
+        """A group reference on the file's final, unterminated line is removed."""
+        self.inv_path.write_text(self.inv_path.read_text().rstrip("\n"))
+        self.assertTrue(purge_host("host2", str(self.inv_path)))
+        inv = yaml.safe_load(self.inv_path.read_text())
+        self.assertNotIn("host2", inv["all"]["hosts"])
+        self.assertIsNone(inv["all"]["children"]["vps"]["hosts"])
 
 
 class TestInventoryIntegrity(unittest.TestCase):
