@@ -141,6 +141,11 @@
     - role: tailscale_cert
       tags: [services, tailscale_cert]
       when: inventory_hostname not in groups.get('vps', []) and machine_profile != 'vm-test' and not skip_tailscale_cert | default(false)
+    # Stops and deletes quadlets/units left behind by roles removed from
+    # this repo. Never on the retired VPSes: nothing there may be stopped.
+    - role: retired_services
+      tags: [system, retired_services]
+      when: inventory_hostname not in groups.get('vps', []) and not is_termux | bool and ansible_facts['service_mgr'] | default('') == 'systemd'
     - role: server_hardening
       tags: [system, hardening, security]
       when: inventory_hostname in groups.get('server', []) or inventory_hostname in groups.get('vps', [])

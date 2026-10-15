@@ -85,6 +85,7 @@ Every role in `site.yml` carries one or more tags. Tags fall into two kinds: **p
 | Services | `kirocrew` | `services`, `kirocrew` |
 | Services | `proxy` | `services`, `proxy`, `caddy` |
 | Services | `tailscale_cert` | `services`, `tailscale_cert` |
+| Services | `retired_services` | `system`, `retired_services` |
 | Services | `server_hardening` | `system`, `hardening`, `security` |
 | Services | `fleet_facts` | `facts`, `fleet_facts` |
 
@@ -141,7 +142,7 @@ Every flag `site.yml` reads, all defaulting to `false` (`| default(false)`). Set
 | `skip_proxy` | `proxy` | not `vps`, not `vm-test` | `mumbai`, `punjab`, `termux` |
 | `skip_tailscale_cert` | `tailscale_cert` | not `vps`, not `vm-test` | `mumbai`, `termux` |
 
-"desktop" is `is_desktop` (membership of the `desktop` group unless overridden); "not `vm-test`" is `machine_profile != 'vm-test'`. Roles without a flag either always run or are gated another way: `termux_packages` (`termux_hosts` group), `omp` (not Termux), `kirocrew` (`kirocrew_enabled: true`), `server_hardening` (`server`/`vps` groups).
+"desktop" is `is_desktop` (membership of the `desktop` group unless overridden); "not `vm-test`" is `machine_profile != 'vm-test'`. Roles without a flag either always run or are gated another way: `termux_packages` (`termux_hosts` group), `omp` (not Termux), `kirocrew` (`kirocrew_enabled: true`), `server_hardening` (`server`/`vps` groups), `retired_services` (not `vps`, not Termux, systemd hosts).
 
 ## Secrets Flow
 
