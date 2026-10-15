@@ -359,6 +359,73 @@ Not detailed here — these target Ryzen AI NPU or CPU fallback.
 
 ---
 
+## Backup to bihar
+
+`lemonade-backup.yaml` keeps one verified mirror of both PVCs on bihar
+(dotfiles#27). bihar and karnataka are Talos nodes with no sshd, so both ends
+run in-cluster:
+
+| Piece | Where | What |
+|-------|-------|------|
+| `lemonade-backup-receiver` Deployment + ClusterIP Service | bihar (tolerates the control-plane taint) | rsync daemon, module `lemonade`, hostPath `/var/lib/lemonade-backup` |
+| `lemonade-backup` CronJob | karnataka (where the local PVs are) | Sun 03:30 UTC: `rsync -a --checksum --delete` of `models/` and `cache/`, then a dry run must show zero differences, then writes `.lemonade-backup-stamp` |
+| `lemonade-backup-staleness` CronJob | any node | Sun 09:00 UTC: reads the stamp over rsync, alerts if unreachable or >9 days old |
+
+It is a mirror, not dated snapshots: the daemon only moves files, so nothing
+can run retention on bihar. That is enough because models are re-downloadable
+(see "Disaster recovery" below) — the mirror only saves the slow re-fetch. The
+job refuses to push an empty `/models` or `/cache`, so a blank replacement disk
+cannot wipe the mirror.
+
+Prerequisites (once, on the home cluster):
+
+```bash
+# `default` is already PodSecurity-privileged for lemonade (talos-k8s/README.md §6);
+# the receiver's hostPath needs the same.
+kubectl -n default create secret generic lemonade-backup-rsync \
+  --from-literal=password="$(openssl rand -hex 32)"   # in-cluster only, not in Bitwarden
+kubectl apply -f lemonade-backup.yaml
+kubectl create job lemonade-backup-manual --from=cronjob/lemonade-backup
+kubectl logs -f job/lemonade-backup-manual
+```
+
+bihar's `/var` (EPHEMERAL) needs ~200GB free; it survives reboots and
+`talosctl upgrade --preserve`, but a reset wipes it — re-run the job after.
+Alerts go to the `fleet-alerts` secret if it exists; without it the jobs only
+log a warning.
+
+Restore (scale Lemonade down first so nothing writes to the PVCs):
+
+```bash
+kubectl scale deploy/lemonade --replicas=0
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata: {name: lemonade-restore, namespace: default}
+spec:
+  restartPolicy: Never
+  nodeSelector: {kubernetes.io/hostname: karnataka}
+  containers:
+    - name: restore
+      image: instrumentisto/rsync-ssh:alpine3.23-r3
+      command: ["/bin/sh", "-c", "for d in models cache; do rsync -a rsync://lemonade-backup@lemonade-backup-receiver/lemonade/$d/ /$d/ || exit 1; done"]
+      env:
+        - name: RSYNC_PASSWORD
+          valueFrom: {secretKeyRef: {name: lemonade-backup-rsync, key: password}}
+      volumeMounts:
+        - {name: models, mountPath: /models}
+        - {name: cache, mountPath: /cache}
+  volumes:
+    - {name: models, persistentVolumeClaim: {claimName: lemonade-models}}
+    - {name: cache, persistentVolumeClaim: {claimName: lemonade-cache}}
+EOF
+kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/lemonade-restore --timeout=6h \
+  && kubectl logs pod/lemonade-restore && kubectl delete pod lemonade-restore
+kubectl scale deploy/lemonade --replicas=1
+```
+
+---
+
 ## Disaster recovery — re-downloading essential models
 
 If the models PVC is lost or restored empty (fresh cluster, disk failure, or

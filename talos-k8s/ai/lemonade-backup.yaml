@@ -9,23 +9,162 @@
 # don't trust a copy's exit code alone, assert something about the result,
 # and fail loud rather than succeed silently on a partial copy.
 #
-# Runs pinned to karnataka (where the source PVCs are — local-storage PVs are
-# node-local, so a pod mounting them cannot run anywhere else) and pushes over
-# SSH to bihar, rather than mounting a destination hostPath in the same pod —
-# bihar's own local-storage PV would only be schedulable on bihar, so the two
-# can't share a pod.
+# Both ends run in-cluster. bihar and karnataka are Talos nodes: no sshd, no
+# shell, so nothing can be pushed "to bihar" except into a pod running there.
+#   - `lemonade-backup-receiver` — an rsync daemon pinned to bihar, writing to
+#     hostPath /var/lib/lemonade-backup, behind a ClusterIP Service.
+#   - `lemonade-backup` — weekly CronJob pinned to karnataka (local-storage
+#     PVs are node-local, so a pod mounting them cannot run anywhere else),
+#     pushing with `rsync rsync://lemonade-backup-receiver/...`.
+#   - `lemonade-backup-staleness` — dead-man's switch reading the stamp file
+#     the backup leaves on the receiver.
 #
-# MANUAL PREREQUISITES — this PR cannot provision these itself:
-#   - An SSH keypair for this job to authenticate to bihar as some backup
-#     user, with a `known_hosts` entry for bihar. Seed as a `kubernetes.io/ssh-auth`
-#     Secret named `lemonade-backup-ssh` (keys: ssh-privatekey, known_hosts)
-#     in the `default` namespace on the home cluster.
-#   - `/var/lib/lemonade-backup` (or wherever) exists on bihar with enough free
-#     space for a ~100GB+ mirror, owned by that backup user.
+# One mirror, not dated snapshots: the daemon only accepts file transfers, so
+# nothing here can remote-exec retention cleanup on bihar. A single
+# `--delete` mirror plus a stamp file is enough, because models are
+# re-downloadable (lemonade-warmup.sh) — the backup exists to skip a slow
+# re-fetch, not to be the only copy of anything. The job refuses to mirror an
+# empty source, so a blank replacement disk can't wipe the backup.
+#
+# Pod Security: the receiver needs a hostPath volume, which `baseline` (the
+# Talos default outside kube-system) forbids. It lives in `default`, which is
+# already labelled `pod-security.kubernetes.io/enforce=privileged` for
+# lemonade itself (talos-k8s/README.md, section 6).
+#
+# MANUAL PREREQUISITES — this file cannot provision these itself:
+#   - The shared rsync password, as a Secret in `default` on the home cluster.
+#     It never leaves the cluster, so it is not in Bitwarden — regenerate it
+#     freely (then restart the receiver):
+#       kubectl -n default create secret generic lemonade-backup-rsync \
+#         --from-literal=password="$(openssl rand -hex 32)"
+#   - Enough free space on bihar's EPHEMERAL (/var) partition for ~200GB
+#     (both 100Gi PVCs). /var survives reboots and `talosctl upgrade
+#     --preserve`, but a reset/reinstall wipes it — re-run the job afterwards.
 #   - The `fleet-alerts` secret (NTFY_TOPIC/DISCORD_BOT_TOKEN/DISCORD_CHANNEL)
 #     used by talos-k8s/hive/ jobs on the AWS cluster does NOT exist on the
-#     home cluster by default — this job degrades to a log warning if it's
+#     home cluster by default — these jobs degrade to a log warning if it's
 #     absent, so alerts silently do nothing until it's created here too.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lemonade-backup-receiver
+  namespace: default
+data:
+  rsyncd.conf: |
+    # root so `rsync -a` can preserve the PVCs' ownership; the module is
+    # chrooted to /backup and only accepts authenticated pushes.
+    uid = 0
+    gid = 0
+    use chroot = yes
+    numeric ids = yes
+    reverse lookup = no
+    max connections = 2
+    lock file = /tmp/rsyncd.lock
+    # Pod CIDR (flannel, docs/src/servers/talos-k8s/cluster.md): refuses
+    # anything off-cluster. Node-local traffic arrives from the cni0 address
+    # (10.244.x.1), so the password, not this, is the real gate in-cluster.
+    hosts allow = 10.244.0.0/16
+    hosts deny = *
+
+    [lemonade]
+      path = /backup
+      read only = no
+      auth users = lemonade-backup
+      secrets file = /tmp/rsyncd.secrets
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lemonade-backup-receiver
+  namespace: default
+  labels:
+    app: lemonade-backup-receiver
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate                 # never two daemons on one hostPath
+  selector:
+    matchLabels:
+      app: lemonade-backup-receiver
+  template:
+    metadata:
+      labels:
+        app: lemonade-backup-receiver
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: bihar
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: rsyncd
+          image: instrumentisto/rsync-ssh:alpine3.23-r3
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              [ -n "${RSYNC_SECRET:-}" ] || { echo "lemonade-backup-rsync secret is empty" >&2; exit 1; }
+              umask 077
+              printf 'lemonade-backup:%s\n' "$RSYNC_SECRET" > /tmp/rsyncd.secrets
+              unset RSYNC_SECRET
+              exec rsync --daemon --no-detach --config=/etc/rsyncd/rsyncd.conf --log-file=/dev/stdout
+          env:
+            - name: RSYNC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lemonade-backup-rsync
+                  key: password
+          ports:
+            - containerPort: 873
+              name: rsync
+          readinessProbe:
+            tcpSocket:
+              port: rsync
+            periodSeconds: 30          # each probe is a logged connect
+          livenessProbe:
+            tcpSocket:
+              port: rsync
+            periodSeconds: 60
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: backup
+              mountPath: /backup
+            - name: config
+              mountPath: /etc/rsyncd
+              readOnly: true
+      volumes:
+        - name: backup
+          hostPath:
+            path: /var/lib/lemonade-backup
+            type: DirectoryOrCreate
+        - name: config
+          configMap:
+            name: lemonade-backup-receiver
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lemonade-backup-receiver
+  namespace: default
+  labels:
+    app: lemonade-backup-receiver
+spec:
+  type: ClusterIP
+  selector:
+    app: lemonade-backup-receiver
+  ports:
+    - name: rsync
+      port: 873
+      targetPort: rsync
+---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -41,6 +180,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
+      activeDeadlineSeconds: 21600  # 6h; a wedged transfer must end as a failure
       template:
         spec:
           restartPolicy: Never
@@ -48,20 +188,23 @@ spec:
             kubernetes.io/hostname: karnataka
           containers:
             - name: backup
-              image: instrumentisto/rsync-ssh:latest
+              image: instrumentisto/rsync-ssh:alpine3.23-r3
               command: ["/bin/sh", "-c"]
               args:
                 - |
                   set -eu
-                  mkdir -p ~/.ssh
-                  cp /ssh/ssh-privatekey ~/.ssh/id_ed25519
-                  cp /ssh/known_hosts ~/.ssh/known_hosts
-                  chmod 600 ~/.ssh/id_ed25519
-                  chmod 644 ~/.ssh/known_hosts
+
+                  # The image ships rsync but no curl. Install it up front and
+                  # say so loudly if that fails, rather than discovering a mute
+                  # notifier during an incident (same as postgres-backup).
+                  apk add --no-cache -q curl >/dev/null 2>&1 \
+                    || echo "WARNING: could not install curl — this backup will not be able to alert" >&2
 
                   STAMP="$(date -u +%Y-%m-%d)"
-                  DEST_BASE="${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}:${BACKUP_REMOTE_PATH}"
-                  DEST="${DEST_BASE}/${STAMP}"
+                  URL="rsync://lemonade-backup@${BACKUP_HOST}/lemonade"
+                  # Connect timeout + I/O timeout: a dead receiver must fail
+                  # the job, not hang it.
+                  RSYNC_NET="--contimeout=30 --timeout=600"
 
                   notify() {   # $1=priority $2=title $3=body
                     sent=0
@@ -81,52 +224,63 @@ spec:
                     [ "$sent" = 1 ] || echo "WARNING: could not deliver alert (fleet-alerts secret missing or unreachable): $2: $3" >&2
                   }
                   fail() {
+                    echo "FAILED: $1" >&2
                     notify urgent "Lemonade backup FAILED" "$1"
                     exit 1
                   }
-                  trap 'fail "unexpected error on line $LINENO"' ERR
+                  trap 'fail "unexpected error (set -e)"' ERR
 
-                  ssh -o StrictHostKeyChecking=yes "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" \
-                    "mkdir -p '${BACKUP_REMOTE_PATH}/${STAMP}/models' '${BACKUP_REMOTE_PATH}/${STAMP}/cache'" \
-                    || fail "could not create remote destination on bihar (SSH/auth broken?)"
+                  # --delete mirrors whatever the source holds. A blank
+                  # replacement disk or a failed mount must not wipe the one
+                  # good copy, so refuse to push an empty source.
+                  for d in models cache; do
+                    [ -n "$(find "/$d" -type f | head -n 1)" ] \
+                      || fail "/$d is empty — refusing to --delete the mirror on bihar (PVC mount failed or disk replaced?)"
+                  done
 
-                  # --checksum (not just size/mtime) since these are large
-                  # binary GGUF files fetched once and never touched again —
-                  # a partial/corrupt prior sync would otherwise look "done".
-                  # rsync's own exit code is trustworthy here (no pipe to mask it).
-                  rsync -a --checksum --delete -e ssh /models/ "${DEST}/models/" \
-                    || fail "rsync of models PVC to bihar failed"
-                  rsync -a --checksum --delete -e ssh /cache/ "${DEST}/cache/" \
-                    || fail "rsync of cache PVC to bihar failed"
+                  for d in models cache; do
+                    # --checksum (not just size/mtime) since these are large
+                    # binary GGUF files fetched once and never touched again —
+                    # a corrupt prior copy would otherwise look "done".
+                    # rsync's own exit code is trustworthy here (no pipe to mask it).
+                    rsync -a --checksum --delete $RSYNC_NET "/$d/" "${URL}/$d/" \
+                      || fail "rsync of $d PVC to bihar failed (receiver down, auth, or disk full?)"
 
-                  # Verify: something actually landed on the remote, not just
-                  # a mkdir that succeeded while the sync silently no-op'd.
-                  COUNT=$(ssh "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" "find '${DEST}/models' -type f | wc -l") \
-                    || fail "could not verify remote file count after sync"
-                  [ "$COUNT" -gt 0 ] || fail "backup produced zero files under ${DEST}/models — source mount likely empty/failed"
+                    # Verify: a size+mtime dry run must find nothing left to
+                    # send or delete, i.e. the receiver now holds exactly the
+                    # source tree. A non-empty list means an incomplete copy
+                    # (or Lemonade wrote to the PVC mid-sync — re-run).
+                    DIFF=$(rsync -an --delete --itemize-changes $RSYNC_NET "/$d/" "${URL}/$d/") \
+                      || fail "could not verify $d on bihar after sync"
+                    [ -z "$DIFF" ] \
+                      || fail "$d on bihar differs from source after sync: $(printf '%s\n' "$DIFF" | head -n 5 | tr '\n' ' ')"
+                  done
 
-                  SIZE=$(ssh "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" "du -sh '${DEST}' | cut -f1") || SIZE="unknown"
+                  COUNT=$(find /models /cache -type f | wc -l)
+                  SIZE=$(du -sch /models /cache | tail -n 1 | cut -f1)
 
-                  # Retention: keep 4 weekly snapshots (~1 month) on bihar.
-                  ssh "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" \
-                    "cd '${BACKUP_REMOTE_PATH}' && ls -1d 20* 2>/dev/null | sort | head -n -4 | xargs -r rm -rf" \
-                    || echo "WARNING: retention cleanup on bihar failed (non-fatal)" >&2
+                  # Stamp the receiver last, only after verification, so the
+                  # staleness check reads "last *verified* backup", then read
+                  # it back to prove the write landed.
+                  printf 'epoch=%s\ndate=%s\nfiles=%s\nsize=%s\n' "$(date -u +%s)" "$STAMP" "$COUNT" "$SIZE" > /tmp/stamp
+                  rsync $RSYNC_NET /tmp/stamp "${URL}/.lemonade-backup-stamp" \
+                    || fail "could not write stamp file to bihar"
+                  rsync $RSYNC_NET "${URL}/.lemonade-backup-stamp" /tmp/stamp.check \
+                    || fail "could not read stamp file back from bihar"
+                  cmp -s /tmp/stamp /tmp/stamp.check || fail "stamp file on bihar does not match what was written"
 
-                  KEPT=$(ssh "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" "cd '${BACKUP_REMOTE_PATH}' && ls -1d 20* 2>/dev/null | wc -l") || KEPT="unknown"
                   trap - ERR
                   notify default "Lemonade backup ok" \
-                    "${STAMP}: ${SIZE} synced (${COUNT} model files) to bihar, ${KEPT} week(s) retained"
-                  echo "backup complete: ${DEST} (${SIZE}), ${KEPT} retained on bihar"
+                    "${STAMP}: ${SIZE} (${COUNT} files) mirrored to bihar and verified"
+                  echo "backup complete: ${SIZE} (${COUNT} files) mirrored to ${URL}"
               env:
-                - name: BACKUP_SSH_USER
+                - name: BACKUP_HOST
+                  value: lemonade-backup-receiver
+                - name: RSYNC_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: lemonade-backup-ssh
-                      key: username
-                - name: BACKUP_SSH_HOST
-                  value: bihar.manatee-basking.ts.net
-                - name: BACKUP_REMOTE_PATH
-                  value: /var/lib/lemonade-backup
+                      name: lemonade-backup-rsync
+                      key: password
                 - name: NTFY_TOPIC
                   valueFrom:
                     secretKeyRef:
@@ -152,9 +306,6 @@ spec:
                 - name: cache-volume
                   mountPath: /cache
                   readOnly: true
-                - name: ssh-creds
-                  mountPath: /ssh
-                  readOnly: true
               resources:
                 requests:
                   cpu: 100m
@@ -171,18 +322,12 @@ spec:
               persistentVolumeClaim:
                 claimName: lemonade-cache
                 readOnly: true
-            - name: ssh-creds
-              secret:
-                secretName: lemonade-backup-ssh
-                items:
-                  - key: ssh-privatekey
-                    path: ssh-privatekey
-                  - key: known_hosts
-                    path: known_hosts
 ---
 # Dead-man's switch, same rationale as postgres-backup-staleness: a job that
 # never runs emits no error, so silence needs to be made loud on a timer.
-# Runs on karnataka too, since it authenticates to bihar the same way.
+# Deliberately NOT pinned to karnataka — if karnataka is down the backup
+# can't run, and the check that notices must still be able to. Tolerates the
+# control-plane taint so it can land on bihar.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -200,57 +345,60 @@ spec:
       template:
         spec:
           restartPolicy: Never
-          nodeSelector:
-            kubernetes.io/hostname: karnataka
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
           containers:
             - name: check
-              image: instrumentisto/rsync-ssh:latest
+              image: instrumentisto/rsync-ssh:alpine3.23-r3
               command: ["/bin/sh", "-c"]
               args:
                 - |
                   set -eu
-                  mkdir -p ~/.ssh
-                  cp /ssh/ssh-privatekey ~/.ssh/id_ed25519
-                  cp /ssh/known_hosts ~/.ssh/known_hosts
-                  chmod 600 ~/.ssh/id_ed25519
-                  chmod 644 ~/.ssh/known_hosts
+                  apk add --no-cache -q curl >/dev/null 2>&1 \
+                    || echo "WARNING: could not install curl — this check will not be able to alert" >&2
 
                   alert() {
+                    sent=0
                     if [ -n "${DISCORD_BOT_TOKEN:-}" ] && [ -n "${DISCORD_CHANNEL:-}" ] && command -v curl >/dev/null 2>&1; then
                       curl -fsS --max-time 25 -X POST \
                         -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
                         -H "Content-Type: application/json" \
                         -d "$(printf '{"content":"**Lemonade backup STALE**\\n%s"}' "$1")" \
-                        "https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages" >/dev/null 2>&1
+                        "https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages" >/dev/null 2>&1 && sent=1
                     fi
                     if [ -n "${NTFY_TOPIC:-}" ] && command -v curl >/dev/null 2>&1; then
                       curl -fsS --max-time 15 \
                         -H "Title: Lemonade backup STALE" -H "Priority: urgent" \
-                        -d "$1" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null 2>&1
+                        -d "$1" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null 2>&1 && sent=1
                     fi
+                    [ "$sent" = 1 ] || echo "WARNING: could not deliver alert (fleet-alerts secret missing or unreachable)" >&2
                     echo "STALE: $1" >&2
                     exit 1
                   }
 
-                  NEWEST=$(ssh -o StrictHostKeyChecking=yes "${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}" \
-                    "cd '${BACKUP_REMOTE_PATH}' && ls -1d 20* 2>/dev/null | sort | tail -1") \
-                    || alert "could not reach bihar to check backup staleness (SSH/auth broken?)"
+                  # A missing stamp and an unreachable receiver both mean "no
+                  # proof of a recent backup" — alert either way.
+                  rsync --contimeout=30 --timeout=60 \
+                    "rsync://lemonade-backup@${BACKUP_HOST}/lemonade/.lemonade-backup-stamp" /tmp/stamp \
+                    || alert "could not read the backup stamp from the receiver on bihar (receiver down, auth broken, or no backup has ever completed)"
 
-                  [ -n "$NEWEST" ] || alert "no Lemonade backup snapshot exists on bihar at all"
-                  NOW=$(date +%s)
-                  AGE_DAYS=$(( (NOW - $(date -d "$NEWEST" +%s 2>/dev/null || echo "$NOW")) / 86400 ))
-                  [ "$AGE_DAYS" -le 9 ] || alert "newest Lemonade backup is ${AGE_DAYS}d old (>9d, weekly job should refresh every 7d)"
-                  echo "ok: newest backup is ${AGE_DAYS}d old"
+                  EPOCH=$(awk -F= '$1 == "epoch" { print $2 }' /tmp/stamp)
+                  case "$EPOCH" in
+                    ''|*[!0-9]*) alert "backup stamp on bihar is malformed: $(tr '\n' ' ' < /tmp/stamp)" ;;
+                  esac
+                  AGE_DAYS=$(( ($(date -u +%s) - EPOCH) / 86400 ))
+                  [ "$AGE_DAYS" -le 9 ] || alert "newest verified Lemonade backup is ${AGE_DAYS}d old (>9d, weekly job should refresh every 7d)"
+                  echo "ok: newest verified backup is ${AGE_DAYS}d old ($(tr '\n' ' ' < /tmp/stamp))"
               env:
-                - name: BACKUP_SSH_USER
+                - name: BACKUP_HOST
+                  value: lemonade-backup-receiver
+                - name: RSYNC_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: lemonade-backup-ssh
-                      key: username
-                - name: BACKUP_SSH_HOST
-                  value: bihar.manatee-basking.ts.net
-                - name: BACKUP_REMOTE_PATH
-                  value: /var/lib/lemonade-backup
+                      name: lemonade-backup-rsync
+                      key: password
                 - name: NTFY_TOPIC
                   valueFrom:
                     secretKeyRef:
@@ -269,16 +417,10 @@ spec:
                       name: fleet-alerts
                       key: DISCORD_CHANNEL
                       optional: true
-              volumeMounts:
-                - name: ssh-creds
-                  mountPath: /ssh
-                  readOnly: true
-          volumes:
-            - name: ssh-creds
-              secret:
-                secretName: lemonade-backup-ssh
-                items:
-                  - key: ssh-privatekey
-                    path: ssh-privatekey
-                  - key: known_hosts
-                    path: known_hosts
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
