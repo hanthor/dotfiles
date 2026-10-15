@@ -1,8 +1,11 @@
 ---
 all:
   hosts:
+    # `tailnet_name`: the host's MagicDNS name when it isn't the inventory
+    # name; scripts/online_hosts.py matches online peers by it.
     punjab:
       ansible_host: 100.78.73.8
+      ansible_user: ubuntu  # stock Ubuntu AMI login; there is no `james` here
       ansible_connection: ssh
     # This targets the Debian VM running via Android's Virtualization
     # Framework on the phone (tailnet node name "mumbai"), not the raw
@@ -20,6 +23,7 @@ all:
       ansible_port: 8022
       ansible_user: u0_a372
       ansible_connection: ssh
+      tailnet_name: pixel-9a
     goa:
       ansible_host: localhost
       ansible_connection: local
@@ -35,6 +39,7 @@ all:
     matrix:
       ansible_host: 100.73.19.81
       ansible_connection: ssh
+      tailnet_name: reilly-asia-matrix
     telengana:
       ansible_host: 100.101.234.32
       ansible_connection: ssh

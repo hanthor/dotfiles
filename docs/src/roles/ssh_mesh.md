@@ -10,8 +10,11 @@ Self-healing passwordless SSH mesh across the fleet.
    `lineinfile`, so Bitwarden-managed keys and extras survive.
 3. Warns if this machine's own public key is missing or stale in git.
 4. Probes passwordless SSH to every fleet machine currently **online on
-   the tailnet** (`tailscale status --json` ∩ `machines` −
-   `ssh_mesh_exclude`).
+   the tailnet**: `scripts/online_hosts.py --peers` (the same matcher as
+   `just apply-all`) gives the online MagicDNS names, each inventory host
+   is matched by its `tailnet_name` (or its own name), then ∩ `machines` −
+   `ssh_mesh_exclude` − the `vps` group. Port and login user come from
+   `inventory.yml` (`ansible_port`, `ansible_user`).
 5. On failure: reaps stale ControlMaster sockets, refreshes the host key
    in `known_hosts` (rebuilt machines), and retries.
 6. Fails the apply if the mesh is still broken, naming the unreachable
@@ -38,8 +41,10 @@ just apply-remote-tags HOST mesh_check # verify + heal from HOST
 ## Adding a machine to the mesh
 
 Add its public key to `machine_pubkeys` in `group_vars/all.yml` and its
-entry to the `machines` dict. Machines that must not be probed (Talos
-nodes, port-forwarded test VMs) go in `ssh_mesh_exclude`.
+entry to the `machines` dict. If its MagicDNS name differs from its
+inventory name, set `tailnet_name` on it in `inventory.yml`. Machines whose
+sshd isn't always reachable (phones, port-forwarded test VMs) go in
+`ssh_mesh_exclude`: a failed probe fails the apply.
 
 ## Relationship to ssh_keys
 

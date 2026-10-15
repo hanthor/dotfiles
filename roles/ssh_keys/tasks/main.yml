@@ -183,9 +183,13 @@
 # Scan each remote fleet machine's host key, flush stale entries, then
 # add only the current key. Prevents "REMOTE HOST IDENTIFICATION CHANGED"
 # warnings when machines get rebuilt.
+# Keyed by the same HostName (and Port) that ssh_config.j2 emits, since that
+# is what ssh looks up. Non-22 ports (phones, port-forwarded test VMs) are
+# recorded as `[host]:port`.
 - name: Scan host key for each fleet machine
   ansible.builtin.command: >-
-    ssh-keyscan -t ed25519 -T 5 {{ hostvars[item]['ansible_host'] | default(machines[item]['hostname']) }}
+    ssh-keyscan -t ed25519 -T 5 -p {{ hostvars[item]['ansible_port'] | default(22) }}
+    {{ machines[item]['hostname'] }}
   register: host_key_scan
   changed_when: false
   failed_when: false
@@ -194,8 +198,12 @@
 
 - name: Remove stale known_hosts entries
   ansible.builtin.known_hosts:
-    name: "{{ hostvars[item.item]['ansible_host'] | default(machines[item.item]['hostname']) }}"
+    name: "{{ _kh_name }}"
     state: absent
+  vars:
+    _kh_host: "{{ machines[item.item]['hostname'] }}"
+    _kh_port: "{{ hostvars[item.item]['ansible_port'] | default(22) | int }}"
+    _kh_name: "{{ _kh_host if _kh_port | int == 22 else '[' ~ _kh_host ~ ']:' ~ _kh_port }}"
   loop: "{{ host_key_scan.results | default([]) }}"
   when:
     - item.rc is defined
@@ -206,10 +214,14 @@
 
 - name: Add current host key to known_hosts
   ansible.builtin.known_hosts:
-    name: "{{ hostvars[item.item]['ansible_host'] | default(machines[item.item]['hostname']) }}"
+    name: "{{ _kh_name }}"
     key: "{{ item.stdout }}"
     state: present
     hash_host: false
+  vars:
+    _kh_host: "{{ machines[item.item]['hostname'] }}"
+    _kh_port: "{{ hostvars[item.item]['ansible_port'] | default(22) | int }}"
+    _kh_name: "{{ _kh_host if _kh_port | int == 22 else '[' ~ _kh_host ~ ']:' ~ _kh_port }}"
   loop: "{{ host_key_scan.results | default([]) }}"
   when:
     - item.rc is defined
