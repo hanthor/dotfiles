@@ -29,6 +29,11 @@
       "groupName": "cluster images and charts",
       "schedule": ["before 6am on monday"],
       "labels": ["deploy-needed"]
+    },
+    {
+      "description": "Hive images: the hive-operator's HiveRelease `hive` (Enforce, track v6-latest) rolls the spokes and the hub, so the digests in the spoke manifests are not deployable state. ccleft's is bumped by hand (see its comment).",
+      "matchPackageNames": ["ghcr.io/hivecommons/hive", "ghcr.io/hivecommons/hive-hub"],
+      "enabled": false
     }
   ],
   "kubernetes": {

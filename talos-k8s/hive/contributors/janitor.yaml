@@ -42,7 +42,7 @@ spec:
             - {name: home, persistentVolumeClaim: {claimName: claude-home}}
           containers:
             - name: janitor
-              image: alpine:3.22
+              image: alpine:3.24
               securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
               resources:
                 requests: {cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi}
@@ -95,7 +95,7 @@ spec:
             - {name: home, persistentVolumeClaim: {claimName: agy-home}}
           containers:
             - name: janitor
-              image: alpine:3.22
+              image: alpine:3.24
               securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
               resources:
                 requests: {cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi}
@@ -148,7 +148,7 @@ spec:
             - {name: home, persistentVolumeClaim: {claimName: pi-codex-home}}
           containers:
             - name: janitor
-              image: alpine:3.22
+              image: alpine:3.24
               securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
               resources:
                 requests: {cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi}
