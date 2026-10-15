@@ -1,0 +1,273 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Punjab (agent box) - Infrastructure Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="James Reilly&#x27;s personal fleet (Ansible dotfiles) and the TunaOS infrastructure it administers">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../../highlight.css">
+        <link rel="stylesheet" href="../../tomorrow-night.css">
+        <link rel="stylesheet" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Infrastructure Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/servers/punjab/README.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="punjab"><a class="header" href="#punjab">Punjab</a></h1>
+<blockquote>
+<p><strong>TunaOS infrastructure.</strong> This runs in the TunaOS AWS account and serves
+the TunaOS project (Hive, Matrix, CI), not James's personal fleet. See
+<a href="../aws/README.html">TunaOS AWS Account &amp; IaC</a>.</p>
+</blockquote>
+<p>Headless agent/dev box — the fleet's only AWS-hosted Ansible host. Lives in
+the AWS account alongside the <a href="../aws-k8s/cluster.html">AWS Talos cluster</a>, but
+in a different region and VPC; it is an ordinary fleet member, not a cluster
+node.</p>
+<h2 id="hardware"><a class="header" href="#hardware">Hardware</a></h2>
+<ul>
+<li>EC2 <code>t3.large</code> (2 vCPU, 8 GiB, unlimited CPU credits), <code>us-east-1d</code></li>
+<li>250 GB gp3 root volume (unencrypted — predates EBS encryption-by-default;
+snapshotted daily ×7 / weekly ×4 by DLM)</li>
+<li>Default VPC, stable Elastic IP</li>
+<li>IMDSv2 required, hop limit 1; termination protection on</li>
+<li>Instance role: Session Manager only</li>
+<li>Tailscale: <code>punjab</code> (MagicDNS)</li>
+</ul>
+<p>The instance, its security group and key pair are codified in
+<a href="https://github.com/hanthor/dotfiles/blob/master/aws/punjab.tf"><code>aws/punjab.tf</code></a> —
+see <a href="../aws/README.html">AWS Account</a>.</p>
+<h2 id="os"><a class="header" href="#os">OS</a></h2>
+<p>Ubuntu 24.04 LTS (stock <code>ubuntu-noble-24.04-amd64-server</code> AMI), AWS kernel.</p>
+<h2 id="role"><a class="header" href="#role">Role</a></h2>
+<ul>
+<li>Agent host: Claude Code, Kiro, <code>pi</code>, run in tmux</li>
+<li><strong>Kiro Crew gateway</strong> — <code>kirocrew.service</code> (system unit, runs as <code>ubuntu</code>,
+binary <code>~/.local/bin/kirocrew</code>, env <code>/etc/kirocrew/kirocrew.env</code>). Installed
+with Kiro's own installer; the <a href="../../roles/kirocrew.html"><code>kirocrew</code></a> role keeps
+it running, its env file root-only, and its dashboard on localhost.</li>
+<li>AWS admin box: <code>awscli</code> + <code>opentofu</code> (via <code>extra_brews</code>) for the
+<a href="../aws/README.html">AWS IaC</a></li>
+</ul>
+<h2 id="access"><a class="header" href="#access">Access</a></h2>
+<ul>
+<li><strong>Normal</strong>: <code>ssh punjab</code> over Tailscale.</li>
+<li><strong>Break-glass</strong> (Tailscale down): SSM Session Manager, no open port needed:
+<pre><code class="language-bash">aws ssm start-session --region us-east-1 --target &lt;instance-id&gt;
+</code></pre>
+(needs <code>session-manager-plugin</code>; the instance ID is in the OpenTofu state).</li>
+<li><strong>Cluster</strong>: <code>kubectl</code>/<code>talosctl</code> work from here with
+<code>~/.kube/config-aws-migration</code> / <code>~/.talos/config-aws-migration</code>.</li>
+<li><strong>AWS CLI</strong>: prefer the scoped admin user; it can plan the whole config
+(read-only IAM). Log in as root (<code>aws login</code>) only for IAM changes, and don't
+leave a root session lying around on a shared box.</li>
+</ul>
+<h2 id="host-hardening"><a class="header" href="#host-hardening">Host hardening</a></h2>
+<ul>
+<li>sshd drop-in (<code>sshd_harden: true</code>): no root login, no passwords/kbd-interactive,
+no X11, <code>MaxAuthTries 3</code>.</li>
+<li><code>unattended-upgrades</code> on (Ubuntu default).</li>
+<li>Kiro Crew dashboard binds localhost only — the <code>kirocrew</code> role asserts it.</li>
+</ul>
+<h2 id="ansible-notes-host_varspunjabyml"><a class="header" href="#ansible-notes-host_varspunjabyml">Ansible notes (<code>host_vars/punjab.yml</code>)</a></h2>
+<ul>
+<li><code>skip_proxy: true</code> — no podman on stock Ubuntu, so no Caddy quadlet.</li>
+<li>Not a desktop: no GNOME/flatpak/browser roles.</li>
+<li><code>syncthing</code> only runs if its brew binary exists (it currently doesn't).</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../cluster/hive.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../roles/sshd.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../cluster/hive.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../roles/sshd.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
