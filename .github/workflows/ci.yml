@@ -7,10 +7,11 @@ on:
     branches: [master]
   workflow_dispatch:
 
-# A newer push to the same PR supersedes the in-flight run. Pushes to
-# master are never cancelled, so every merged commit gets a full result.
+# A newer push to the same PR supersedes the in-flight run. Other events get
+# a per-commit group: a shared group would still let GitHub cancel a *queued*
+# master run when the next merge lands, even without cancel-in-progress.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # PRs (including agent PRs) run with a read-only token.
