@@ -83,7 +83,7 @@ just apply
 - `just apply` runs the full playbook with secrets, unlocking Bitwarden and completing setup
 - This pull-in step distributes SSH keys across the fleet, registers with GitHub and Tailscale, and sets up daily/on-login automation
 
-Do **not** edit `host_vars/<name>.yml` before the first `just apply` — bootstrap sets sensible defaults, and `just apply` will pull in critical secrets (SSH keys, GitHub tokens, Tailscale auth). Any per-machine customizations can follow once the first apply succeeds.
+Do **not** edit `host_vars/<name>.yml` before the first `just apply` — bootstrap sets sensible defaults, and `just apply` will pull in critical secrets (SSH keys, GitHub tokens, Tailscale auth). Any per-machine customizations can follow once the first apply succeeds; the `skip_*` flags that turn individual roles off are listed in [Architecture → Skip Flags](architecture.md#skip-flags).
 
 The details of what happens during this first apply are covered in the [Post-Onboarding](#post-onboarding) section below.
 
