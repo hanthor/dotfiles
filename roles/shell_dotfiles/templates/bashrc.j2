@@ -35,7 +35,7 @@ if [[ $- == *i* ]]; then
 fi
 
 # ── direnv ───────────────────────────────────────────────────────
-command -v direnv &>/dev/null && eval "$(direnv hook bash)"
+command -v direnv &>/dev/null && eval "$(direnv hook bash | sed -E "s#'[^']*/Cellar/direnv/[^/]+/bin/direnv'#'$(command -v direnv)'#")"
 
 # ── fzf (fallback if bluefin-cli didn't set it up) ───────────────
 if [[ $- == *i* ]]; then
