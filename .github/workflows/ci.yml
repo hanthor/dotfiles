@@ -7,6 +7,12 @@ on:
     branches: [master]
   workflow_dispatch:
 
+# A newer push to the same PR supersedes the in-flight run. Pushes to
+# master are never cancelled, so every merged commit gets a full result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # PRs (including agent PRs) run with a read-only token.
 permissions:
   contents: read
@@ -26,8 +32,19 @@ jobs:
         run: |
           yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, comments-indentation: disable, comments: disable, braces: disable, indentation: disable, commas: disable, empty-lines: disable}}" .
 
+      # ansible-lint would install requirements.yml itself, with no retry;
+      # galaxy.ansible.com intermittently resets connections (#217).
+      - name: Install collections
+        run: |
+          for i in 1 2 3; do
+            ansible-galaxy collection install -r requirements.yml && exit 0
+            echo "galaxy install failed (attempt $i); retrying"
+            sleep $((i * 15))
+          done
+          exit 1
+
       - name: ansible-lint
-        run: ansible-lint site.yml
+        run: ansible-lint --offline site.yml
 
       - name: shellcheck
         run: |
