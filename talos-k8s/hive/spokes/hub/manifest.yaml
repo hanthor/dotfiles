@@ -156,7 +156,7 @@ spec:
         app.kubernetes.io/name: hub-front
     spec:
       containers:
-        - image: docker.io/library/nginx:1.27-alpine-slim
+        - image: docker.io/library/nginx:1.31-alpine-slim
           imagePullPolicy: IfNotPresent
           name: web
           ports:
