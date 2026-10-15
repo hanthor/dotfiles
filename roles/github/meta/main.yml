@@ -1,0 +1,5 @@
+---
+# GitHub authentication requires Bitwarden vault access to fetch credentials.
+# This role will be skipped if Bitwarden is locked (bw_unlocked: false).
+dependencies:
+  - role: bitwarden

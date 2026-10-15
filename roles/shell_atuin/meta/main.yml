@@ -1,0 +1,5 @@
+---
+# Shell history sync requires Bitwarden vault access to fetch the Atuin key.
+# This role will be skipped if Bitwarden is locked (bw_unlocked: false).
+dependencies:
+  - role: bitwarden

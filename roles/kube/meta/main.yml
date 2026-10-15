@@ -1,0 +1,5 @@
+---
+# kube requires Bitwarden vault access for secrets.
+# This role will be skipped if Bitwarden is locked (bw_unlocked: false).
+dependencies:
+  - role: bitwarden

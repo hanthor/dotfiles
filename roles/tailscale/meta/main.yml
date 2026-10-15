@@ -1,0 +1,5 @@
+---
+# Tailscale authentication requires Bitwarden vault access to fetch the auth key.
+# This role will be skipped if Bitwarden is locked (bw_unlocked: false).
+dependencies:
+  - role: bitwarden

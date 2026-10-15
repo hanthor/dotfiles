@@ -1,0 +1,5 @@
+---
+# Shell AI integration requires Bitwarden vault access to fetch API keys.
+# This role will be skipped if Bitwarden is locked (bw_unlocked: false).
+dependencies:
+  - role: bitwarden
