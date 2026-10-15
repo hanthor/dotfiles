@@ -1,0 +1,77 @@
+---
+# Unit files that roles deleted from this repo left on machines. Each entry
+# names the role and the commit that removed it; docs/src/roles/retired_services.md
+# has the full provenance. Order matters: containers before the volumes and
+# networks they use, timers before the services they trigger.
+#
+# Only add units no current role deploys (caddy.container belongs to `proxy`).
+
+# Absolute paths — rootful quadlets and plain system units.
+retired_services_system_units:
+  # cockpit — removed in 2af694a
+  - /etc/containers/systemd/cockpit.container
+  # homepage — removed in f0143a6
+  - /etc/containers/systemd/homepage.container
+  # netbox — removed in 7f3c122
+  - /etc/containers/systemd/netbox.container
+  - /etc/containers/systemd/netbox-worker.container
+  - /etc/containers/systemd/netbox-redis.container
+  - /etc/containers/systemd/netbox-postgres.container
+  - /etc/containers/systemd/netbox-postgres.volume
+  - /etc/containers/systemd/netbox-media.volume
+  - /etc/containers/systemd/netbox.network
+  # netbox_agent — removed in 7f3c122 (plain units running a podman container)
+  - /etc/systemd/system/netbox-agent.timer
+  - /etc/systemd/system/netbox-agent.service
+
+# Relative to ~/.config/containers/systemd — rootless quadlets.
+retired_services_user_units:
+  # lima (lima-bootc) — removed in f0143a6
+  - lima-bootc.container
+  # monitoring — removed in 8c9b171 (prometheus-hub.container was installed
+  # as prometheus.container)
+  - node-exporter.container
+  - podman-exporter.container
+  - alloy.container
+  - promtail.container
+  - prometheus.container
+  - perses.container
+  - grafana.container
+  - loki.container
+  - alertmanager.container
+  - pve-exporter.container
+  - matrix-notifier.container
+  - alloy-data.volume
+  - prometheus-data.volume
+  - perses-data.volume
+  - grafana-data.volume
+  - loki-data.volume
+  - alertmanager-data.volume
+  - monitoring.network
+  # appflowy — removed in f7f2a2a
+  - appflowy-cloud.container
+  - appflowy-gotrue.container
+  - appflowy-s3.container
+  - appflowy-minio.container
+  - appflowy-redis.container
+  - appflowy-db.container
+  - appflowy-s3-data.volume
+  - appflowy-minio-data.volume
+  - appflowy-db-data.volume
+  - appflowy.network
+  # authentik — removed in f7f2a2a
+  - authentik-server.container
+  - authentik-worker.container
+  - authentik-redis.container
+  - authentik-db.container
+  - authentik-db-data.volume
+  - authentik-media.volume
+  - authentik-certs.volume
+  - authentik-custom-templates.volume
+  - authentik.network
+  # n8n — removed in f7f2a2a
+  - n8n-server.container
+  - n8n-db.container
+  - n8n-data.volume
+  - n8n-db-data.volume
+  - n8n.network

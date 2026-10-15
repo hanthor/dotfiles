@@ -1,0 +1,11 @@
+---
+# Quadlet file extension -> suffix of the service the generator makes from it
+# (foo.volume -> foo-volume.service). Anything else is a plain unit file.
+retired_services_quadlet_suffix:
+  .container: ""
+  .volume: "-volume"
+  .network: "-network"
+  .pod: "-pod"
+
+_retired_user_dir: "{{ ansible_facts['env']['HOME'] }}/.config/containers/systemd"
+_retired_dirs: "{{ retired_services_system_units | map('dirname') | unique | list + [_retired_user_dir] }}"

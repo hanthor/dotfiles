@@ -1,0 +1,98 @@
+---
+# Stops and removes unit files left by roles that were deleted from this repo.
+# Only the unit files go: podman volumes, images and config dirs stay. On a
+# machine without any of these files every task after the lookup is skipped.
+
+# One find over the unit dirs instead of a stat per file: this runs on every
+# daily apply, and ~70 module calls is noticeable on a laptop. find warns on
+# missing paths, so only hand it the dirs that exist.
+- name: Check which unit directories exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop: "{{ _retired_dirs }}"
+  register: _retired_dir_stat
+
+- name: Find leftover unit files from retired roles
+  ansible.builtin.find:
+    paths: "{{ _retired_dir_stat.results | selectattr('stat.isdir', 'defined') | selectattr('stat.isdir') | map(attribute='item') | list }}"
+    patterns: "{{ retired_services_system_units | map('basename') | list + retired_services_user_units }}"
+    file_type: any
+  register: _retired_found
+  when: _retired_dir_stat.results | selectattr('stat.isdir', 'defined') | selectattr('stat.isdir') | list | length > 0
+
+- name: Collect leftover unit files
+  ansible.builtin.set_fact:
+    _retired_system_present: "{{ retired_services_system_units | select('in', _found_paths) | list }}"
+    _retired_user_present: "{{ _user_paths | select('in', _found_paths) | map('basename') | list }}"
+  vars:
+    _found_paths: "{{ _retired_found.files | default([]) | map(attribute='path') | list }}"
+    _user_paths: "{{ retired_services_user_units | map('regex_replace', '^', _retired_user_dir ~ '/') | list }}"
+
+- name: Remove leftover system units
+  when: _retired_system_present | length > 0
+  become: true
+  block:
+    # Generated quadlet units can't be disabled (removing the file and
+    # reloading drops their [Install] links); plain units are disabled so no
+    # dangling timers.target.wants symlink is left behind.
+    - name: Stop leftover system services
+      ansible.builtin.systemd:
+        name: "{{ _unit }}"
+        state: stopped
+        enabled: "{{ omit if _ext in retired_services_quadlet_suffix else false }}"
+      vars:
+        _stem: "{{ (item | basename | splitext)[0] }}"
+        _ext: "{{ (item | basename | splitext)[1] }}"
+        _unit: "{{ (_stem ~ retired_services_quadlet_suffix[_ext] ~ '.service') if _ext in retired_services_quadlet_suffix else item | basename }}"
+      loop: "{{ _retired_system_present }}"
+      register: _retired_system_stop
+      # A file whose unit was never generated (podman gone, bad quadlet) has
+      # nothing to stop — still remove the file.
+      failed_when:
+        - _retired_system_stop is failed
+        - "'Could not find the requested service' not in (_retired_system_stop.msg | default(''))"
+
+    - name: Remove leftover system unit files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ _retired_system_present }}"
+
+    - name: Reload systemd after removing retired units
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+- name: Remove leftover user quadlets
+  when: _retired_user_present | length > 0
+  # systemctl --user needs the user's runtime dir; it isn't always in the
+  # environment (e.g. non-login shells), so pin it like zen_browser does.
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_facts['user_uid'] }}"
+  block:
+    - name: Stop leftover user services
+      ansible.builtin.systemd:
+        name: "{{ _stem ~ retired_services_quadlet_suffix[_ext] ~ '.service' }}"
+        scope: user
+        state: stopped
+      vars:
+        _stem: "{{ (item | splitext)[0] }}"
+        _ext: "{{ (item | splitext)[1] }}"
+      loop: "{{ _retired_user_present }}"
+      register: _retired_user_stop
+      failed_when:
+        - _retired_user_stop is failed
+        - "'Could not find the requested service' not in (_retired_user_stop.msg | default(''))"
+
+    - name: Remove leftover user quadlet files
+      ansible.builtin.file:
+        path: "{{ _retired_user_dir }}/{{ item }}"
+        state: absent
+      loop: "{{ _retired_user_present }}"
+
+    - name: Reload user systemd after removing retired quadlets
+      ansible.builtin.systemd:
+        scope: user
+        daemon_reload: true
