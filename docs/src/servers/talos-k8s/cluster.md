@@ -6,6 +6,14 @@
 > `just doctor` will fail against it until it returns. Workloads that needed to
 > stay up (Matrix, Hive, CFP dashboard) run on the
 > [AWS Talos cluster](../aws-k8s/cluster.md).
+>
+> **When it returns**, before applying anything under `talos-k8s/ai/`:
+> run [`talos-k8s/ai/migrate-pv-path.sh`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/migrate-pv-path.sh)
+> first. `lemonade.yaml` already points its PVs at `/var/lib/…`, but the models
+> are still under `/var/tmp/…` on karnataka. Applying the manifest first
+> orphans them (#29). Then follow the prerequisites in
+> [`talos-k8s/ai/README.md`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/README.md)
+> for the backup job and run `lemonade-warmup.sh` (#26, #27).
 
 
 > **Two-node [Talos Linux](https://www.talos.dev/) [Kubernetes](https://kubernetes.io/) cluster.**
