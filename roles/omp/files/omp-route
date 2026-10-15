@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# omp-route — start omp on the first provider that still has quota.
+#
+# Priority: Claude Max → Codex → Antigravity (Claude, then Gemini) → Kiro → Muse.
+# Quota comes from `ccleft probe`; a provider whose quota can't be read
+# (expired probe token, API-key login, probe failure) is tried anyway — omp's
+# own usage-aware fallback and retry.fallbackChains.default (same order) take
+# over mid-session.
+#
+#   omp-route [omp args...]   # aliased to `omp` by shell_dotfiles
+#   omp-route --pick          # print the chosen model and why, then exit
+set -uo pipefail
+
+RESERVE_PCT="${OMP_ROUTE_RESERVE_PCT:-10}"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/omp-route/probe.json"
+CACHE_TTL="${OMP_ROUTE_CACHE_TTL:-300}"
+LAST_RESORT="meta/muse-spark-1.3-contributor"
+
+# Candidates in priority order: "<ccleft provider>|<ccleft window scope or ->|<omp model>"
+CANDIDATES=(
+  "claude|-|anthropic/claude-opus-5-5"
+  "codex|-|openai-codex/gpt-6.1-sol"
+  "agy|3p|google-antigravity/claude-opus-5-5"
+  "agy|gemini|google-antigravity/gemini-3.8-flash"
+  "kiro|-|kiro/auto"
+)
+
+OMP_BIN="$(type -P omp)" || { echo "omp-route: omp not on PATH" >&2; exit 127; }
+CCLEFT_BIN="$(type -P ccleft || echo "$HOME/go/bin/ccleft")"
+
+probe() {
+  local age
+  if [[ -s "$CACHE" ]]; then
+    age=$(( $(date +%s) - $(stat -c %Y "$CACHE") ))
+    if (( age < CACHE_TTL )); then cat "$CACHE"; return; fi
+  fi
+  [[ -x "$CCLEFT_BIN" ]] || return 1
+  mkdir -p "$(dirname "$CACHE")"
+  local out
+  out="$(timeout 8 "$CCLEFT_BIN" probe --json 2>/dev/null)" || return 1
+  printf '%s' "$out" > "$CACHE"
+  printf '%s' "$out"
+}
+
+# Prints "ok", "skip", or "unknown" for one candidate.
+verdict() {
+  local json="$1" provider="$2" scope="$3"
+  jq -r --arg p "$provider" --arg s "$scope" --argjson r "$RESERVE_PCT" '
+    [.readings[] | select(.provider == $p)] as $rs
+    | if ($rs | length) == 0 then "unknown" else
+      $rs[0] as $x
+      | [$x.windows[]? | select(.binding == true and .remaining_pct != null)
+          | select($s == "-" or .scope == $s)] as $w
+      | if ($w | length) > 0 then
+          (if ([$w[].remaining_pct] | min) > $r then "ok" else "skip" end)
+        elif ($x.state == "limited" or $x.state == "exhausted") and $s == "-" then "skip"
+        else "unknown" end
+      end' <<<"$json" 2>/dev/null || echo unknown
+}
+
+pick() {
+  local json entry provider scope model v label
+  if ! json="$(probe)"; then
+    echo "${CANDIDATES[0]##*|}|ccleft probe unavailable"
+    return
+  fi
+  for entry in "${CANDIDATES[@]}"; do
+    IFS='|' read -r provider scope model <<<"$entry"
+    v="$(verdict "$json" "$provider" "$scope")"
+    if [[ "$v" != skip ]]; then
+      [[ "$scope" == - ]] && label="$provider" || label="$provider/$scope"
+      echo "$model|$label: $v"
+      return
+    fi
+  done
+  echo "$LAST_RESORT|all quota-tracked providers exhausted"
+}
+
+if [[ "${1:-}" == --pick ]]; then
+  pick | awk -F'|' '{print $1 "  (" $2 ")"}'
+  exit 0
+fi
+
+# Only route interactive/prompt launches: leave subcommands and explicit
+# model choices alone.
+route=1
+for arg in "$@"; do
+  case "$arg" in
+    --model|--model=*|--provider|--provider=*|-h|--help|-v|--version) route=0 ;;
+  esac
+done
+if [[ "${1:-}" =~ ^[a-z][a-z-]*$ ]] \
+   && "$OMP_BIN" help 2>/dev/null | awk '/^COMMANDS/{c=1;next} c&&/^  [a-z]/{print $1}' | grep -qxF "$1"; then
+  route=0
+fi
+
+if (( route )); then
+  IFS='|' read -r model why <<<"$(pick)"
+  printf '\033[2momp-route: %s (%s)\033[0m\n' "$model" "$why" >&2
+  exec "$OMP_BIN" --model "$model" "$@"
+fi
+exec "$OMP_BIN" "$@"

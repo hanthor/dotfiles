@@ -120,3 +120,23 @@
     src: kiro.json
     dest: "{{ ansible_facts['env']['HOME'] }}/.config/omp/kiro.json"
     mode: "0644"
+
+- name: Install omp-route (quota-aware omp launcher via ccleft)
+  ansible.builtin.copy:
+    src: omp-route
+    dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/omp-route"
+    mode: "0755"
+
+- name: Merge provider routing into OMP config
+  ansible.builtin.shell: |
+    set -eu
+    cfg="$HOME/.omp/agent/config.yml"
+    mkdir -p "$(dirname "$cfg")"
+    [ -f "$cfg" ] || : > "$cfg"
+    before=$(sha256sum "$cfg")
+    yq -i '. *= (load("{{ role_path }}/files/routing.yml") | explode(.) | ... comments="")' "$cfg"
+    [ "$before" = "$(sha256sum "$cfg")" ] || echo changed
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env_path }}"
+  register: omp_routing_merge
+  changed_when: "'changed' in omp_routing_merge.stdout"
