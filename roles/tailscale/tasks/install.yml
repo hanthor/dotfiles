@@ -22,6 +22,13 @@
   when: _ujust_exists.rc == 0
 
 - name: Install tailscale via install script (non-Bluefin)
-  ansible.builtin.shell: set -o pipefail && curl -fsSL https://tailscale.com/install.sh | sh
+  # Download fully, then run: a dropped connection can't execute half a script.
+  ansible.builtin.shell: |
+    set -eu
+    tmp_script=$(mktemp)
+    trap 'rm -f "$tmp_script"' EXIT
+    curl -fsSL --max-time 60 https://tailscale.com/install.sh -o "$tmp_script"
+    [ -s "$tmp_script" ] || { echo "Downloaded script is empty"; exit 1; }
+    sh "$tmp_script"
   become: true
   when: _ujust_exists.rc != 0
