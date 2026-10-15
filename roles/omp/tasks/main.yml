@@ -129,7 +129,7 @@
 
 - name: Merge provider routing into OMP config
   ansible.builtin.shell: |
-    set -eu
+    set -euo pipefail
     cfg="$HOME/.omp/agent/config.yml"
     mkdir -p "$(dirname "$cfg")"
     [ -f "$cfg" ] || : > "$cfg"
