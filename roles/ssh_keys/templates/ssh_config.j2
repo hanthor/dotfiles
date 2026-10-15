@@ -15,7 +15,10 @@ Host *
 {% for name, info in machines.items() %}
 Host {{ name }}
   HostName {{ info.hostname }}
-  User {{ user_login }}
+{% if hostvars[name] is defined and hostvars[name].ansible_port is defined %}
+  Port {{ hostvars[name].ansible_port }}
+{% endif %}
+  User {{ hostvars[name].ansible_user | default(user_login) if hostvars[name] is defined else user_login }}
   SendEnv BW_SESSION
 
 {% endfor %}

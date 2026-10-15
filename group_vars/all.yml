@@ -4,12 +4,20 @@ user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james
 brew_prefix: /home/linuxbrew/.linuxbrew
-# All machine names (for SSH config generation)
+# Every inventory host reachable over SSH, keyed by inventory name, with the
+# address ssh should use (MagicDNS name unless noted). Port and login user
+# come from inventory.yml (ansible_port / ansible_user) — ssh_config.j2 and
+# ssh_mesh read them from there. Talos nodes (bihar, karnataka) are absent on
+# purpose: Talos has no SSH.
 machines:
+  punjab:
+    hostname: punjab
+  mumbai:
+    hostname: mumbai
+  termux:
+    hostname: pixel-9a
   himachal:
     hostname: himachal
-  karnataka:
-    hostname: karnataka
   kerala:
     hostname: kerala
   dilli:
@@ -20,16 +28,15 @@ machines:
     hostname: goa
   vm:
     hostname: vm
-  bihar:
-    hostname: bihar
   matrix:
     hostname: matrix.reilly.asia
   telengana:
     hostname: telengana
+  # Reached through `virtctl port-forward` on the inventory's 127.0.0.1 ports.
   test-fleet-fedora:
-    hostname: test-fleet-fedora
+    hostname: 127.0.0.1
   test-fleet-node2:
-    hostname: test-fleet-node2
+    hostname: 127.0.0.1
 
 # Fleet SSH public keys, committed to git (public keys only — safe in a
 # public repo). The ssh_mesh role merges these into authorized_keys on
@@ -46,13 +53,18 @@ machine_pubkeys:
   vm: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIISpsmEf1I6nKchkatNY08OInckBvQCGm0L3rDse6nBy james@Jamess-MacBook-Air.local
   termux: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyFPxxcqd3bA+SPDL5eGlYzS5mDV2gJcp6vuDpx+spR u0_a372@localhost
   mumbai: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN059d8p5GeXivRywaeJwvx+pAcLdsebGaj7ypalFCuO pixel-9a
+  # Not an inventory host: Termux on the Nothing Phone (tailnet node `nothing`).
   nothing: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIDWQMpTXLLE8z3sxeCFpW7RBURRuNEOdxbe5XBCG2eT u0_a266@localhost
 
-# Machines never probed by the ssh_mesh check: Talos nodes (no user SSH)
-# and port-forwarded test VMs.
+# `machines` entries the ssh_mesh check never probes (a failed probe fails the
+# apply): the phones run sshd only while Termux / the AVF VM is up, the test
+# VMs only exist behind a port-forward, and punjab (login `ubuntu`) has never
+# been probed — drop it from this list once `just mesh-check` from a desktop
+# reaches it.
 ssh_mesh_exclude:
-  - bihar
-  - karnataka
+  - mumbai
+  - termux
+  - punjab
   - test-fleet-fedora
   - test-fleet-node2
 # ── Core packages (all machines) ─────────────────────────────────

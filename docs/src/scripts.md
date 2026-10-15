@@ -202,16 +202,15 @@ python3 scripts/last-apply-status.py
 
 ### `online_hosts.py`
 
-Print the list of online fleet hosts (intersection of Tailscale peers and inventory), excluding VPS machines and localhost.
+Print the online fleet hosts: inventory hosts whose tailnet name is online, excluding the `vps` group and this machine. A host's tailnet name is its `tailnet_name` in `inventory.yml` (e.g. `termux` → `pixel-9a`), otherwise its inventory name. A peer's name is its MagicDNS short name; the OS HostName is used only when a peer has no DNSName, because HostNames aren't unique (several phones report `localhost`).
 
 **Usage:**
 ```bash
-python3 scripts/online_hosts.py
+python3 scripts/online_hosts.py          # inventory names, space-separated
+python3 scripts/online_hosts.py --peers  # raw online tailnet names, one per line
 ```
 
-**Output:** One hostname per line.
-
-**Used by:** `just _online_hosts` and bulk apply operations to target only reachable machines.
+**Used by:** `just _online_hosts` (bulk applies, `doctor-fleet`, `push-terminfo`), and `roles/ssh_mesh`, which runs `--peers` on the target via the `script` module.
 
 **Silently fails:** If Tailscale is not running, returns empty output (so scripts gracefully degrade).
 
