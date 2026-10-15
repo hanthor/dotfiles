@@ -179,7 +179,7 @@ This roadmap reflects the strategic direction of the dotfiles infrastructure acr
 3. **Improve docs**: Handbook PRs, runbooks, troubleshooting guides
 4. **Add roles**: New roles must include role-specific README and idempotency tests
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions. All contributions must include DCO sign-off (`git commit -s`).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how changes land and the local checks.
 
 ---
 
