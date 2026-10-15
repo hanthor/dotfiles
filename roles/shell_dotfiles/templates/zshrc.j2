@@ -52,7 +52,7 @@ elif command -v atuin &>/dev/null; then
 fi
 
 # ── direnv ───────────────────────────────────────────────────────
-command -v direnv &>/dev/null && eval "$(direnv hook zsh)"
+command -v direnv &>/dev/null && eval "$(direnv hook zsh | sed -E "s#'[^']*/Cellar/direnv/[^/]+/bin/direnv'#'$(command -v direnv)'#")"
 
 # ── fzf (fallback if bluefin-cli didn't set it up) ───────────────
 command -v fzf &>/dev/null && ! type _fzf_complete &>/dev/null && source <(fzf --zsh)
