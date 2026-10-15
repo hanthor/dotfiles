@@ -82,13 +82,20 @@ def purge_host(name: str, inv_path: str = "inventory.yml") -> bool:
 
     hosts_part, sep, children_part = content.partition("\n  children:\n")
 
-    # `    <name>:\n` plus its exactly-6-space indented children.
-    host_block = re.compile(rf"^    {re.escape(name)}:\n(?:      (?! )[^\n]+\n)*", re.MULTILINE)
+    # `    <name>:` plus its exactly-6-space indented children. Any of those
+    # lines can end the section with no newline: partition() consumed the one
+    # before `children:`, and the file itself need not end in one.
+    host_block = re.compile(rf"^    {re.escape(name)}:[ \t]*(?:\n|\Z)(?:      (?! )[^\n]+(?:\n|\Z))*", re.MULTILINE)
     hosts_part, host_removed = host_block.subn("", hosts_part, count=1)
+    if sep and host_removed:
+        # Removing the last block leaves the previous line's newline behind;
+        # sep supplies it again.
+        hosts_part = hosts_part.rstrip("\n")
     content = hosts_part + sep + children_part
 
-    # The bare reference under any group's `hosts:` list.
-    group_ref = re.compile(rf"^        {re.escape(name)}:\s*\n", re.MULTILINE)
+    # The bare reference under any group's `hosts:` list, which may be the
+    # file's last line.
+    group_ref = re.compile(rf"^        {re.escape(name)}:[ \t]*(?:\n|\Z)", re.MULTILINE)
     content, group_removed = group_ref.subn("", content)
 
     if not host_removed and not group_removed:
