@@ -299,8 +299,8 @@ def main():
         return 0
 
     models = fetch_available_models()
-    count = len(models)
-    print(f"Discovered {count} available models from catalog.", file=sys.stderr)
+    providers = sorted({m.get("provider") for m in models if m.get("provider")})
+    print(f"Discovered {len(models)} available models across providers: {', '.join(providers) or 'none'}.", file=sys.stderr)
 
     generated = generate_routing_block(models)
 
@@ -308,7 +308,14 @@ def main():
         import yaml
         print(yaml.safe_dump(generated, sort_keys=False, default_flow_style=False))
     elif action == "update":
-        update_config_file(config_path, generated)
+        # Never clobber a healthy baseline with a thin unauthenticated
+        # catalog (e.g. only extension-advertised models before `omp-login`).
+        if len(providers) >= 2 and len(models) >= 5:
+            update_config_file(config_path, generated)
+        else:
+            print(f"Keeping existing {config_path}: catalog too thin to improve it "
+                  f"({len(models)} models, {len(providers)} providers). "
+                  f"Run \`just omp-login\` then re-run with --update.", file=sys.stderr)
 
     return 0
 
