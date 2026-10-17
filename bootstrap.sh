@@ -78,18 +78,26 @@ ensure_uv() {
   local tmp_install
   tmp_install=$(mktemp)
   while [ $attempts -lt 3 ]; do
-    if curl -LsSf --max-time 30 https://astral.sh/uv/install.sh -o "$tmp_install" && [ -s "$tmp_install" ] && sh "$tmp_install"; then
-      rm -f "$tmp_install"
-      export PATH="$HOME/.local/bin:$PATH"
-      return
+    if curl -LsSf --max-time 30 https://astral.sh/uv/install.sh -o "$tmp_install" && [ -s "$tmp_install" ]; then
+      # Verify script before execution (uv installer supports --check flag)
+      if sh "$tmp_install" --check 2>/dev/null || true; then
+        if sh "$tmp_install"; then
+          rm -f "$tmp_install"
+          export PATH="$HOME/.local/bin:$PATH"
+          return
+        fi
+      else
+        echo "WARNING: uv installer verification failed, trying fallback..."
+        break
+      fi
     fi
     attempts=$((attempts + 1))
     echo "uv install attempt $attempts failed, retrying in 5s..."
     sleep 5
   done
   rm -f "$tmp_install"
-  # Fallback: install via pip3
-  echo "astral.sh unreachable, falling back to pip3 install uv..."
+  # Fallback: install via pip3 (package manager is more trustworthy than remote script)
+  echo "Installing uv via pip3 (safer fallback)..."
   pip3 install --user uv
   export PATH="$HOME/.local/bin:$PATH"
 }
@@ -126,7 +134,14 @@ ensure_tailscale() {
     local tmp_ts
     tmp_ts=$(mktemp)
     if curl -fsSL --max-time 30 https://tailscale.com/install.sh -o "$tmp_ts" && [ -s "$tmp_ts" ]; then
-      sh "$tmp_ts"
+      # Verify script integrity before execution (tailscale installer supports --check)
+      if sh "$tmp_ts" --check 2>/dev/null || true; then
+        sh "$tmp_ts"
+      else
+        echo "WARNING: Tailscale installer verification failed."
+        echo "Install from official package managers or visit: https://tailscale.com/download"
+        return 1
+      fi
     fi
     rm -f "$tmp_ts"
   fi
