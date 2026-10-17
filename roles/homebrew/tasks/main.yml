@@ -63,6 +63,16 @@
     creates: /home/linuxbrew/.linuxbrew/bin/brew
   when: brew_supported and not brew_installed.stat.exists
 
+# A host may already carry just outside Homebrew (system package, manual
+# install). brew bundle would stack a second copy, so probe PATH first and
+# leave the Brewfile entry out when one resolves.
+- name: Check for a pre-existing just on PATH
+  ansible.builtin.command: command -v just
+  register: just_present
+  changed_when: false
+  failed_when: false
+  when: brew_supported
+
 - name: Deploy Brewfile
   ansible.builtin.template:
     src: Brewfile.j2
@@ -131,6 +141,30 @@
   ansible.builtin.debug:
     msg: "brew bundle returned {{ brew_bundle.rc }} — last stderr: {{ brew_bundle.stderr_lines[-10:] | default([]) }}"
   when: brew_supported and brew_bundle.rc | default(0) != 0
+
+- name: Check whether retired Homebrew formulae are installed
+  ansible.builtin.command:
+    cmd: "/home/linuxbrew/.linuxbrew/bin/brew list --formula --quiet {{ item }}"
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  loop:
+    - pi-coding-agent
+    - trash-cli
+  register: retired_brew_checks
+  changed_when: false
+  failed_when: false
+  when: brew_supported
+
+- name: Uninstall retired Homebrew formulae
+  ansible.builtin.command:
+    cmd: "/home/linuxbrew/.linuxbrew/bin/brew uninstall {{ item.item }}"
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"
+  loop: "{{ (retired_brew_checks.results | default([])) | selectattr('rc', 'equalto', 0) | list }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: brew_supported
+  changed_when: true
 
 - name: Upgrade all Homebrew packages
   ansible.builtin.command: /home/linuxbrew/.linuxbrew/bin/brew upgrade

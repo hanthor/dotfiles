@@ -4,7 +4,7 @@ tap "{{ tap }}"
 {% endfor %}
 
 {% for pkg in core_brews %}
-brew "{{ pkg }}"
+{% if pkg != "just" or just_present.rc | default(1) != 0 %}brew "{{ pkg }}"{% endif %}
 {% endfor %}
 
 {% for pkg in core_tap_brews %}
