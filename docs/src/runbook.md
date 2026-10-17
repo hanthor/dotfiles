@@ -7,20 +7,25 @@ these from memory or commit logs more than twice, add it here.
 
 ## I rotated my SSH key on host X — how do I propagate it?
 
-The `ssh_keys` role now syncs **on mismatch** (not just on missing), so:
+An intentional local rotation is explicit: when the local public key differs
+from the Bitwarden item, the `ssh_keys` role leaves Bitwarden unchanged and
+warns. This protects the stored key if a new key was generated while the vault
+was locked. To publish an intentional rotation, on host X with BW unlocked:
 
 ```bash
-# On host X (with BW unlocked locally, just unlocked with bw unlock --raw):
-dots-apply
+# `dots-apply` forwards these arguments to the Ansible playbook.
+dots-apply -e ssh_keys_force_push=true
 ```
 
-That detects the local pub key differs from the BW entry, calls
-`bw edit item` to replace it, and rewrites this host's `authorized_keys` while
-it's at it. Then on every *other* host:
+That updates the `james@<hostname>` item in Bitwarden and refreshes this host's
+`authorized_keys` while it is at it. Then on every *other* host:
 
 ```bash
 dots-apply           # picks up the fresh pubkey from BW into authorized_keys
 ```
+
+If the mismatch was not intentional, do not use the force flag: move the local
+key aside and re-apply so the host fetches the Bitwarden copy.
 
 If you can't reach an "other" host because of the stale key situation, you
 can also push the new key directly first:
