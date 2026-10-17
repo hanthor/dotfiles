@@ -1,6 +1,9 @@
 {
   "enabled": true,
+  "authMode": "api-key",
+  "apiKey": "KIRO_API_KEY",
+  "upstreamUrl": "https://runtime.us-east-1.kiro.dev/",
+  "endpoint": "amazonq",
   "cliFallback": true,
-  "kiroCliPath": "kiro-cli",
   "requestTimeoutMs": 600000
 }
