@@ -33,7 +33,7 @@ _add_path_fast ~/.cargo/bin
     end
 
     # direnv
-    command -q direnv && direnv hook fish | source
+    command -q direnv && direnv hook fish | string replace -r '"[^"]*/Cellar/direnv/[^/]+/bin/direnv"' (command -s direnv) | source
 
     # fzf keybindings (fallback if bluefin-cli didn't set them up)
     if command -q fzf && not functions -q _fzf_search_history

@@ -4,6 +4,10 @@ user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james
 brew_prefix: /home/linuxbrew/.linuxbrew
+# Canonical OMP provider auth broker (empty = each machine uses its own OAuth
+# logins via `just omp-login`). Set per-host in host_vars/<name>.yml where a
+# shared broker exists (e.g. punjab serves the fleet broker).
+omp_auth_broker_url: ""
 # All machine names (for SSH config generation)
 machines:
   himachal:
@@ -73,13 +77,15 @@ core_brews:
   - shellcheck
   - shfmt
   - unzip
-  - trash-cli
   - yq
   # atuin is also in bluefin-cli, but the brew copy keeps non-Bluefin glibc hosts (Ubuntu, Debian) covered
   - atuin
+  - bun
+  - can1357/tap/omp
   # bluefin-cli provides: atuin, bat, eza, fd, fzf, starship, carapace, ripgrep, tealdeer, zoxide, colordiff, television, ugrep
 core_taps:
   - ublue-os/experimental-tap
+  - can1357/tap
 core_tap_brews:
   - ublue-os/experimental-tap/bluefin-cli
 # ── Desktop-only packages ────────────────────────────────────────
@@ -131,7 +137,6 @@ desktop_brews:
   - ollama
   - openai-whisper
   - opencode
-  - pi-coding-agent
   - oras
   - p7zip
   - pkgconf

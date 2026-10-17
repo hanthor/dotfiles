@@ -4,35 +4,48 @@
     path: "{{ ansible_facts['env']['HOME'] }}/.cache"
     state: directory
     mode: "0700"
-  when: is_musl | bool
 
-- name: Download OMP installer on musl systems
+- name: Check Bun availability for OMP plugins
+  ansible.builtin.command: bun --version
+  environment:
+    PATH: "{{ ansible_facts['env']['HOME'] }}/.bun/bin:{{ ansible_facts['env']['HOME'] }}/.local/bin:{{ ansible_env_path }}"
+  register: omp_bun_version
+  changed_when: false
+  failed_when: false
+
+- name: Check OMP availability
+  ansible.builtin.command: omp --version
+  environment:
+    PATH: "{{ ansible_facts['env']['HOME'] }}/.bun/bin:{{ ansible_facts['env']['HOME'] }}/.local/bin:{{ ansible_env_path }}"
+  register: omp_version_check
+  changed_when: false
+  failed_when: false
+
+- name: Download OMP installer when missing
   ansible.builtin.get_url:
     url: https://omp.sh/install
     dest: "{{ ansible_facts['env']['HOME'] }}/.cache/omp-install.sh"
     mode: "0700"
-  when: is_musl | bool
+  when: omp_version_check.rc != 0
 
-- name: Install OMP on musl systems
+- name: Install OMP when missing
   ansible.builtin.command: sh {{ ansible_facts['env']['HOME'] }}/.cache/omp-install.sh --binary
   args:
     creates: "{{ ansible_facts['env']['HOME'] }}/.local/bin/omp"
   environment:
     PI_INSTALL_DIR: "{{ ansible_facts['env']['HOME'] }}/.local/bin"
-  when: is_musl | bool
+  when: omp_version_check.rc != 0
 
-- name: Download Bun installer on musl systems
+- name: Download Bun installer when unavailable
   ansible.builtin.get_url:
     url: https://bun.sh/install
     dest: "{{ ansible_facts['env']['HOME'] }}/.cache/bun-install.sh"
     mode: "0700"
-  when: is_musl | bool
+  when: omp_bun_version.rc != 0
 
-- name: Install Bun on musl systems for OMP plugins
+- name: Install Bun for OMP plugins
   ansible.builtin.command: bash {{ ansible_facts['env']['HOME'] }}/.cache/bun-install.sh
-  args:
-    creates: "{{ ansible_facts['env']['HOME'] }}/.bun/bin/bun"
-  when: is_musl | bool
+  when: omp_bun_version.rc != 0
 
 
 - name: Verify OMP is installed
@@ -100,12 +113,23 @@
   changed_when: false
   failed_when: false
 
-- name: Install Kiro provider plugin from GitHub
+- name: Inspect installed OMP plugin source
+  ansible.builtin.slurp:
+    src: "{{ ansible_facts['env']['HOME'] }}/.local/share/omp/plugins/bun.lock"
+  register: omp_plugins_lock
+  changed_when: false
+  failed_when: false
+
+- name: Install Kiro provider from Hanthor fork
   ansible.builtin.command:
-    cmd: omp plugin install github:elkibalion/omp-kiro-provider
+    cmd: omp plugin install github:hanthor/omp-kiro-provider#kiro-api-key-auth --force
   environment:
     PATH: "{{ ansible_facts['env']['HOME'] }}/.bun/bin:{{ ansible_facts['env']['HOME'] }}/.local/bin:{{ ansible_env_path }}"
-  when: omp_plugin_list.rc != 0 or 'omp-kiro-provider' not in (omp_plugin_list.stdout | default(''))
+  when: >-
+    omp_plugin_list.rc != 0
+    or 'omp-kiro-provider' not in (omp_plugin_list.stdout | default(''))
+    or 'github:hanthor/omp-kiro-provider#kiro-api-key-auth'
+       not in (omp_plugins_lock.content | default('') | b64decode)
 
 - name: Install ccleft (provider quota-remaining probe)
   ansible.builtin.command: go install github.com/tuna-os/ccleft/cmd/ccleft@latest
@@ -115,8 +139,42 @@
     creates: "{{ ansible_facts['env']['HOME'] }}/go/bin/ccleft"
   failed_when: false
 
-- name: Deploy omp-kiro-provider config (kiro-cli ACP fallback on 401/403)
+- name: Deploy omp-kiro-provider config (direct Kiro API-key auth)
   ansible.builtin.copy:
     src: kiro.json
     dest: "{{ ansible_facts['env']['HOME'] }}/.config/omp/kiro.json"
     mode: "0644"
+
+- name: Install omp-route (quota-aware omp launcher via ccleft)
+  ansible.builtin.copy:
+    src: omp-route
+    dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/omp-route"
+    mode: "0755"
+
+
+- name: Deploy omp-inventory-chains (dynamic model fallback generator)
+  ansible.builtin.copy:
+    src: omp-inventory-chains
+    dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/omp-inventory-chains"
+    mode: "0755"
+- name: Merge provider routing into OMP config
+  ansible.builtin.shell: |
+    set -eu
+    cfg="$HOME/.omp/agent/config.yml"
+    mkdir -p "$(dirname "$cfg")"
+    [ -f "$cfg" ] || : > "$cfg"
+    before=$(sha256sum "$cfg")
+    yq -i '. *= (load("{{ role_path }}/files/routing.yml") | explode(.) | ... comments="")' "$cfg"
+    [ "$before" = "$(sha256sum "$cfg")" ] || echo changed
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env_path }}"
+  register: omp_routing_merge
+  changed_when: "'changed' in omp_routing_merge.stdout"
+
+- name: Run omp-inventory-chains to discover live models and optimize chains
+  ansible.builtin.command: "{{ ansible_facts['env']['HOME'] }}/.local/bin/omp-inventory-chains --update"
+  environment:
+    PATH: "{{ ansible_facts['env']['HOME'] }}/.local/bin:{{ ansible_facts['env']['HOME'] }}/.bun/bin:{{ ansible_env_path }}"
+    OMP_AUTH_BROKER_URL: "{{ omp_auth_broker_url | default('') }}"
+  failed_when: false
+  changed_when: false

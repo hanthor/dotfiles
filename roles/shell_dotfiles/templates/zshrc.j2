@@ -23,6 +23,7 @@ export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 export XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 
 export PATH="$HOME/.local/bin:$PATH"
+{% if omp_auth_broker_url | default('') %}export OMP_AUTH_BROKER_URL="{{ omp_auth_broker_url }}"{% endif %}
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
 # ── Completion ───────────────────────────────────────────────────
@@ -52,7 +53,7 @@ elif command -v atuin &>/dev/null; then
 fi
 
 # ── direnv ───────────────────────────────────────────────────────
-command -v direnv &>/dev/null && eval "$(direnv hook zsh)"
+command -v direnv &>/dev/null && eval "$(direnv hook zsh | sed -E "s#'[^']*/Cellar/direnv/[^/]+/bin/direnv'#'$(command -v direnv)'#")"
 
 # ── fzf (fallback if bluefin-cli didn't set it up) ───────────────
 command -v fzf &>/dev/null && ! type _fzf_complete &>/dev/null && source <(fzf --zsh)

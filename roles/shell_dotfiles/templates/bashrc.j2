@@ -22,6 +22,7 @@ export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 export XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 
 export PATH="$HOME/.local/bin:$PATH"
+{% if omp_auth_broker_url | default('') %}export OMP_AUTH_BROKER_URL="{{ omp_auth_broker_url }}"{% endif %}
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
 # ── Bluefin CLI shell integration (eza, bat, zoxide, starship, atuin, fzf) ──
@@ -35,7 +36,7 @@ if [[ $- == *i* ]]; then
 fi
 
 # ── direnv ───────────────────────────────────────────────────────
-command -v direnv &>/dev/null && eval "$(direnv hook bash)"
+command -v direnv &>/dev/null && eval "$(direnv hook bash | sed -E "s#'[^']*/Cellar/direnv/[^/]+/bin/direnv'#'$(command -v direnv)'#")"
 
 # ── fzf (fallback if bluefin-cli didn't set it up) ───────────────
 if [[ $- == *i* ]]; then

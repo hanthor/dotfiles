@@ -43,6 +43,7 @@ all:
       ansible_connection: ssh
     dilli:
       ansible_host: dilli
+      ansible_user: james
       ansible_connection: ssh
     kanpur:
       ansible_host: 100.107.52.37

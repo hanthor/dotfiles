@@ -6,8 +6,8 @@ Secondary workstation in the hanthor fleet.
 
 - Arch: x86_64
 - WiFi on the home LAN (DHCP)
-- Tailscale: `dilli` (MagicDNS)
-
+- Tailscale: `dilli` (MagicDNS: `dilli.manatee-basking.ts.net`)
+- SSH User: `james` (`ssh james@dilli`)
 ## OS
 
 [Bluefin](https://projectbluefin.io/) (Fedora Atomic)

@@ -1,0 +1,317 @@
+#!/usr/bin/env python3
+"""
+omp-inventory-chains — Programmatically discover available models and generate
+optimal role assignments and fallback chains for ~/.omp/agent/config.yml.
+
+Queries `omp models --json` (via OMP_AUTH_BROKER_URL or local runtime) and
+constructs prioritized fallback chains for:
+  - plan: high reasoning & deep thinking for architecture and planning
+  - smol: low latency & fast execution for implementation turns
+  - default: balanced interactive turn sequence
+  - slow: heavy reasoning tasks
+  - advisor: secondary architecture review
+
+Usage:
+  omp-inventory-chains             # Print generated YAML to stdout
+  omp-inventory-chains --dry-run   # Same as default
+  omp-inventory-chains --show      # Show current config fallback chains
+  omp-inventory-chains --update    # Write generated chains to ~/.omp/agent/config.yml
+"""
+
+import sys
+import os
+import json
+import subprocess
+from pathlib import Path
+
+DEFAULT_CONFIG_PATH = Path.home() / ".omp" / "agent" / "config.yml"
+
+# Priority preferences by provider and pattern
+PLANNER_PREFERENCES = [
+    ("openai-codex", ["gpt-6.1-sol", "gpt-5.6-sol", "gpt-5.5"]),
+    ("anthropic", ["claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-sonnet-5"]),
+    ("google-antigravity", [
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "gemini-4-argon-high",
+        "gemini-3.8-flash",
+    ]),
+    ("kiro", ["gpt-5.6-sol", "auto"]),
+    ("meta", ["muse-spark-1.3-contributor", "muse-spark-1.3"]),
+]
+
+SMOL_PREFERENCES = [
+    ("anthropic", ["claude-haiku-4-5", "claude-haiku-4", "claude-3-5-haiku"]),
+    ("google-antigravity", [
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+    ]),
+    ("kiro", ["gpt-5.6-sol", "auto"]),
+]
+
+DEFAULT_PREFERENCES = [
+    ("openai-codex", ["gpt-6.1-sol", "gpt-5.6-sol"]),
+    ("anthropic", ["claude-opus-5-5", "claude-sonnet-5-5"]),
+    ("google-antigravity", [
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "gemini-3.8-flash",
+    ]),
+    ("kiro", ["gpt-5.6-sol", "auto"]),
+    ("meta", ["muse-spark-1.3-contributor"]),
+]
+
+
+def fetch_available_models():
+    """Fetch live catalog from `omp models --json`.
+
+    Honors OMP_AUTH_BROKER_URL when the operator exports it (e.g. punjab's
+    fleet broker); otherwise uses the machine's own provider logins. Any
+    failure falls back to baseline preferences — never fatal.
+    """
+    env = os.environ.copy()
+
+    try:
+        res = subprocess.run(
+            ["omp", "models", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            data = json.loads(res.stdout)
+            models = data.get("models", [])
+            if models:
+                return models
+    except Exception as exc:
+        print(f"WARN: dynamic model query failed ({exc}); using baseline discovery", file=sys.stderr)
+    return []
+
+
+def resolve_chain(available_models, preferences, add_thinking=None):
+    """Build a deduplicated fallback list matching preferences against available models."""
+    chain = []
+    seen = set()
+
+    # Index available models by (provider, id)
+    available_map = {}
+    for m in available_models:
+        p = m.get("provider")
+        mid = m.get("id")
+        if p and mid:
+            available_map[(p, mid)] = m
+
+    for provider, model_ids in preferences:
+        for mid in model_ids:
+            # If available models were discovered, verify availability
+            selector = f"{provider}/{mid}"
+            if available_map and (provider, mid) not in available_map:
+                # Try prefix/substring match if exact id differs
+                matched = False
+                for (p, cand_id), cand_model in available_map.items():
+                    if p == provider and (mid in cand_id or cand_id.startswith(mid)):
+                        selector = cand_model.get("selector", f"{p}/{cand_id}")
+                        matched = True
+                        break
+                if not matched:
+                    continue
+
+            # Add thinking suffix if requested
+            if add_thinking and add_thinking.get(provider):
+                selector = f"{selector}:{add_thinking[provider]}"
+
+            if selector not in seen:
+                seen.add(selector)
+                chain.append(selector)
+
+    # If dynamic query returned nothing, return default candidates
+    if not chain:
+        for provider, model_ids in preferences:
+            for mid in model_ids:
+                s = f"{provider}/{mid}"
+                if add_thinking and add_thinking.get(provider):
+                    s = f"{s}:{add_thinking[provider]}"
+                if s not in seen:
+                    seen.add(s)
+                    chain.append(s)
+
+    return chain
+
+
+def generate_routing_block(available_models):
+    """Generate modelRoles and retry.fallbackChains configuration."""
+    plan_chain = resolve_chain(
+        available_models,
+        PLANNER_PREFERENCES,
+        add_thinking={"openai-codex": "high", "anthropic": "high", "google-antigravity": "high"},
+    )
+    smol_chain = resolve_chain(
+        available_models,
+        SMOL_PREFERENCES,
+    )
+    default_chain = resolve_chain(
+        available_models,
+        DEFAULT_PREFERENCES,
+    )
+    slow_chain = resolve_chain(
+        available_models,
+        PLANNER_PREFERENCES,
+        add_thinking={"anthropic": "high", "openai-codex": "high"},
+    )
+    advisor_chain = resolve_chain(
+        available_models,
+        DEFAULT_PREFERENCES,
+        add_thinking={"google-antigravity": "high"},
+    )
+
+    primary_default = default_chain[0] if default_chain else "openai-codex/gpt-6.1-sol"
+    primary_plan = plan_chain[0] if plan_chain else "openai-codex/gpt-6.1-sol:high"
+    primary_smol = smol_chain[0] if smol_chain else "anthropic/claude-haiku-4-5"
+    primary_slow = slow_chain[0] if slow_chain else "anthropic/claude-opus-5-5"
+    primary_advisor = advisor_chain[0] if advisor_chain else "openai-codex/gpt-6.1-sol"
+    primary_vision = "google-antigravity/gemini-3.8-flash"
+
+    return {
+        "modelRoles": {
+            "default": primary_default,
+            "plan": primary_plan,
+            "smol": primary_smol,
+            "advisor": primary_advisor,
+            "slow": primary_slow,
+            "vision": primary_vision,
+        },
+        "retry": {
+            "modelFallback": True,
+            "fallbackOn": "any",
+            "fallbackRevertPolicy": "cooldown-expiry",
+            "usageAwareFallback": True,
+            "usageReservePct": 10,
+            "usageReservePolicy": "auto",
+            "fallbackChains": {
+                "default": default_chain,
+                "plan": plan_chain,
+                "smol": smol_chain,
+                "slow": slow_chain,
+                "advisor": advisor_chain,
+            },
+        },
+        "prewalk": {
+            "enabled": True,
+            "auto": "on",
+            "autoTarget": "@smol",
+        },
+        "modelPresets": {
+            "deep": {
+                "modelRoles": {
+                    "default": primary_default,
+                    "plan": primary_plan,
+                    "smol": primary_smol,
+                    "slow": primary_slow,
+                },
+                "defaultThinkingLevel": "high",
+            },
+            "cheap": {
+                "modelRoles": {
+                    "default": "google-antigravity/gemini-3.8-flash",
+                    "plan": "google-antigravity/gemini-4-argon-high",
+                    "smol": "google-antigravity/gemini-3.8-flash",
+                    "slow": "google-antigravity/claude-sonnet-5-5",
+                },
+                "defaultThinkingLevel": "off",
+            },
+        },
+    }
+
+
+def update_config_file(config_path, generated):
+    """Merge generated settings into existing YAML file."""
+    import yaml
+
+    config_path = Path(config_path).expanduser()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    data = {}
+    if config_path.is_file():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"WARN: could not parse existing {config_path}: {e}", file=sys.stderr)
+            data = {}
+
+    # Merge modelRoles
+    data.setdefault("modelRoles", {})
+    data["modelRoles"].update(generated["modelRoles"])
+
+    # Merge retry
+    data.setdefault("retry", {})
+    for k, v in generated["retry"].items():
+        if k == "fallbackChains":
+            data["retry"].setdefault("fallbackChains", {})
+            data["retry"]["fallbackChains"].update(v)
+        else:
+            data["retry"][k] = v
+
+    # Merge prewalk
+    data.setdefault("prewalk", {})
+    data["prewalk"].update(generated["prewalk"])
+
+    # Merge modelPresets
+    data.setdefault("modelPresets", {})
+    data["modelPresets"].update(generated["modelPresets"])
+
+    with open(config_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, sort_keys=False, default_flow_style=False)
+
+    print(f"Updated {config_path} successfully.")
+
+
+def main():
+    action = "dry-run"
+    config_path = DEFAULT_CONFIG_PATH
+
+    for arg in sys.argv[1:]:
+        if arg in ("--dry-run", "dry-run"):
+            action = "dry-run"
+        elif arg in ("--update", "-u", "update"):
+            action = "update"
+        elif arg in ("--show", "-s", "show"):
+            action = "show"
+        elif arg.startswith("--config="):
+            config_path = Path(arg.split("=", 1)[1])
+        elif arg in ("-h", "--help", "help"):
+            print(__doc__)
+            return 0
+        else:
+            print(f"ERROR: unknown option {arg}", file=sys.stderr)
+            return 1
+
+    if action == "show":
+        if not config_path.is_file():
+            print(f"No config file found at {config_path}")
+            return 1
+        with open(config_path) as f:
+            print(f.read())
+        return 0
+
+    models = fetch_available_models()
+    count = len(models)
+    print(f"Discovered {count} available models from catalog.", file=sys.stderr)
+
+    generated = generate_routing_block(models)
+
+    if action == "dry-run":
+        import yaml
+        print(yaml.safe_dump(generated, sort_keys=False, default_flow_style=False))
+    elif action == "update":
+        update_config_file(config_path, generated)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

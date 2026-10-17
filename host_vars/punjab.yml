@@ -10,3 +10,5 @@ extra_brews:
 sshd_harden: true
 # Kiro Crew gateway (kirocrew role)
 kirocrew_enabled: true
+# Serves the fleet OMP auth broker (omp-auth-broker.service on 100.78.73.8:8765).
+omp_auth_broker_url: "http://100.78.73.8:8765"
