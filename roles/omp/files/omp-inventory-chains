@@ -38,16 +38,33 @@ PLANNER_PREFERENCES = [
         "claude-opus-5-5",
         "claude-sonnet-5-5",
         "gemini-4-argon-high",
+        "gemini-4-argon-medium",
         "gemini-3.8-flash",
     ]),
     ("kiro", ["gpt-5.6-sol", "gpt-5.6-luna", "auto"]),
     ("meta", ["muse-spark-1.3-contributor", "muse-spark-1.3"]),
 ]
 
+# On-demand heavy-hitters (`--model @max`): biggest models first, then the
+# strongest everyday rungs. Never auto-selected; the max chain only runs
+# when explicitly requested.
+MAX_PREFERENCES = [
+    ("google-antigravity", [
+        "gemini-4-argon-high",
+        "gemini-4-argon-medium",
+        "claude-opus-5-5",
+        "gemini-3.8-flash",
+    ]),
+    ("anthropic", ["claude-opus-5-5", "claude-sonnet-5-5"]),
+    ("openai-codex", ["gpt-6.1-sol", "gpt-6-luna"]),
+    ("meta", ["muse-spark-1.3-contributor"]),
+]
+
 SMOL_PREFERENCES = [
     ("anthropic", ["claude-haiku-4-5", "claude-haiku-4", "claude-3-5-haiku"]),
     ("google-antigravity", [
         "gemini-3.8-flash",
+        "gemini-4-argon-low",
         "gemini-3.5-flash",
         "gemini-3.1-flash-lite",
         "gemini-2.5-flash",
@@ -171,12 +188,17 @@ def generate_routing_block(available_models):
         DEFAULT_PREFERENCES,
         add_thinking={"google-antigravity": "high"},
     )
+    max_chain = resolve_chain(
+        available_models,
+        MAX_PREFERENCES,
+    )
 
     primary_default = default_chain[0] if default_chain else "openai-codex/gpt-6.1-sol"
     primary_plan = plan_chain[0] if plan_chain else "openai-codex/gpt-6.1-sol:high"
     primary_smol = smol_chain[0] if smol_chain else "anthropic/claude-haiku-4-5"
     primary_slow = slow_chain[0] if slow_chain else "anthropic/claude-opus-5-5"
     primary_advisor = advisor_chain[0] if advisor_chain else "openai-codex/gpt-6.1-sol"
+    primary_max = max_chain[0] if max_chain else "google-antigravity/gemini-4-argon-high"
     primary_vision = "google-antigravity/gemini-3.8-flash"
 
     return {
@@ -186,6 +208,7 @@ def generate_routing_block(available_models):
             "smol": primary_smol,
             "advisor": primary_advisor,
             "slow": primary_slow,
+            "max": primary_max,
             "vision": primary_vision,
         },
         "retry": {
@@ -201,6 +224,7 @@ def generate_routing_block(available_models):
                 "smol": smol_chain,
                 "slow": slow_chain,
                 "advisor": advisor_chain,
+                "max": max_chain,
             },
         },
         "prewalk": {
