@@ -14,7 +14,7 @@ For the local machine's key (`james@<hostname>` in Bitwarden):
 
 1. **No key on disk** → fetch from BW; if absent there too, `ssh-keygen` a fresh ed25519 pair.
 2. **Local pub key matches BW** → no-op.
-3. **Local pub key differs from BW** → `bw edit item` updates the BW entry so every other host sees the current key on their next apply. *(This is the case the old "create if missing" logic silently skipped, which caused stale public keys to linger in BW after a key rotation.)*
+3. **Local pub key differs from BW** → leave the Bitwarden item unchanged and warn by default. An intentional rotation must opt in with `dots-apply -e ssh_keys_force_push=true`; only then is the BW item replaced so every other host sees the current key on its next apply. This gate prevents a key generated while the vault was locked from clobbering the stored key.
 
 Then, regardless of whether the local item changed:
 
@@ -29,7 +29,7 @@ If `bw_unlocked` is false (vault locked, BW not installed, etc.), every BW-touch
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `Permission denied (publickey)` from a host that worked yesterday | Local key changed but BW still has the old pub key | Run `dots-apply` on the source host with BW unlocked — the role will detect the mismatch and update BW. Then run `dots-apply` on the failing host to pull the fresh `authorized_keys`. |
+| `Permission denied (publickey)` from a host that worked yesterday | Local key changed but BW still has the old pub key | For an intentional rotation, run `dots-apply -e ssh_keys_force_push=true` on the source host with BW unlocked, then run `dots-apply` on the failing host. If the mismatch was accidental, restore the Bitwarden key locally instead of forcing it. |
 | Some hosts missing from `authorized_keys` | Those hosts never round-tripped their key to BW | Run `dots-apply` on each missing host once, with BW unlocked. |
 | New ed25519 key generated on a host that should have inherited an existing key | BW item missing/empty for this hostname | Verify the BW entry name matches `james@<hostname>` exactly. |
 
