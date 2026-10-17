@@ -13,3 +13,8 @@ mic_hardware_volume_pct: 75
 # Previously ran as user timers on telengana; moved here when telengana was
 # retired. Exactly one host should have this enabled.
 hive_ops_enabled: true
+
+# Personal laptop: dips into punjab's shared provider quota via the fleet
+# broker (reserve 0 locally). Applied when the host is next online.
+omp_auth_broker_url: "http://100.78.73.8:8765"
+omp_broker_client: true

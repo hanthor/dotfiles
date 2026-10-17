@@ -6,3 +6,8 @@ web_services:
     icon: buildstream.png
     description: Build monitor
     group: System
+# Personal workstation: dips into punjab's shared provider quota via the
+# fleet broker (reserve 0 locally). Hive contributors stay limited by
+# their own 15% reserve and never use this broker.
+omp_auth_broker_url: "http://100.78.73.8:8765"
+omp_broker_client: true

@@ -8,6 +8,13 @@ brew_prefix: /home/linuxbrew/.linuxbrew
 # logins via `just omp-login`). Set per-host in host_vars/<name>.yml where a
 # shared broker exists (e.g. punjab serves the fleet broker).
 omp_auth_broker_url: ""
+# Broker clients (personal machines dipping into the shared quota) set
+# omp_broker_client: true in host_vars alongside omp_auth_broker_url. The
+# token is read controller-side from the serving host's
+# ~/.omp/auth-broker.token at apply time and written 0600 on the target —
+# it never lands in git. Hive contributors are NOT clients: they keep
+# their own 15% reserve via contributors-omp.yaml.
+omp_broker_client: false
 # All machine names (for SSH config generation)
 machines:
   himachal:

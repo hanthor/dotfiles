@@ -151,6 +151,29 @@
     dest: "{{ ansible_facts['env']['HOME'] }}/.config/omp/kiro.json"
     mode: "0644"
 
+- name: Read broker token controller-side for broker clients
+  ansible.builtin.slurp:
+    src: "{{ lookup('env', 'HOME') }}/.omp/auth-broker.token"
+  register: omp_broker_token_slurp
+  delegate_to: localhost
+  when: omp_broker_client | bool
+  failed_when: false
+
+- name: Deploy broker token env for broker clients
+  ansible.builtin.copy:
+    content: "export OMP_AUTH_BROKER_URL=\"{{ omp_auth_broker_url }}\"\nexport OMP_AUTH_BROKER_TOKEN=\"{{ omp_broker_token_slurp.content | default('') | b64decode | trim }}\"\n"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/omp/broker-token.env"
+    mode: "0600"
+  when: omp_broker_client | bool and (omp_broker_token_slurp.content | default('') | length > 0)
+
+- name: Warn when broker token is unavailable controller-side
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: {{ inventory_hostname }} is a broker client but no token was
+      found at {{ lookup('env', 'HOME') }}/.omp/auth-broker.token on the
+      controller. Run this apply from the broker host (punjab).
+  when: omp_broker_client | bool and (omp_broker_token_slurp.content | default('') | length == 0)
+
 - name: Install omp-route (quota-aware omp launcher via ccleft)
   ansible.builtin.copy:
     src: omp-route
@@ -189,5 +212,6 @@
   environment:
     PATH: "{{ ansible_facts['env']['HOME'] }}/.local/bin:{{ ansible_facts['env']['HOME'] }}/.bun/bin:{{ ansible_env_path }}"
     OMP_AUTH_BROKER_URL: "{{ omp_auth_broker_url | default('') }}"
+    OMP_AUTH_BROKER_TOKEN: "{{ (omp_broker_token_slurp.content | default('') | b64decode | trim) if (omp_broker_client | bool) else omit }}"
   failed_when: false
   changed_when: false

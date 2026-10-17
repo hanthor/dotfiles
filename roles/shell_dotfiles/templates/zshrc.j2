@@ -24,6 +24,7 @@ export XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 
 export PATH="$HOME/.local/bin:$PATH"
 {% if omp_auth_broker_url | default('') %}export OMP_AUTH_BROKER_URL="{{ omp_auth_broker_url }}"{% endif %}
+{% if omp_broker_client | default(false) %}[ -f "$HOME/.config/omp/broker-token.env" ] && . "$HOME/.config/omp/broker-token.env"{% endif %}
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
 # ── Completion ───────────────────────────────────────────────────
