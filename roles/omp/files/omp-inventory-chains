@@ -26,9 +26,13 @@ from pathlib import Path
 
 DEFAULT_CONFIG_PATH = Path.home() / ".omp" / "agent" / "config.yml"
 
-# Priority preferences by provider and pattern
+# Priority preferences by provider and pattern.
+# Degrade inside each family before crossing providers: Sol -> Luna,
+# Opus -> Sonnet. Local machines burn full quota (reserve 0); the Hive
+# fleet keeps its own 15% reserve in contributors-omp.yaml.
+LOCAL_RESERVE_PCT = 0
 PLANNER_PREFERENCES = [
-    ("openai-codex", ["gpt-6.1-sol", "gpt-5.6-sol", "gpt-5.5"]),
+    ("openai-codex", ["gpt-6.1-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna"]),
     ("anthropic", ["claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-sonnet-5"]),
     ("google-antigravity", [
         "claude-opus-5-5",
@@ -36,7 +40,7 @@ PLANNER_PREFERENCES = [
         "gemini-4-argon-high",
         "gemini-3.8-flash",
     ]),
-    ("kiro", ["gpt-5.6-sol", "auto"]),
+    ("kiro", ["gpt-5.6-sol", "gpt-5.6-luna", "auto"]),
     ("meta", ["muse-spark-1.3-contributor", "muse-spark-1.3"]),
 ]
 
@@ -53,7 +57,7 @@ SMOL_PREFERENCES = [
 ]
 
 DEFAULT_PREFERENCES = [
-    ("openai-codex", ["gpt-6.1-sol", "gpt-5.6-sol"]),
+    ("openai-codex", ["gpt-6.1-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna"]),
     ("anthropic", ["claude-opus-5-5", "claude-sonnet-5-5"]),
     ("google-antigravity", [
         "claude-opus-5-5",
@@ -189,7 +193,7 @@ def generate_routing_block(available_models):
             "fallbackOn": "any",
             "fallbackRevertPolicy": "cooldown-expiry",
             "usageAwareFallback": True,
-            "usageReservePct": 10,
+            "usageReservePct": LOCAL_RESERVE_PCT,
             "usageReservePolicy": "auto",
             "fallbackChains": {
                 "default": default_chain,
