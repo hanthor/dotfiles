@@ -163,14 +163,21 @@
     src: omp-inventory-chains
     dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/omp-inventory-chains"
     mode: "0755"
+- name: Stage provider routing baseline on target
+  ansible.builtin.copy:
+    src: routing.yml
+    dest: "{{ ansible_facts['env']['HOME'] }}/.cache/omp-routing.yml"
+    mode: "0644"
+
 - name: Merge provider routing into OMP config
   ansible.builtin.shell: |
     set -eu
     cfg="$HOME/.omp/agent/config.yml"
+    base="{{ ansible_facts['env']['HOME'] }}/.cache/omp-routing.yml"
     mkdir -p "$(dirname "$cfg")"
     [ -f "$cfg" ] || : > "$cfg"
     before=$(sha256sum "$cfg")
-    yq -i '. *= (load("{{ role_path }}/files/routing.yml") | explode(.) | ... comments="")' "$cfg"
+    yq -i '. *= (load("'"$base"'") | explode(.) | ... comments="")' "$cfg"
     [ "$before" = "$(sha256sum "$cfg")" ] || echo changed
   environment:
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env_path }}"
