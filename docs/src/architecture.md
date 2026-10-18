@@ -83,6 +83,7 @@ Every role in `site.yml` carries one or more tags. Tags fall into two kinds: **p
 | Desktop apps | `pipewire_audio` | `desktop`, `audio`, `pipewire` |
 | Services | `syncthing` | `services`, `syncthing` |
 | Services | `systemd` | `services`, `systemd` |
+| Services | `systemd_hive_services` | `services`, `systemd`, `systemd_hive_services` |
 | Services | `bst_dashboard` | `services`, `bst_dashboard` |
 | Services | `kirocrew` | `services`, `kirocrew` |
 | Services | `proxy` | `services`, `proxy`, `caddy` |

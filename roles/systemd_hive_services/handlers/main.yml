@@ -1,0 +1,5 @@
+---
+- name: Reload systemd hive user daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+    scope: user

@@ -68,7 +68,7 @@ The `llm` group is dormant (commented out in `inventory.yml`).
 | 1 — System + packages + dotfiles | sudo, sshd, apk_packages, homebrew, termux_packages, bitwarden, shell_fonts, shell_dotfiles, omp, hive_ops, git, neovim | `system`, `packages`, `dotfiles` |
 | 2 — Secrets + auth | shell_atuin, shell_ai, ssh_keys, ssh_mesh, github, tailscale, kube, forgejo_registry | `secrets` |
 | 3 — Desktop apps | flatpak, bluefin_common, gnome, zen_browser (+ browser_fxa), pipewire_audio | `desktop` |
-| 4 — Services | syncthing, systemd, bst_dashboard, kirocrew, proxy, tailscale_cert, server_hardening | `services` |
+| 4 — Services | syncthing, systemd, systemd_hive_services, bst_dashboard, kirocrew, proxy, tailscale_cert, server_hardening | `services` |
 
 Only the `secrets`-tagged work needs Bitwarden. With the vault locked (or
 `--skip-tags secrets`), phases 1, 3 and 4 run normally and BW-touching tasks

@@ -89,6 +89,7 @@
 
 - [syncthing](roles/syncthing.md)
 - [systemd](roles/systemd.md)
+- [systemd_hive_services](roles/systemd_hive_services.md)
 - [proxy (Caddy)](roles/proxy.md)
 - [tailscale_cert](roles/tailscale_cert.md)
 - [bst_dashboard](roles/bst_dashboard.md)
