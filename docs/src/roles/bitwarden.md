@@ -11,7 +11,7 @@ Resolves a Bitwarden session, refreshes the local vault cache, and publishes a s
 1. Resolves `BW_SESSION` in this order: environment → `/tmp/bw_session` cache → interactive `bw unlock`.
 2. Runs `bw sync` with a hard 15 s timeout (so a flaky vault server can't hang the whole play).
 3. Calls `bw status` and sets `bw_unlocked` (boolean host fact) — `true` only if `bw` is installed, a session was resolved, and the vault actually reports `unlocked`.
-4. If a session is set but the vault is still locked (common on remote applies — see below), emits a one-line debug warning so the operator knows secrets work is being skipped here.
+4. If a session is set but the vault is still locked, emits a one-line debug warning so the operator knows secrets work is being skipped here. On a remote apply, this means target-side session resolution did not unlock the target vault.
 
 Every BW-using role downstream gates on `when: bw_unlocked | default(false)`. The end-of-play `post_tasks` summary then prints one of three messages:
 
@@ -21,19 +21,24 @@ Every BW-using role downstream gates on `when: bw_unlocked | default(false)`. Th
 | locked   | `Bitwarden vault was LOCKED — … skipped. To enable: bw unlock …` |
 | `--skip-tags secrets` | `SKIPPED (--skip-tags secrets). Run dots-apply to include …` |
 
-## Why a forwarded BW_SESSION can fail on a remote host
+## Remote applies
 
-`just apply-remote <host>` forwards your local `BW_SESSION` over SSH. The token is, however, **derived from the master password + the local vault's KDF parameters**. If the remote host's vault has different KDF iterations or a stale cached vault, `bw status` on the remote will keep reporting `locked` despite the forwarded token. This isn't a bug — it's a Bitwarden CLI portability limit. The role detects it via the `bw_unlocked` check and degrades gracefully.
+`just apply-remote <host>` (and `just apply-remote-tags <host> <tags>`) resolve
+the Bitwarden session on the **target host**; they do not forward the local
+host's `BW_SESSION`:
 
-To enable secrets on a remote host where the forwarded session doesn't unlock:
+1. `scripts/bw-resolve.sh remote <host>` unlocks Bitwarden on the target and
+   prints that host's session token. If the remote CLI is logged out, it tries
+   the configured API-key and master-password paths, then falls back to an
+   interactive unlock over `ssh -t`.
+2. The recipe exports the returned `BW_SESSION` inline in the remote command
+   and caches it in the target's `/tmp/bw_session`.
+3. The remote `bitwarden` role runs `bw status`; when it reports `unlocked`,
+   `bw_unlocked` becomes true and secrets work proceeds.
 
-```bash
-ssh <host>
-bw unlock --raw | tee /tmp/bw_session > /dev/null
-chmod 600 /tmp/bw_session
-exit
-just apply-remote-tags <host> secrets
-```
+A session token is valid only on the host that unlocked it. If target-side
+resolution fails, the remote vault remains locked and BW-using tasks skip
+cleanly. See the [full remote apply flow](../bitwarden.md#remote-apply).
 
 ## How to verify it ran correctly
 
