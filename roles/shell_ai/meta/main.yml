@@ -1,0 +1,4 @@
+---
+# Shell credentials are fetched through the Bitwarden session fact.
+dependencies:
+  - role: bitwarden

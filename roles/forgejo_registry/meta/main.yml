@@ -1,0 +1,4 @@
+---
+# Registry credentials are stored in Bitwarden.
+dependencies:
+  - role: bitwarden
