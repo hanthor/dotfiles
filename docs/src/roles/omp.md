@@ -14,6 +14,17 @@ Installs Oh My Pi and the Kiro provider on each supported computer. Homebrew hos
 4. Exposes the Bitwarden DeepSeek key as `DEEPSEEK_API_KEY` through the shell secret files, not an agent-specific credential file.
 5. Removes the legacy Pi CLI from raw Termux. OMP has no native Android/Bionic build; the Debian VM (`mumbai`) is supported normally.
 
+## Skills and the package manifest
+
+The playbook copies `roles/pi/files/skills/` to
+`~/.omp/agent/skills/james/` and links those skill directories into
+`~/.claude/skills/`. The `roles/pi` path is skill source data, not a separate
+Ansible role.
+
+`roles/pi/files/package.json` is tracked by Renovate and protected by
+`deps-guard`; it is not installed by this role. OMP plugin installation is
+handled separately by the role's explicit plugin tasks.
+
 ## Kiro authentication
 
 Plugin installation is unattended. OAuth is per user and must be completed on each computer:
