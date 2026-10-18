@@ -77,7 +77,7 @@
   failed_when: false
   when:
     - not atuin_logged_in
-    - bw_unlocked | default(false)
+    - secrets_available | default(false)
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "{{ ansible_env_path }}"
@@ -85,7 +85,7 @@
 - name: Skip atuin login (already logged in or vault locked)
   ansible.builtin.set_fact:
     atuin_bw_item: {rc: 1, stdout: ""}
-  when: atuin_logged_in or not (bw_unlocked | default(false))
+  when: atuin_logged_in or not (secrets_available | default(false))
 
 - name: Warn if atuin.sh not found in Bitwarden
   ansible.builtin.debug:

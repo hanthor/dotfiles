@@ -8,7 +8,7 @@ Pulls the kube + Talos configs for both Talos clusters from BW so any desktop in
 
 ## What it does
 
-When `bw_unlocked` is true:
+When `secrets_available` is true:
 
 1. Ensures `~/.kube/` and `~/.talos/` exist (mode 0700).
 2. `bw get notes kubeconfig` → writes to `~/.kube/config` (0600). Skipped if BW returns empty.

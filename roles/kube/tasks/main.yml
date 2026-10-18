@@ -2,10 +2,10 @@
 # Fetches kubeconfig + talosconfig from Bitwarden and writes them locally.
 # Seed Bitwarden with `scripts/bw-seed-kube.sh` from a machine that already
 # has working configs.
-# Gated on `bw_unlocked` (set by the bitwarden role).
+# Gated on `secrets_available` (published by the bitwarden role).
 
 - name: Deploy kube + talos configs
-  when: bw_unlocked | default(false)
+  when: secrets_available | default(false)
   environment:
     BW_SESSION: "{{ bw_session }}"
     PATH: "{{ ansible_env_path }}"

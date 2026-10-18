@@ -8,7 +8,7 @@ Logs podman in to the private Forgejo container registry.
 
 ## What It Does
 
-When `bw_unlocked` and `podman` is on `PATH`:
+When `secrets_available` and `podman` is on `PATH`:
 
 1. Checks `podman login --get-login {{ forgejo_registry }}` — skips if already logged in
 2. Fetches `bw get username` / `bw get password` for the item named `{{ forgejo_registry }}`

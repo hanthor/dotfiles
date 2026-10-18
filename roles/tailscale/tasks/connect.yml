@@ -8,11 +8,11 @@
       tailscale is not connected but the Bitwarden vault is locked on this host,
       so the auth key can't be fetched. Unlock the vault (`bw unlock`,
       `printf '%s' "$session" > /tmp/bw_session`) and re-run.
-  when: not (bw_unlocked | default(false))
+  when: not (secrets_available | default(false))
 
 - name: End role if vault is locked
   ansible.builtin.meta: end_role
-  when: not (bw_unlocked | default(false))
+  when: not (secrets_available | default(false))
 
 - name: Fetch tailscale auth/API key from Bitwarden
   ansible.builtin.shell: set -o pipefail && bw get item tailscale-apikey | python3 -c "import sys,json; print(json.load(sys.stdin)['login']['password'])"
