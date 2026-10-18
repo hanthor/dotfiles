@@ -32,8 +32,10 @@ Three pieces, and none of them trusts the PR itself:
    owned paths `needs-human`, with a comment listing the paths.
 
 `deps-guard` lets Renovate change **versions** in `roles/pi/files/package.json`
-but fails if a PR adds or removes a dependency. The pi role `npm install`s
-that file on every machine.
+but fails if a PR adds or removes a dependency. The manifest is tracked by
+repository automation; the `omp` role copies `roles/pi/files/skills/` and
+installs OMP plugins separately. It does not run `npm install` from this
+manifest on fleet machines.
 
 ## Day to day
 
