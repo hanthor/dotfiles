@@ -7,6 +7,7 @@ dotfiles/
 ├── site.yml              # Main playbook — entrypoint for all machines
 ├── inventory.yml         # Host inventory + group definitions
 ├── Justfile              # Task runner (just apply, just lint, etc.)
+├── aws/                  # OpenTofu for the TunaOS AWS account and cluster
 ├── group_vars/
 │   ├── all.yml           # Shared vars: packages, flatpaks, fleet config
 │   └── vps.yml           # VPS-specific overrides
@@ -16,7 +17,8 @@ dotfiles/
 │   └── <role>/           # Each role: tasks/, files/, templates/, vars/
 ├── docs/                 # This handbook
 ├── scripts/              # Utility scripts (inventory scan, BW seed)
-└── talos-k8s/            # Talos Linux + Kubernetes cluster manifests
+├── talos-k8s/            # Talos Linux + Kubernetes cluster manifests
+└── tools/                # Standalone tools, including the secret-broker
 ```
 
 ## How It Works

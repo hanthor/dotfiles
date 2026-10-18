@@ -1,9 +1,10 @@
 # Dotfiles Fleet Handbook
 
-Ansible-driven dotfiles and infrastructure for a personal fleet. Two distinct concerns live here:
+Ansible-driven dotfiles and infrastructure for a personal fleet. Three distinct concerns live here:
 
 1. **Workstation config** — shells, packages, browser, SSH, Tailscale, kubeconfig, GNOME, and more
-2. **Talos K8s cluster** — manifests for the Bihar + Karnataka cluster
+2. **Home Talos K8s cluster** — manifests for the Bihar + Karnataka cluster
+3. **TunaOS AWS infrastructure** — OpenTofu for the AWS account, its Talos cluster, and hosted fleet services
 
 > **This handbook is public.** It covers architecture, decisions and runbooks.
 > Host-specific addresses and cloud resource identifiers are deliberately left
@@ -64,10 +65,10 @@ The `llm` group is dormant (commented out in `inventory.yml`).
 
 | Phase | Roles | Main tags |
 |-------|-------|-----------|
-| 1 — System + packages + dotfiles | sudo, sshd, apk_packages, homebrew, termux_packages, bitwarden, shell_fonts, shell_dotfiles, pi, hive_ops, git, neovim | `system`, `packages`, `dotfiles` |
+| 1 — System + packages + dotfiles | sudo, sshd, apk_packages, homebrew, termux_packages, bitwarden, shell_fonts, shell_dotfiles, omp, hive_ops, git, neovim | `system`, `packages`, `dotfiles` |
 | 2 — Secrets + auth | shell_atuin, shell_ai, ssh_keys, ssh_mesh, github, tailscale, kube, forgejo_registry | `secrets` |
 | 3 — Desktop apps | flatpak, bluefin_common, gnome, zen_browser (+ browser_fxa), pipewire_audio | `desktop` |
-| 4 — Services | syncthing, systemd, bst_dashboard, proxy, tailscale_cert, server_hardening | `services` |
+| 4 — Services | syncthing, systemd, bst_dashboard, kirocrew, proxy, tailscale_cert, server_hardening | `services` |
 
 Only the `secrets`-tagged work needs Bitwarden. With the vault locked (or
 `--skip-tags secrets`), phases 1, 3 and 4 run normally and BW-touching tasks
