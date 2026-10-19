@@ -49,7 +49,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: forgejo
-          image: code.forgejo.org/forgejo/forgejo:16.0.6-rootless
+          image: code.forgejo.org/forgejo/forgejo:17.0.0-rootless
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 1000
