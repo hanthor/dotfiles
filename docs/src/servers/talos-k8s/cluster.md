@@ -598,8 +598,13 @@ and containerd), user homes under `/var/home`, and these retained workload paths
 |------|---------|
 | `/var/mnt/storage` | Bihar's K3s local-path default and existing host-path data |
 | `/var/lib/longhorn` | Longhorn persistent storage |
-| `/var/tmp/lemonade-cache` | Lemonade cache, excluded from tmpfiles cleanup |
-| `/var/tmp/lemonade-models` | Lemonade models, excluded from tmpfiles cleanup |
+| `/var/lib/lemonade-cache` | Lemonade cache, matching the current home PV manifest |
+| `/var/lib/lemonade-models` | Lemonade models, matching the current home PV manifest |
+
+The current `talos-k8s/ai/lemonade.yaml` uses `/var/lib/lemonade-*`. The offline
+Talos node may still hold the data under `/var/tmp/lemonade-*`: back up those
+source directories before wiping and restore into `/var/lib/lemonade-*` on the
+new node. Creating an empty PV directory does not migrate the models.
 
 ### Back up before building a physical migration plan
 

@@ -22,11 +22,11 @@ printf '%s  /tmp/k3s-selinux.rpm\n' "$K3S_SELINUX_SHA256" | sha256sum --check --
 dnf5 -y --setopt=localpkg_gpgcheck=False install /tmp/k3s-selinux.rpm
 # Its RPM scriptlet ignores errors; policy compilation must fail the build.
 semodule -n -X 200 -i /usr/share/selinux/packages/k3s.pp
-# The retained Talos volume paths are outside K3s's default SELinux mapping.
+# Home workload volume paths are outside K3s's default SELinux mapping.
 # Hummingbird's policy maps /var/mnt to /mnt before matching file contexts.
 semanage fcontext -a -t container_file_t '/mnt/storage(/.*)?'
-semanage fcontext -a -t container_file_t '/var/tmp/lemonade-cache(/.*)?'
-semanage fcontext -a -t container_file_t '/var/tmp/lemonade-models(/.*)?'
+semanage fcontext -a -t container_file_t '/var/lib/lemonade-cache(/.*)?'
+semanage fcontext -a -t container_file_t '/var/lib/lemonade-models(/.*)?'
 # Device cgroups still restrict access to devices assigned by Kubernetes.
 setsebool -P container_use_devices on
 

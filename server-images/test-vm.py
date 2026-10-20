@@ -197,7 +197,7 @@ cat /proc/cmdline
 printf '\\nBOOTC_BEGIN\\n'
 bootc status --format json
 printf '\\nBOOTC_END\\n'
-matchpathcon /var/mnt/storage /var/tmp/lemonade-cache
+matchpathcon /var/mnt/storage /var/lib/lemonade-cache
 printf '\\nIDENTITY_BEGIN\\n'
 python3 - <<'PY'
 import json
