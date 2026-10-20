@@ -195,6 +195,7 @@ def install(args):
 test "$(cat /proc/sys/kernel/hostname)" = {node}
 systemctl --failed --no-pager
 journalctl -b -u systemd-modules-load.service -u gssproxy.service --no-pager
+journalctl -b -k --no-pager
 test "$(getenforce)" = Enforcing
 test ! -e /etc/bootc-installer/live-iso-mode
 test ! -e /usr/bin/bootc-installer-tui
