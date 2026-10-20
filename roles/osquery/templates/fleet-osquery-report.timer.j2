@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh private osquery fleet drift every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

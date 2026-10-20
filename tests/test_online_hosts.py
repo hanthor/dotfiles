@@ -67,21 +67,28 @@ def run_script(bindir, env, tailscale_body):
                           env=env, capture_output=True, text=True, timeout=30)
 
 
-def test_end_to_end_excludes_vps_and_self(stub_env, tmp_path):
+def test_end_to_end_only_returns_online_inventory_non_vps_non_self(stub_env, tmp_path):
     bindir, env = stub_env
-    peers = {str(i): {"Online": True, "DNSName": f"{h}.tail.ts.net.", "HostName": h}
-             for i, h in enumerate(["kerala", "matrix", "telengana", "test-fleet-fedora",
-                                    "stranger", os.uname().nodename])}
-    peers["x"] = {"Online": False, "DNSName": "goa.tail.ts.net.", "HostName": "goa"}
-    (tmp_path / "ts.json").write_text(json.dumps({"Peer": peers}))
-    r = run_script(bindir, env, f"cat {tmp_path / 'ts.json'}\n")
-    assert r.returncode == 0, r.stderr
-    got = set(r.stdout.split())
     try:
         me = Path("/etc/dotfiles-machine").read_text().strip().lower()
     except OSError:
         me = os.uname().nodename.lower()
-    assert got == {"kerala", "test-fleet-fedora"} - {me}
+    # Exercise discovery policy, not this checkout's changing machine names.
+    inventory = tmp_path / "inventory.yml"
+    inventory.write_text(
+        "all:\n  hosts:\n"
+        + "".join(f"    {h}:\n" for h in (me, "sample-online", "sample-test", "retired", "offline"))
+        + "  children:\n    vps:\n      hosts:\n        retired:\n"
+          "    test_fleet:\n      hosts:\n        sample-test:\n"
+    )
+    env["DOTFILES_INVENTORY"] = str(inventory)
+    peers = {str(i): {"Online": True, "DNSName": f"{h}.tail.ts.net.", "HostName": h}
+             for i, h in enumerate(["sample-online", "sample-test", "retired", "stranger", me])}
+    peers["offline"] = {"Online": False, "DNSName": "offline.tail.ts.net."}
+    (tmp_path / "ts.json").write_text(json.dumps({"Peer": peers}))
+    r = run_script(bindir, env, f"cat {tmp_path / 'ts.json'}\n")
+    assert r.returncode == 0, r.stderr
+    assert set(r.stdout.split()) == {"sample-online", "sample-test"} - {me}
 
 
 def test_end_to_end_maps_tailnet_name_to_inventory_host(stub_env, tmp_path):

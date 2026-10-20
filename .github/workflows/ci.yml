@@ -77,6 +77,27 @@ jobs:
       - name: pytest
         run: uvx --with pyyaml pytest -q tests
 
+  osquery-smoke:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Ansible
+        run: |
+          pip install ansible-core
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: Install actual native osquery and private reporting
+        run: >-
+          ansible-playbook -i localhost, -c local site.yml --tags osquery
+          --skip-tags secrets -e target=localhost
+
+      - name: Exercise real socket, enabled unit and baseline transitions
+        run: sudo python3 tests/osquery_smoke.py
+
   # Renovate may bump pi's npm deps unreviewed (CODEOWNERS carve-out); this
   # makes sure a PR can't *add* or remove one without a human.
   deps-guard:

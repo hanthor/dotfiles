@@ -1,0 +1,16 @@
+[Unit]
+Description=Compare osquery fleet state with the accepted baseline
+After=osqueryd.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/fleet-osquery/fleet-osquery report
+TimeoutStartSec=240s
+UMask=0077
+Nice=10
+CPUQuota=20%
+MemoryMax=512M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/fleet-osquery

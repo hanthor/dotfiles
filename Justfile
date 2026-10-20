@@ -528,6 +528,10 @@ doctor-fleet:
       ssh -o BatchMode=yes "$h" 'cd ~/.local/share/dotfiles && just doctor' || true
     done
 
+# Private osquery drift and explicit online/offline/unsupported coverage.
+osquery-fleet *args:
+    python3 "{{justfile_directory()}}/scripts/osquery-fleet.py" {{args}}
+
 # Build a shared starter or configured home-node image; never touches a physical disk.
 server-image node tag="testing":
     #!/usr/bin/env bash

@@ -48,6 +48,7 @@
 - [apk_packages](roles/apk_packages.md)
 - [server_hardening](roles/server_hardening.md)
 - [fleet_facts](roles/fleet_facts.md)
+- [osquery (private drift)](roles/fleet_facts.md#private-drift-monitoring-osquery)
 - [retired_services](roles/retired_services.md)
 
 ## Packages

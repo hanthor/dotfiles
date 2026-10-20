@@ -22,3 +22,86 @@ repo through the GitHub contents API. There's no clone and no merge, and
 
 **Never published:** IP/MAC addresses, serial numbers, usernames, anything
 from Bitwarden.
+
+## Private drift monitoring (`osquery`)
+
+The separate `osquery` role watches changes that must **not** go to the public
+`fleet-facts` branch. It installs checksum-pinned upstream osquery 5.23.1 under
+`/opt`, including on immutable desktops: no package layering, writable `/usr`,
+reboot, Fleet server, enrollment token, or new network listener.
+
+**Tags:** `osquery`, `services`, `security`. Requires root, glibc Linux, systemd,
+and x86_64 or aarch64. Nura/Alpine musl (Kerala) and unrooted Android/Termux are
+unsupported; `osquery_supported: false` records that exclusion. Offline hosts
+install on their next successful normal apply. `skip_osquery: true` skips the
+role; it does not uninstall an already-running daemon. The retired VPS group is
+never modified, and Talos nodes are not Ansible-managed.
+
+### What's watched
+
+- TCP listeners and bound UDP ports: address, port, protocol, executable path.
+  PIDs are excluded so a process restart alone does not create drift. UDP client
+  sockets and temporary development listeners can legitimately change.
+- Enabled system startup triggers: service, timer, socket and path symlinks in
+  `/etc/systemd/system/*.wants`, `*.requires` and their `/run` equivalents.
+  This includes enabled-but-not-started units, without mistaking ordinary
+  active/inactive transitions for startup changes. User units and vendor
+  dependencies compiled into unit files are outside this query.
+- Kernel, OS and osquery versions.
+
+`osqueryd.service` samples every five minutes, writing differential JSON logs
+only under `/var/log/osquery` (10 MiB rotation, three retained archives).
+`fleet-osquery-report.timer` refreshes a private baseline comparison every
+15 minutes. Both have bounded CPU/memory use; audit/event capture and distributed
+queries are disabled. Sampling is not real-time intrusion detection or unit-file
+content integrity checking.
+
+### Review the fleet
+
+From an updated checkout:
+
+```sh
+just apply-tags osquery
+just osquery-fleet
+just osquery-fleet --host punjab --host dilli
+just osquery-fleet --json
+```
+
+The controller uses effective Ansible inventory, Tailscale online status and
+existing authenticated SSH plus noninteractive sudo. Host-key verification stays
+enabled. It shows `ok`, `drift`, `offline`, `unsupported`, `excluded`, `stale` or
+`error`; missing/bad reports and failed reads never become `ok`. Reports older
+than 30 minutes are stale. Stale/errors return nonzero; ordinary drift and offline
+coverage do not. Each result shows its collection time, not a claim of live state.
+`--inventory PATH` (or `DOTFILES_INVENTORY`) selects another inventory.
+
+### Baseline and local investigation
+
+First apply records the machine's **existing** state, not an audited known-safe
+state. Later applies never accept new drift automatically. Changes remain pending
+against that baseline until reviewed and explicitly accepted:
+
+```sh
+sudo systemctl start fleet-osquery-report.service
+sudo /opt/fleet-osquery/fleet-osquery report
+sudo journalctl -u fleet-osquery-report.service
+# Only after reviewing the changes:
+sudo /opt/fleet-osquery/fleet-osquery baseline --accept
+sudo systemctl start fleet-osquery-report.service
+```
+
+Baseline/report/lock files are root-owned mode 0600 in
+`/var/lib/fleet-osquery` (0700). Failed collection does not replace the last
+successful report or baseline; inspect the failed service and its journal, and
+treat an aging cached sample accordingly. The CLI never persists fetched fleet
+reports. **Keep its output private:** addresses and executable paths are sensitive;
+do not attach raw JSON to public issues or publish it through `fleet_facts`.
+No command lines, process environments, credentials or serial numbers are queried.
+
+Check mode reports platform support only; actual installation and baseline
+collection require a normal apply. CI exercises the actual role and
+`sudo python3 tests/osquery_smoke.py` on x86_64 and aarch64 Ubuntu runners.
+That smoke creates a temporary loopback listener and an enabled, never-started
+unit, checks pending/accepted/removed drift, and compares a synthetic prior kernel
+against the real current kernel. It uses isolated state and removes its fixtures;
+the fleet baseline is untouched.
