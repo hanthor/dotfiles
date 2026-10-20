@@ -6,7 +6,7 @@
 
 - Arch: aarch64 (ARM)
 - Mobile device (laptop power profile)
-- Tailscale: `kerala` (MagicDNS)
+- Tailscale: `kerala-1` (MagicDNS; fleet alias `kerala`)
 
 ## OS
 

@@ -24,7 +24,8 @@ all:
       ansible_host: localhost
       ansible_connection: local
     kerala:
-      ansible_host: 100.67.142.116
+      ansible_host: 100.96.124.92
+      ansible_user: james
       ansible_connection: ssh
     vm:
       ansible_host: localhost
