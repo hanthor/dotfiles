@@ -7,3 +7,6 @@ __pycache__/
 pi-session-*.html
 support.zip
 *.zip
+
+# Disposable node disks contain installer users and cluster credentials.
+/artifacts/home-k8s/

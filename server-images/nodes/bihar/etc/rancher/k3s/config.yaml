@@ -1,0 +1,15 @@
+node-name: bihar
+cluster-init: true
+cluster-cidr: 10.244.0.0/16
+service-cidr: 10.96.0.0/12
+cluster-dns: 10.96.0.10
+tls-san:
+  - bihar
+  - 192.168.0.5
+selinux: true
+write-kubeconfig-mode: "0600"
+default-local-storage-path: /var/mnt/storage
+disable:
+  - traefik
+  - servicelb
+  - metrics-server
