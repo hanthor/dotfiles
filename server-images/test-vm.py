@@ -196,13 +196,14 @@ test "$(cat /proc/sys/kernel/hostname)" = {node}
 systemctl --failed --no-pager
 journalctl -b -u systemd-modules-load.service -u gssproxy.service --no-pager
 journalctl -b -k --no-pager
+journalctl -b --no-pager _TRANSPORT=audit
 test "$(getenforce)" = Enforcing
 test ! -e /etc/bootc-installer/live-iso-mode
 test ! -e /usr/bin/bootc-installer-tui
 test ! -e /etc/rancher/k3s/activate
 systemctl is-enabled k3s@{unit}.service
 if systemctl is-active --quiet k3s@{unit}.service; then exit 1; fi
-systemctl is-active NetworkManager firewalld iscsid.socket
+systemctl is-active NetworkManager firewalld iscsid.socket gssproxy
 sysctl net.ipv4.ip_forward net.bridge.bridge-nf-call-iptables
 k3s --version
 cat /proc/cmdline
@@ -314,7 +315,8 @@ k3s kubectl -n installed-smoke exec client -- nslookup kubernetes.default.svc.cl
 writer_ip=$(k3s kubectl -n installed-smoke get pod writer -o jsonpath='{.status.podIP}')
 test "$(k3s kubectl -n installed-smoke exec client -- wget -qO- "http://$writer_ip:8080")" = home-k8s-installed-nodes
 pv=$(k3s kubectl -n installed-smoke get pvc proof -o jsonpath='{.spec.volumeName}')
-path=$(k3s kubectl get pv "$pv" -o jsonpath='{.spec.hostPath.path}')
+k3s kubectl get pv "$pv" -o yaml
+path=$(k3s kubectl get pv "$pv" -o jsonpath='{.spec.local.path}{.spec.hostPath.path}')
 case "$path" in /var/mnt/storage/*) ;; *) echo "Unexpected PV path: $path"; exit 1 ;; esac
 k3s kubectl -n installed-smoke delete pod writer --wait=true
 python3 - <<'PY'
