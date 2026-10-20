@@ -14,8 +14,17 @@ on:
       - '.github/workflows/server-images.yml'
       - 'Justfile'
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the exact accepted images and installer media (master only)
+        type: boolean
+        default: false
+      version:
+        description: Immutable release date, YYYYMMDD (required when publishing)
+        type: string
+        default: ''
 
-# Fork PRs build and test with read-only access; nothing is published or deployed.
+# PR/push acceptance is read-only. Only an explicit master dispatch can publish.
 permissions:
   contents: read
 
@@ -23,6 +32,8 @@ jobs:
   installer-acceptance:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    outputs:
+      registry-owner: ${{ steps.request.outputs.registry-owner }}
     defaults:
       run:
         shell: bash
@@ -30,6 +41,33 @@ jobs:
       FISHERMAN_SRC: ${{ github.workspace }}/.sources/fisherman
       UTAH_SRC: ${{ github.workspace }}/.sources/utah
     steps:
+      - name: Validate publication request
+        id: request
+        env:
+          PUBLISH: ${{ inputs.publish || false }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          echo "registry-owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+          echo "REGISTRY_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+          if [[ "$PUBLISH" != true ]]; then
+            exit 0
+          fi
+          if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$GITHUB_REF" != refs/heads/master ]]; then
+            echo '::error::Publication requires workflow_dispatch on refs/heads/master.'
+            exit 1
+          fi
+          python3 - <<'PY'
+          import datetime
+          import os
+          import re
+          version = os.environ["VERSION"]
+          try:
+              assert re.fullmatch(r"[0-9]{8}", version)
+              datetime.datetime.strptime(version, "%Y%m%d")
+          except (AssertionError, ValueError):
+              raise SystemExit("::error::Publishing requires version to be a valid YYYYMMDD date.")
+          PY
+
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -103,21 +141,25 @@ jobs:
           just server-images 2>&1 | tee "$ARTIFACTS/build-images.log"
 
       - name: Install both nodes through the real interactive TUI
+        env:
+          PUBLISH: ${{ inputs.publish || false }}
         run: |
           for node in bihar karnataka; do
             iso="$ARTIFACTS/$node-installer.iso"
             live_image="localhost/home-k8s-$node-installer:testing"
             cleanup_media() {
-              rm -f -- "$iso"
+              if [[ "$PUBLISH" != true ]]; then
+                rm -f -- "$iso"
+              fi
               if podman image exists "$live_image"; then
                 podman image rm "$live_image"
               fi
             }
-            # Keep installed disks for the cluster test, but never keep large
-            # installer media or live overlay images between node installs.
+            # Releases retain the actual tested ISOs; live overlays are always
+            # removed between installs. Disks stay local for cluster acceptance.
             trap cleanup_media EXIT
             just server-installer "$node" \
-              "ghcr.io/tuna-os/home-k8s-$node:testing" "$iso" \
+              "ghcr.io/$REGISTRY_OWNER/home-k8s-$node:testing" "$iso" \
               2>&1 | tee "$ARTIFACTS/$node-build-installer.log"
             uv run server-images/test-vm.py --artifacts "$ARTIFACTS" \
               --accel kvm install "$node" \
@@ -132,6 +174,89 @@ jobs:
           uv run server-images/test-vm.py --artifacts "$ARTIFACTS" \
             --accel kvm cluster 2>&1 | tee "$ARTIFACTS/cluster-driver.log"
 
+      - name: Export only accepted release artifacts
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          release="$RUNNER_TEMP/home-k8s-release"
+          mkdir -p "$release"
+          # Acceptance has powered off both disposable VMs. Their disks are
+          # never transferred, and removing them makes room for the archives.
+          rm -- "$ARTIFACTS/bihar-installed.qcow2" "$ARTIFACTS/karnataka-installed.qcow2"
+          for node in bihar karnataka; do
+            mv -- "$ARTIFACTS/$node-installer.iso" "$release/"
+            podman save --format oci-archive \
+              --output "$release/home-k8s-$node.oci.tar" \
+              "localhost/home-k8s-$node:testing"
+            podman image inspect "localhost/home-k8s-$node:testing" \
+              --format '{{.Id}}' > "$release/$node-image-id.txt"
+            cp -- "$ARTIFACTS/$node-media.json" "$release/"
+          done
+          # This explicit allowlist excludes VM disks, NVRAM, kubeconfigs,
+          # join tokens, and general-purpose installer/cluster console logs.
+          python3 - "$release" <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          release = Path(sys.argv[1])
+          proof = (Path(os.environ["ARTIFACTS"]) / "cluster-proof.txt").read_text()
+          markers = [
+              "TUI_INSTALLED_NODE_PASSED=bihar",
+              "TUI_INSTALLED_NODE_PASSED=karnataka",
+          ]
+          for node, marker in zip(("bihar", "karnataka"), markers):
+              driver = (Path(os.environ["ARTIFACTS"]) / f"{node}-install-driver.log").read_text()
+              if marker not in driver:
+                  raise SystemExit(f"Missing accepted TUI proof: {node}")
+          # Only explicit success markers are public; raw console output can
+          # contain credentials even when the disposable cluster has stopped.
+          cluster_markers = [line.strip() for line in proof.splitlines()
+                             if line.strip().startswith("INSTALLED_CLUSTER_")]
+          if not cluster_markers:
+              raise SystemExit("Missing installed-cluster acceptance proof")
+          (release / "acceptance-proof.txt").write_text("\n".join(markers + cluster_markers) + "\n")
+          def sha(path):
+              return subprocess.check_output(["git", "-C", path, "rev-parse", "HEAD"], text=True).strip()
+          provenance = {
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "source_sha": os.environ["GITHUB_SHA"],
+              "version": os.environ["VERSION"],
+              "run_url": f'{os.environ["GITHUB_SERVER_URL"]}/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{os.environ["GITHUB_RUN_ID"]}',
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "upstream_sources": {
+                  "tuna-os/fisherman": sha(os.environ["FISHERMAN_SRC"]),
+                  "projectbluefin/utah": sha(os.environ["UTAH_SRC"]),
+              },
+              "acceptance": "Both offline TUI installs, installed-node boot checks, and two-node K3s DNS/network/PVC replacement persistence passed.",
+              "images": {
+                  node: {
+                      "tested_image_id": (release / f"{node}-image-id.txt").read_text().strip(),
+                      "archive": f"home-k8s-{node}.oci.tar",
+                      "installer": f"{node}-installer.iso",
+                      "tracking_ref": f'ghcr.io/{os.environ["REGISTRY_OWNER"]}/home-k8s-{node}:testing',
+                  } for node in ("bihar", "karnataka")
+              },
+          }
+          (release / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
+          for path in release.iterdir():
+              if path.stat().st_size >= 2 * 1024**3:
+                  raise SystemExit(f"::error::Release asset exceeds GitHub's per-asset size limit: {path.name}")
+          PY
+          (cd "$release" && sha256sum -- * > SHA256SUMS)
+
+      - name: Transfer accepted release artifacts
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        uses: actions/upload-artifact@v7
+        with:
+          name: home-k8s-accepted-release
+          path: ${{ runner.temp }}/home-k8s-release/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
       - name: Upload installer and cluster diagnostics
         if: always()
         uses: actions/upload-artifact@v7
@@ -143,3 +268,155 @@ jobs:
             ${{ runner.temp }}/server-images/**/*.txt
           if-no-files-found: warn
           retention-days: 7
+
+  publish:
+    needs: installer-acceptance
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: home-k8s-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+    defaults:
+      run:
+        shell: bash
+        working-directory: release
+    env:
+      VERSION: ${{ inputs.version }}
+      REGISTRY_OWNER: ${{ needs.installer-acceptance.outputs.registry-owner }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Download only accepted release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: home-k8s-accepted-release
+          path: release
+
+      - name: Install registry tooling
+        run: |
+          printf 'REGISTRY_AUTH_FILE=%s/home-k8s-registry-auth.json\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends podman skopeo
+
+      - name: Require an unused public release name
+        run: |
+          sha256sum --check SHA256SUMS
+          test "$(jq -r .source_sha provenance.json)" = "$GITHUB_SHA"
+          test "$(jq -r .version provenance.json)" = "$VERSION"
+          if [[ "$(gh api "repos/$GH_REPO" --jq .private)" != false ]]; then
+            echo '::error::Public release publication requires a public source repository.'
+            exit 1
+          fi
+          release_tag="home-k8s-$VERSION"
+          refs=$(gh api "repos/$GH_REPO/git/matching-refs/tags/$release_tag")
+          releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100")
+          if jq -e --arg tag "refs/tags/$release_tag" 'any(.[]; .ref == $tag)' <<< "$refs" >/dev/null ||
+             jq -e --arg tag "$release_tag" 'any(.[][]; .tag_name == $tag)' <<< "$releases" >/dev/null; then
+            echo "::error::Immutable release/tag $release_tag already exists; choose a new version."
+            exit 1
+          fi
+          printf '%s' "$GH_TOKEN" |
+            podman login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Preflight immutable registry tags
+        run: |
+          for node in bihar karnataka; do
+            image="$REGISTRY_OWNER/home-k8s-$node"
+            skopeo inspect --raw "oci-archive:home-k8s-$node.oci.tar" \
+              > "$RUNNER_TEMP/$node-manifest.json"
+            digest="sha256:$(sha256sum "$RUNNER_TEMP/$node-manifest.json" | cut -d ' ' -f 1)"
+            if [[ "$digest" != "$(jq -r .platformManifestDigest "$node-media.json")" ]]; then
+              echo "::error::The $node release archive differs from the exact payload installed by the accepted TUI media."
+              exit 1
+            fi
+            printf '%s\n' "$digest" > "$RUNNER_TEMP/$node-expected-digest"
+            token=$(curl --fail --silent --show-error --user "$GITHUB_ACTOR:$GH_TOKEN" \
+              "https://ghcr.io/token?service=ghcr.io&scope=repository:$image:pull,push" | jq -er .token)
+            status=$(curl --silent --show-error --output "$RUNNER_TEMP/$node-existing-manifest.json" \
+              --write-out '%{http_code}' --header "Authorization: Bearer $token" \
+              --header 'Accept: application/vnd.oci.image.manifest.v1+json' \
+              "https://ghcr.io/v2/$image/manifests/$VERSION")
+            case "$status" in
+              404) ;;
+              200)
+                existing="sha256:$(sha256sum "$RUNNER_TEMP/$node-existing-manifest.json" | cut -d ' ' -f 1)"
+                if [[ "$existing" != "$digest" ]]; then
+                  echo "::error::Immutable ghcr.io/$image:$VERSION exists with different content."
+                  exit 1
+                fi
+                # A failed publish job may be rerun after package visibility
+                # is fixed. Identical existing immutable tags are not rewritten.
+                touch "$RUNNER_TEMP/$node-date-exists"
+                ;;
+              *)
+                echo "::error::Cannot establish immutable tag availability for $image (HTTP $status)."
+                exit 1
+                ;;
+            esac
+          done
+
+      - name: Load and push the exact accepted OCI archives
+        run: |
+          for node in bihar karnataka; do
+            image="ghcr.io/$REGISTRY_OWNER/home-k8s-$node"
+            podman load --input "home-k8s-$node.oci.tar"
+            expected_id=$(jq -r --arg node "$node" '.images[$node].tested_image_id' provenance.json)
+            test "$(podman image inspect "localhost/home-k8s-$node:testing" --format '{{.Id}}')" = "$expected_id"
+            # Copy from the archive, preserving its exact manifest and layers;
+            # no build or image mutation is permitted in the publishing job.
+            if [[ ! -f "$RUNNER_TEMP/$node-date-exists" ]]; then
+              skopeo copy --preserve-digests --digestfile "$RUNNER_TEMP/$node-pushed-digest" \
+                "oci-archive:home-k8s-$node.oci.tar" "docker://$image:$VERSION"
+              test "$(cat "$RUNNER_TEMP/$node-expected-digest")" = "$(cat "$RUNNER_TEMP/$node-pushed-digest")"
+            fi
+            skopeo copy --preserve-digests --digestfile "$RUNNER_TEMP/$node-testing-digest" \
+              "oci-archive:home-k8s-$node.oci.tar" "docker://$image:testing"
+            test "$(cat "$RUNNER_TEMP/$node-expected-digest")" = "$(cat "$RUNNER_TEMP/$node-testing-digest")"
+            digest=$(cat "$RUNNER_TEMP/$node-expected-digest")
+            jq --arg node "$node" --arg digest "$digest" --arg ref "$image:$VERSION" \
+              '.images[$node] += {registry_digest: $digest, immutable_ref: $ref}' \
+              provenance.json > "$RUNNER_TEMP/provenance.json"
+            mv "$RUNNER_TEMP/provenance.json" provenance.json
+          done
+
+      - name: Require anonymous GHCR access before creating the public release
+        run: |
+          for node in bihar karnataka; do
+            image="$REGISTRY_OWNER/home-k8s-$node"
+            if ! token=$(curl --fail --silent --show-error \
+                "https://ghcr.io/token?service=ghcr.io&scope=repository:$image:pull" | jq -er .token); then
+              echo "::error::ghcr.io/$image is not anonymously accessible. Set the package visibility to public, then rerun this failed publish job within the one-day artifact retention."
+              exit 1
+            fi
+            for tag in "$VERSION" testing; do
+              status=$(curl --silent --show-error --output "$RUNNER_TEMP/$node-public-manifest.json" \
+                --write-out '%{http_code}' --header "Authorization: Bearer $token" \
+                --header 'Accept: application/vnd.oci.image.manifest.v1+json' \
+                "https://ghcr.io/v2/$image/manifests/$tag")
+              if [[ "$status" != 200 ]]; then
+                echo "::error::Anonymous ghcr.io/$image:$tag manifest access failed (HTTP $status). Set the package visibility to public, then rerun this failed publish job within one day."
+                exit 1
+              fi
+              digest="sha256:$(sha256sum "$RUNNER_TEMP/$node-public-manifest.json" | cut -d ' ' -f 1)"
+              test "$digest" = "$(cat "$RUNNER_TEMP/$node-expected-digest")"
+            done
+          done
+          # Exclude the previous checksum file from its own replacement.
+          sha256sum -- *.iso *.oci.tar *.json *.txt > SHA256SUMS
+
+      - name: Create the immutable public prerelease
+        run: |
+          gh release create "home-k8s-$VERSION" ./* \
+            --target "$GITHUB_SHA" \
+            --title "Hummingbird home nodes $VERSION" \
+            --notes "Exact images and offline bootc-installer-tui ISOs accepted by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Both installed nodes passed K3s DNS, pod networking, and PVC replacement persistence. Physical hardware is not yet validated. Registry digests, upstream source revisions, and SHA256SUMS are included in the assets. The testing channel tracks these images; date tags are immutable. No fleet rollout is performed." \
+            --prerelease --latest=false
+
+      - name: Remove ephemeral registry credentials
+        if: always()
+        working-directory: ${{ runner.temp }}
+        run: rm -f -- "$RUNNER_TEMP/home-k8s-registry-auth.json"

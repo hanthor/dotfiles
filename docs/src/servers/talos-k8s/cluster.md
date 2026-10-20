@@ -668,10 +668,39 @@ just server-installer karnataka "$KARNATAKA_TARGET_REF" artifacts/home-k8s/karna
 
 The target references above are **day-2 tracking metadata**, not downloads needed
 by the offline installation. Each ISO embeds its matching unchanged OCI payload.
-Neither these commands nor CI publish registry images. Refs may therefore be
-unpublished. Before a later `bootc upgrade`, deliberately publish the intended
-image to its canonical ref (with appropriate registry access) and verify the
-digest; building an ISO does not make that ref available.
+These local commands and PR/push acceptance do not publish registry images.
+Before `bootc upgrade`, publish the intended image to its canonical ref and verify
+the digest; building an ISO alone does not make that ref available.
+
+### Publish accepted images and installation media
+
+Publication is an explicit **master-only** dispatch, after interactive Corral
+acceptance. It repeats both real offline TUI installations and the installed
+two-node Kubernetes scenario before transferring any release artifacts:
+
+```bash
+gh workflow run server-images.yml --repo hanthor/dotfiles --ref master \
+  -f publish=true -f version=20261020
+```
+
+Choose an unused, valid `YYYYMMDD` date. Ordinary PR/push runs and manual runs
+with `publish=false` remain read-only. Only the separate publishing job receives
+registry/release write permissions; it pushes the exact accepted OCI archives,
+not rebuilt images. It publishes `ghcr.io/hanthor/home-k8s-{bihar,karnataka}`
+with immutable date tags and the mutable `testing` channel, plus the public
+GitHub prerelease `home-k8s-YYYYMMDD` (not the repository's latest stable release).
+Assets include both tested ISOs, OCI archives, media contracts, checksums,
+source/upstream revisions, registry digests, and explicit acceptance markers.
+Installed VM disks and credentials are never release assets.
+
+GitHub creates new container packages **private**, even when linked to this
+public repository. On first publication, change each package's visibility to
+public in its GitHub package settings. The publisher refuses to create the
+release until anonymous access to both image tags succeeds. If this gate fails,
+change visibility and rerun **only the failed publishing job within one day**:
+the accepted artifact transfer has one-day retention. Identical existing date
+tags are reused; different content or an existing release/tag name is rejected.
+Never rebuild over an immutable date tag.
 
 ### Install through the actual TUI
 
@@ -778,15 +807,17 @@ own tested restore plan; retain the Talos recovery material independently.
 
 GitHub Actions workflow [Home server images](../../../../.github/workflows/server-images.yml)
 (`server-images.yml`) runs for matching pull requests and master pushes.
-Once present on the default branch, it can also be dispatched on a review branch
-with no inputs. It runs the build, offline media creation, real interactive TUI
-installation for both targets, and installed-disk cluster acceptance. Its VMs
-use an isolated virtual LAN plus QEMU NAT, not the physical home LAN. CI must
-explicitly require KVM and fail if it is unavailable; no registry publication,
-fleet deployment, or physical-disk access is part of this workflow.
-It runs on `ubuntu-24.04` and uploads only `*.log`, `*.json`, and `*.txt` as
-`home-server-images-diagnostics` with seven-day retention, not installed disks
-or ISOs. Retain any needed evidence before those artifacts expire.
+Manual dispatch defaults to acceptance only (`publish=false`); review branches
+cannot publish. Acceptance runs image builds, offline media creation, real
+interactive TUI installation for both targets, and installed-disk cluster
+acceptance. Its VMs use an isolated virtual LAN plus QEMU NAT, not the physical
+home LAN. CI requires KVM and fails if it is unavailable. No fleet deployment
+or physical-disk access occurs, including on a publication dispatch.
+It runs on `ubuntu-24.04` and uploads `*.log`, `*.json`, and `*.txt` diagnostics
+as `home-server-images-diagnostics` with seven-day retention, never installed
+disks. Only an explicit master publication retains the exact tested ISOs and
+exports an allowlisted, one-day release-artifact transfer to the publishing job
+described above. Retain any needed diagnostics before they expire.
 
 For local acceptance, install `uv`, QEMU x86_64, and OVMF, and use the ISO names
 from the build commands above. These commands create disposable installed
