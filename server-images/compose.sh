@@ -9,7 +9,7 @@ dnf5 -y --enable-repo=utah-packages --enable-repo=fedora-storage \
     amd-ucode-firmware microcode_ctl \
     iwlwifi-dvm-firmware iwlwifi-mvm-firmware \
     realtek-firmware mt7xxx-firmware atheros-firmware brcmfmac-firmware \
-    NetworkManager-wifi wpa_supplicant iptables-nft \
+    NetworkManager-wifi wpa_supplicant tailscale iptables-nft \
     iscsi-initiator-utils nfs-client-utils policycoreutils-python-utils
 
 curl --fail --location \
@@ -35,15 +35,15 @@ setsebool -P container_use_devices on
 
 /usr/bin/k3s --version
 firewall-offline-cmd --check-config
-systemctl enable NetworkManager.service NetworkManager-wait-online.service sshd.service firewalld.service iscsi-init.service iscsid.service
+systemctl enable NetworkManager.service NetworkManager-wait-online.service sshd.service firewalld.service tailscaled.service iscsi-init.service iscsid.service
 # Reboots of the only control plane must be deliberate and preceded by backups.
 systemctl mask bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service
 
 kernel=$(basename /usr/lib/modules/*)
 for module in overlay br_netfilter vxlan iscsi_tcp nfs \
-    amdgpu i915 xe kvm_intel kvm_amd vhost_net \
+    amdgpu i915 xe kvm_intel kvm_amd vhost_net tun \
     iwlwifi mt7925e mt7921e rtw89_8852be rtw89_8922ae r8169 \
-    ath9k ath10k_pci ath11k_pci ath12k_pci brcmfmac; do
+    ath9k ath10k_pci ath11k_pci ath12k brcmfmac; do
     modinfo -k "$kernel" "$module" >/dev/null
 done
 # Firmware subpackages are weak dependencies; verify the explicitly selected

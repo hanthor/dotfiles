@@ -424,6 +424,17 @@ test ! -e /etc/bootc-installer/live-iso-mode
 test ! -e /usr/bin/bootc-installer-tui
 {inactive_k3s()}
 {role_check}
+systemctl is-active tailscaled
+test "$(stat -c %a /var/lib/tailscale)" = 700
+test "$(stat -c %u /var/lib/tailscale)" = 0
+python3 - <<'PY'
+import json
+import subprocess
+status = json.loads(subprocess.check_output(["tailscale", "status", "--json"], text=True))
+assert status["BackendState"] == "NeedsLogin", "An image must not ship an enrolled Tailscale identity"
+assert status.get("CurrentTailnet") is None, "An image must not join a tailnet automatically"
+print("TAILSCALE_AWAITING_ENROLLMENT: real daemon responsive under Enforcing SELinux; private runtime state")
+PY
 systemctl is-active NetworkManager firewalld iscsid.socket gssproxy
 sysctl net.ipv4.ip_forward net.bridge.bridge-nf-call-iptables
 k3s --version
