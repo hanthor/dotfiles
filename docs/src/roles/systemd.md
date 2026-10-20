@@ -27,12 +27,9 @@ If podman is installed:
 - Configures the podman socket for group access (mode 0660)
 - Enables and starts `podman.socket`
 
-### system-mitigator (himachal only)
-
-A Python daemon that monitors for Lenovo EC firmware bugs:
-- Detects false `BD_PROCHOT` signals that lock CPU cores to 400 MHz
-- Watches for `systemd-journald` watchdog loops
-- Sends desktop notifications when issues are detected
+The host-specific fleet services run in `systemd_hive_services`, keeping
+machine-specific monitoring and phone orchestration separate from the generic
+systemd user services and conditional Podman socket setup.
 
 ## Notes
 

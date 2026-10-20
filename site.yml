@@ -130,6 +130,9 @@
     - role: systemd
       tags: [services, systemd]
       when: not skip_systemd | default(false)
+    - role: systemd_hive_services
+      tags: [services, systemd, systemd_hive_services]
+      when: not skip_systemd | default(false)
     - role: bst_dashboard
       tags: [services, bst_dashboard]
     - role: kirocrew
