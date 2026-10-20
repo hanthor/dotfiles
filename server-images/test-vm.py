@@ -218,8 +218,9 @@ test "$(getenforce)" = Enforcing
 test "$(cat /proc/sys/kernel/hostname)" = starter-smoke
 test ! -e /etc/bootc-installer/live-iso-mode
 test ! -e /usr/bin/bootc-installer-tui
-''' + inactive_k3s() + '''printf '\\nBOOTC_BEGIN\\n'
-bootc status --format json
+''' + inactive_k3s() + '''bootc status --format json > /run/home-k8s-bootc-status.json
+printf '\\nBOOTC_BEGIN\\n'
+cat /run/home-k8s-bootc-status.json
 printf '\\nBOOTC_END\\n'
 printf '\\nSTATE_BEGIN\\n'
 python3 - <<'PY'
@@ -290,8 +291,9 @@ printf '%s' {shlex.quote(sentinel)} > /var/lib/home-k8s-switch-smoke/sentinel
         if before["sentinel"] != sentinel or before["admin"]["uid"] == 0:
             raise RuntimeError("Invalid starter sentinel or local administrator identity")
         output = vm.run(fixture + f'''bootc switch {shlex.quote(args.image)}
+bootc status --format json > /run/home-k8s-bootc-status.json
 printf '\\nBOOTC_BEGIN\\n'
-bootc status --format json
+cat /run/home-k8s-bootc-status.json
 printf '\\nBOOTC_END\\n'
 ''', timeout=1800)
         staged_status = json.loads(section(output, "BOOTC"))
