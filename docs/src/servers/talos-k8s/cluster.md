@@ -96,7 +96,8 @@ The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on
 
 | Component       | Detail |
 |-----------------|--------|
-| CPU             | Intel x86_64 |
+| CPU             | Intel Core i7-13700K |
+| Integrated GPU  | Intel UHD 770 |
 | Boot disk       | `/dev/nvme0n1` |
 
 ---
@@ -558,15 +559,18 @@ Corral acceptance uses separate disposable KubeVirt VMs, not Talos node changes.
 Sections 1–11 remain the Talos recovery handbook, not instructions for the new OS.
 
 Image builds alone do not prove installation. The GitHub Actions acceptance
-workflow builds both images and offline ISOs, drives the **real
-`bootc-installer-tui`**, boots the installed disks without their ISOs, then
-activates a disposable two-node K3s cluster.
-[Publication run 39478127960](https://github.com/hanthor/dotfiles/actions/runs/39478127960)
-passed for release source `cb3d9bc9466b9a440dffb41a0f74ddca83ffe5d9`: both offline TUI
-installs, installed-disk UEFI boot, admin login/sudo, Enforcing SELinux, gated
-K3s activation, two Ready nodes, cross-node HTTP, cluster DNS, and local-path
-PVC data surviving writer-pod replacement. The normal repository CI also
-[passed](https://github.com/hanthor/dotfiles/actions/runs/39478101444).
+workflow builds all three images and offline ISOs, drives the **real
+`bootc-installer-tui`**, boots the installed disks without their ISOs, and
+switches the installed starter to Bihar before activating a separate disposable
+two-node K3s cluster.
+[Publication run 39493512586](https://github.com/hanthor/dotfiles/actions/runs/39493512586)
+passed for release source `4ec3fa6470d6b02e7eaf1b0eaae03d1db05a31a7`: all three offline TUI
+installs, installed-disk UEFI boot, admin login/sudo, Enforcing SELinux,
+unenrolled Tailscale, and a real starter-to-Bihar bootc switch with exact digest,
+reboot, and administrator/hostname/identity/`/var` persistence checks. Gated K3s
+activation then passed two Ready nodes, cross-node HTTP, cluster DNS, and
+local-path PVC data surviving writer-pod replacement. The reviewed PR also
+[passed normal repository CI](https://github.com/hanthor/dotfiles/actions/runs/39490206821).
 
 On **2026-10-20**, Playwright drove both installers through the **actual Corral
 noVNC canvases** on disposable KubeVirt VMs. Both reached “Installation
@@ -596,6 +600,25 @@ is saved under `~/.local/share/home-k8s-build/` on the acceptance controller:
 `corral-{bihar,karnataka}-installed-boot.webp`,
 `corral-installed-kubernetes.webp`, and `corral-cluster-proof.txt`.
 
+The optional starter also passed a **2026-10-20** Playwright/noVNC installation
+in namespace `home-k8s-starter-acceptance`, followed by ISO detachment and an
+installed-disk UEFI boot. Actual admin-password login/sudo, hostname
+`starter-smoke`, Enforcing SELinux, absent K3s role/configuration, driver/firmware
+payload checks, and the canonical starter bootc reference passed. The real
+installed `tailscaled` daemon was active and responsive in **NeedsLogin**, with
+no tailnet and root-owned `0700` state; no VM was enrolled into the fleet.
+The dedicated `tailscale0` SSH firewall zone was present. All disposable VMs,
+PVCs, namespaces, and temporary Corral/upload services were removed afterward.
+
+That native starter ISO was built from source
+`2f8be86e3f98782f8dc7857e688e274318494f5b`, is **2,057,453,568 bytes**, and has SHA256
+`1dc796f217e2d4ce6140511bed59399d2e031092299e2fa09e0436bea305ee27`.
+Evidence is under `~/.local/share/home-k8s-build/unified-starter-native/`:
+`corral-starter-install-summary.png`, `corral-starter-install-complete.png`,
+`corral-starter-admin-sudo.png`, `corral-starter-installed-tailscale.png`, and
+`corral-starter-installed-proof.txt`. These are native acceptance artifacts,
+not a claim that the later publication rebuild is byte-identical.
+
 VM acceptance cannot establish GPU, physical NIC, disk health, firmware,
 or nested-virtualization readiness on the real machines. The recorded runner
 was AMD EPYC: Bihar's Intel-only `kvm_intel` preload fails in that VM, so its
@@ -605,9 +628,11 @@ unit and a real KubeVirt guest on physical Bihar before cutover.
 ### Image contents and state
 
 The source is `server-images/Containerfile`, `compose.sh`, `nodes/`, and `rootfs/`.
-Both targets use the digest-pinned Hummingbird Community `os-minimal` base,
-without a desktop. Firmware (including AMD GPU/CPU, Intel microcode, Realtek,
-and MediaTek support) comes through the digest-pinned Utah package factory.
+All three targets use the digest-pinned Hummingbird Community `os-minimal` base,
+without a desktop. The Bihar/Karnataka images remain the direct installation
+path for those machines; `starter` is optional for future x86_64 AMD/Intel nodes.
+Explicit AMD/Intel GPU and CPU, Intel Wi-Fi, Realtek, MediaTek, Atheros, and
+Broadcom firmware subpackages come through the digest-pinned Utah package factory.
 That local repository is authenticated by its OCI digest, **not RPM signatures**.
 The lower-priority Fedora 44 repository checks Fedora RPM signatures and supplies
 missing storage dependencies; it does not replace the Hummingbird kernel.
@@ -617,17 +642,38 @@ ntfs-3g supplied by signed Fedora RPMs. Those live additions do not modify the
 embedded installed-system OCI payload.
 K3s and its SELinux policy RPM are separately SHA256-pinned.
 
+The common hardware payload includes:
+
+| Hardware | Shipped support |
+|---|---|
+| Bihar: Intel Core i7-13700K / UHD 770 | Intel microcode, `i915` and its firmware, `kvm_intel`; the `xe` driver/firmware is also available |
+| Karnataka: Strix Halo / Radeon 8060S (`gfx1151`) | `amdgpu`, `gc_11_5_1` GPU firmware, AMD microcode, `kvm_amd` |
+| Karnataka: MediaTek MT7925 Wi-Fi | `mt7925e` plus its Wi-Fi code and patch firmware |
+| Karnataka: Realtek RTL8126 Ethernet | `r8169` plus Realtek NIC firmware |
+| Other common Wi-Fi families | Intel `iwlwifi`, Realtek `rtw89`, Atheros/Qualcomm `ath9k`/`ath10k`/`ath11k`/`ath12k`, Broadcom `brcmfmac`, and their selected firmware packages |
+
+`NetworkManager-wifi` supplies the actual Wi-Fi backend, with `wpa_supplicant`
+for authentication. After installed-system login, connect interactively with
+`sudo nmcli --ask device wifi connect "your-ssid"`; never put Wi-Fi credentials
+in image source or command-line password arguments. Live-session network
+configuration is not copied by the pinned installer. Driver/module/firmware
+presence is checked during builds and starter acceptance, but **physical RF,
+GPU compute, device passthrough, and board-specific compatibility remain untested**.
+This is not an ARM image or a proprietary NVIDIA/CUDA stack.
+
 K3s is pinned to **`v1.36.1+k3s1`**, with embedded containerd, Flannel networking,
 and embedded etcd on Bihar (`cluster-init: true`). Pod/service CIDRs remain
 `10.244.0.0/16` and `10.96.0.0/12`; cluster DNS is `10.96.0.10`.
 Bihar disables bundled Traefik, ServiceLB, and metrics-server: restore any needed
 equivalents deliberately. This is one control plane, not HA.
 
-NetworkManager, sshd, firewalld, and iSCSI services are enabled. Bihar enables
-`k3s@server`; Karnataka enables `k3s@agent`, but both are gated by
-`/etc/rancher/k3s/activate`. **No activation marker or cluster token is baked
-into an image.** Automatic bootc fetch/apply services are masked so a reboot of
-the only control plane is an explicit maintenance decision.
+NetworkManager, sshd, firewalld, Tailscale, and iSCSI services are enabled on all
+three images. Bihar enables `k3s@server`; Karnataka enables `k3s@agent`, but
+both are gated by `/etc/rancher/k3s/activate`. The starter selects neither role
+and supplies no hostname, K3s configuration, or cluster endpoint.
+**No activation marker, cluster token, Tailscale auth key, or enrolled identity
+is baked into an image.** Automatic bootc fetch/apply services are masked so a
+reboot of the only control plane is an explicit maintenance decision.
 NFS GSSAPI state directories are initialized privately (`0700`) through
 tmpfiles before the daemon's sandbox is assembled; CI requires `gssproxy` to
 start successfully with SELinux enforcing.
@@ -668,7 +714,7 @@ and current contents at the console (`lsblk -o NAME,SIZE,MODEL,SERIAL,FSTYPE,MOU
 do not assume device enumeration is sufficient. Apply the same backup and
 operator-choice gate to Bihar's intended `/dev/nvme0n1`.
 
-### Build both targets and offline installation media
+### Build node images and optional starter media
 
 Run from this repository on a Linux builder with Podman, Go compatible with
 Fisherman's `tui/go.mod`, Python 3, squashfs-tools (`mksquashfs`), dosfstools
@@ -685,7 +731,7 @@ offline installation without exhausting the live filesystem.
 
 ```bash
 just server-images
-# Produces localhost/home-k8s-bihar:testing and localhost/home-k8s-karnataka:testing.
+# Produces localhost/home-k8s-{starter,bihar,karnataka}:testing.
 mkdir -p artifacts/home-k8s
 export FISHERMAN_SRC="$HOME/dev/tuna-os/fisherman"
 export UTAH_SRC="$HOME/dev/utah"
@@ -694,6 +740,8 @@ export BIHAR_TARGET_REF=ghcr.io/hanthor/home-k8s-bihar:testing
 export KARNATAKA_TARGET_REF=ghcr.io/hanthor/home-k8s-karnataka:testing
 just server-installer bihar "$BIHAR_TARGET_REF" artifacts/home-k8s/bihar-installer.iso
 just server-installer karnataka "$KARNATAKA_TARGET_REF" artifacts/home-k8s/karnataka-installer.iso
+# Optional: a hardware-generic install with no selected cluster role.
+just server-installer starter ghcr.io/hanthor/home-k8s-starter:testing artifacts/home-k8s/starter-installer.iso
 ```
 
 The target references above are **day-2 tracking metadata**, not downloads needed
@@ -702,43 +750,57 @@ These local commands and PR/push acceptance do not publish registry images.
 Before `bootc upgrade`, publish the intended image to its canonical ref and verify
 the digest; building an ISO alone does not make that ref available.
 
+To build just one profile, use `just server-image bihar`, `just server-image
+karnataka`, or `just server-image starter`. The canonical recipe disables
+Podman's injected `/etc/hostname` so image composition can clear the base hostname
+before applying a specialization. The UEFI media keeps its boot files inside
+the FAT ESP rather than duplicating them as loose ISO files; the embedded
+installed-system payload is unchanged by that size reduction.
+
 ### Publish accepted images and installation media
 
 Published acceptance release:
-[**home-k8s-20261020**](https://github.com/hanthor/dotfiles/releases/tag/home-k8s-20261020).
+[**home-k8s-20261021**](https://github.com/hanthor/dotfiles/releases/tag/home-k8s-20261021).
 These are public **prerelease** artifacts, not proof of physical hardware
-readiness. Both date tags and the `testing` channel passed anonymous GHCR access.
+readiness. All three profiles' date tags and `testing` channels passed anonymous
+GHCR access and match the exact tested payloads and source revision.
 
-| Node | Published image | Offline installer ISO |
+| Profile | Published image | Offline installer ISO |
 |---|---|---|
-| Bihar | `ghcr.io/hanthor/home-k8s-bihar:20261020` | [bihar-installer.iso](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261020/bihar-installer.iso) |
-| Karnataka | `ghcr.io/hanthor/home-k8s-karnataka:20261020` | [karnataka-installer.iso](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261020/karnataka-installer.iso) |
+| Bihar | `ghcr.io/hanthor/home-k8s-bihar:20261021` | [bihar-installer.iso](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/bihar-installer.iso) |
+| Karnataka | `ghcr.io/hanthor/home-k8s-karnataka:20261021` | [karnataka-installer.iso](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/karnataka-installer.iso) |
+| Optional starter | `ghcr.io/hanthor/home-k8s-starter:20261021` | [starter-installer.iso](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/starter-installer.iso) |
 
-Download [SHA256SUMS](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261020/SHA256SUMS)
-and [provenance.json](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261020/provenance.json)
+Download [SHA256SUMS](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/SHA256SUMS)
+and [provenance.json](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/provenance.json)
 from the same release; the latter records image digests, exact source/upstream
-revisions, and the acceptance run. OCI archives and media contracts are also
-release assets. The publisher treats date tags as write-once; use the recorded
-`@sha256:` digest when a registry reference must be intrinsically immutable.
+revisions, and the acceptance run. OCI archives, media contracts, and the
+[starter-switch proof](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/starter-switch-proof.txt)
+are also release assets. The publisher treats date tags as write-once; use the
+recorded `@sha256:` digest when a registry reference must be intrinsically immutable.
+The older `20261020` release remains available but predates the optional starter
+and completed GPU/Wi-Fi firmware and host Tailscale payload.
 
 Publication is an explicit **master-only** dispatch, after interactive Corral
-acceptance. It repeats both real offline TUI installations and the installed
-two-node Kubernetes scenario before transferring any release artifacts:
+acceptance. It repeats all three real offline TUI installations, the installed
+starter's bootc switch, and the two-node Kubernetes scenario before transferring
+any release artifacts:
 
 ```bash
 gh workflow run server-images.yml --repo hanthor/dotfiles --ref master \
-  -f publish=true -f version=20261021
+  -f publish=true -f version=20261022
 ```
 
-Choose an unused, valid `YYYYMMDD` date; `20261020` is already published.
+Choose an unused, valid `YYYYMMDD` date; `20261020` and `20261021` are already published.
 Ordinary PR/push runs and manual runs
 with `publish=false` remain read-only. Only the separate publishing job receives
 registry/release write permissions; it pushes the exact accepted OCI archives,
-not rebuilt images. It publishes `ghcr.io/hanthor/home-k8s-{bihar,karnataka}`
+not rebuilt images. It publishes `ghcr.io/hanthor/home-k8s-{starter,bihar,karnataka}`
 with immutable date tags and the mutable `testing` channel, plus the public
 GitHub prerelease `home-k8s-YYYYMMDD` (not the repository's latest stable release).
-Assets include both tested ISOs, OCI archives, media contracts, checksums,
-source/upstream revisions, registry digests, and explicit acceptance markers.
+Assets include all three tested ISOs, OCI archives, media contracts, checksums,
+source/upstream revisions, registry digests, explicit acceptance markers, and
+the sanitized starter-switch proof.
 The canonical `just server-images` build records this repository's Git revision
 in the OCI source/revision labels, rather than inheriting Hummingbird's revision.
 Installed VM disks and credentials are never release assets.
@@ -767,7 +829,8 @@ bootc-installer-tui
 2. Choose **Custom URL** and enter `oci:/usr/share/home-k8s/payload`.
 3. Choose the verified intended installation disk. Installation destroys its
    contents; do not choose the failing Karnataka secondary disk.
-4. Choose **ext4**, and set the hostname to `bihar` or `karnataka` as appropriate.
+4. Choose **ext4**, and set the hostname to `bihar` or `karnataka` as appropriate,
+   or a unique hostname for a new starter installation.
 5. Leave disk encryption disabled for the tested installation path. Encrypted
    installation is not covered by this acceptance run.
 6. Create an **actual administrative user** with a strong password. Record it
@@ -785,6 +848,64 @@ verify `getenforce` prints **`Enforcing`**, `sudo -v` succeeds for the new user,
 unit is inactive before activation. Stop and resolve any mismatch before joining
 the cluster. Install SSH keys and verify remote access using authenticated,
 trusted connections; never paste private keys or cluster tokens into CI logs.
+
+### Optional starter and a deliberate image switch
+
+The starter is not a third cluster node and does not join anything on first boot.
+It installs the same hardware, storage, Tailscale, and K3s tooling, but neither
+K3s instance is enabled and there is no default K3s configuration. Install Bihar
+and Karnataka directly when replacing those machines; the starter is an optional
+base for additional machines or a later switch to another bootc image.
+
+For example, to adopt Bihar's server profile from an installed starter:
+
+```bash
+sudo bootc switch ghcr.io/hanthor/home-k8s-bihar:testing
+sudo systemctl reboot
+```
+
+After reboot, inspect `sudo bootc status` and verify the **booted** image, not
+merely a staged deployment. The administrator, chosen hostname, and `/var` state
+survive; a switch does not rename the host or create the K3s activation marker.
+`/etc` uses a three-way merge, so review existing configuration rather than
+assuming the destination image replaces it.
+
+The named profiles are **home-machine specializations**, not generic role
+templates: they contain fixed K3s node names, home addresses, and CPU-specific
+module preloads. On additional machines, use an appropriate derived image or
+review those defaults before activation, especially `node-name`, server address,
+TLS SANs, and virtualization modules. The starter also retains the common
+home-LAN firewall policy; new sites need an explicit network-policy review.
+
+### Enroll host Tailscale after installation
+
+The pinned Utah factory supplies Tailscale **1.98.8**. `tailscaled` starts
+automatically but remains **NeedsLogin** until the operator enrolls that node.
+On the installed system—not the live ISO—run:
+
+```bash
+sudo tailscale up --hostname="$(uname -n)" --advertise-tags=tag:fleet \
+  --accept-dns=false --accept-routes=false
+tailscale status
+```
+
+Complete the displayed login URL using the fleet tailnet account; `tag:fleet`
+requires the corresponding tag-owner permission. This keeps the existing fleet
+tag convention without importing tailnet routes or replacing the node's DNS,
+which could conflict with the home/Flannel networks. No subnet routes, exit-node
+service, or Tailscale SSH are enabled automatically.
+
+The dedicated `tailscale0` firewalld zone allows ordinary SSH only; it does not
+open the Kubernetes API, kubelet, VXLAN, or NodePorts to every tailnet peer.
+Tailnet ACLs and installed SSH authorized keys still govern access. Host Tailscale
+does not replace Flannel or the separate in-cluster Tailscale Operator.
+
+Node keys and enrollment state live under private, root-owned
+`/var/lib/tailscale` (`0700`) and survive bootc updates/switches. Never bake that
+directory into an image or copy it between machines. A clean reinstall needs its
+own enrollment; a live-session identity is not migrated by this installer.
+CI checks the real installed daemon's unauthenticated state and private storage
+with SELinux enforcing; it does **not** enroll disposable VMs into the fleet.
 
 ### Explicit activation and separate kubeconfig
 
@@ -859,9 +980,13 @@ own tested restore plan; retain the Talos recovery material independently.
 GitHub Actions workflow [Home server images](https://github.com/hanthor/dotfiles/actions/workflows/server-images.yml)
 (`server-images.yml`) runs for matching pull requests and master pushes.
 Manual dispatch defaults to acceptance only (`publish=false`); review branches
-cannot publish. Acceptance runs image builds, offline media creation, real
-interactive TUI installation for both targets, and installed-disk cluster
-acceptance. Its VMs use an isolated virtual LAN plus QEMU NAT, not the physical
+cannot publish. Acceptance builds all three images/ISOs, installs each through
+the real TUI, and checks installed-disk boot, admin/sudo, Enforcing SELinux,
+unenrolled Tailscale, and gated K3s. It switches the installed starter to the exact
+new Bihar payload through a loopback-only registry, verifies the staged digest,
+reboots, and checks the **booted** digest plus persistent admin/hostname/identity
+and `/var` data. The fixture registry, starter disk, and NVRAM are removed before
+the two-node cluster scenario. The VMs use an isolated virtual LAN plus QEMU NAT, not the physical
 home LAN. CI requires KVM and fails if it is unavailable. No fleet deployment
 or physical-disk access occurs, including on a publication dispatch.
 It runs on `ubuntu-24.04` and uploads `*.log`, `*.json`, and `*.txt` diagnostics
@@ -870,18 +995,35 @@ disks. Only an explicit master publication retains the exact tested ISOs and
 exports an allowlisted, one-day release-artifact transfer to the publishing job
 described above. Retain any needed diagnostics before they expire.
 
-For local acceptance, install `uv`, QEMU x86_64, and OVMF, and use the ISO names
+For local acceptance, install `uv`, QEMU x86_64, Skopeo, and OVMF, and use the ISO names
 from the build commands above. These commands create disposable installed
 qcow2 disks and per-node UEFI variable stores in the artifact directory:
 
 ```bash
+uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm install starter
 uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm install bihar
 uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm install karnataka
 uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm cluster
 ```
 
+To exercise a published-image switch on that installed starter, resolve the
+immutable date tag's digest first (the guest needs outbound registry access):
+
+```bash
+image=ghcr.io/hanthor/home-k8s-bihar:20261021
+digest=$(skopeo inspect --format '{{.Digest}}' "docker://$image")
+uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm \
+  switch-starter --image "$image" --expected-digest "$digest"
+```
+
+`starter-switch-proof.txt` records only explicit successful checks and public
+image references/digests, never the administrator password or private state.
+The workflow's fixture instead uses the exact newly built Bihar archive before
+publication, binds its HTTP registry only to `127.0.0.1:5000`, and scopes its
+temporary insecure-registry setting to `10.0.2.2:5000` inside the disposable guest.
+
 On a machine without usable KVM, explicitly replace `--accel kvm` with
-`--accel tcg` in **all three commands**; this is slower emulation, not hardware
+`--accel tcg` in **every command**; this is slower emulation, not hardware
 acceleration proof. The harness pins `pexpect==4.9.0` through its inline `uv`
 dependency metadata. It drives the actual TUI, powers off, removes the ISO,
 boots the installed UEFI disk, checks login/sudo, Enforcing SELinux, target
