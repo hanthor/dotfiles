@@ -561,12 +561,12 @@ Image builds alone do not prove installation. The GitHub Actions acceptance
 workflow builds both images and offline ISOs, drives the **real
 `bootc-installer-tui`**, boots the installed disks without their ISOs, then
 activates a disposable two-node K3s cluster.
-[Run 39472985001](https://github.com/hanthor/dotfiles/actions/runs/39472985001)
-passed for commit `2c73044f888bf439e82f93c3cb807355ddc853eb`: both offline TUI
+[Publication run 39478127960](https://github.com/hanthor/dotfiles/actions/runs/39478127960)
+passed for release source `cb3d9bc9466b9a440dffb41a0f74ddca83ffe5d9`: both offline TUI
 installs, installed-disk UEFI boot, admin login/sudo, Enforcing SELinux, gated
 K3s activation, two Ready nodes, cross-node HTTP, cluster DNS, and local-path
 PVC data surviving writer-pod replacement. The normal repository CI also
-[passed](https://github.com/hanthor/dotfiles/actions/runs/39472984865).
+[passed](https://github.com/hanthor/dotfiles/actions/runs/39478101444).
 
 On **2026-10-20**, Playwright drove both installers through the **actual Corral
 noVNC canvases** on disposable KubeVirt VMs. Both reached “Installation
@@ -704,16 +704,34 @@ the digest; building an ISO alone does not make that ref available.
 
 ### Publish accepted images and installation media
 
+Published acceptance release:
+[**home-k8s-20261020**](https://github.com/hanthor/dotfiles/releases/tag/home-k8s-20261020).
+These are public **prerelease** artifacts, not proof of physical hardware
+readiness. Both date tags and the `testing` channel passed anonymous GHCR access.
+
+| Node | Published image | Offline installer ISO |
+|---|---|---|
+| Bihar | `ghcr.io/hanthor/home-k8s-bihar:20261020` | [bihar-installer.iso](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261020/bihar-installer.iso) |
+| Karnataka | `ghcr.io/hanthor/home-k8s-karnataka:20261020` | [karnataka-installer.iso](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261020/karnataka-installer.iso) |
+
+Download [SHA256SUMS](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261020/SHA256SUMS)
+and [provenance.json](https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261020/provenance.json)
+from the same release; the latter records image digests, exact source/upstream
+revisions, and the acceptance run. OCI archives and media contracts are also
+release assets. The publisher treats date tags as write-once; use the recorded
+`@sha256:` digest when a registry reference must be intrinsically immutable.
+
 Publication is an explicit **master-only** dispatch, after interactive Corral
 acceptance. It repeats both real offline TUI installations and the installed
 two-node Kubernetes scenario before transferring any release artifacts:
 
 ```bash
 gh workflow run server-images.yml --repo hanthor/dotfiles --ref master \
-  -f publish=true -f version=20261020
+  -f publish=true -f version=20261021
 ```
 
-Choose an unused, valid `YYYYMMDD` date. Ordinary PR/push runs and manual runs
+Choose an unused, valid `YYYYMMDD` date; `20261020` is already published.
+Ordinary PR/push runs and manual runs
 with `publish=false` remain read-only. Only the separate publishing job receives
 registry/release write permissions; it pushes the exact accepted OCI archives,
 not rebuilt images. It publishes `ghcr.io/hanthor/home-k8s-{bihar,karnataka}`
@@ -725,10 +743,11 @@ The canonical `just server-images` build records this repository's Git revision
 in the OCI source/revision labels, rather than inheriting Hummingbird's revision.
 Installed VM disks and credentials are never release assets.
 
-GitHub creates new container packages **private**, even when linked to this
-public repository. On first publication, change each package's visibility to
-public in its GitHub package settings. The publisher refuses to create the
-release until anonymous access to both image tags succeeds. If this gate fails,
+New GitHub container packages default to **private**, even when linked to a
+public repository. The packages above are already public. For a new package,
+change visibility in its GitHub package settings if necessary. The publisher
+refuses to create the release until anonymous access to both image tags succeeds.
+If this gate fails,
 change visibility and rerun **only the failed publishing job within one day**:
 the accepted artifact transfer has one-day retention. Identical existing date
 tags are reused; different content or an existing release/tag name is rejected.
