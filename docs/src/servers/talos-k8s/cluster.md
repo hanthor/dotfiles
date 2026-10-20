@@ -14,6 +14,11 @@
 > orphans them (#29). Then follow the prerequisites in
 > [`talos-k8s/ai/README.md`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/README.md)
 > for the backup job and run `lemonade-warmup.sh` (#26, #27).
+>
+> **Home Hummingbird migration: prepared, not deployed.** The build/install and
+> activation procedure is in [section 12](#12-hummingbirdbootc-migration-home-only).
+> The home machines remain offline/in storage; the Talos recovery instructions
+> below and all existing home/AWS credentials remain valid recovery material.
 
 
 > **Two-node [Talos Linux](https://www.talos.dev/) [Kubernetes](https://kubernetes.io/) cluster.**
@@ -33,6 +38,7 @@
 9. [Day-to-day operations](#9-day-to-day-operations)
 10. [Reinstall procedure](#10-reinstall-procedure)
 11. [Troubleshooting](#11-troubleshooting)
+12. [Hummingbird/bootc migration (home only)](#12-hummingbirdbootc-migration-home-only)
 
 ---
 
@@ -536,3 +542,331 @@ After reboot (~2 min), all pods recover automatically. PVC-backed services
 - Set `SKIP_CHUNKAH=1` for Forgejo builds (avoids extra 2GB memory spike)
 - Consider moving non-GPU workloads to bihar or a third node
 - The Forgejo runner has `timeout-minutes: 45` — builds that exceed this will be killed
+
+---
+
+## 12. Hummingbird/bootc migration (home only)
+
+### Scope and acceptance status
+
+This is a replacement OS and **new K3s cluster** for the two home nodes, not a
+Talos upgrade. Bihar is the Intel server/control plane; Karnataka is the AMD
+worker. **No physical migration has been performed.** The home cluster is still
+powered down/in storage. Nothing here changes the production
+[AWS Talos cluster](../aws-k8s/cluster.md) nodes, workloads, or credentials;
+Corral acceptance uses separate disposable KubeVirt VMs, not Talos node changes.
+Sections 1–11 remain the Talos recovery handbook, not instructions for the new OS.
+
+Image builds alone do not prove installation. The GitHub Actions acceptance
+workflow builds both images and offline ISOs, drives the **real
+`bootc-installer-tui`**, boots the installed disks without their ISOs, then
+activates a disposable two-node K3s cluster.
+[Run 39472985001](https://github.com/hanthor/dotfiles/actions/runs/39472985001)
+passed for commit `2c73044f888bf439e82f93c3cb807355ddc853eb`: both offline TUI
+installs, installed-disk UEFI boot, admin login/sudo, Enforcing SELinux, gated
+K3s activation, two Ready nodes, cross-node HTTP, cluster DNS, and local-path
+PVC data surviving writer-pod replacement. The normal repository CI also
+[passed](https://github.com/hanthor/dotfiles/actions/runs/39472984865).
+
+On **2026-10-20**, Playwright drove both installers through the **actual Corral
+noVNC canvases** on disposable KubeVirt VMs. Both reached “Installation
+Complete”; their ISO volumes were then detached before installed-disk boots.
+Real admin-password login/sudo and Enforcing SELinux passed on both. The installed
+cluster passed the same DNS, cross-node HTTP, and PVC pod-replacement scenario
+used by CI. Bihar's Intel `kvm_intel` module loaded on this Intel Corral host;
+that is not a test of a nested KubeVirt guest or the physical home machines.
+
+The deployed Corral service reported its cluster unreachable, so acceptance used
+a temporary localhost Corral dashboard against `admin@aws-migration`, without
+changing the deployed service. All test VMs/disks were isolated in namespace
+`home-k8s-acceptance`. Configure the disposable node LAN as `192.168.0.5/24`
+and `192.168.0.6/24` **before activating K3s**: Corral's provider pod addresses
+overlap this new cluster's `10.244.0.0/16` pod CIDR. The initial overlapping
+setup reached Ready nodes and working DNS but failed cross-node HTTP; the
+non-overlapping guest LAN passed without changing the images' production
+network configuration. Changing an already-initialized embedded-etcd server's
+IP also requires its membership to be corrected; do not initialize it with the
+provider pod IP in the first place.
+
+Native Corral media predates publication-only OCI label changes; it is not
+byte-identical to the subsequently rebuilt release. The publication dispatch
+repeats complete KVM acceptance on the exact bytes it publishes. Corral evidence
+is saved under `~/.local/share/home-k8s-build/` on the acceptance controller:
+`corral-{bihar,karnataka}-install-complete.webp`,
+`corral-{bihar,karnataka}-installed-boot.webp`,
+`corral-installed-kubernetes.webp`, and `corral-cluster-proof.txt`.
+
+VM acceptance cannot establish GPU, physical NIC, disk health, firmware,
+or nested-virtualization readiness on the real machines. The recorded runner
+was AMD EPYC: Bihar's Intel-only `kvm_intel` preload fails in that VM, so its
+module-load unit is not evidence of working Intel virtualization. Verify that
+unit and a real KubeVirt guest on physical Bihar before cutover.
+
+### Image contents and state
+
+The source is `server-images/Containerfile`, `compose.sh`, `nodes/`, and `rootfs/`.
+Both targets use the digest-pinned Hummingbird Community `os-minimal` base,
+without a desktop. Firmware (including AMD GPU/CPU, Intel microcode, Realtek,
+and MediaTek support) comes through the digest-pinned Utah package factory.
+That local repository is authenticated by its OCI digest, **not RPM signatures**.
+The lower-priority Fedora 44 repository checks Fedora RPM signatures and supplies
+missing storage dependencies; it does not replace the Hummingbird kernel.
+The separate live-media build uses Hummingbird's `dracut-live` and
+`systemd-boot-unsigned`, with missing dependencies such as fuse, parted, and
+ntfs-3g supplied by signed Fedora RPMs. Those live additions do not modify the
+embedded installed-system OCI payload.
+K3s and its SELinux policy RPM are separately SHA256-pinned.
+
+K3s is pinned to **`v1.36.1+k3s1`**, with embedded containerd, Flannel networking,
+and embedded etcd on Bihar (`cluster-init: true`). Pod/service CIDRs remain
+`10.244.0.0/16` and `10.96.0.0/12`; cluster DNS is `10.96.0.10`.
+Bihar disables bundled Traefik, ServiceLB, and metrics-server: restore any needed
+equivalents deliberately. This is one control plane, not HA.
+
+NetworkManager, sshd, firewalld, and iSCSI services are enabled. Bihar enables
+`k3s@server`; Karnataka enables `k3s@agent`, but both are gated by
+`/etc/rancher/k3s/activate`. **No activation marker or cluster token is baked
+into an image.** Automatic bootc fetch/apply services are masked so a reboot of
+the only control plane is an explicit maintenance decision.
+NFS GSSAPI state directories are initialized privately (`0700`) through
+tmpfiles before the daemon's sandbox is assembled; CI requires `gssproxy` to
+start successfully with SELinux enforcing.
+
+Mutable state includes `/etc/rancher/k3s`, `/var/lib/rancher/k3s` (including etcd
+and containerd), user homes under `/var/home`, and these retained workload paths:
+
+| Path | Purpose |
+|------|---------|
+| `/var/mnt/storage` | Bihar's K3s local-path default and existing host-path data |
+| `/var/lib/longhorn` | Longhorn persistent storage |
+| `/var/lib/lemonade-cache` | Lemonade cache, matching the current home PV manifest |
+| `/var/lib/lemonade-models` | Lemonade models, matching the current home PV manifest |
+
+The current `talos-k8s/ai/lemonade.yaml` uses `/var/lib/lemonade-*`. The offline
+Talos node may still hold the data under `/var/tmp/lemonade-*`: back up those
+source directories before wiping and restore into `/var/lib/lemonade-*` on the
+new node. Creating an empty PV directory does not migrate the models.
+
+### Back up before building a physical migration plan
+
+Before **any disk wipe**, recover the old nodes if necessary and copy application
+backups, PV data, models, manifests, and required secrets **off both machines**.
+Inventory PV-to-node/path mappings, ownership, application restore procedures,
+and Longhorn volumes; verify the backups can be read/restored independently.
+An etcd snapshot is useful for Talos recovery, but **Talos etcd cannot be
+directly restored into K3s**. A matching directory name is not a data migration.
+
+Keep the old Bitwarden secure notes `kubeconfig` / `talosconfig` and their
+`~/.kube/config` / `~/.talos/config` files. Also keep the separate AWS
+`kubeconfig-aws-migration` / `talosconfig-aws-migration` notes and files unchanged.
+Use a new home kubeconfig below; do not overwrite any of these.
+
+**Karnataka's `/dev/nvme1n1` (WD Black) is failing: never select it.**
+Only the healthy `/dev/nvme0n1` is a candidate, **after off-node backups and an
+explicit physical operator choice**. Identify disks by model, serial, size,
+and current contents at the console (`lsblk -o NAME,SIZE,MODEL,SERIAL,FSTYPE,MOUNTPOINTS`);
+do not assume device enumeration is sufficient. Apply the same backup and
+operator-choice gate to Bihar's intended `/dev/nvme0n1`.
+
+### Build both targets and offline installation media
+
+Run from this repository on a Linux builder with Podman, Go compatible with
+Fisherman's `tui/go.mod`, Python 3, squashfs-tools (`mksquashfs`), dosfstools
+(`mkfs.fat`), mtools (`mmd`, `mcopy`), and xorriso available. Local source
+defaults are `~/dev/tuna-os/fisherman` and `~/dev/utah`; override with
+`FISHERMAN_SRC` and `UTAH_SRC`. For the CI source selection, use Fisherman commit
+`014e704be5f7365c4a1ccdef37fcadf97ade792a` and Utah commit
+`f2736b6b774551cc8971af85cedaa65a272354ee`; the Fisherman Go requirement is
+`1.26.2`. The media builder compiles the real Fisherman backend and TUI from
+these trees, not a substitute installer. Use a clean Fisherman checkout at that
+revision: it includes the target-disk OCI staging fix from
+the merged [Fisherman PR 345](https://github.com/tuna-os/fisherman/pull/345), required for
+offline installation without exhausting the live filesystem.
+
+```bash
+just server-images
+# Produces localhost/home-k8s-bihar:testing and localhost/home-k8s-karnataka:testing.
+mkdir -p artifacts/home-k8s
+export FISHERMAN_SRC="$HOME/dev/tuna-os/fisherman"
+export UTAH_SRC="$HOME/dev/utah"
+# Choose canonical refs in a registry namespace you control.
+export BIHAR_TARGET_REF=ghcr.io/hanthor/home-k8s-bihar:testing
+export KARNATAKA_TARGET_REF=ghcr.io/hanthor/home-k8s-karnataka:testing
+just server-installer bihar "$BIHAR_TARGET_REF" artifacts/home-k8s/bihar-installer.iso
+just server-installer karnataka "$KARNATAKA_TARGET_REF" artifacts/home-k8s/karnataka-installer.iso
+```
+
+The target references above are **day-2 tracking metadata**, not downloads needed
+by the offline installation. Each ISO embeds its matching unchanged OCI payload.
+These local commands and PR/push acceptance do not publish registry images.
+Before `bootc upgrade`, publish the intended image to its canonical ref and verify
+the digest; building an ISO alone does not make that ref available.
+
+### Publish accepted images and installation media
+
+Publication is an explicit **master-only** dispatch, after interactive Corral
+acceptance. It repeats both real offline TUI installations and the installed
+two-node Kubernetes scenario before transferring any release artifacts:
+
+```bash
+gh workflow run server-images.yml --repo hanthor/dotfiles --ref master \
+  -f publish=true -f version=20261020
+```
+
+Choose an unused, valid `YYYYMMDD` date. Ordinary PR/push runs and manual runs
+with `publish=false` remain read-only. Only the separate publishing job receives
+registry/release write permissions; it pushes the exact accepted OCI archives,
+not rebuilt images. It publishes `ghcr.io/hanthor/home-k8s-{bihar,karnataka}`
+with immutable date tags and the mutable `testing` channel, plus the public
+GitHub prerelease `home-k8s-YYYYMMDD` (not the repository's latest stable release).
+Assets include both tested ISOs, OCI archives, media contracts, checksums,
+source/upstream revisions, registry digests, and explicit acceptance markers.
+The canonical `just server-images` build records this repository's Git revision
+in the OCI source/revision labels, rather than inheriting Hummingbird's revision.
+Installed VM disks and credentials are never release assets.
+
+GitHub creates new container packages **private**, even when linked to this
+public repository. On first publication, change each package's visibility to
+public in its GitHub package settings. The publisher refuses to create the
+release until anonymous access to both image tags succeeds. If this gate fails,
+change visibility and rerun **only the failed publishing job within one day**:
+the accepted artifact transfer has one-day retention. Identical existing date
+tags are reused; different content or an existing release/tag name is rejected.
+Never rebuild over an immutable date tag.
+
+### Install through the actual TUI
+
+For each node, first meet the backup/disk-selection gate above. Boot its matching
+ISO in **UEFI mode with Secure Boot disabled**. At the live root console run:
+
+```bash
+bootc-installer-tui
+```
+
+1. Skip network configuration to use **DHCP**. The pinned TUI does not serialize
+   selected network configuration; do not depend on it applying static addressing.
+2. Choose **Custom URL** and enter `oci:/usr/share/home-k8s/payload`.
+3. Choose the verified intended installation disk. Installation destroys its
+   contents; do not choose the failing Karnataka secondary disk.
+4. Choose **ext4**, and set the hostname to `bihar` or `karnataka` as appropriate.
+5. Leave disk encryption disabled for the tested installation path. Encrypted
+   installation is not covered by this acceptance run.
+6. Create an **actual administrative user** with a strong password. Record it
+   securely and check login/sudo after installation. Do not rely on root live
+   access as an installed-system account.
+7. Skip SSH-key import: this pinned TUI does not serialize imported keys into
+   the installation. Add authorized keys securely after first login instead.
+8. Review the destructive disk choice, install, shut down/reboot, and **remove
+   the ISO** so the next boot is from the installed disk.
+
+The live ISO is SELinux **permissive only** (`enforcing=0`, not `selinux=0`).
+That exception belongs to live assembly, not the target. On the installed node,
+verify `getenforce` prints **`Enforcing`**, `sudo -v` succeeds for the new user,
+`bootc status` shows the intended target reference, and the corresponding K3s
+unit is inactive before activation. Stop and resolve any mismatch before joining
+the cluster. Install SSH keys and verify remote access using authenticated,
+trusted connections; never paste private keys or cluster tokens into CI logs.
+
+### Explicit activation and separate kubeconfig
+
+Verify router DHCP reservations and actual addresses **before starting K3s**:
+**Bihar `192.168.0.5`, Karnataka `192.168.0.6`**. The worker configuration and
+server TLS SAN depend on Bihar's address. Make sure the isolated/new home
+cluster cannot conflict with a running old cluster at those addresses.
+
+On Bihar, as root:
+
+```bash
+touch /etc/rancher/k3s/activate
+systemctl start k3s@server
+k3s kubectl get nodes
+```
+
+Wait for the API/server to be healthy. Securely transfer
+`/var/lib/rancher/k3s/server/node-token` from Bihar to
+`/etc/rancher/k3s/token` on Karnataka. **Treat this server token as
+cluster-admin-sensitive**, not as a harmless worker password. Use a verified SSH
+connection or other authenticated encrypted channel; do not print it, commit it,
+store it in artifacts, or copy it through chat. On Karnataka ensure the file is
+owned by root and mode `0600` before activation:
+
+```bash
+chown root:root /etc/rancher/k3s/token
+chmod 0600 /etc/rancher/k3s/token
+touch /etc/rancher/k3s/activate
+systemctl start k3s@agent
+```
+
+Securely copy Bihar's `/etc/rancher/k3s/k3s.yaml` to the workstation as
+`~/.kube/config-home-hummingbird` (mode `0600`); change only its loopback API
+endpoint to `https://192.168.0.5:6443`. Keep this admin credential out of Git and
+logs. Use it explicitly instead of changing the old home or AWS kubeconfigs:
+
+```bash
+export KUBECONFIG="$HOME/.kube/config-home-hummingbird"
+kubectl get nodes -o wide
+kubectl wait --for=condition=Ready nodes/bihar nodes/karnataka --timeout=300s
+```
+
+### Restore home workloads and validate before cutover
+
+Review and apply **only selected home workload manifests** from `talos-k8s/`.
+Do not recursively apply that whole directory: it also contains AWS manifests.
+Do not apply Talos machine patches, extension/schematic settings, or Talos-only
+bootstrap configuration to K3s. Reconcile storage classes, node labels,
+selectors, host paths, privileged-device access, and security requirements
+against the new cluster before restoring applications.
+
+Restore data from off-node backups to the intended node/path with correct
+ownership and SELinux labels (use `restorecon` on restored host paths). Follow
+application-consistent restore procedures rather than blindly copying running
+databases or treating Longhorn's data directory as a complete backup. Validate
+PVC binding, persistence after pod/node restarts, DNS, cross-node traffic,
+ingress, application health, and data integrity before declaring a cutover.
+
+On real Karnataka hardware, verify `amdgpu`, `/dev/kfd`, `/dev/dri`, the AMD
+device plugin's allocatable GPU, and an actual Lemonade inference workload.
+Verify `/dev/kvm`, firmware virtualization settings, the correct Intel/AMD KVM
+modules, KubeVirt scheduling, and a real guest boot on the relevant nodes.
+Build-time module checks and virtual acceptance do not establish these facts.
+
+Use planned maintenance and fresh data/etcd backups for day-2 bootc updates.
+**`bootc rollback` rolls back the OS deployment, not application data, etcd,
+mutable `/etc` configuration, or PV contents.** A data rollback requires its
+own tested restore plan; retain the Talos recovery material independently.
+
+### Disposable VM acceptance (GitHub Actions and local)
+
+GitHub Actions workflow [Home server images](../../../../.github/workflows/server-images.yml)
+(`server-images.yml`) runs for matching pull requests and master pushes.
+Manual dispatch defaults to acceptance only (`publish=false`); review branches
+cannot publish. Acceptance runs image builds, offline media creation, real
+interactive TUI installation for both targets, and installed-disk cluster
+acceptance. Its VMs use an isolated virtual LAN plus QEMU NAT, not the physical
+home LAN. CI requires KVM and fails if it is unavailable. No fleet deployment
+or physical-disk access occurs, including on a publication dispatch.
+It runs on `ubuntu-24.04` and uploads `*.log`, `*.json`, and `*.txt` diagnostics
+as `home-server-images-diagnostics` with seven-day retention, never installed
+disks. Only an explicit master publication retains the exact tested ISOs and
+exports an allowlisted, one-day release-artifact transfer to the publishing job
+described above. Retain any needed diagnostics before they expire.
+
+For local acceptance, install `uv`, QEMU x86_64, and OVMF, and use the ISO names
+from the build commands above. These commands create disposable installed
+qcow2 disks and per-node UEFI variable stores in the artifact directory:
+
+```bash
+uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm install bihar
+uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm install karnataka
+uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm cluster
+```
+
+On a machine without usable KVM, explicitly replace `--accel kvm` with
+`--accel tcg` in **all three commands**; this is slower emulation, not hardware
+acceleration proof. The harness pins `pexpect==4.9.0` through its inline `uv`
+dependency metadata. It drives the actual TUI, powers off, removes the ISO,
+boots the installed UEFI disk, checks login/sudo, Enforcing SELinux, target
+reference, and inactive K3s, then activates both nodes and checks Ready status,
+cross-node traffic, DNS, and PVC behavior. Preserve the generated `*.log`,
+`*.json`, and `*.txt` proof outputs with the CI run. The passing run and physical
+hardware limitations are recorded under “Scope and acceptance status” above.

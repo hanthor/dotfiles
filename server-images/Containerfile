@@ -1,0 +1,31 @@
+ARG BASE_IMAGE=quay.io/hummingbird-community/os-minimal:latest@sha256:b696a563751a0f945688171327c42142841c319533e001408eda9bba73cd4950
+ARG PACKAGE_IMAGE=ghcr.io/projectbluefin/utah-packages@sha256:d257e97a0057e37da47995bb142c180e2352960ab13bd44594215616a395b717
+FROM ${PACKAGE_IMAGE} AS packages
+FROM ${BASE_IMAGE} AS common
+
+ARG SOURCE_DATE_EPOCH=1704067200
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
+ARG K3S_VERSION=v1.36.1+k3s1
+ARG K3S_SHA256=a443db3fe9820cd93617ae67e4386d87c1514c1e96ceb30f4c2791c39065653c
+ARG K3S_SELINUX_VERSION=v1.6.latest.1
+ARG K3S_SELINUX_SHA256=ff171703f71f8c2c987342267d674a9ee3b86bb2e5d4c7cbd4a3a4be3be386d3
+
+COPY packages/ /etc/yum.repos.d/
+COPY fedora-44-primary.key /etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary
+COPY rootfs/ /
+COPY compose.sh /tmp/compose.sh
+RUN --mount=type=bind,from=packages,source=/repository,target=/etc/utah-packages,ro \
+    bash /tmp/compose.sh
+LABEL containers.bootc="1" \
+      org.opencontainers.image.source="https://github.com/hanthor/dotfiles" \
+      org.opencontainers.image.revision=""
+
+FROM common AS bihar
+COPY nodes/bihar/ /
+RUN systemctl enable k3s@server.service && bootc container lint --fatal-warnings --skip nonempty-boot
+LABEL org.opencontainers.image.title="Bihar Hummingbird Kubernetes server"
+
+FROM common AS karnataka
+COPY nodes/karnataka/ /
+RUN systemctl enable k3s@agent.service && bootc container lint --fatal-warnings --skip nonempty-boot
+LABEL org.opencontainers.image.title="Karnataka Hummingbird Kubernetes worker"

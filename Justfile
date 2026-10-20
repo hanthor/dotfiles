@@ -528,6 +528,27 @@ doctor-fleet:
       ssh -o BatchMode=yes "$h" 'cd ~/.local/share/dotfiles && just doctor' || true
     done
 
+# Build a Hummingbird home-cluster image; never installs to a physical disk.
+server-image node tag="testing":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    node={{quote(node)}}
+    tag={{quote(tag)}}
+    case "$node" in bihar|karnataka) ;; *) echo "Expected bihar or karnataka" >&2; exit 2 ;; esac
+    revision=$(git -C "{{justfile_directory()}}" rev-parse HEAD)
+    podman build --target "$node" --tag "localhost/home-k8s-$node:$tag" \
+      --label "org.opencontainers.image.revision=$revision" \
+      --file "{{justfile_directory()}}/server-images/Containerfile" "{{justfile_directory()}}/server-images"
+
+# Build both home nodes from the same pinned base and Kubernetes release.
+server-images tag="testing":
+    just server-image bihar {{quote(tag)}}
+    just server-image karnataka {{quote(tag)}}
+
+# Build UEFI live media with bootc-installer-tui and this node's offline payload.
+server-installer node target_ref output tag="testing":
+    "{{justfile_directory()}}/server-images/build-installer.sh" {{quote(node)}} {{quote(target_ref)}} {{quote(output)}} {{quote(tag)}}
+
 # ── AWS account IaC (aws/, OpenTofu) ─────────────────────────────────────
 # Docs: docs/src/servers/aws/README.md. Needs AWS creds (`aws login`) and
 # aws/terraform.tfvars, which holds personal IPs + alert address and so lives in

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<zone>
+  <short>Home Kubernetes nodes</short>
+  <source address="192.168.0.0/24"/>
+  <service name="ssh"/>
+  <port protocol="tcp" port="6443"/>
+  <port protocol="tcp" port="10250"/>
+  <port protocol="udp" port="8472"/>
+  <port protocol="tcp" port="30000-32767"/>
+  <port protocol="udp" port="30000-32767"/>
+  <forward/>
+</zone>
