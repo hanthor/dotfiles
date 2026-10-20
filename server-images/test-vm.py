@@ -112,7 +112,7 @@ class VM:
             self.child.sendline(encoded[offset:offset + 512])
         self.child.sendline("HOME_K8S_SCRIPT")
         self.child.sendline(f"bash -euo pipefail /run/home-k8s-proof.sh; result=$?; printf '\\n{marker}:%s\\n' \"$result\"")
-        self.child.expect(rf"(?m)^{marker}:([0-9]+)\r?$", timeout=timeout)
+        self.child.expect(rf"(?m)^{marker}:([0-9]+)\r*\n", timeout=timeout)
         output = ANSI.sub("", self.child.before).replace("\r", "")
         if self.child.match.group(1) != "0":
             raise RuntimeError(f"{self.node}: guest command failed:\n{output[-16000:]}")
