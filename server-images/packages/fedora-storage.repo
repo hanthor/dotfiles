@@ -1,0 +1,9 @@
+# Composition only. The base's Hummingbird repository has priority 10.
+[fedora-storage]
+name=Fedora 44 storage dependencies
+baseurl=https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/$basearch/os/
+enabled=0
+priority=90
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary
+skip_if_unavailable=False

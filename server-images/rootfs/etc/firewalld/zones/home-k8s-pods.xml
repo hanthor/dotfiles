@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<zone target="ACCEPT">
+  <short>Home Kubernetes pod and service networks</short>
+  <source address="10.244.0.0/16"/>
+  <source address="10.96.0.0/12"/>
+  <forward/>
+</zone>

@@ -1,0 +1,139 @@
+name: Home server images
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'server-images/**'
+      - '.github/workflows/server-images.yml'
+      - 'Justfile'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'server-images/**'
+      - '.github/workflows/server-images.yml'
+      - 'Justfile'
+  workflow_dispatch:
+
+# Fork PRs build and test with read-only access; nothing is published or deployed.
+permissions:
+  contents: read
+
+jobs:
+  installer-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      FISHERMAN_SRC: ${{ github.workspace }}/.sources/fisherman
+      UTAH_SRC: ${{ github.workspace }}/.sources/utah
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check out real Fisherman installer sources
+        uses: actions/checkout@v4
+        with:
+          repository: tuna-os/fisherman
+          ref: dc9920c6bdeb96fdf567cd968d8b632336a9c611
+          path: .sources/fisherman
+          persist-credentials: false
+
+      - name: Check out Utah live-media sources
+        uses: actions/checkout@v4
+        with:
+          repository: projectbluefin/utah
+          ref: f2736b6b774551cc8971af85cedaa65a272354ee
+          path: .sources/utah
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: .sources/fisherman/tui/go.mod
+          cache: false
+
+      - uses: astral-sh/setup-uv@v6
+
+      - uses: extractions/setup-just@v2
+
+      - name: Set acceptance output directory
+        run: echo "ARTIFACTS=$RUNNER_TEMP/server-images" >> "$GITHUB_ENV"
+
+      - name: Install image and VM tooling
+        run: |
+          mkdir -p "$ARTIFACTS"
+          {
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends \
+              podman buildah qemu-system-x86 qemu-utils ovmf \
+              squashfs-tools dosfstools mtools xorriso \
+              uidmap slirp4netns fuse-overlayfs acl python3 git
+          } 2>&1 | tee "$ARTIFACTS/install-tools.log"
+
+      - name: Record capacity and require accessible KVM
+        run: |
+          mkdir -p "$ARTIFACTS"
+          {
+            uname -a
+            lscpu
+            free -h
+            df -h
+            id
+            if [[ ! -c /dev/kvm ]]; then
+              echo '::error::This GitHub-hosted runner has no /dev/kvm; real installer acceptance requires KVM. No TCG fallback is permitted.'
+              exit 1
+            fi
+            sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+            ls -l /dev/kvm
+            getfacl /dev/kvm
+            python3 -c 'import os; fd = os.open("/dev/kvm", os.O_RDWR); os.close(fd)'
+          } 2>&1 | tee "$ARTIFACTS/runner-capacity.log"
+
+      - name: Build both node images once
+        run: |
+          just server-images 2>&1 | tee "$ARTIFACTS/build-images.log"
+
+      - name: Install both nodes through the real interactive TUI
+        run: |
+          for node in bihar karnataka; do
+            iso="$ARTIFACTS/$node-installer.iso"
+            live_image="localhost/home-k8s-$node-installer:testing"
+            cleanup_media() {
+              rm -f -- "$iso"
+              if podman image exists "$live_image"; then
+                podman image rm "$live_image"
+              fi
+            }
+            # Keep installed disks for the cluster test, but never keep large
+            # installer media or live overlay images between node installs.
+            trap cleanup_media EXIT
+            just server-installer "$node" \
+              "ghcr.io/tuna-os/home-k8s-$node:testing" "$iso" \
+              2>&1 | tee "$ARTIFACTS/$node-build-installer.log"
+            uv run server-images/test-vm.py --artifacts "$ARTIFACTS" \
+              --accel kvm install "$node" \
+              2>&1 | tee "$ARTIFACTS/$node-install-driver.log"
+            cleanup_media
+            trap - EXIT
+            df -h "$ARTIFACTS"
+          done
+
+      - name: Accept the installed two-node K3s cluster
+        run: |
+          uv run server-images/test-vm.py --artifacts "$ARTIFACTS" \
+            --accel kvm cluster 2>&1 | tee "$ARTIFACTS/cluster-driver.log"
+
+      - name: Upload installer and cluster diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-server-images-diagnostics
+          path: |
+            ${{ runner.temp }}/server-images/**/*.log
+            ${{ runner.temp }}/server-images/**/*.json
+            ${{ runner.temp }}/server-images/**/*.txt
+          if-no-files-found: warn
+          retention-days: 7

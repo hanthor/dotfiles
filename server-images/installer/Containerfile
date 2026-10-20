@@ -1,0 +1,9 @@
+ARG SOURCE_IMAGE
+FROM ${SOURCE_IMAGE}
+COPY bootc-installer-tui fisherman /usr/bin/
+COPY payload/ /usr/share/home-k8s/payload/
+COPY media-input.json /etc/bootc-installer/media-input.json
+COPY source.txt /usr/share/home-k8s/installer-source.txt
+COPY rootfs/ /
+COPY configure.sh /tmp/configure-installer.sh
+RUN bash /tmp/configure-installer.sh
