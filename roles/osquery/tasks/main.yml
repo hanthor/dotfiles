@@ -25,3 +25,7 @@
 - name: Install native osquery monitoring
   ansible.builtin.include_tasks: install.yml
   when: osquery_native_supported | bool and not ansible_check_mode
+
+- name: Manage the always-on fleet poller
+  ansible.builtin.include_tasks: poller.yml
+  when: osquery_native_supported | bool and not ansible_check_mode

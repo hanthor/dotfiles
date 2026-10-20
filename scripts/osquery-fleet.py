@@ -3,8 +3,8 @@
 
 Offline, unsupported and excluded hosts remain visible in coverage. Drift is a
 monitoring result, while stale data and collection failures make the CLI fail.
-Nothing is written to disk and subprocess diagnostics/report extras are not
-forwarded: effective Ansible inventory can contain secrets.
+Optional snapshots are private and atomic. Subprocess diagnostics/report extras
+are not forwarded: effective Ansible inventory can contain secrets.
 """
 import argparse
 from datetime import datetime, timedelta, timezone
@@ -13,8 +13,10 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 
 from online_hosts import online_peers
 
@@ -91,6 +93,8 @@ def inventory_hosts(inventory):
     if any(not isinstance(h, str) or not isinstance(v, dict) for h, v in variables.items()):
         raise ValueError("inventory contains invalid host variables")
     hosts = group_hosts(inventory, "all") | set(variables)
+    if not hosts:
+        raise ValueError("inventory contains no fleet hosts")
     return {host: variables.get(host, {}) for host in hosts}
 
 
@@ -286,11 +290,31 @@ def print_overview(overview):
                     print(f"    {marker} {json.dumps(row, sort_keys=True, ensure_ascii=True)}")
 
 
+def write_snapshot(path, snapshot):
+    directory = path.parent
+    info = directory.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid()
+            or stat.S_IMODE(info.st_mode) & 0o077):
+        raise ValueError("snapshot directory must be private and owned by the caller")
+    fd, temporary = tempfile.mkstemp(prefix=".fleet-osquery-", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            os.fchmod(output.fileno(), 0o600)
+            json.dump(snapshot, output, sort_keys=True)
+            output.write("\n")
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inventory", default=os.environ.get("DOTFILES_INVENTORY", str(INVENTORY)))
     parser.add_argument("--host", action="append", help="inventory alias (repeatable)")
     parser.add_argument("--json", action="store_true", help="print private report details as JSON")
+    parser.add_argument("--output", type=Path, help="atomically save JSON in an existing private directory")
     args = parser.parse_args(argv)
     try:
         inventory = load_inventory(args.inventory)
@@ -300,13 +324,25 @@ def main(argv=None):
             status, discovery_error = {}, str(exc)
         overview = collect_fleet(inventory, status, args.host, discovery_error=discovery_error)
     except ValueError as exc:
+        overview = {"schema_version": 1, "collected_at": datetime.now(timezone.utc).isoformat(),
+                    "error": str(exc)}
+    if args.output is not None:
+        try:
+            write_snapshot(args.output, overview)
+        except (OSError, ValueError):
+            print("osquery fleet: cannot write private snapshot", file=sys.stderr)
+            return 1
+    if "error" in overview:
         if args.json:
-            print(json.dumps({"schema_version": 1, "error": str(exc)}))
+            print(json.dumps(overview))
         else:
-            print(f"osquery fleet: {exc}", file=sys.stderr)
+            print(f"osquery fleet: {overview['error']}", file=sys.stderr)
         return 1
     if args.json:
         print(json.dumps(overview, sort_keys=True))
+    elif args.output is not None:
+        print("Fleet snapshot saved: " + ", ".join(
+            f"{state}={overview['coverage'][state]}" for state in STATUSES))
     else:
         print_overview(overview)
     return int(bool(overview["coverage"]["error"] or overview["coverage"]["stale"]))

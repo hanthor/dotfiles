@@ -92,11 +92,22 @@ jobs:
 
       - name: Install actual native osquery and private reporting
         run: >-
-          ansible-playbook -i localhost, -c local site.yml --tags osquery
-          --skip-tags secrets -e target=localhost
+          ansible-playbook -i "$(hostname)," -c local site.yml --tags osquery
+          --skip-tags secrets -e "target=$(hostname)" -e osquery_poller_enabled=true
 
       - name: Exercise real socket, enabled unit and baseline transitions
         run: sudo python3 tests/osquery_smoke.py
+
+      - name: Prove pending listener drift reaches the private poller snapshot
+        run: sudo python3 tests/osquery_poller_smoke.py --snapshot "$HOME/.local/state/fleet-osquery/latest.json"
+
+      - name: Verify poller opt-out stops the schedule and service
+        run: |
+          ansible-playbook -i "$(hostname)," -c local site.yml --tags osquery \
+            --skip-tags secrets -e "target=$(hostname)" -e osquery_poller_enabled=false
+          test "$(systemctl show fleet-osquery-poll.timer -p ActiveState --value)" = inactive
+          test "$(systemctl show fleet-osquery-poll.timer -p UnitFileState --value)" = disabled
+          test "$(systemctl show fleet-osquery-poll.service -p ActiveState --value)" = inactive
 
   # Renovate may bump pi's npm deps unreviewed (CODEOWNERS carve-out); this
   # makes sure a PR can't *add* or remove one without a human.

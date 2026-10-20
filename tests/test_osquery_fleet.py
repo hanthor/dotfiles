@@ -326,3 +326,96 @@ def test_unknown_host_and_invalid_effective_inventory_fail_closed():
         fleet.collect_fleet(inventory({"known": {}}), peers("known"), selected=["unknown"], identities={"controller"})
     with pytest.raises(ValueError, match="effective host variables"):
         fleet.inventory_hosts({"all": {"hosts": ["known"]}})
+    with pytest.raises(ValueError, match="no fleet hosts"):
+        fleet.collect_fleet(inventory({}), peers(), identities={"controller"})
+
+
+@pytest.fixture
+def snapshot_file(tmp_path):
+    directory = tmp_path / "snapshots"
+    directory.mkdir(mode=0o700)
+    return directory / "latest.json"
+
+
+def test_snapshot_is_private_and_failed_replace_preserves_previous(snapshot_file, monkeypatch):
+    fleet.write_snapshot(snapshot_file, {"status": "previous"})
+    assert snapshot_file.stat().st_mode & 0o777 == 0o600
+    previous = snapshot_file.read_bytes()
+
+    def fail_replace(*args):
+        raise OSError("replacement failed")
+
+    monkeypatch.setattr(fleet.os, "replace", fail_replace)
+    with pytest.raises(OSError):
+        fleet.write_snapshot(snapshot_file, {"status": "new"})
+    assert snapshot_file.read_bytes() == previous
+    assert sorted(p.name for p in snapshot_file.parent.iterdir()) == ["latest.json"]
+
+
+@pytest.mark.parametrize("unsafe", ["public", "symlink"])
+def test_snapshot_rejects_nonprivate_or_symlink_directory(snapshot_file, tmp_path, unsafe):
+    if unsafe == "public":
+        snapshot_file.parent.chmod(0o755)
+    else:
+        link = tmp_path / "linked-state"
+        link.symlink_to(snapshot_file.parent, target_is_directory=True)
+        snapshot_file = link / "latest.json"
+    with pytest.raises(ValueError, match="private"):
+        fleet.write_snapshot(snapshot_file, {"status": "new"})
+    assert not snapshot_file.exists()
+
+
+def test_scheduled_snapshot_keeps_raw_drift_out_of_console(snapshot_file, monkeypatch, capsys):
+    monkeypatch.setattr(fleet, "load_inventory", lambda path: inventory({"remote": {}}))
+    monkeypatch.setattr(fleet, "load_status", lambda: peers("remote"))
+    monkeypatch.setattr(fleet, "self_names", lambda: {"controller"})
+    monkeypatch.setattr(fleet, "command_json", lambda *args: report(drift=True))
+    assert fleet.main(["--output", str(snapshot_file)]) == 0
+    saved = json.loads(snapshot_file.read_text())
+    assert saved["coverage"]["drift"] == 1
+    assert saved["hosts"][0]["report"]["changes"]["listening_ports"]["added"][0]["port"] == "2222"
+    output = capsys.readouterr().out
+    assert "drift=1" in output
+    assert "0.0.0.0" not in output and "/usr/sbin/sshd" not in output
+
+
+def test_failed_host_replaces_previous_healthy_snapshot(snapshot_file, monkeypatch):
+    fleet.write_snapshot(snapshot_file, {"coverage": {"ok": 1}})
+    monkeypatch.setattr(fleet, "load_inventory", lambda path: inventory({"remote": {}}))
+    monkeypatch.setattr(fleet, "load_status", lambda: peers("remote"))
+    monkeypatch.setattr(fleet, "self_names", lambda: {"controller"})
+
+    def failed_read(*args):
+        raise ValueError("cached report read failed (exit 255)")
+
+    monkeypatch.setattr(fleet, "command_json", failed_read)
+    assert fleet.main(["--output", str(snapshot_file)]) == 1
+    saved = json.loads(snapshot_file.read_text())
+    assert saved["coverage"]["ok"] == 0 and saved["coverage"]["error"] == 1
+    assert saved["hosts"][0]["status"] == "error"
+    assert "report" not in saved["hosts"][0]
+
+
+def test_fatal_inventory_failure_replaces_previous_snapshot_with_timestamped_error(snapshot_file, monkeypatch):
+    fleet.write_snapshot(snapshot_file, {"coverage": {"ok": 1}})
+
+    def failed_inventory(path):
+        raise ValueError("ansible-inventory failed")
+
+    monkeypatch.setattr(fleet, "load_inventory", failed_inventory)
+    assert fleet.main(["--output", str(snapshot_file)]) == 1
+    saved = json.loads(snapshot_file.read_text())
+    assert saved["error"] == "ansible-inventory failed"
+    assert fleet.timestamp(saved["collected_at"]) == NOW
+    assert "coverage" not in saved and "hosts" not in saved
+
+
+def test_snapshot_write_failure_never_reports_healthy(snapshot_file, monkeypatch, capsys):
+    monkeypatch.setattr(fleet, "load_inventory", lambda path: inventory({}))
+    monkeypatch.setattr(fleet, "load_status", lambda: peers())
+    snapshot_file.parent.chmod(0o755)
+    assert fleet.main(["--output", str(snapshot_file)]) == 1
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "cannot write private snapshot" in output.err
+    assert not snapshot_file.exists()
