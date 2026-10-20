@@ -193,6 +193,8 @@ def install(args):
         unit = "server" if node == "bihar" else "agent"
         output = vm.run(f'''test "$(id -u)" = 0
 test "$(cat /proc/sys/kernel/hostname)" = {node}
+systemctl --failed --no-pager
+journalctl -b -u systemd-modules-load.service -u gssproxy.service --no-pager
 test "$(getenforce)" = Enforcing
 test ! -e /etc/bootc-installer/live-iso-mode
 test ! -e /usr/bin/bootc-installer-tui
