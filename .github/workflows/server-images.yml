@@ -86,7 +86,13 @@ jobs:
               echo '::error::This GitHub-hosted runner has no /dev/kvm; real installer acceptance requires KVM. No TCG fallback is permitted.'
               exit 1
             fi
-            sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+            # Persist KVM ownership across udev refreshes, not just an initial
+            # ACL: real acceptance lost access between installation and disk boot.
+            printf 'KERNEL=="kvm", OWNER="%s", MODE="0600"\n' "$(id -u)" |
+              sudo tee /etc/udev/rules.d/99-home-k8s-kvm.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            sudo udevadm settle
             ls -l /dev/kvm
             getfacl /dev/kvm
             python3 -c 'import os; fd = os.open("/dev/kvm", os.O_RDWR); os.close(fd)'
