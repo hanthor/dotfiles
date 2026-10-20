@@ -1,0 +1,53 @@
+---
+# ── PipeWire config directories ──────────────────────────────────────────
+
+- name: Ensure PipeWire config directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - ~/.config/pipewire/pipewire.conf.d
+    - ~/.config/pipewire/filter-chain.conf.d
+
+# ── Speaker DSP ──────────────────────────────────────────────────────────
+# Tier 1: LV2-based full chain (para EQ + bass enhancer + exciter + limiter)
+# Tier 2: Built-in biquad EQ (zero external deps, works everywhere)
+#
+# If LV2 plugins are available, speaker-dsp.conf (LV2) takes priority.
+# Otherwise speaker-biquad.conf (built-in biquads) is used.
+
+- name: Deploy speaker DSP (LV2-based, full chain)
+  when: has_lv2_lsp | bool
+  ansible.builtin.copy:
+    src: speaker-dsp.conf
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/pipewire/pipewire.conf.d/50-speaker-dsp.conf"
+    mode: "0644"
+  notify: Restart pipewire
+
+- name: Deploy speaker DSP (built-in biquads, zero-dependency fallback)
+  when: not (has_lv2_lsp | bool)
+  ansible.builtin.copy:
+    src: speaker-biquad.conf
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/pipewire/pipewire.conf.d/50-speaker-dsp.conf"
+    mode: "0644"
+  notify: Restart pipewire
+
+# ── Mic DSP ──────────────────────────────────────────────────────────────
+# Requires librnnoise_ladspa.so (RNNoise noise suppression).
+# Only deployed when the LADSPA plugin exists on the system.
+
+- name: Deploy mic DSP (RNNoise LADSPA)
+  when: has_rnnoise | bool
+  ansible.builtin.copy:
+    src: mic-rnnoise.conf
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/pipewire/pipewire.conf.d/60-mic-dsp.conf"
+    mode: "0644"
+  notify: Restart pipewire
+
+- name: Remove mic DSP config (RNNoise unavailable)
+  when: not (has_rnnoise | bool)
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/pipewire/pipewire.conf.d/60-mic-dsp.conf"
+    state: absent
+  notify: Restart pipewire
