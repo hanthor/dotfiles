@@ -1,0 +1,25 @@
+{
+  "options": {
+    "logger_path": "/var/log/osquery",
+    "logger_rotate": "true",
+    "logger_rotate_size": "10485760",
+    "logger_rotate_max_files": "3",
+    "disable_events": "true",
+    "disable_audit": "true",
+    "disable_distributed": "true"
+  },
+  "schedule": {
+    "fleet_listening_ports": {
+      "query": "SELECT DISTINCT lp.address, lp.port, lp.protocol, COALESCE(p.path, '') AS path FROM listening_ports lp LEFT JOIN processes p ON lp.pid = p.pid WHERE lp.port > 0 AND lp.protocol IN (6, 17);",
+      "interval": 300
+    },
+    "fleet_startup_services": {
+      "query": "SELECT DISTINCT filename AS name, CASE WHEN path LIKE '/run/%' THEN 'enabled-runtime' ELSE 'enabled' END AS unit_file_state, symlink_target_path AS fragment_path FROM file WHERE (path LIKE '/etc/systemd/system/%.wants/%' OR path LIKE '/etc/systemd/system/%.requires/%' OR path LIKE '/run/systemd/system/%.wants/%' OR path LIKE '/run/systemd/system/%.requires/%') AND symlink = 1 AND (filename LIKE '%.service' OR filename LIKE '%.timer' OR filename LIKE '%.socket' OR filename LIKE '%.path');",
+      "interval": 300
+    },
+    "fleet_system_versions": {
+      "query": "SELECT 'kernel' AS component, version FROM kernel_info UNION ALL SELECT 'os', name || ' ' || version FROM os_version UNION ALL SELECT 'osquery', version FROM osquery_info;",
+      "interval": 300
+    }
+  }
+}

@@ -1,0 +1,10 @@
+---
+osquery_supported: true
+osquery_version: "5.23.1"
+osquery_release_archives:
+  x86_64:
+    name: "osquery-5.23.1_1.linux_x86_64.tar.gz"
+    sha256: "0f37a478a1dbda24b67c81551e32d734b392c5a2f5deb156bf1c41ca204cfa67"
+  aarch64:
+    name: "osquery-5.23.1_1.linux_aarch64.tar.gz"
+    sha256: "9ae763820166f75f19970b5147b1930a308865a923ab127f4b8bbaea7b69962a"

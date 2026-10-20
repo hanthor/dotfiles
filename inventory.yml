@@ -28,8 +28,10 @@ all:
       ansible_host: localhost
       ansible_connection: local
     kerala:
-      ansible_host: 100.67.142.116
+      ansible_host: 100.96.124.92
+      ansible_user: james
       ansible_connection: ssh
+      tailnet_name: kerala-1
     vm:
       ansible_host: localhost
       ansible_connection: local
@@ -48,6 +50,7 @@ all:
       ansible_connection: ssh
     dilli:
       ansible_host: dilli
+      ansible_user: james
       ansible_connection: ssh
     kanpur:
       ansible_host: 100.107.52.37

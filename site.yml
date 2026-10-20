@@ -130,6 +130,9 @@
     - role: systemd
       tags: [services, systemd]
       when: not skip_systemd | default(false)
+    - role: osquery
+      tags: [services, security, osquery]
+      when: inventory_hostname not in groups.get('vps', []) and not skip_osquery | default(false)
     - role: bst_dashboard
       tags: [services, bst_dashboard]
     - role: kirocrew

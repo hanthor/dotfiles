@@ -1,0 +1,151 @@
+---
+- name: Provision private native osquery monitoring
+  become: true
+  block:
+    - name: Create persistent executable and download directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - /var/cache/fleet-osquery
+        - "/opt/osquery-{{ osquery_version }}"
+        - /opt/fleet-osquery
+
+    - name: Download checksum-pinned upstream osquery archive
+      ansible.builtin.get_url:
+        url: >-
+          https://github.com/osquery/osquery/releases/download/{{ osquery_version }}/{{ osquery_release_archives[ansible_facts['architecture']].name }}
+        dest: "/var/cache/fleet-osquery/{{ osquery_release_archives[ansible_facts['architecture']].name }}"
+        checksum: "sha256:{{ osquery_release_archives[ansible_facts['architecture']].sha256 }}"
+        owner: root
+        group: root
+        mode: "0644"
+        timeout: 120
+
+    - name: Extract the upstream native binary
+      ansible.builtin.unarchive:
+        src: "/var/cache/fleet-osquery/{{ osquery_release_archives[ansible_facts['architecture']].name }}"
+        dest: "/opt/osquery-{{ osquery_version }}"
+        remote_src: true
+        include:
+          - opt/osquery/bin/osqueryd
+        extra_opts:
+          - --strip-components=2
+        creates: "/opt/osquery-{{ osquery_version }}/bin/osqueryd"
+        owner: root
+        group: root
+
+    - name: Label the persistent native executable for SELinux hosts
+      ansible.builtin.file:
+        path: "/opt/osquery-{{ osquery_version }}/bin/osqueryd"
+        owner: root
+        group: root
+        mode: "0755"
+        setype: bin_t
+
+    - name: Expose osquery interactive mode
+      ansible.builtin.file:
+        src: osqueryd
+        dest: "/opt/osquery-{{ osquery_version }}/bin/osqueryi"
+        state: link
+        owner: root
+        group: root
+
+    - name: Select the pinned osquery release
+      ansible.builtin.file:
+        src: "/opt/osquery-{{ osquery_version }}"
+        dest: /opt/osquery
+        state: link
+        owner: root
+        group: root
+      notify: Restart osquery daemon
+
+    - name: Create private osquery configuration and state directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop:
+        - /etc/osquery
+        - /var/lib/osquery
+        - /var/log/osquery
+        - /var/lib/fleet-osquery
+
+    - name: Install the private drift reporter
+      ansible.builtin.copy:
+        src: fleet-osquery.py
+        dest: /opt/fleet-osquery/fleet-osquery
+        owner: root
+        group: root
+        mode: "0755"
+        setype: bin_t
+
+    - name: Configure bounded local-only osquery scheduling
+      ansible.builtin.template:
+        src: osquery.conf.j2
+        dest: /etc/osquery/osquery.conf
+        owner: root
+        group: root
+        mode: "0600"
+        validate: /opt/osquery/bin/osqueryd --disable_extensions --config_check --config_path=%s
+      notify: Restart osquery daemon
+
+    - name: Install osquery daemon unit
+      ansible.builtin.template:
+        src: osqueryd.service.j2
+        dest: /etc/systemd/system/osqueryd.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart osquery daemon
+
+    - name: Install drift comparison units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - fleet-osquery-report.service
+        - fleet-osquery-report.timer
+
+    # Enable before baseline collection so our own startup timer is included.
+    - name: Enable drift timer without starting an uninitialized report
+      ansible.builtin.systemd_service:
+        name: fleet-osquery-report.timer
+        daemon_reload: true
+        enabled: true
+
+    - name: Apply changed daemon configuration
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start osquery daemon
+      ansible.builtin.systemd_service:
+        name: osqueryd.service
+        enabled: true
+        state: started
+
+    - name: Establish the initial baseline without accepting later drift
+      ansible.builtin.command:
+        argv:
+          - /opt/fleet-osquery/fleet-osquery
+          - baseline
+          - --if-missing
+        creates: /var/lib/fleet-osquery/baseline.json
+
+    - name: Refresh the private drift report
+      ansible.builtin.systemd_service:
+        name: fleet-osquery-report.service
+        state: started
+      changed_when: false
+
+    - name: Start periodic drift reporting
+      ansible.builtin.systemd_service:
+        name: fleet-osquery-report.timer
+        state: started
