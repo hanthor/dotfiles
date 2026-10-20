@@ -1,3 +1,4 @@
+#!/bin/sh
 if [ "$(id -u)" = 0 ] && [ -t 0 ]; then
     printf '\nHome Kubernetes installer (live media, root console).\n'
     printf 'Run: bootc-installer-tui\n'
