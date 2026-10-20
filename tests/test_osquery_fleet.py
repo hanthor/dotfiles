@@ -13,7 +13,17 @@ sys.path.insert(0, str(REPO / "scripts"))
 spec = importlib.util.spec_from_file_location("osquery_fleet", REPO / "scripts/osquery-fleet.py")
 fleet = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fleet)
-NOW = datetime.now(timezone.utc)
+NOW = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def fixed_clock(monkeypatch):
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW if tz is None else NOW.astimezone(tz)
+
+    monkeypatch.setattr(fleet, "datetime", Clock)
 
 
 def inventory(hosts, **groups):
