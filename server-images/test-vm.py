@@ -47,7 +47,8 @@ class VM:
                 "-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd",
                 "-drive", f"if=pflash,format=raw,file={variables}",
                 "-drive", f"if=virtio,format=qcow2,file={disk}",
-                "-display", "none", "-serial", "stdio", "-monitor", "none", "-no-reboot",
+                "-display", "none", "-chardev", "stdio,id=console,signal=off",
+                "-serial", "chardev:console", "-monitor", "none", "-no-reboot",
                 "-netdev", f"user,id=nat,restrict={'off' if lan_port else 'on'}",
                 "-device", "virtio-net-pci,netdev=nat"]
         if live:
