@@ -30,12 +30,12 @@ jobs:
       FISHERMAN_SRC: ${{ github.workspace }}/.sources/fisherman
       UTAH_SRC: ${{ github.workspace }}/.sources/utah
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Check out real Fisherman installer sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: tuna-os/fisherman
           ref: dc9920c6bdeb96fdf567cd968d8b632336a9c611
@@ -43,21 +43,21 @@ jobs:
           persist-credentials: false
 
       - name: Check out Utah live-media sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: projectbluefin/utah
           ref: f2736b6b774551cc8971af85cedaa65a272354ee
           path: .sources/utah
           persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: .sources/fisherman/tui/go.mod
           cache: false
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.3.0
 
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
 
       - name: Set acceptance output directory
         run: echo "ARTIFACTS=$RUNNER_TEMP/server-images" >> "$GITHUB_ENV"
@@ -128,7 +128,7 @@ jobs:
 
       - name: Upload installer and cluster diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: home-server-images-diagnostics
           path: |
