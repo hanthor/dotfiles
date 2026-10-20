@@ -9,3 +9,5 @@ extra_brews:
 sshd_harden: true
 # Kiro Crew gateway (kirocrew role)
 kirocrew_enabled: true
+# Always-on fleet observer; reuse this account's existing Tailscale/SSH access.
+osquery_poller_enabled: true

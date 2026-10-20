@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll private fleet osquery reports every 15 minutes
+
+[Timer]
+# Host reports run at :00/:15/:30/:45; collect after their refresh window.
+OnCalendar=*:2/15
+RandomizedDelaySec=30s
+OnBootSec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

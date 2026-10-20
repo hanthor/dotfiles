@@ -1,0 +1,97 @@
+---
+- name: Check for a previously managed fleet poller
+  ansible.builtin.stat:
+    path: /etc/systemd/system/fleet-osquery-poll.timer
+    get_checksum: false
+  register: osquery_poller_timer
+  when: not osquery_poller_enabled | bool
+
+- name: Disable fleet polling when this host is not selected
+  ansible.builtin.systemd_service:
+    name: fleet-osquery-poll.timer
+    enabled: false
+    state: stopped
+  become: true
+  when:
+    - not osquery_poller_enabled | bool
+    - osquery_poller_timer.stat.exists
+
+- name: Stop any remaining poll on an unselected host
+  ansible.builtin.systemd_service:
+    name: fleet-osquery-poll.service
+    state: stopped
+  become: true
+  when:
+    - not osquery_poller_enabled | bool
+    - osquery_poller_timer.stat.exists
+
+- name: Configure persistent private fleet polling
+  become: true
+  when: osquery_poller_enabled | bool
+  block:
+    - name: Verify Ansible inventory tooling under the polling identity
+      ansible.builtin.command:
+        argv: [ansible-inventory, --version]
+      become: false
+      environment:
+        PATH: "{{ osquery_poller_path }}"
+      changed_when: false
+
+    - name: Create root-managed poller configuration directory
+      ansible.builtin.file:
+        path: /etc/fleet-osquery
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install the collector and its existing discovery helper
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/scripts/{{ item }}"
+        dest: "/opt/fleet-osquery/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - osquery-fleet.py
+        - online_hosts.py
+
+    - name: Snapshot only fleet connection and exclusion metadata
+      ansible.builtin.template:
+        src: poller-inventory.yml.j2
+        dest: /etc/fleet-osquery/inventory.yml
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Create private aggregate snapshot storage for the polling identity
+      ansible.builtin.file:
+        path: "{{ osquery_poller_state_dir }}"
+        state: directory
+        owner: "{{ ansible_facts['user_id'] }}"
+        group: "{{ ansible_facts['user_gid'] }}"
+        mode: "0700"
+
+    - name: Install system-level fleet polling units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - fleet-osquery-poll.service
+        - fleet-osquery-poll.timer
+
+    - name: Enable persistent fleet polling schedule
+      ansible.builtin.systemd_service:
+        name: fleet-osquery-poll.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    - name: Collect the initial fleet snapshot under the existing SSH identity
+      ansible.builtin.systemd_service:
+        name: fleet-osquery-poll.service
+        state: started
+      changed_when: false

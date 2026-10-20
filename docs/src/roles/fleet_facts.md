@@ -75,6 +75,42 @@ than 30 minutes are stale. Stale/errors return nonzero; ordinary drift and offli
 coverage do not. Each result shows its collection time, not a claim of live state.
 `--inventory PATH` (or `DOTFILES_INVENTORY`) selects another inventory.
 
+### Always-on poller: Punjab
+
+Punjab has `osquery_poller_enabled: true`. Its system-level
+`fleet-osquery-poll.timer` runs every 15 minutes at :02/:17/:32/:47, after the
+hosts' report-refresh window, and two minutes after boot. It runs as `ubuntu`,
+using that account's existing SSH keys, known hosts and noninteractive sudo.
+It does not depend on an interactive SSH agent or copy credentials into Kubernetes.
+
+The role installs a root-managed collector and a minimal inventory under
+`/opt/fleet-osquery` and `/etc/fleet-osquery/inventory.yml`. Only connection and
+exclusion metadata is copied—not the full effective inventory or Bitwarden facts.
+Apply the `osquery` role on Punjab after changing fleet membership or connection
+details to refresh this inventory snapshot.
+
+Each poll atomically replaces **one** aggregate:
+`/home/ubuntu/.local/state/fleet-osquery/latest.json` (0600, inside a 0700 directory,
+owned by `ubuntu`). No unbounded history is kept. Journald gets coverage counts,
+not raw addresses or executable paths. Polling never accepts host baselines.
+
+```sh
+ssh ubuntu@punjab 'cat ~/.local/state/fleet-osquery/latest.json'
+ssh ubuntu@punjab 'systemctl status fleet-osquery-poll.timer --no-pager'
+ssh ubuntu@punjab 'sudo -n systemctl start fleet-osquery-poll.service'
+```
+
+Offline machines remain explicitly offline. Failed reads/stale reports are saved
+as degraded coverage and fail the service; an unusable or empty inventory saves
+a timestamped error instead of retaining a supposedly healthy snapshot. If the
+process itself cannot run or write, check the service journal and the snapshot's
+collection time—an old file is not current health.
+
+`osquery_poller_enabled` defaults to false on other hosts. Setting it false on a
+previous poller and applying the role stops its timer and in-flight service;
+the last private snapshot remains for inspection. The manual fleet CLI still works
+from other machines and supports `--output PATH` for explicit private snapshots.
+
 ### Baseline and local investigation
 
 First apply records the machine's **existing** state, not an audited known-safe
@@ -93,9 +129,10 @@ sudo systemctl start fleet-osquery-report.service
 Baseline/report/lock files are root-owned mode 0600 in
 `/var/lib/fleet-osquery` (0700). Failed collection does not replace the last
 successful report or baseline; inspect the failed service and its journal, and
-treat an aging cached sample accordingly. The CLI never persists fetched fleet
-reports. **Keep its output private:** addresses and executable paths are sensitive;
-do not attach raw JSON to public issues or publish it through `fleet_facts`.
+treat an aging cached sample accordingly. Manual CLI runs do not save fetched
+reports unless `--output` is supplied; Punjab's scheduled aggregate is described
+above. **Keep all report output private:** addresses and executable paths are
+sensitive; do not attach raw JSON to public issues or publish it through `fleet_facts`.
 No command lines, process environments, credentials or serial numbers are queried.
 
 Check mode reports platform support only; actual installation and baseline
@@ -105,3 +142,6 @@ That smoke creates a temporary loopback listener and an enabled, never-started
 unit, checks pending/accepted/removed drift, and compares a synthetic prior kernel
 against the real current kernel. It uses isolated state and removes its fixtures;
 the fleet baseline is untouched.
+The native CI jobs also enable the persistent poller and run
+`tests/osquery_poller_smoke.py`: a real temporary listener must appear in the
+aggregate, disappear after removal, and leave the host baseline unchanged.

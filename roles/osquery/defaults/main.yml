@@ -1,5 +1,8 @@
 ---
 osquery_supported: true
+osquery_poller_enabled: false
+osquery_poller_state_dir: "{{ ansible_facts['env']['HOME'] }}/.local/state/fleet-osquery"
+osquery_poller_path: "{{ ansible_facts['env']['HOME'] }}/.local/bin:{{ ansible_env_path }}"
 osquery_version: "5.23.1"
 osquery_release_archives:
   x86_64:
