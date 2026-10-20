@@ -535,7 +535,9 @@ server-image node tag="testing":
     node={{quote(node)}}
     tag={{quote(tag)}}
     case "$node" in bihar|karnataka) ;; *) echo "Expected bihar or karnataka" >&2; exit 2 ;; esac
+    revision=$(git -C "{{justfile_directory()}}" rev-parse HEAD)
     podman build --target "$node" --tag "localhost/home-k8s-$node:$tag" \
+      --label "org.opencontainers.image.revision=$revision" \
       --file "{{justfile_directory()}}/server-images/Containerfile" "{{justfile_directory()}}/server-images"
 
 # Build both home nodes from the same pinned base and Kubernetes release.

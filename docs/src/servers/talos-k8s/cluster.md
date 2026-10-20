@@ -552,20 +552,50 @@ After reboot (~2 min), all pods recover automatically. PVC-backed services
 This is a replacement OS and **new K3s cluster** for the two home nodes, not a
 Talos upgrade. Bihar is the Intel server/control plane; Karnataka is the AMD
 worker. **No physical migration has been performed.** The home cluster is still
-powered down/in storage. Nothing here changes the
-[AWS Talos cluster](../aws-k8s/cluster.md), its workloads, credentials, or nodes.
+powered down/in storage. Nothing here changes the production
+[AWS Talos cluster](../aws-k8s/cluster.md) nodes, workloads, or credentials;
+Corral acceptance uses separate disposable KubeVirt VMs, not Talos node changes.
 Sections 1–11 remain the Talos recovery handbook, not instructions for the new OS.
 
 Image builds alone do not prove installation. The GitHub Actions acceptance
 workflow builds both images and offline ISOs, drives the **real
 `bootc-installer-tui`**, boots the installed disks without their ISOs, then
 activates a disposable two-node K3s cluster.
-[Run 39462240451](https://github.com/hanthor/dotfiles/actions/runs/39462240451)
-passed for commit `d4f71e54122e81d22f1e3789609a5aad3f57edcf`: both offline TUI
+[Run 39472985001](https://github.com/hanthor/dotfiles/actions/runs/39472985001)
+passed for commit `2c73044f888bf439e82f93c3cb807355ddc853eb`: both offline TUI
 installs, installed-disk UEFI boot, admin login/sudo, Enforcing SELinux, gated
 K3s activation, two Ready nodes, cross-node HTTP, cluster DNS, and local-path
 PVC data surviving writer-pod replacement. The normal repository CI also
-[passed](https://github.com/hanthor/dotfiles/actions/runs/39462240483).
+[passed](https://github.com/hanthor/dotfiles/actions/runs/39472984865).
+
+On **2026-10-20**, Playwright drove both installers through the **actual Corral
+noVNC canvases** on disposable KubeVirt VMs. Both reached “Installation
+Complete”; their ISO volumes were then detached before installed-disk boots.
+Real admin-password login/sudo and Enforcing SELinux passed on both. The installed
+cluster passed the same DNS, cross-node HTTP, and PVC pod-replacement scenario
+used by CI. Bihar's Intel `kvm_intel` module loaded on this Intel Corral host;
+that is not a test of a nested KubeVirt guest or the physical home machines.
+
+The deployed Corral service reported its cluster unreachable, so acceptance used
+a temporary localhost Corral dashboard against `admin@aws-migration`, without
+changing the deployed service. All test VMs/disks were isolated in namespace
+`home-k8s-acceptance`. Configure the disposable node LAN as `192.168.0.5/24`
+and `192.168.0.6/24` **before activating K3s**: Corral's provider pod addresses
+overlap this new cluster's `10.244.0.0/16` pod CIDR. The initial overlapping
+setup reached Ready nodes and working DNS but failed cross-node HTTP; the
+non-overlapping guest LAN passed without changing the images' production
+network configuration. Changing an already-initialized embedded-etcd server's
+IP also requires its membership to be corrected; do not initialize it with the
+provider pod IP in the first place.
+
+Native Corral media predates publication-only OCI label changes; it is not
+byte-identical to the subsequently rebuilt release. The publication dispatch
+repeats complete KVM acceptance on the exact bytes it publishes. Corral evidence
+is saved under `~/.local/share/home-k8s-build/` on the acceptance controller:
+`corral-{bihar,karnataka}-install-complete.webp`,
+`corral-{bihar,karnataka}-installed-boot.webp`,
+`corral-installed-kubernetes.webp`, and `corral-cluster-proof.txt`.
+
 VM acceptance cannot establish GPU, physical NIC, disk health, firmware,
 or nested-virtualization readiness on the real machines. The recorded runner
 was AMD EPYC: Bihar's Intel-only `kvm_intel` preload fails in that VM, so its
@@ -650,7 +680,7 @@ defaults are `~/dev/tuna-os/fisherman` and `~/dev/utah`; override with
 `1.26.2`. The media builder compiles the real Fisherman backend and TUI from
 these trees, not a substitute installer. Use a clean Fisherman checkout at that
 revision: it includes the target-disk OCI staging fix from
-[Fisherman PR 345](https://github.com/tuna-os/fisherman/pull/345), required for
+the merged [Fisherman PR 345](https://github.com/tuna-os/fisherman/pull/345), required for
 offline installation without exhausting the live filesystem.
 
 ```bash
@@ -691,6 +721,8 @@ with immutable date tags and the mutable `testing` channel, plus the public
 GitHub prerelease `home-k8s-YYYYMMDD` (not the repository's latest stable release).
 Assets include both tested ISOs, OCI archives, media contracts, checksums,
 source/upstream revisions, registry digests, and explicit acceptance markers.
+The canonical `just server-images` build records this repository's Git revision
+in the OCI source/revision labels, rather than inheriting Hummingbird's revision.
 Installed VM disks and credentials are never release assets.
 
 GitHub creates new container packages **private**, even when linked to this

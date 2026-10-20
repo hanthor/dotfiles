@@ -17,7 +17,8 @@ COPY compose.sh /tmp/compose.sh
 RUN --mount=type=bind,from=packages,source=/repository,target=/etc/utah-packages,ro \
     bash /tmp/compose.sh
 LABEL containers.bootc="1" \
-      org.opencontainers.image.source="https://github.com/hanthor/dotfiles"
+      org.opencontainers.image.source="https://github.com/hanthor/dotfiles" \
+      org.opencontainers.image.revision=""
 
 FROM common AS bihar
 COPY nodes/bihar/ /
