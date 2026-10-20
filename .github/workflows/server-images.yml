@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: tuna-os/fisherman
-          ref: dc9920c6bdeb96fdf567cd968d8b632336a9c611
+          ref: 014e704be5f7365c4a1ccdef37fcadf97ade792a
           path: .sources/fisherman
           persist-credentials: false
 

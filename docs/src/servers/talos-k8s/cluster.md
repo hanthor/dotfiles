@@ -634,10 +634,13 @@ Fisherman's `tui/go.mod`, Python 3, squashfs-tools (`mksquashfs`), dosfstools
 (`mkfs.fat`), mtools (`mmd`, `mcopy`), and xorriso available. Local source
 defaults are `~/dev/tuna-os/fisherman` and `~/dev/utah`; override with
 `FISHERMAN_SRC` and `UTAH_SRC`. For the CI source selection, use Fisherman commit
-`dc9920c6bdeb96fdf567cd968d8b632336a9c611` and Utah commit
+`014e704be5f7365c4a1ccdef37fcadf97ade792a` and Utah commit
 `f2736b6b774551cc8971af85cedaa65a272354ee`; the Fisherman Go requirement is
 `1.26.2`. The media builder compiles the real Fisherman backend and TUI from
-these trees, not a substitute installer.
+these trees, not a substitute installer. Use a clean Fisherman checkout at that
+revision: it includes the target-disk OCI staging fix from
+[Fisherman PR 345](https://github.com/tuna-os/fisherman/pull/345), required for
+offline installation without exhausting the live filesystem.
 
 ```bash
 just server-images
