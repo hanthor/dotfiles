@@ -192,7 +192,7 @@ def install(args):
         vm.root_login()
         unit = "server" if node == "bihar" else "agent"
         output = vm.run(f'''test "$(id -u)" = 0
-test "$(hostname)" = {node}
+test "$(cat /proc/sys/kernel/hostname)" = {node}
 test "$(getenforce)" = Enforcing
 test ! -e /etc/bootc-installer/live-iso-mode
 test ! -e /usr/bin/bootc-installer-tui
