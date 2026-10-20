@@ -559,10 +559,18 @@ Sections 1–11 remain the Talos recovery handbook, not instructions for the new
 Image builds alone do not prove installation. The GitHub Actions acceptance
 workflow builds both images and offline ISOs, drives the **real
 `bootc-installer-tui`**, boots the installed disks without their ISOs, then
-activates a disposable two-node K3s cluster. Passing CI evidence has **not yet
-been recorded here**; consult the actual run and uploaded logs before relying
-on it. VM acceptance cannot establish GPU, physical NIC, disk health, firmware,
-or nested-virtualization readiness on the real machines.
+activates a disposable two-node K3s cluster.
+[Run 39462240451](https://github.com/hanthor/dotfiles/actions/runs/39462240451)
+passed for commit `d4f71e54122e81d22f1e3789609a5aad3f57edcf`: both offline TUI
+installs, installed-disk UEFI boot, admin login/sudo, Enforcing SELinux, gated
+K3s activation, two Ready nodes, cross-node HTTP, cluster DNS, and local-path
+PVC data surviving writer-pod replacement. The normal repository CI also
+[passed](https://github.com/hanthor/dotfiles/actions/runs/39462240483).
+VM acceptance cannot establish GPU, physical NIC, disk health, firmware,
+or nested-virtualization readiness on the real machines. The recorded runner
+was AMD EPYC: Bihar's Intel-only `kvm_intel` preload fails in that VM, so its
+module-load unit is not evidence of working Intel virtualization. Verify that
+unit and a real KubeVirt guest on physical Bihar before cutover.
 
 ### Image contents and state
 
@@ -590,6 +598,9 @@ NetworkManager, sshd, firewalld, and iSCSI services are enabled. Bihar enables
 `/etc/rancher/k3s/activate`. **No activation marker or cluster token is baked
 into an image.** Automatic bootc fetch/apply services are masked so a reboot of
 the only control plane is an explicit maintenance decision.
+NFS GSSAPI state directories are initialized privately (`0700`) through
+tmpfiles before the daemon's sandbox is assembled; CI requires `gssproxy` to
+start successfully with SELinux enforcing.
 
 Mutable state includes `/etc/rancher/k3s`, `/var/lib/rancher/k3s` (including etcd
 and containerd), user homes under `/var/home`, and these retained workload paths:
@@ -794,5 +805,5 @@ dependency metadata. It drives the actual TUI, powers off, removes the ISO,
 boots the installed UEFI disk, checks login/sudo, Enforcing SELinux, target
 reference, and inactive K3s, then activates both nodes and checks Ready status,
 cross-node traffic, DNS, and PVC behavior. Preserve the generated `*.log`,
-`*.json`, and `*.txt` proof outputs with the CI run. **No passing result is
-claimed by this procedure; record actual evidence after the run completes.**
+`*.json`, and `*.txt` proof outputs with the CI run. The passing run and physical
+hardware limitations are recorded under “Scope and acceptance status” above.
