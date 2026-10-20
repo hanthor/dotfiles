@@ -40,6 +40,10 @@ jobs:
     env:
       FISHERMAN_SRC: ${{ github.workspace }}/.sources/fisherman
       UTAH_SRC: ${{ github.workspace }}/.sources/utah
+      # Docker Official Image library/registry, version 3.1.2; manifest-index
+      # digest resolved from Docker Hub. Official-images source revision:
+      # distribution/distribution-library-image@775973b655bb4b11561db92a1cf50113148ce530.
+      REGISTRY_FIXTURE_IMAGE: docker.io/library/registry:3.1.2@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8
     steps:
       - name: Validate publication request
         id: request
@@ -106,7 +110,7 @@ jobs:
           {
             sudo apt-get update
             sudo apt-get install -y --no-install-recommends \
-              podman buildah qemu-system-x86 qemu-utils ovmf \
+              podman buildah skopeo qemu-system-x86 qemu-utils ovmf \
               squashfs-tools dosfstools mtools xorriso \
               uidmap slirp4netns fuse-overlayfs acl python3 git
           } 2>&1 | tee "$ARTIFACTS/install-tools.log"
@@ -136,9 +140,77 @@ jobs:
             python3 -c 'import os; fd = os.open("/dev/kvm", os.O_RDWR); os.close(fd)'
           } 2>&1 | tee "$ARTIFACTS/runner-capacity.log"
 
-      - name: Build both node images once
+      - name: Build starter and both node images once
         run: |
           just server-images 2>&1 | tee "$ARTIFACTS/build-images.log"
+
+      - name: Install starter and accept a real bootc switch
+        run: |
+          # The recorded acceptance runner had 85 GiB free on a 145 GiB root
+          # filesystem. Keep sequential media construction: the extra retained
+          # ISO is bounded below 2 GiB, and the starter disk/registry are removed
+          # before the existing two-node acceptance. No third VM disk overlaps.
+          df -h "$ARTIFACTS" | tee "$ARTIFACTS/starter-capacity.log"
+          just server-installer starter \
+            "ghcr.io/$REGISTRY_OWNER/home-k8s-starter:testing" \
+            "$ARTIFACTS/starter-installer.iso" \
+            2>&1 | tee "$ARTIFACTS/starter-build-installer.log"
+          test "$(stat --format=%s "$ARTIFACTS/starter-installer.iso")" -lt 2147483648
+          uv run server-images/test-vm.py --artifacts "$ARTIFACTS" \
+            --accel kvm install starter \
+            2>&1 | tee "$ARTIFACTS/starter-install-driver.log"
+          # Save the exact newly built Bihar image now and reuse this archive
+          # for publication; preserve its manifest through the local fixture.
+          podman save --format oci-archive \
+            --output "$ARTIFACTS/home-k8s-bihar.oci.tar" \
+            localhost/home-k8s-bihar:testing
+          test "$(stat --format=%s "$ARTIFACTS/home-k8s-bihar.oci.tar")" -lt 2147483648
+          podman pull "$REGISTRY_FIXTURE_IMAGE"
+          registry="home-k8s-starter-switch-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          podman run --detach --name "$registry" --pull=never \
+            --publish 127.0.0.1:5000:5000 "$REGISTRY_FIXTURE_IMAGE"
+          for _ in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:5000/v2/; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent --show-error http://127.0.0.1:5000/v2/
+          skopeo copy --preserve-digests --dest-tls-verify=false \
+            --digestfile "$ARTIFACTS/starter-switch-target-digest.txt" \
+            "oci-archive:$ARTIFACTS/home-k8s-bihar.oci.tar" \
+            docker://127.0.0.1:5000/home-k8s-bihar:testing
+          skopeo inspect --raw --tls-verify=false \
+            docker://127.0.0.1:5000/home-k8s-bihar:testing \
+            > "$ARTIFACTS/starter-switch-target-manifest.json"
+          digest=$(cat "$ARTIFACTS/starter-switch-target-digest.txt")
+          test "$digest" = "sha256:$(sha256sum "$ARTIFACTS/starter-switch-target-manifest.json" | cut -d ' ' -f 1)"
+          skopeo inspect --raw "oci-archive:$ARTIFACTS/home-k8s-bihar.oci.tar" \
+            > "$RUNNER_TEMP/starter-switch-source-manifest.json"
+          test "$digest" = "sha256:$(sha256sum "$RUNNER_TEMP/starter-switch-source-manifest.json" | cut -d ' ' -f 1)"
+          uv run server-images/test-vm.py --artifacts "$ARTIFACTS" \
+            --accel kvm switch-starter \
+            --image 10.0.2.2:5000/home-k8s-bihar:testing \
+            --expected-digest "$digest" --insecure-registry 10.0.2.2:5000 \
+            2>&1 | tee "$ARTIFACTS/starter-switch-driver.log"
+
+      - name: Remove disposable starter disk and loopback registry
+        if: always()
+        env:
+          PUBLISH: ${{ inputs.publish || false }}
+        run: |
+          registry="home-k8s-starter-switch-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          if podman container exists "$registry"; then
+            podman rm --force --volumes "$registry"
+          fi
+          rm -f -- "$ARTIFACTS/starter-installed.qcow2" "$ARTIFACTS/starter-OVMF-VARS.fd"
+          if [[ "$PUBLISH" != true ]]; then
+            rm -f -- "$ARTIFACTS/starter-installer.iso" "$ARTIFACTS/home-k8s-bihar.oci.tar"
+          fi
+          if podman image exists localhost/home-k8s-starter-installer:testing; then
+            podman image rm localhost/home-k8s-starter-installer:testing
+          fi
+          df -h "$ARTIFACTS" | tee -a "$ARTIFACTS/starter-capacity.log"
 
       - name: Install both nodes through the real interactive TUI
         env:
@@ -161,6 +233,7 @@ jobs:
             just server-installer "$node" \
               "ghcr.io/$REGISTRY_OWNER/home-k8s-$node:testing" "$iso" \
               2>&1 | tee "$ARTIFACTS/$node-build-installer.log"
+            test "$(stat --format=%s "$iso")" -lt 2147483648
             uv run server-images/test-vm.py --artifacts "$ARTIFACTS" \
               --accel kvm install "$node" \
               2>&1 | tee "$ARTIFACTS/$node-install-driver.log"
@@ -184,11 +257,15 @@ jobs:
           # Acceptance has powered off both disposable VMs. Their disks are
           # never transferred, and removing them makes room for the archives.
           rm -- "$ARTIFACTS/bihar-installed.qcow2" "$ARTIFACTS/karnataka-installed.qcow2"
-          for node in bihar karnataka; do
+          for node in starter bihar karnataka; do
             mv -- "$ARTIFACTS/$node-installer.iso" "$release/"
-            podman save --format oci-archive \
-              --output "$release/home-k8s-$node.oci.tar" \
-              "localhost/home-k8s-$node:testing"
+            if [[ "$node" == bihar ]]; then
+              mv -- "$ARTIFACTS/home-k8s-bihar.oci.tar" "$release/"
+            else
+              podman save --format oci-archive \
+                --output "$release/home-k8s-$node.oci.tar" \
+                "localhost/home-k8s-$node:testing"
+            fi
             podman image inspect "localhost/home-k8s-$node:testing" \
               --format '{{.Id}}' > "$release/$node-image-id.txt"
             cp -- "$ARTIFACTS/$node-media.json" "$release/"
@@ -204,13 +281,47 @@ jobs:
           release = Path(sys.argv[1])
           proof = (Path(os.environ["ARTIFACTS"]) / "cluster-proof.txt").read_text()
           markers = [
+              "TUI_INSTALLED_NODE_PASSED=starter",
               "TUI_INSTALLED_NODE_PASSED=bihar",
               "TUI_INSTALLED_NODE_PASSED=karnataka",
           ]
-          for node, marker in zip(("bihar", "karnataka"), markers):
+          for node, marker in zip(("starter", "bihar", "karnataka"), markers):
               driver = (Path(os.environ["ARTIFACTS"]) / f"{node}-install-driver.log").read_text()
               if marker not in driver:
                   raise SystemExit(f"Missing accepted TUI proof: {node}")
+          switch_driver = (Path(os.environ["ARTIFACTS"]) / "starter-switch-driver.log").read_text()
+          if not any(line == "STARTER_SWITCH_PASSED" or line.startswith("STARTER_SWITCH_PASSED: ")
+                     for line in switch_driver.splitlines()):
+              raise SystemExit("Missing accepted starter bootc-switch proof")
+          markers.append("STARTER_SWITCH_PASSED")
+          artifacts = Path(os.environ["ARTIFACTS"])
+          switch = json.loads((artifacts / "starter-switch-proof.txt").read_text())
+          switch_fields = (
+              "schema_version", "marker", "image", "expected_digest", "booted_ref",
+              "booted_digest", "previous_ref", "hostname",
+          )
+          switch_checks = (
+              "rebooted", "staged_digest_verified", "admin_identity_preserved",
+              "var_sentinel_preserved", "machine_identity_preserved", "hostname_preserved",
+              "selinux_enforcing", "k3s_inactive", "activation_marker_absent",
+              "registry_override_removed",
+          )
+          switch_proof = {key: switch[key] for key in switch_fields}
+          switch_proof["checks"] = {key: switch["checks"][key] for key in switch_checks}
+          digest = (artifacts / "starter-switch-target-digest.txt").read_text().strip()
+          target_media = json.loads((release / "bihar-media.json").read_text())
+          if (switch_proof["schema_version"] != 1 or
+                  switch_proof["marker"] != "STARTER_SWITCH_PASSED" or
+                  switch_proof["image"] != "10.0.2.2:5000/home-k8s-bihar:testing" or
+                  switch_proof["booted_ref"] != switch_proof["image"] or
+                  switch_proof["expected_digest"] != digest or
+                  switch_proof["booted_digest"] != digest or
+                  target_media["platformManifestDigest"] != digest or
+                  switch_proof["previous_ref"] != f'ghcr.io/{os.environ["REGISTRY_OWNER"]}/home-k8s-starter:testing' or
+                  switch_proof["hostname"] != "starter-smoke" or
+                  any(value is not True for value in switch_proof["checks"].values())):
+              raise SystemExit("Starter switch proof does not match the accepted source/target and persistence checks")
+          (release / "starter-switch-proof.txt").write_text(json.dumps(switch_proof, indent=2) + "\n")
           # Only explicit success markers are public; raw console output can
           # contain credentials even when the disposable cluster has stopped.
           cluster_markers = [line.strip() for line in proof.splitlines()
@@ -230,14 +341,24 @@ jobs:
                   "tuna-os/fisherman": sha(os.environ["FISHERMAN_SRC"]),
                   "projectbluefin/utah": sha(os.environ["UTAH_SRC"]),
               },
-              "acceptance": "Both offline TUI installs, installed-node boot checks, and two-node K3s DNS/network/PVC replacement persistence passed.",
+              "switch_fixture": {
+                  "registry_image": os.environ["REGISTRY_FIXTURE_IMAGE"],
+                  "official_image_source": "https://github.com/distribution/distribution-library-image",
+                  "official_image_revision": "775973b655bb4b11561db92a1cf50113148ce530",
+                  "host_binding": "127.0.0.1:5000",
+                  "guest_ref": "10.0.2.2:5000/home-k8s-bihar:testing",
+                  "expected_digest": digest,
+                  "proof": "starter-switch-proof.txt",
+              },
+              "acceptance": "Three offline TUI installs and installed-node boot checks, starter bootc switch with persistent admin/state and no automatic K3s activation, and two-node K3s DNS/network/PVC replacement persistence passed.",
               "images": {
                   node: {
                       "tested_image_id": (release / f"{node}-image-id.txt").read_text().strip(),
+                      "tested_manifest_digest": json.loads((release / f"{node}-media.json").read_text())["platformManifestDigest"],
                       "archive": f"home-k8s-{node}.oci.tar",
                       "installer": f"{node}-installer.iso",
                       "tracking_ref": f'ghcr.io/{os.environ["REGISTRY_OWNER"]}/home-k8s-{node}:testing',
-                  } for node in ("bihar", "karnataka")
+                  } for node in ("starter", "bihar", "karnataka")
               },
           }
           (release / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
@@ -324,7 +445,7 @@ jobs:
 
       - name: Preflight immutable registry tags
         run: |
-          for node in bihar karnataka; do
+          for node in starter bihar karnataka; do
             image="$REGISTRY_OWNER/home-k8s-$node"
             skopeo inspect --raw "oci-archive:home-k8s-$node.oci.tar" \
               > "$RUNNER_TEMP/$node-manifest.json"
@@ -361,7 +482,7 @@ jobs:
 
       - name: Load and push the exact accepted OCI archives
         run: |
-          for node in bihar karnataka; do
+          for node in starter bihar karnataka; do
             image="ghcr.io/$REGISTRY_OWNER/home-k8s-$node"
             podman load --input "home-k8s-$node.oci.tar"
             expected_id=$(jq -r --arg node "$node" '.images[$node].tested_image_id' provenance.json)
@@ -385,7 +506,7 @@ jobs:
 
       - name: Require anonymous GHCR access before creating the public release
         run: |
-          for node in bihar karnataka; do
+          for node in starter bihar karnataka; do
             image="$REGISTRY_OWNER/home-k8s-$node"
             if ! token=$(curl --fail --silent --show-error \
                 "https://ghcr.io/token?service=ghcr.io&scope=repository:$image:pull" | jq -er .token); then
@@ -412,8 +533,8 @@ jobs:
         run: |
           gh release create "home-k8s-$VERSION" ./* \
             --target "$GITHUB_SHA" \
-            --title "Hummingbird home nodes $VERSION" \
-            --notes "Exact images and offline bootc-installer-tui ISOs accepted by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Both installed nodes passed K3s DNS, pod networking, and PVC replacement persistence. Physical hardware is not yet validated. Registry digests, upstream source revisions, and SHA256SUMS are included in the assets. The testing channel tracks these images; date tags are immutable. No fleet rollout is performed." \
+            --title "Hummingbird x86_64 starter and home nodes $VERSION" \
+            --notes "Exact images and offline bootc-installer-tui ISOs accepted by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. The unconfigured starter passed installation and an actual bootc switch to the newly built Bihar payload with admin/state persistence and no automatic K3s activation. Both installed home nodes passed K3s DNS, pod networking, and PVC replacement persistence. Physical hardware is not yet validated. Registry digests, upstream source revisions, and SHA256SUMS are included in the assets. The testing channel tracks these images; date tags are immutable. No fleet rollout is performed." \
             --prerelease --latest=false
 
       - name: Remove ephemeral registry credentials

@@ -5,8 +5,11 @@ set -euo pipefail
 # Hummingbird/factory repositories do not provide; never upgrade the base kernel.
 dnf5 -y --enable-repo=utah-packages --enable-repo=fedora-storage \
     --setopt=install_weak_deps=False --exclude='kernel*' install \
-    linux-firmware amd-gpu-firmware amd-ucode-firmware microcode_ctl \
-    realtek-firmware mt7xxx-firmware iptables-nft \
+    linux-firmware amd-gpu-firmware intel-gpu-firmware \
+    amd-ucode-firmware microcode_ctl \
+    iwlwifi-dvm-firmware iwlwifi-mvm-firmware \
+    realtek-firmware mt7xxx-firmware atheros-firmware brcmfmac-firmware \
+    NetworkManager-wifi wpa_supplicant tailscale iptables-nft \
     iscsi-initiator-utils nfs-client-utils policycoreutils-python-utils
 
 curl --fail --location \
@@ -32,14 +35,35 @@ setsebool -P container_use_devices on
 
 /usr/bin/k3s --version
 firewall-offline-cmd --check-config
-systemctl enable NetworkManager.service NetworkManager-wait-online.service sshd.service firewalld.service iscsi-init.service iscsid.service
+systemctl enable NetworkManager.service NetworkManager-wait-online.service sshd.service firewalld.service tailscaled.service iscsi-init.service iscsid.service
 # Reboots of the only control plane must be deliberate and preceded by backups.
 systemctl mask bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service
 
 kernel=$(basename /usr/lib/modules/*)
-for module in overlay br_netfilter vxlan iscsi_tcp nfs amdgpu kvm_intel kvm_amd vhost_net; do
+for module in overlay br_netfilter vxlan iscsi_tcp nfs \
+    amdgpu i915 xe kvm_intel kvm_amd vhost_net tun \
+    iwlwifi mt7925e mt7921e rtw89_8852be rtw89_8922ae r8169 \
+    ath9k ath10k_pci ath11k_pci ath12k brcmfmac; do
     modinfo -k "$kernel" "$module" >/dev/null
 done
+# Firmware subpackages are weak dependencies; verify the explicitly selected
+# hardware families rather than relying on linux-firmware's meta-package.
+python3 - <<'PY'
+from pathlib import Path
+
+root = Path("/usr/lib/firmware")
+families = {
+    "Strix Halo graphics": ("amdgpu/gc_11_5_1*",),
+    "Intel Raptor Lake graphics": ("i915/adlp*", "i915/tgl*"),
+    "Intel Xe graphics": ("xe/**/*",),
+    "Intel Wi-Fi": ("iwlwifi-*.ucode*", "intel/iwlwifi/*.ucode*"),
+    "MediaTek MT7925 Wi-Fi": ("mediatek/mt7925/WIFI*bin*",),
+    "Intel CPU microcode": ("intel-ucode/*",),
+}
+for family, patterns in families.items():
+    if not any(path.is_file() for pattern in patterns for path in root.glob(pattern)):
+        raise SystemExit(f"Missing required firmware: {family}")
+PY
 # Include installed firmware and boot/storage drivers, not this builder's devices.
 dracut --force --no-hostonly --kver "$kernel" "/usr/lib/modules/$kernel/initramfs.img"
 
@@ -47,6 +71,8 @@ mkdir -p /usr/share/home-k8s
 rpm -qa --qf '%{NAME}\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' | sort > /usr/share/home-k8s/packages.tsv
 # Each physical host must generate its own iSCSI initiator identity at boot.
 rm -f /etc/iscsi/initiatorname.iscsi
+# The installer/operator assigns a hostname; specializations may provide one.
+rm -f /etc/hostname
 : > /etc/machine-id
 : > /etc/crypttab
 dnf5 clean all
