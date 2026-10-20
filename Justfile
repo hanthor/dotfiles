@@ -528,20 +528,21 @@ doctor-fleet:
       ssh -o BatchMode=yes "$h" 'cd ~/.local/share/dotfiles && just doctor' || true
     done
 
-# Build a Hummingbird home-cluster image; never installs to a physical disk.
+# Build a shared starter or configured home-node image; never touches a physical disk.
 server-image node tag="testing":
     #!/usr/bin/env bash
     set -euo pipefail
     node={{quote(node)}}
     tag={{quote(tag)}}
-    case "$node" in bihar|karnataka) ;; *) echo "Expected bihar or karnataka" >&2; exit 2 ;; esac
+    case "$node" in starter|bihar|karnataka) ;; *) echo "Expected starter, bihar or karnataka" >&2; exit 2 ;; esac
     revision=$(git -C "{{justfile_directory()}}" rev-parse HEAD)
     podman build --target "$node" --tag "localhost/home-k8s-$node:$tag" \
       --label "org.opencontainers.image.revision=$revision" \
       --file "{{justfile_directory()}}/server-images/Containerfile" "{{justfile_directory()}}/server-images"
 
-# Build both home nodes from the same pinned base and Kubernetes release.
+# Build the starter and both home variants from the same base and Kubernetes release.
 server-images tag="testing":
+    just server-image starter {{quote(tag)}}
     just server-image bihar {{quote(tag)}}
     just server-image karnataka {{quote(tag)}}
 

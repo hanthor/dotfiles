@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Build per-node UEFI media around the real local Fisherman TUI and backend.
 set -euo pipefail
-node=${1:?expected bihar or karnataka}
+node=${1:?expected starter, bihar or karnataka}
 target_ref=${2:?expected the canonical registry reference for installed-system updates}
 output=${3:?expected an output ISO path}
 tag=${4:-testing}
 source_image="localhost/home-k8s-$node:$tag"
-case "$node" in bihar|karnataka) ;; *) echo 'Expected bihar or karnataka' >&2; exit 2 ;; esac
+case "$node" in starter|bihar|karnataka) ;; *) echo 'Expected starter, bihar or karnataka' >&2; exit 2 ;; esac
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 fisherman_src=${FISHERMAN_SRC:-$HOME/dev/tuna-os/fisherman}
 utah_src=${UTAH_SRC:-$HOME/dev/utah}
@@ -52,5 +52,5 @@ live_image="localhost/home-k8s-$node-installer:$tag"
 podman build --build-arg "SOURCE_IMAGE=$source_image" \
     --tag "$live_image" --file "$work/Containerfile" "$work"
 podman unshare bash "$here/assemble-installer.sh" "$live_image" "$output" "$node" "$work" "$utah_src"
-printf 'Installer: %s\nCustom image URL: oci:/usr/share/home-k8s/payload\nHostname: %s\n' "$output" "$node"
+printf 'Installer: %s\nCustom image URL: oci:/usr/share/home-k8s/payload\nImage profile: %s\n' "$output" "$node"
 printf 'UEFI only; Secure Boot must be disabled. Live media is SELinux permissive; installed nodes remain enforcing.\n'
