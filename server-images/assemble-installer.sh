@@ -14,7 +14,7 @@ initrd="$mount/usr/lib/modules/$kernel/initramfs.img"
 efi="$mount/usr/lib/systemd/boot/efi/systemd-bootx64.efi"
 test -f "$initrd"
 test -f "$efi"
-mkdir -p "$work/live-root" "$work/iso-root/EFI/BOOT" "$work/iso-root/LiveOS" "$work/iso-root/images/pxeboot"
+mkdir -p "$work/live-root" "$work/iso-root/EFI" "$work/iso-root/LiveOS"
 cp -a "$mount/." "$work/live-root/"
 mksquashfs "$work/live-root" "$work/iso-root/LiveOS/squashfs.img" \
     -noappend -comp zstd -Xcompression-level 3 -b 131072 -processors 4 \
@@ -40,9 +40,8 @@ EOF
 printf 'timeout 3\ndefault home-k8s.conf\n' > "$work/loader.conf"
 mcopy -i "$esp" "$work/home-k8s.conf" ::/loader/entries/home-k8s.conf
 mcopy -i "$esp" "$work/loader.conf" ::/loader/loader.conf
-cp "$efi" "$work/iso-root/EFI/BOOT/BOOTX64.EFI"
-cp "$vmlinuz" "$work/iso-root/images/pxeboot/vmlinuz"
-cp "$initrd" "$work/iso-root/images/pxeboot/initrd.img"
+# UEFI boots the FAT ESP above. Duplicate loose boot files outside that ESP
+# are unused and can push firmware-complete media over the release asset limit.
 xorriso -as mkisofs -iso-level 3 -r -J --joliet-long -V HOME_K8S_LIVE \
     --efi-boot EFI/efi.img -efi-boot-part --efi-boot-image \
     -o "$output" "$work/iso-root"
