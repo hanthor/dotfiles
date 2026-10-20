@@ -1,21 +1,21 @@
 ---
 name: gnome-gui
-description: Authoritative resource for building, auditing, and improving GNOME GTK4/libadwaita apps. Design tokens, 42-widget component library, 21 pattern skills, 47 mirrored HIG pages, 34 real-app audits, and lint scripts. Use when building a GNOME app, adding GNOME GUI features, auditing HIG compliance, packaging for Flatpak/Flathub, or when the user mentions GTK, libadwaita, Adw, Blueprint, or GNOME HIG.
+description: Authoritative resource for building, auditing, and improving GNOME GTK4/libadwaita apps. Design tokens, 22 focused skills, a 42-widget component library, 47 mirrored HIG pages, and implementation maps. Use when building a GNOME app, adding GNOME GUI features, auditing HIG compliance, packaging for Flatpak/Flathub, or when the user mentions GTK, libadwaita, Adw, Blueprint, or GNOME HIG.
 ---
 
 # GNOME GUI — Router
 
-Read ONLY the one or two files your task needs. Do not read INDEX.md or the
-master guide unless routing below fails.
+Read ONLY the one or two files your task needs. Do not read INDEX.md unless
+routing below fails.
 
 ## Route by task
 
 | Your task | Read this |
 |-----------|-----------|
-| New app, end-to-end (scaffold → Flatpak) | `QUICKSTART.md` (lanes for Python, Rust, C, GJS) |
+| New app, end-to-end (scaffold → Flatpak) | `skills/quick-start/SKILL.md`, `skills/language-quickstart/SKILL.md`, then `skills/flatpak-packaging/SKILL.md` |
 | New app from scratch | `skills/quick-start/SKILL.md`, then `skills/language-quickstart/SKILL.md` for your language |
 | CI / GitHub Actions / release automation | `skills/github-actions-ci/SKILL.md` |
-| Audit / review / polish an existing app | `skills/hig-audit/SKILL.md` (quick automated pass: `scripts/lint-app.sh <dir>`) |
+| Audit / review / polish an existing app | `skills/hig-audit/SKILL.md` |
 | Preferences/settings UI | `skills/preferences-dialog/SKILL.md` |
 | Persist settings / window state | `skills/gsettings-backend/SKILL.md` |
 | Delete/remove/clear actions | `skills/delete-with-undo/SKILL.md` |
@@ -37,7 +37,7 @@ master guide unless routing below fails.
 ## Route by lookup
 
 | You need | Read this |
-|----------|-----------|
+|-----------|-----------|
 | A specific widget's Blueprint/XML API | `components/<widget>.md` (36 files, kebab-case names; index in `COMPONENT-LIBRARY.md`) |
 | Spacing/margin values | `tokens/spacing.md` |
 | Window sizes, sidebar widths, breakpoints | `tokens/sizing.md` |
@@ -46,10 +46,10 @@ master guide unless routing below fails.
 | App skeleton to copy | `reference/layout-recipes.md` or `reference/app-templates.md` |
 | What NOT to do + release checklist | `reference/anti-patterns.md` |
 | CSS style classes | `tokens/style-classes.md` |
-| Valid icon name | grep `reference/icons.md` (645 icons); validate with `scripts/check-icons.sh` |
-| "How does app X do Y?" | `INTENT-MAP.md` (intent → app → file:line, 34 apps) |
+| Valid icon name | `reference/icons.md` (Adwaita symbolic icon catalog) |
+| "How does app X do Y?" | `INTENT-MAP.md` (intent → pattern → implementation example) |
 | Official HIG wording on a topic | `reference/hig/<topic>.md` (47 pages) |
-| How a real GNOME app is built | `audits/<app>.md` (34 pattern audits) |
+| How to choose app patterns | `INTENT-MAP.md` and `reference/app-architecture.md` |
 
 ## Non-negotiable defaults (memorize, don't re-read)
 

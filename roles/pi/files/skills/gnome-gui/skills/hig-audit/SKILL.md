@@ -37,7 +37,7 @@ patterns, and the one reference file — not this whole repo).
 | 1 | Text style | `grep -rn 'title\|label\|tooltip' *.blp *.ui` | `reference/hig/writing-style.md` + `tokens/typography.md` |
 | 2 | Buttons | `grep -rn 'Button\|icon-name' *.blp *.ui` | `reference/hig/buttons.md` |
 | 3 | Layout/margins | `grep -rn 'margin\|spacing\|width-request' *.blp *.ui` | `tokens/spacing.md` |
-| 4 | Icons | `grep -rhoE '[a-z0-9-]+-symbolic' -r . \| sort -u` | validate with `scripts/check-icons.sh` |
+| 4 | Icons | `grep -rhoE '[a-z0-9-]+-symbolic' -r . \| sort -u` | compare with `reference/icons.md` |
 | 5 | Shortcuts | `grep -rn 'accel\|<primary>\|<Control>' src/` | `reference/hig/keyboard.md` |
 | 6 | Accessibility | icon-only buttons without `tooltip-text`; DrawingArea without accessible role | `reference/hig/accessibility.md` |
 | 7 | Color | `grep -rnE '#[0-9a-fA-F]{3,8}\|rgb(' src/ data/` | `reference/hig/palette.md` |
@@ -56,8 +56,7 @@ patterns, and the one reference file — not this whole repo).
   is standard; icon-only buttons without tooltips.
 - **Layout**: margins/spacing off the 6/12/18/24 scale; window
   `width-request` below 360; missing `AdwStatusPage` for empty states.
-- **Icons**: any `-symbolic` name not present in the Adwaita icon theme
-  (run `scripts/check-icons.sh`).
+- **Icons**: any `-symbolic` name not present in the Adwaita icon theme; compare names with `reference/icons.md`.
 - **Shortcuts**: missing standard accelerators (Ctrl+Q quit, Ctrl+comma
   preferences, Ctrl+N/O/S/W/F where applicable); conflicts.
 - **Dialogs**: `GtkDialog`/`GtkMessageDialog` instead of `AdwDialog`/
@@ -89,11 +88,11 @@ Only if asked to fix (an "audit" request alone delivers the report):
 
 1. Fix in category order 4 → 8 → 6 → 5 → 1 → the rest (breakage first, polish last).
 2. One commit per category: `fix(hig): <category> — <summary>`
-3. After each category, verify: `blueprint-compiler format`/build still passes,
-   `scripts/check-icons.sh` is clean.
+3. After each category, run the audited project's formatter, build, or test
+   checks as appropriate for that project.
 4. Re-run the category's grep to confirm zero remaining candidates.
 
 ## Audit report for this repo's collection
 
-If auditing a GNOME app for inclusion in this repo's pattern library, use
-`audits/TEMPLATE.md` instead — that documents patterns, not violations.
+If auditing a GNOME app for pattern examples, use the implementation mappings in
+`INTENT-MAP.md` and the component/reference pages when recording examples.
