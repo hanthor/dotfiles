@@ -856,7 +856,7 @@ own tested restore plan; retain the Talos recovery material independently.
 
 ### Disposable VM acceptance (GitHub Actions and local)
 
-GitHub Actions workflow [Home server images](../../../../.github/workflows/server-images.yml)
+GitHub Actions workflow [Home server images](https://github.com/hanthor/dotfiles/actions/workflows/server-images.yml)
 (`server-images.yml`) runs for matching pull requests and master pushes.
 Manual dispatch defaults to acceptance only (`publish=false`); review branches
 cannot publish. Acceptance runs image builds, offline media creation, real
