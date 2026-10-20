@@ -85,25 +85,33 @@ class VM:
         self.child.expect("Password:")
         self.child.sendline(PASSWORD)
         self.child.expect(r"(?m)[^\r\n]*\$ ", timeout=60)
-        self.child.sendline("export PS1='NODE_USER_PROMPT> '")
-        self.child.expect(r"(?m)^NODE_USER_PROMPT> ")
+        self.child.sendline("stty -echo; unset PROMPT_COMMAND")
+        self.child.expect(r"\$ ", timeout=30)
         self.child.sendline("sudo -k; sudo -v")
-        outcome = self.child.expect([r"\[sudo\] password for .*:", "NODE_USER_PROMPT> "], timeout=30)
+        outcome = self.child.expect([r"\[sudo\] password for .*:", r"\$ "], timeout=30)
         if outcome == 0:
             self.child.sendline(PASSWORD)
-            self.child.expect("NODE_USER_PROMPT> ", timeout=30)
+            self.child.expect(r"\$ ", timeout=30)
         self.child.sendline("sudo bash --noprofile --norc")
         self.child.expect(r"(?m)[^\r\n]*# ", timeout=30)
         self.root_prompt()
 
     def root_prompt(self):
-        self.child.sendline(f"export PS1='{PROMPT}'; stty -echo")
-        self.child.expect(rf"(?m)^{PROMPT}")
+        # Disable echo before assigning PS1: matching the echoed assignment would
+        # race the shell. Readline/OSC control sequences may precede the prompt.
+        self.child.sendline("stty -echo; unset PROMPT_COMMAND")
+        self.child.expect(r"# ", timeout=30)
+        self.child.sendline(f"export PS1='{PROMPT}'")
+        self.child.expect_exact(PROMPT, timeout=30)
 
     def run(self, script, *, timeout=240):
         encoded = base64.b64encode(script.encode()).decode()
         marker = "COMMAND_RESULT_" + secrets.token_hex(8)
-        self.child.sendline(f"printf %s '{encoded}' | base64 -d > /run/home-k8s-proof.sh; bash -euo pipefail /run/home-k8s-proof.sh; result=$?; printf '\\n{marker}:%s\\n' \"$result\"")
+        self.child.sendline("base64 -d > /run/home-k8s-proof.sh <<'HOME_K8S_SCRIPT'")
+        for offset in range(0, len(encoded), 512):
+            self.child.sendline(encoded[offset:offset + 512])
+        self.child.sendline("HOME_K8S_SCRIPT")
+        self.child.sendline(f"bash -euo pipefail /run/home-k8s-proof.sh; result=$?; printf '\\n{marker}:%s\\n' \"$result\"")
         self.child.expect(rf"(?m)^{marker}:([0-9]+)\r?$", timeout=timeout)
         output = ANSI.sub("", self.child.before).replace("\r", "")
         if self.child.match.group(1) != "0":
