@@ -205,8 +205,9 @@ systemctl is-active NetworkManager firewalld iscsid.socket
 sysctl net.ipv4.ip_forward net.bridge.bridge-nf-call-iptables
 k3s --version
 cat /proc/cmdline
+bootc status --format json > /run/home-k8s-bootc-status.json
 printf '\\nBOOTC_BEGIN\\n'
-bootc status --format json
+cat /run/home-k8s-bootc-status.json
 printf '\\nBOOTC_END\\n'
 matchpathcon /var/mnt/storage /var/lib/lemonade-cache
 printf '\\nIDENTITY_BEGIN\\n'
