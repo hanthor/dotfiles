@@ -10,8 +10,12 @@ dnf5 -y --enable-repo=utah-packages --enable-repo=fedora-storage \
     iwlwifi-dvm-firmware iwlwifi-mvm-firmware \
     realtek-firmware mt7xxx-firmware atheros-firmware brcmfmac-firmware \
     NetworkManager-wifi wpa_supplicant tailscale iptables-nft \
-    iscsi-initiator-utils nfs-client-utils policycoreutils-python-utils \
     xfsprogs btrfs-progs
+
+# Add Flathub remote for system flatpaks
+flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+# Add TunaOS Flatpak repo (Ghostty terminal)
+flatpak remote-add --system --if-not-exists tuna-os oci+https://tunaos.org/flatpak --no-gpg-verify
 
 curl --fail --location \
     "https://github.com/k3s-io/k3s/releases/download/${K3S_VERSION}/k3s" -o /usr/bin/k3s
