@@ -1,10 +1,10 @@
 ---
 # Automate `podman login` to the private Forgejo container registry using the
 # credential stored in Bitwarden (item name == {{ forgejo_registry }}).
-# Idempotent: skips if already logged in. Gated on an unlocked vault.
+# Idempotent: skips if already logged in. Gated on `secrets_available`.
 
 - name: Set up Forgejo registry login
-  when: bw_unlocked | default(false)
+  when: secrets_available | default(false)
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_facts['env']['PATH'] }}"

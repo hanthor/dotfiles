@@ -8,7 +8,7 @@ Deploys API credentials for the AI coding tools and shell.
 
 ## What It Does
 
-1. When `bw_unlocked`:
+1. When `secrets_available`:
    - `bw get password deepseek-api-key` → `DEEPSEEK_API_KEY` in shell secret files
    - `bw get notes forgejo` (the `API Token:` line) → `FORGEJO_TOKEN`
    - `bw get password tavily-api-key` → `TAVILY_API_KEY`

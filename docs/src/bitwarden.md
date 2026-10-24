@@ -7,8 +7,8 @@ All secrets live in [Bitwarden](https://bitwarden.com/) and are resolved at runt
 1. The `bitwarden` role runs first in the secrets phase.
 2. It resolves a session token in order: `BW_SESSION` env var → `/tmp/bw_session` → interactive `bw unlock`.
 3. It runs `bw sync` (with a 15 s hard timeout, so a flaky vault server can't hang the play) to refresh the local cached vault.
-4. It calls `bw status` and sets a `bw_unlocked` host fact: `true` only if the CLI is installed, a session was resolved, *and* the vault actually unlocks.
-5. Every BW-using role gates on `when: bw_unlocked | default(false)`. The end-of-play `post_tasks` summary prints one of:
+4. It calls `bw status` and publishes a `secrets_available` host fact: `true` only if the CLI is installed, a session was resolved, *and* the vault actually unlocks.
+5. Every BW-using role gates on `when: secrets_available | default(false)`. The end-of-play `post_tasks` summary prints one of:
    - `vault unlocked — all secret roles executed normally`
    - `Bitwarden vault was LOCKED — … skipped. To enable: bw unlock …`
    - `SKIPPED (--skip-tags secrets). Run dots-apply to include …`
@@ -26,7 +26,7 @@ All secrets live in [Bitwarden](https://bitwarden.com/) and are resolved at runt
    is exported inline in the remote command, not via `SendEnv`. `apply-remote`
    also caches it in the remote's `/tmp/bw_session`.
 3. The `bitwarden` role on the remote runs `bw status`: if it reports
-   `unlocked`, `bw_unlocked` flips to true and secrets work proceeds.
+   `unlocked`, `secrets_available` becomes true and secrets work proceeds.
 
 **Caveat — session portability is not guaranteed.** A `BW_SESSION` token is only valid on the machine that unlocked it — that's why the recipes unlock on the remote instead of forwarding yours. If the remote unlock fails, the remote `bw status` returns `locked`, the role prints a one-line warning, and every BW-touching task is skipped cleanly — nothing fails, no files get clobbered with empty values. Unlock the vault directly on that host (`bw unlock`, then write the session to `/tmp/bw_session`) to enable secrets there.
 

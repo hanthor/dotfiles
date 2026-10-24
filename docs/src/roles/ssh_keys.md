@@ -23,7 +23,7 @@ Then, regardless of whether the local item changed:
 - Refreshes `~/.ssh/known_hosts` for every fleet host via `ssh-keyscan`, removing stale entries first.
 - Updates `~/.ssh/allowed_signers` with this host's pub key for git commit signing.
 
-If `bw_unlocked` is false (vault locked, BW not installed, etc.), every BW-touching step is skipped and `authorized_keys` is **not** rewritten — preserving the existing file rather than wiping it with an empty list.
+If `secrets_available` is false (vault locked, BW not installed, etc.), every BW-touching step is skipped and `authorized_keys` is **not** rewritten — preserving the existing file rather than wiping it with an empty list.
 
 ## Failure modes
 
