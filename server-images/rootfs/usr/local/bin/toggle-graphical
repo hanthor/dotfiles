@@ -1,0 +1,47 @@
+#!/usr/bin/bash
+# toggle-graphical: Switch between graphical and multi-user targets with optional auto-reboot
+# Usage: toggle-graphical [--reboot]
+
+set -euo pipefail
+
+REBOOT=false
+if [[ "${1:-}" == "--reboot" ]]; then
+    REBOOT=true
+fi
+
+current=$(systemctl get-default)
+
+case "$current" in
+    graphical.target)
+        echo "Currently on graphical.target (GNOME desktop)"
+        echo "Switching to multi-user.target (text console)..."
+        systemctl set-default multi-user.target
+        systemctl unmask gdm.service  # ungmask in case it was masked
+        echo "✓ Set default to multi-user.target"
+        if [[ "$REBOOT" == "true" ]]; then
+            echo "Rebooting in 10 seconds... (Ctrl+C to cancel)"
+            sleep 10
+            systemctl reboot
+        else
+            echo "Run 'sudo systemctl reboot' to apply, or 'sudo systemctl start multi-user.target' to switch now"
+        fi
+        ;;
+    multi-user.target)
+        echo "Currently on multi-user.target (text console)"
+        echo "Switching to graphical.target (GNOME desktop)..."
+        systemctl set-default graphical.target
+        systemctl unmask gdm.service
+        echo "✓ Set default to graphical.target"
+        if [[ "$REBOOT" == "true" ]]; then
+            echo "Rebooting in 10 seconds... (Ctrl+C to cancel)"
+            sleep 10
+            systemctl reboot
+        else
+            echo "Run 'sudo systemctl reboot' to apply, or 'sudo systemctl isolate graphical.target' to switch now"
+        fi
+        ;;
+    *)
+        echo "Unknown target: $current" >&2
+        exit 1
+        ;;
+esac
