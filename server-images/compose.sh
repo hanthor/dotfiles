@@ -74,6 +74,10 @@ rpm -qa --qf '%{NAME}\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' | sort > /us
 rm -f /etc/iscsi/initiatorname.iscsi
 # The installer/operator assigns a hostname; specializations may provide one.
 rm -f /etc/hostname
+# Graphical target (GDM/GNOME) disabled by default; enable with:
+# systemctl set-default graphical.target && reboot
+systemctl set-default multi-user.target
+systemctl mask gdm.service
 : > /etc/machine-id
 : > /etc/crypttab
 dnf5 clean all
