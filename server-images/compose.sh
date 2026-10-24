@@ -12,11 +12,6 @@ dnf5 -y --enable-repo=utah-packages --enable-repo=fedora-storage \
     NetworkManager-wifi wpa_supplicant tailscale iptables-nft \
     xfsprogs btrfs-progs
 
-# Add Flathub remote for system flatpaks
-flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-# Add TunaOS Flatpak repo (Ghostty terminal)
-flatpak remote-add --system --if-not-exists tuna-os oci+https://tunaos.org/flatpak --no-gpg-verify
-
 curl --fail --location \
     "https://github.com/k3s-io/k3s/releases/download/${K3S_VERSION}/k3s" -o /usr/bin/k3s
 printf '%s  /usr/bin/k3s\n' "$K3S_SHA256" | sha256sum --check --strict
