@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=quay.io/hummingbird-community/os-minimal:latest@sha256:b696a563751a0f945688171327c42142841c319533e001408eda9bba73cd4950
+ARG BASE_IMAGE=quay.io/hummingbird-community/os-minimal:latest@sha256:490380d6bea3e58edde1e2927214080337804378c80d1c1668f10a63d987359e
 ARG PACKAGE_IMAGE=ghcr.io/projectbluefin/utah-packages@sha256:d257e97a0057e37da47995bb142c180e2352960ab13bd44594215616a395b717
 FROM ${PACKAGE_IMAGE} AS packages
 FROM ${BASE_IMAGE} AS common
