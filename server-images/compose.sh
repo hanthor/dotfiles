@@ -10,7 +10,8 @@ dnf5 -y --enable-repo=utah-packages --enable-repo=fedora-storage \
     iwlwifi-dvm-firmware iwlwifi-mvm-firmware \
     realtek-firmware mt7xxx-firmware atheros-firmware brcmfmac-firmware \
     NetworkManager-wifi wpa_supplicant tailscale iptables-nft \
-    iscsi-initiator-utils nfs-client-utils policycoreutils-python-utils
+    iscsi-initiator-utils nfs-client-utils policycoreutils-python-utils \
+    xfsprogs btrfs-progs
 
 curl --fail --location \
     "https://github.com/k3s-io/k3s/releases/download/${K3S_VERSION}/k3s" -o /usr/bin/k3s
