@@ -1,0 +1,4 @@
+---
+# GitHub registers the public key created and maintained by ssh_keys.
+dependencies:
+  - role: ssh_keys

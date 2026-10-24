@@ -1,0 +1,4 @@
+---
+# Bitwarden provides the session and unlocked fact used for key recovery and sync.
+dependencies:
+  - role: bitwarden

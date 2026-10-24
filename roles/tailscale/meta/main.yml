@@ -1,0 +1,4 @@
+---
+# The join path fetches its auth key from Bitwarden.
+dependencies:
+  - role: bitwarden

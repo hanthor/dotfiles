@@ -1,0 +1,4 @@
+---
+# Atuin reads its login item through the Bitwarden session fact.
+dependencies:
+  - role: bitwarden

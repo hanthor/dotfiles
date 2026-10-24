@@ -112,9 +112,32 @@ roles/<name>/
 ├── templates/           # Jinja2 templates (with .j2 extension)
 ├── vars/                # Role-specific variables
 │   └── main.yml
-└── handlers/            # Role handlers (notify targets)
+├── meta/
+│   └── main.yml         # Explicit prerequisites for this role
+└── handlers/            # Notify targets
     └── main.yml
 ```
+
+### Role Dependencies
+
+Prerequisites that provide required facts, files, or services are declared in
+`roles/<name>/meta/main.yml`, not only by their position in `site.yml`. The
+playbook still owns fleet-wide phase ordering, host conditions, and tags; the
+metadata makes the prerequisite relationship part of the role interface.
+
+| Role | Dependency | Contract |
+|---|---|---|
+| `shell_atuin` | `bitwarden` | Reads the Atuin login item and `bw_unlocked` |
+| `shell_ai` | `bitwarden` | Reads API credentials for generated shell files |
+| `ssh_keys` | `bitwarden` | Recovers and mirrors the machine key |
+| `github` | `ssh_keys` | Registers the public key maintained by `ssh_keys` |
+| `kube` | `bitwarden` | Reads the cluster configuration notes |
+| `forgejo_registry` | `bitwarden` | Reads the registry login item |
+| `tailscale` | `bitwarden` | Reads the join key when the host is not connected |
+
+Optional integrations keep their existing standalone behavior. For example,
+`browser_fxa` can receive credentials directly and therefore does not declare a
+Bitwarden dependency.
 
 ## Conditional Execution
 
