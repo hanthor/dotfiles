@@ -1,0 +1,69 @@
+---
+# ── Platform detection ───────────────────────────────────────────────────
+
+- name: Detect if system is bootc-based (container-native, no package manager)
+  ansible.builtin.stat:
+    path: /usr/bin/bootc
+  register: bootc_bin
+
+- name: Detect if rpm-ostree is available (Fedora Atomic)
+  ansible.builtin.stat:
+    path: /usr/bin/rpm-ostree
+  register: rpm_ostree_bin
+
+- name: Detect if dnf is available (traditional Fedora)
+  ansible.builtin.stat:
+    path: /usr/bin/dnf
+  register: dnf_bin
+
+# ── Prerequisite packages (only on mutable systems) ──────────────────────
+# On bootc systems packages are baked into the image — we can't install at
+# runtime. LV2/LADSPA plugins must be in the Containerfile.
+
+- name: Install LV2 + LADSPA DSP prerequisites (dnf)
+  when: dnf_bin.stat.exists | default(false)
+  become: true
+  ansible.builtin.dnf:
+    name:
+      - lsp-plugins-lv2
+      - noise-suppression-for-voice
+    state: present
+
+- name: Layer LV2 + LADSPA DSP prerequisites (rpm-ostree)
+  when: rpm_ostree_bin.stat.exists | default(false)
+  become: true
+  ansible.builtin.command:
+    cmd: rpm-ostree install --apply-live lsp-plugins-lv2 noise-suppression-for-voice
+  register: rpm_ostree_install
+  changed_when: "'Already layered' not in rpm_ostree_install.stdout and 'No change' not in rpm_ostree_install.stdout"
+  failed_when: false
+
+- name: Install LV2 + LADSPA DSP prerequisites (Arch)
+  when: ansible_facts['os_family'] == 'Archlinux'
+  become: true
+  community.general.pacman:
+    name:
+      - lsp-plugins
+      - noise-suppression-for-voice
+    state: present
+
+# ── Plugin availability check ────────────────────────────────────────────
+
+- name: Find RNNoise LADSPA plugin (cross-distro paths)
+  ansible.builtin.shell: >
+    set -o pipefail; find /usr/lib /usr/lib64 -name librnnoise_ladspa.so 2>/dev/null | head -1
+  register: rnnoise_path
+  failed_when: false
+  changed_when: false
+
+- name: Check if LV2 plugins are available (lv2ls may not be installed)
+  ansible.builtin.command: lv2ls
+  register: lv2ls_result
+  failed_when: false
+  changed_when: false
+
+- name: Set DSP availability facts
+  ansible.builtin.set_fact:
+    has_rnnoise: "{{ rnnoise_path.stdout | default('') | length > 0 }}"
+    has_lv2_lsp: "{{ 'lsp-plug.in/plugins/lv2/para_equalizer_x16_lr' in lv2ls_result.stdout | default('') }}"
+    is_bootc: "{{ bootc_bin.stat.exists | default(false) }}"

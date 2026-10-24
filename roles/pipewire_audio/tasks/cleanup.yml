@@ -1,0 +1,50 @@
+---
+# ── WirePlumber cleanup (old-format Lua unsupported in WP 0.5) ───────────
+
+- name: Remove old-format WirePlumber default-device Lua rule (WP 0.5+)
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/wireplumber/main.lua.d/51-speaker-dsp-default.lua"
+    state: absent
+  notify: Restart wireplumber
+
+- name: Remove empty WirePlumber Lua config directory
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/wireplumber/main.lua.d"
+    state: absent
+
+# ── GNOME volume over-amplification ───────────────────────────────────────
+# Allows volume slider to exceed 100% (software amplification). Virtual
+# DSP sinks use software volume, so over-100% is safe and useful.
+
+- name: Enable GNOME over-100% volume (software amplification)
+  ansible.builtin.command:
+    cmd: gsettings set org.gnome.desktop.sound allow-volume-above-100-percent true
+  environment:
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ ansible_facts['user_uid'] }}/bus"
+  failed_when: false
+  changed_when: false
+
+# ── Easy Effects cleanup ─────────────────────────────────────────────────
+# Migrated to native PipeWire filter-chain above.
+
+- name: Remove Easy Effects autostart entry
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/autostart/com.github.wwmm.easyeffects.desktop"
+    state: absent
+
+- name: Remove Easy Effects Flatpak app data (presets, gsettings)
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.var/app/com.github.wwmm.easyeffects"
+    state: absent
+
+- name: Kill any running Easy Effects processes
+  ansible.builtin.command: flatpak kill com.github.wwmm.easyeffects
+  failed_when: false
+  changed_when: false
+
+- name: Uninstall Easy Effects Flatpak (system)
+  ansible.builtin.command: flatpak uninstall --system -y com.github.wwmm.easyeffects
+  become: true
+  register: ee_uninstall
+  changed_when: "'removed' in ee_uninstall.stdout or 'uninstalled' in ee_uninstall.stdout"
+  failed_when: false
