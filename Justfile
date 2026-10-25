@@ -537,6 +537,18 @@ seed-kube:
 seed-omp-broker:
     @{{ dotfiles_dir }}/scripts/bw-seed-omp-broker.sh
 
+# Tailnet hygiene (scripts/tailnet.py): audit is read-only; the others dry-run unless `--apply`
+tailnet-audit:
+    @{{ dotfiles_dir }}/scripts/tailnet.py audit
+
+# gc + rename + inventory alignment, e.g. `just tailnet-sync --apply`
+tailnet-sync *args:
+    @{{ dotfiles_dir }}/scripts/tailnet.py sync {{ args }}
+
+# Store the Tailscale OAuth client secret (device gc/rename + join key) in Bitwarden
+seed-tailnet-oauth:
+    @{{ dotfiles_dir }}/scripts/bw-seed-tailnet.sh
+
 # Show all online fleet machines' doctor status in parallel
 doctor-fleet:
     #!/usr/bin/env bash

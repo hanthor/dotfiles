@@ -47,6 +47,66 @@ def parse_inventory(text: str):
     return all_hosts, vps
 
 
+def parse_host_vars(text: str):
+    """{host: {var: value}} for the 6-space `key: value` lines under each all.hosts entry.
+
+    Values are stripped of inline comments and quotes; no PyYAML (see parse_inventory).
+    """
+    hosts, section, host = {}, None, None
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent == 2:
+            section = line.strip().rstrip(":")
+        elif indent == 4 and section == "hosts":
+            host = line.strip().rstrip(":")
+            hosts[host] = {}
+        elif indent == 6 and section == "hosts" and host is not None:
+            m = re.match(r"([A-Za-z0-9_]+):\s*(.*?)\s*(?:#.*)?$", line.strip())
+            if m and m.group(2):
+                hosts[host][m.group(1)] = m.group(2).strip("'\"")
+    return hosts
+
+
+def set_host_var(text: str, host: str, key: str, value):
+    """Return `text` with `host`'s `key` set to `value` (or removed when value is None).
+
+    Edits only the host's own block under all.hosts, keeping its inline comment.
+    A missing key is appended after the block's last variable line. Unknown hosts
+    leave the text unchanged.
+    """
+    lines = text.split("\n")
+    start = None
+    for i, line in enumerate(lines):
+        if line.startswith("  children:"):
+            break
+        if re.fullmatch(rf"    {re.escape(host)}:\s*(#.*)?", line):
+            start = i
+            break
+    if start is None:
+        return text
+    end = start + 1
+    while end < len(lines) and (lines[end].startswith("      ") or not lines[end].strip() or lines[end].lstrip().startswith("#")):
+        if lines[end].startswith("    ") and not lines[end].startswith("      "):
+            break
+        end += 1
+    last_var = start
+    for i in range(start + 1, end):
+        if lines[i].startswith("      ") and not lines[i].lstrip().startswith("#"):
+            last_var = i
+            m = re.match(rf"(      {re.escape(key)}:\s*)([^#\n]*?)(\s*(?:#.*)?)$", lines[i])
+            if m:
+                if value is None:
+                    del lines[i]
+                else:
+                    lines[i] = f"{m.group(1)}{value}{m.group(3) if m.group(3).strip() else ''}"
+                return "\n".join(lines)
+    if value is not None:
+        lines.insert(last_var + 1, f"      {key}: {value}")
+    return "\n".join(lines)
+
+
 def register_host(name: str, mtype: str = "desktop", inv_path: str = "inventory.yml") -> bool:
     """Add `name` to all.hosts and to the `mtype` group.
 

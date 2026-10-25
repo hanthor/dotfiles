@@ -23,39 +23,18 @@
     PATH: "{{ ansible_env_path }}"
     BW_SESSION: "{{ bw_session }}"
 
-- name: Remove old tailscale device with same hostname
-  block:
-    - name: Fetch tailscale device list
-      ansible.builtin.uri:
-        url: https://api.tailscale.com/api/v2/tailnet/-/devices
-        method: GET
-        user: "{{ tailscale_apikey.stdout }}"
-        password: ""
-        force_basic_auth: true
-        status_code: 200
-        headers:
-          Content-Type: application/json
-      register: ts_devices
-      failed_when: false
-      no_log: true
-
-    - name: Find old device matching our hostname
-      ansible.builtin.set_fact:
-        ts_old_device_id: >-
-          {{ (ts_devices.json.devices | default([])
-            | selectattr('name', 'equalto', inventory_hostname + '.' + tailscale_domain)
-            | map(attribute='id') | first) | default('') }}
-
-    - name: Delete old tailscale device
-      ansible.builtin.uri:
-        url: https://api.tailscale.com/api/v2/device/{{ ts_old_device_id }}
-        method: DELETE
-        user: "{{ tailscale_apikey.stdout }}"
-        password: ""
-        force_basic_auth: true
-        status_code: 200
-      when: ts_old_device_id | length > 0
-      no_log: true
+# A stale device that still holds this hostname makes Tailscale join us as
+# <hostname>-1. scripts/tailnet.py exchanges the OAuth client secret for an API
+# token (the old inline cleanup used it as a classic API key, got a silent 401,
+# and never deleted anything).
+- name: Remove stale tailscale devices with this hostname
+  ansible.builtin.command: python3 {{ playbook_dir }}/scripts/tailnet.py release {{ inventory_hostname }}
+  environment:
+    TS_OAUTH_CLIENT_SECRET: "{{ tailscale_apikey.stdout }}"
+  register: ts_release
+  changed_when: "'deleted' in ts_release.stdout"
+  failed_when: false
+  no_log: true
   when: tailscale_apikey.stdout | default('') | length > 0
 
 - name: Join tailscale network
