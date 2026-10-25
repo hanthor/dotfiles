@@ -140,3 +140,72 @@
     PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env_path }}"
   register: omp_routing_merge
   changed_when: "'changed' in omp_routing_merge.stdout"
+
+# ── Auth broker (`omp auth-broker`): the fleet's credential vault ───────────
+# One canonical broker holds the provider logins (punjab, over the tailnet);
+# every other host is a client that needs only its URL and bearer token, so no
+# per-machine `/login` is required. The URL is not secret. The token comes from
+# Bitwarden and is written only when the vault is unlocked, so a locked vault
+# leaves any existing token untouched.
+- name: Point OMP at the auth broker
+  ansible.builtin.shell: |
+    set -euo pipefail
+    cfg="$HOME/.omp/agent/config.yml"
+    mkdir -p "$(dirname "$cfg")"
+    [ -f "$cfg" ] || : > "$cfg"
+    before=$(sha256sum "$cfg")
+    URL='{{ omp_auth_broker_url }}' yq -i '.auth.broker.url = strenv(URL)' "$cfg"
+    chmod 600 "$cfg"
+    [ "$before" = "$(sha256sum "$cfg")" ] || echo changed
+  environment:
+    PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env_path }}"
+  register: omp_broker_url_set
+  changed_when: "'changed' in omp_broker_url_set.stdout"
+  when: omp_auth_broker_url | length > 0
+
+- name: Fetch and write the auth broker token
+  when: (omp_auth_broker_url | length > 0) and (bw_unlocked | default(false))
+  environment:
+    BW_SESSION: "{{ bw_session }}"
+    PATH: "{{ ansible_env_path }}"
+  block:
+    - name: Fetch the broker bearer token from Bitwarden
+      ansible.builtin.command: bw get password {{ omp_auth_broker_bw_item }}
+      register: omp_broker_token
+      no_log: true
+      changed_when: false
+      failed_when: false
+
+    - name: Write the broker token into the OMP config
+      ansible.builtin.shell: |
+        set -euo pipefail
+        [ -n "$TOKEN" ] || exit 0
+        cfg="$HOME/.omp/agent/config.yml"
+        before=$(sha256sum "$cfg")
+        yq -i '.auth.broker.token = strenv(TOKEN)' "$cfg"
+        chmod 600 "$cfg"
+        [ "$before" = "$(sha256sum "$cfg")" ] || echo changed
+      environment:
+        TOKEN: "{{ omp_broker_token.stdout | default('') | trim }}"
+        PATH: "/home/linuxbrew/.linuxbrew/bin:{{ ansible_env_path }}"
+      register: omp_broker_token_set
+      no_log: true
+      changed_when: "'changed' in omp_broker_token_set.stdout"
+      when: omp_broker_token.rc == 0
+
+- name: Check the auth broker answers
+  ansible.builtin.command: omp auth-broker status
+  environment:
+    PATH: "{{ ansible_facts['env']['HOME'] }}/.bun/bin:{{ ansible_facts['env']['HOME'] }}/.local/bin:{{ ansible_env_path }}"
+  register: omp_broker_status
+  changed_when: false
+  failed_when: false
+  when: omp_auth_broker_url | length > 0
+
+- name: Report auth broker status
+  ansible.builtin.debug:
+    msg: >-
+      omp auth-broker: {{ (omp_broker_status.stdout | default('') ~ omp_broker_status.stderr | default('')) | trim }}
+      {{ '' if omp_broker_status.rc | default(1) == 0 else
+         '(not healthy. With the vault unlocked, run `just seed-omp-broker` on punjab once, then `just apply-tags omp` here.)' }}
+  when: omp_auth_broker_url | length > 0

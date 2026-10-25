@@ -516,6 +516,10 @@ docs-build:
 seed-kube:
     @{{ dotfiles_dir }}/scripts/bw-seed-kube.sh
 
+# Seed Bitwarden with the omp auth-broker bearer token (run on the broker host, punjab)
+seed-omp-broker:
+    @{{ dotfiles_dir }}/scripts/bw-seed-omp-broker.sh
+
 # Show all online fleet machines' doctor status in parallel
 doctor-fleet:
     #!/usr/bin/env bash

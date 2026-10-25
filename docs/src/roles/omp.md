@@ -1,7 +1,7 @@
 # omp
 
 **Tags:** `dotfiles`, `omp`  
-**Secrets needed:** No for OMP/Kiro installation; `shell_ai` optionally provides the DeepSeek API key  
+**Secrets needed:** No for OMP/Kiro installation; the auth broker token and `shell_ai`'s optional DeepSeek key come from Bitwarden  
 **Runs on:** All supported hosts except raw Termux
 
 Installs Oh My Pi and the Kiro provider on each supported computer. Homebrew hosts install OMP and Bun from the `can1357/tap` tap. musl hosts use OMP's checksum-verified binary installer and Bun's installer. The Kiro provider is installed from `github:elkibalion/omp-kiro-provider`.
@@ -13,6 +13,24 @@ Installs Oh My Pi and the Kiro provider on each supported computer. Homebrew hos
 3. Deploys personal skills to `~/.omp/agent/skills/james/` and symlinks them into `~/.claude/skills/`.
 4. Exposes the Bitwarden DeepSeek key as `DEEPSEEK_API_KEY` through the shell secret files, not an agent-specific credential file.
 5. Removes the legacy Pi CLI from raw Termux. OMP has no native Android/Bionic build; the Debian VM (`mumbai`) is supported normally.
+6. Points OMP at the fleet auth broker (`auth.broker.url`) and, when Bitwarden is unlocked, writes the bearer token (`auth.broker.token`), so the machine needs no local provider `/login`.
+
+## Auth broker
+
+`omp auth-broker` is the fleet's credential vault: provider logins live on one broker, and every other host is a client that holds only a URL and a bearer token. The broker runs on `punjab` as a user unit (`omp-auth-broker.service`, `omp auth-broker serve --bind=<tailnet ip>:8765`). That unit is created by hand and is **not** managed by this repo.
+
+Clients get two keys in `~/.omp/agent/config.yml`:
+
+| Key | Source |
+|---|---|
+| `auth.broker.url` | `omp_auth_broker_url` in `group_vars/all.yml` (punjab's tailnet address, port 8765) |
+| `auth.broker.token` | Bitwarden password item `omp-auth-broker-token` (`omp_auth_broker_bw_item`) |
+
+The token is written only when Bitwarden is unlocked; a locked vault leaves the existing token as it is. The config file is set to mode `0600`.
+
+To seed the token, run `just seed-omp-broker` **on punjab** with the vault unlocked. It reads `omp auth-broker token` (which does not rotate it) and creates or updates the Bitwarden item. Then run `just apply-tags omp` on each client. Verify with `omp auth-broker status`.
+
+If the token is ever rotated (`omp auth-broker token --regenerate` on punjab), seed again and re-apply on the clients.
 
 ## Skills and the package manifest
 
