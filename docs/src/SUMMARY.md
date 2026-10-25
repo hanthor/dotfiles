@@ -5,6 +5,7 @@
 # Core Concepts
 
 - [Architecture](architecture.md)
+- [Units](units.md)
 - [Inventory & Groups](inventory.md)
 - [Secrets with Bitwarden](bitwarden.md)
 - [Onboarding a New Machine](onboarding.md)

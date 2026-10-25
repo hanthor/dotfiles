@@ -43,6 +43,8 @@ apply *args:
     else
       {{ _play }} -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }} || rc=$?
     fi
+    urc=0; scripts/run-units.sh || urc=$?
+    [ "$rc" -ne 0 ] || rc=$urc
     scripts/record-apply.py "$rc" apply "$SKIP_TAGS"
     exit $rc
 
@@ -53,6 +55,8 @@ apply-tags tags:
     cd {{ dotfiles_dir }}
     rc=0
     {{ _play }} -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }} || rc=$?
+    urc=0; scripts/run-units.sh --tags "{{ tags }}" || urc=$?
+    [ "$rc" -ne 0 ] || rc=$urc
     scripts/record-apply.py "$rc" apply-tags "{{ tags }}"
     exit $rc
 
@@ -64,6 +68,8 @@ apply-nosecrets *args:
     git pull --ff-only || true
     rc=0
     {{ _play }} site.yml --skip-tags secrets {{ args }} || rc=$?
+    urc=0; scripts/run-units.sh --no-secrets || urc=$?
+    [ "$rc" -ne 0 ] || rc=$urc
     scripts/record-apply.py "$rc" apply-nosecrets secrets
     exit $rc
 
@@ -86,7 +92,18 @@ mesh-check:
 
 # Apply only dotfile configs (shell, git, tmux, etc.)
 dotfiles:
-    cd {{ dotfiles_dir }} && {{ _play }} site.yml --tags dotfiles
+    #!/usr/bin/env bash
+    set -uo pipefail
+    cd {{ dotfiles_dir }}
+    rc=0
+    {{ _play }} site.yml --tags dotfiles || rc=$?
+    urc=0; scripts/run-units.sh --tags dotfiles || urc=$?
+    [ "$rc" -ne 0 ] || rc=$urc
+    exit $rc
+
+# Run the bash units (units/*.sh) in parallel via mise, e.g. `just units --tags omp`
+units *args:
+    cd {{ dotfiles_dir }} && scripts/run-units.sh {{ args }}
 
 # Apply only packages (Homebrew + Flatpak)
 packages:
@@ -443,7 +460,7 @@ doctor:
     echo "→ Machine identity"
     if [ -f /etc/dotfiles-machine ]; then pass "machine: $(cat /etc/dotfiles-machine)"; else warn "/etc/dotfiles-machine missing — run bootstrap"; fi
     echo "→ Core binaries"
-    for bin in brew bw gh tailscale ansible-playbook just; do
+    for bin in brew bw gh tailscale ansible-playbook just mise; do
       if command -v "$bin" >/dev/null 2>&1; then pass "$bin"; else warn "$bin missing"; fi
     done
     echo "→ Tailscale"

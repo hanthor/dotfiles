@@ -1,4 +1,4 @@
-# Merged into ~/.omp/agent/config.yml by roles/omp (yq deep-merge; lists replace).
+# Merged into ~/.omp/agent/config.yml by units/omp (yq deep-merge; lists replace).
 # Order everywhere: Claude Max → Codex → Antigravity → Kiro → Muse contributor.
 # omp-route (aliased to `omp`) picks the starting model from ccleft quota;
 # these chains handle exhaustion mid-session.
