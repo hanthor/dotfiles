@@ -24,9 +24,15 @@ case "${1:-status}" in
     node=$(kubectl get nodes -l tunaos.org/kubevirt=true -o jsonpath='{.items[0].metadata.name}')
     kubectl annotate node "$node" tunaos.org/idle-since- >/dev/null 2>&1 || true
     kubectl wait --for=condition=Ready "node/$node" --timeout=10m
+    # `down` cordons the node so nothing but VMs is scheduled onto it after a
+    # restart; a cordon survives the stop, so lift it or no VM can start.
+    kubectl uncordon "$node" >/dev/null
     echo "up: $node ($ID). Stops by itself after 30 idle minutes."
     ;;
   down)
+    # Keep ordinary workloads off a node that is about to disappear.
+    node=$(kubectl get nodes -l tunaos.org/kubevirt=true -o jsonpath='{.items[0].metadata.name}')
+    [ -z "$node" ] || kubectl cordon "$node" >/dev/null
     for vm in $(kubectl get vmi -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'); do
       virtctl stop -n "${vm%/*}" "${vm#*/}" || kubectl -n "${vm%/*}" patch vm "${vm#*/}" --type merge -p '{"spec":{"runStrategy":"Halted"}}'
     done
