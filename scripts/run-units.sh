@@ -3,14 +3,18 @@
 # Usage: scripts/run-units.sh [--no-secrets] [--tags a,b]
 set -uo pipefail
 
-ALL_UNITS="chezmoi omp atuin shell-ai"                       # run order for the sequential fallback; keep in step with mise.toml
+ALL_UNITS="chezmoi fonts omp atuin shell-ai github kube forgejo-registry"  # run order for the sequential fallback; keep in step with mise.toml
 tasks_for_tag() { case "$1" in        # Ansible tag -> units (mirrors the old role tags)
-  dotfiles)           echo "chezmoi omp atuin shell-ai" ;;
-  shell)              echo "chezmoi atuin shell-ai" ;;
+  dotfiles)           echo "chezmoi fonts omp atuin shell-ai" ;;
+  shell)              echo "chezmoi fonts atuin shell-ai" ;;
+  fonts)              echo fonts ;;
   git|neovim|editor)  echo chezmoi ;;
   atuin)              echo atuin ;;
   ai)                 echo shell-ai ;;
-  secrets)            echo "atuin shell-ai" ;;
+  secrets)            echo "atuin shell-ai github kube forgejo-registry" ;;
+  github)             echo github ;;
+  kube)               echo kube ;;
+  forgejo|registry)   echo forgejo-registry ;;
   omp)                echo omp ;;
 esac; }
 

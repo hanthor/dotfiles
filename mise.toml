@@ -17,3 +17,19 @@ file = "units/atuin.sh"
 [tasks."unit:shell-ai"]
 description = "shell-ai: API secrets from Bitwarden into the shell secret files"
 file = "units/shell-ai.sh"
+
+[tasks."unit:fonts"]
+description = "fonts: JetBrains Mono Nerd Font on desktops"
+file = "units/fonts.sh"
+
+[tasks."unit:github"]
+description = "github: gh login from Bitwarden and SSH key registration"
+file = "units/github.sh"
+
+[tasks."unit:kube"]
+description = "kube: kubeconfig and talosconfig for the home and AWS clusters from Bitwarden"
+file = "units/kube.sh"
+
+[tasks."unit:forgejo-registry"]
+description = "forgejo-registry: podman login to the private Forgejo registry"
+file = "units/forgejo-registry.sh"

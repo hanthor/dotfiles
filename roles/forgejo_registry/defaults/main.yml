@@ -1,4 +1,0 @@
----
-# Forgejo container registry on the tailnet. The matching Bitwarden login item
-# (name == forgejo_registry) holds the username + a registry/package token.
-forgejo_registry: forgejo.manatee-basking.ts.net

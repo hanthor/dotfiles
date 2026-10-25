@@ -60,7 +60,7 @@
 
 ## Dotfiles
 
-- [shell_fonts](roles/shell_fonts.md)
+- [shell_fonts (unit)](roles/shell_fonts.md)
 - [shell_dotfiles (chezmoi)](roles/shell_dotfiles.md)
 - [shell_atuin (chezmoi + unit)](roles/shell_atuin.md)
 - [shell_ai (unit)](roles/shell_ai.md)
@@ -74,10 +74,10 @@
 - [bitwarden](roles/bitwarden.md)
 - [ssh_keys](roles/ssh_keys.md)
 - [ssh_mesh](roles/ssh_mesh.md)
-- [github](roles/github.md)
+- [github (unit)](roles/github.md)
 - [tailscale](roles/tailscale.md)
-- [kube](roles/kube.md)
-- [forgejo_registry](roles/forgejo_registry.md)
+- [kube (unit)](roles/kube.md)
+- [forgejo_registry (unit)](roles/forgejo_registry.md)
 
 ## Desktop
 

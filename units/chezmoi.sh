@@ -12,13 +12,9 @@ if ! command -v chezmoi >/dev/null 2>&1; then
   exit 0
 fi
 
-is_desktop=0
-if command -v yq >/dev/null 2>&1; then
-  [ "$(yq ".all.children.desktop.hosts | has(\"$MACHINE\")" "$DOTFILES_DIR/inventory.yml" 2>/dev/null)" = true ] && is_desktop=1
-else
-  note "warn: yq missing, assuming non-desktop"
-fi
-export DOTFILES_MACHINE="$MACHINE" DOTFILES_IS_DESKTOP="$is_desktop"
+command -v yq >/dev/null 2>&1 || note "warn: yq missing, assuming non-desktop"
+if is_desktop; then desktop=1; else desktop=0; fi
+export DOTFILES_MACHINE="$MACHINE" DOTFILES_IS_DESKTOP="$desktop"
 
 step "chezmoi apply" chezmoi --source "$DOTFILES_DIR" --keep-going --force --no-tty apply --init
 finish

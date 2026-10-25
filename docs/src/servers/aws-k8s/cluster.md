@@ -142,7 +142,7 @@ talosctl --talosconfig ~/.talos/config-aws-migration \
 ```
 
 Configs live in Bitwarden as `kubeconfig-aws-migration` / `talosconfig-aws-migration`
-and are fetched by the [`kube`](../../roles/kube.md) role into
+and are fetched by the [`kube`](../../roles/kube.md) unit into
 `~/.kube/config-aws-migration` and `~/.talos/config-aws-migration` — kept
 separate from the home cluster's files so both stay independently usable.
 

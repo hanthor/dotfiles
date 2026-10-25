@@ -1,32 +1,30 @@
 # kube
 
-**Tags:** `secrets`, `kube`
-**Secrets needed:** Yes
-**Runs on:** Desktop group only (unless `skip_kube: true`)
+**Unit:** `kube` (`units/kube.sh`; see [Units](../units.md))  
+**Tags:** `secrets`, `kube`  
+**Secrets needed:** Yes  
+**Runs on:** Desktops only (`SKIPPED:` otherwise, or with `skip_kube: true` / `machine_profile: vm-test` in `host_vars`)
 
-Pulls the kube + Talos configs for both Talos clusters from BW so any desktop in the fleet can talk to them: the home cluster (Bihar + Karnataka — powered down, expected back) and the [AWS cluster](../servers/aws-k8s/cluster.md).
+Pulls the kube + Talos configs for both clusters from Bitwarden so any desktop in the fleet can talk to them: the home cluster (Bihar + Karnataka, powered down, expected back) and the [AWS cluster](../servers/aws-k8s/cluster.md) (its nodes were terminated on 2026-10-25; the configs are kept).
 
-## What it does
+## Steps
 
-When `bw_unlocked` is true:
+With an unlocked vault (a locked vault or `--no-secrets` prints `SKIPPED:` and leaves existing files alone):
 
-1. Ensures `~/.kube/` and `~/.talos/` exist (mode 0700).
-2. `bw get notes kubeconfig` → writes to `~/.kube/config` (0600). Skipped if BW returns empty.
-3. `bw get notes talosconfig` → writes to `~/.talos/config` (0600). Skipped if BW returns empty.
-4. Pins `tls-server-name` on every cluster in `~/.kube/config` to `kube_tls_server_name` (default: bihar's LAN address) — the home API-server cert lacks the tailnet address in its SANs.
-5. Emits a one-line warning if either home-cluster note is missing in BW.
-6. `bw get notes kubeconfig-aws-migration` → `~/.kube/config-aws-migration` and `bw get notes talosconfig-aws-migration` → `~/.talos/config-aws-migration` (0600, each skipped if empty). Kept as separate files so both clusters stay independently usable.
-
-When the vault is locked the role no-ops cleanly — existing local configs are preserved.
+1. `kube dirs`: `~/.kube/` and `~/.talos/` (0700).
+2. `home kubeconfig`: `bw get notes kubeconfig` → `~/.kube/config` (0600). A missing note prints `warn:` and leaves the file as it is.
+3. `home talosconfig`: `bw get notes talosconfig` → `~/.talos/config` (0600).
+4. `pin tls-server-name`: after writing the home kubeconfig, every cluster in it gets `--tls-server-name=$KUBE_TLS_SERVER_NAME` (`units/kube.conf`, default bihar's LAN address `192.168.0.5`): the home API-server cert lacks the tailnet address in its SANs.
+5. `aws kubeconfig` / `aws talosconfig`: `kubeconfig-aws-migration` → `~/.kube/config-aws-migration`, `talosconfig-aws-migration` → `~/.talos/config-aws-migration`. Separate files keep both clusters independently usable.
 
 ## Failure modes
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `kubectl` returns `Unable to connect to the server` after onboarding | Vault was locked, configs never deployed | Unlock BW, re-run `just apply-tags kube` |
-| Warning: `kubeconfig missing in BW` | Vault was never seeded | Run `just seed-kube` from a host that already has a working config |
+| `warn: kubeconfig ... missing in BW` | Vault was never seeded | Run `just seed-kube` from a host that already has a working config |
 | Configs deployed but auth fails | Cluster PKI rotated — local configs are stale | Re-run `just seed-kube` from a healthy host, then re-apply on consumers |
-| Role skipped silently on a server host that should have it | `skip_kube: true` in `host_vars/<host>.yml`, or host not in `desktop` group | Adjust inventory or host_vars |
+| Unit prints `SKIPPED: not a desktop` on a host that should have it | `skip_kube: true` in `host_vars/<host>.yml`, or host not in the `desktop` group | Adjust inventory or host_vars |
 
 ## Seeding BW
 
@@ -48,4 +46,4 @@ KUBECONFIG=~/.kube/config-aws-migration kubectl get nodes   # AWS cluster
 ## Notes
 
 - Both files contain cluster PKI material; the repo's `.gitignore` excludes the cluster source files, and these caches live in `~/` only — never commit.
-- The role is gated by `is_desktop | bool and not skip_kube`. Servers don't get a kubeconfig — the cluster nodes themselves are Talos and not in the inventory.
+- Gated by desktop membership and `skip_kube`. Servers don't get a kubeconfig; the cluster nodes are not in the inventory.

@@ -62,14 +62,10 @@ Every role in `site.yml` carries one or more tags. Tags fall into two kinds: **p
 | System + packages | `homebrew` | `packages`, `homebrew` |
 | System + packages | `termux_packages` | `system`, `packages`, `termux` |
 | System + packages | `bitwarden` | `secrets`, `bitwarden` |
-| System + packages | `shell_fonts` | `dotfiles`, `shell`, `fonts` |
 | System + packages | `hive_ops` | `hive`, `hive_ops` |
 | Secrets + auth | `ssh_keys` | `secrets`, `ssh`, `ssh_keys` |
 | Secrets + auth | `ssh_mesh` | `ssh`, `mesh_check` |
-| Secrets + auth | `github` | `secrets`, `github` |
 | Secrets + auth | `tailscale` | `secrets`, `tailscale` |
-| Secrets + auth | `kube` | `secrets`, `kube` |
-| Secrets + auth | `forgejo_registry` | `secrets`, `forgejo`, `registry` |
 | Desktop apps | `flatpak` | `packages`, `desktop`, `flatpak` |
 | Desktop apps | `bluefin_common` | `desktop`, `bluefin` |
 | Desktop apps | `gnome` | `desktop`, `gnome` |
@@ -85,11 +81,11 @@ Every role in `site.yml` carries one or more tags. Tags fall into two kinds: **p
 | Services | `server_hardening` | `system`, `hardening`, `security` |
 | Services | `fleet_facts` | `facts`, `fleet_facts` |
 
-Shell, git, neovim and atuin config, omp, and the shell/atuin secrets are not roles: they are [units](units.md) (`chezmoi`, `omp`, `atuin`, `shell-ai`) that `just apply*` runs after the playbook. The old tags `dotfiles`, `shell`, `git`, `neovim`, `editor`, `atuin`, `ai`, `secrets`, `omp` still select them through `scripts/run-units.sh`.
+Shell, git, neovim and atuin config, fonts, omp, the shell/atuin/GitHub/Forgejo secrets and the kubeconfigs are not roles: they are [units](units.md) (`chezmoi`, `fonts`, `omp`, `atuin`, `shell-ai`, `github`, `kube`, `forgejo-registry`) that `just apply*` runs after the playbook. The old tags `dotfiles`, `shell`, `fonts`, `git`, `neovim`, `editor`, `atuin`, `ai`, `secrets`, `github`, `kube`, `forgejo`, `registry`, `omp` still select them through `scripts/run-units.sh`.
 
 Common phase-wide selections:
 
-- `--tags secrets` — every BW-backed role only (`bitwarden`, `ssh_keys`, `github`, `tailscale`, `kube`, `forgejo_registry`)
+- `--tags secrets` — every BW-backed role only (`bitwarden`, `ssh_keys`, `tailscale`; the `atuin`, `shell-ai`, `github`, `kube` and `forgejo-registry` units also run for this tag)
 - `--tags desktop` — every desktop-app role (`flatpak`, `bluefin_common`, `gnome`, `zen_browser`, `pipewire_audio`)
 - `--tags services` — every long-running service role (`syncthing`, `systemd`, `bst_dashboard`, `kirocrew`, `proxy`, `tailscale_cert`)
 - `--skip-tags secrets` — everything except BW-backed roles. This is `just apply-nosecrets`, which the daily `dotfiles-update.timer` and the `dots` alias run; `bootstrap.sh` and `phone-apply.service` pass `--skip-tags secrets` directly
@@ -128,8 +124,8 @@ Every flag `site.yml` reads, all defaulting to `false` (`| default(false)`). Set
 |------|--------------|---------------------------------|---------------------|
 | `skip_sudo` | `sudo` | — | `termux` |
 | `skip_ssh_mesh` | `ssh_mesh` | not `vm-test` | — |
-| `skip_kube` | `kube` | desktop, not `vm-test` | `mumbai`, `termux` |
-| `skip_forgejo` | `forgejo_registry` | not `vm-test` | — |
+| `skip_kube` | `kube` unit | desktop, not `vm-test` | `mumbai`, `termux` |
+| `skip_forgejo` | `forgejo-registry` unit | not `vm-test` | — |
 | `skip_flatpak` | `flatpak` | desktop, not `vm-test` | `mumbai`, `termux` |
 | `skip_bluefin` | `bluefin_common` | desktop, not `vm-test` | `mumbai`, `termux` |
 | `skip_gnome` | `gnome` | desktop, not `vm-test` | `mumbai`, `termux` |

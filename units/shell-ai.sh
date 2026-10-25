@@ -27,15 +27,6 @@ if [ -z "$deepseek$forgejo$tavily$meta$kiro" ]; then
   exit 0
 fi
 
-# write_atomic dest: stdin -> temp file in the same directory (mode 0600) -> mv
-write_atomic() {
-  local dest="$1" tmp
-  mkdir -p "$(dirname "$dest")" || return 1
-  tmp="$(umask 077; mktemp "$dest.XXXXXX")" || return 1
-  if cat > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" "$dest"; then return 0; fi
-  rm -f "$tmp"; return 1
-}
-
 secrets_sh() {
   echo '# Managed by dotfiles playbook — DO NOT EDIT'
   echo 'export OMP_KIRO_CONFIG="$HOME/.config/omp/kiro.json"'
