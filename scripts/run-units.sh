@@ -3,14 +3,20 @@
 # Usage: scripts/run-units.sh [--no-secrets] [--tags a,b]
 set -uo pipefail
 
-ALL_UNITS="omp"                       # run order for the sequential fallback; keep in step with mise.toml
+ALL_UNITS="chezmoi omp atuin shell-ai"                       # run order for the sequential fallback; keep in step with mise.toml
 tasks_for_tag() { case "$1" in        # Ansible tag -> units (mirrors the old role tags)
-  dotfiles|omp) echo omp ;;
+  dotfiles)           echo "chezmoi omp atuin shell-ai" ;;
+  shell)              echo "chezmoi atuin shell-ai" ;;
+  git|neovim|editor)  echo chezmoi ;;
+  atuin)              echo atuin ;;
+  ai)                 echo shell-ai ;;
+  secrets)            echo "atuin shell-ai" ;;
+  omp)                echo omp ;;
 esac; }
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 export DOTFILES_DIR="$repo"
-PATH=/home/linuxbrew/.linuxbrew/bin:$PATH
+PATH="$PATH:/home/linuxbrew/.linuxbrew/bin"
 
 tags=""
 while [ $# -gt 0 ]; do

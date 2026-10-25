@@ -36,7 +36,7 @@ The token is written only when Bitwarden is unlocked; a locked vault or `--no-se
 
 To seed the token, run `just seed-omp-broker` **on punjab** with the vault unlocked. It reads `omp auth-broker token` (which does not rotate it) and creates or updates the Bitwarden item. Then run `just apply-tags omp` on each client. Verify with `omp auth-broker status`. If the token is rotated (`omp auth-broker token --regenerate` on punjab), seed again and re-apply on the clients.
 
-`DEEPSEEK_API_KEY` and the other provider keys are exposed to the shell by the `shell_ai` role's secret files, not by this unit.
+`DEEPSEEK_API_KEY` and the other provider keys are exposed to the shell by the [`shell-ai` unit](shell_ai.md)'s secret files, not by this unit.
 
 ## Kiro authentication
 

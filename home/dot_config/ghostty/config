@@ -1,4 +1,4 @@
-# Managed by Ansible (roles/shell_dotfiles). Edits here are overwritten on apply.
+# Managed by chezmoi (home/dot_config/ghostty/config). Edits here are overwritten on apply.
 #
 # Follow the GNOME light/dark preference automatically. Ghostty watches the
 # desktop color-scheme and swaps between the two themes live — no restart.

@@ -2,21 +2,22 @@
 # NOTE: bluefin-cli init handles: eza/ll/ls, bat/cat, ugrep/grep,
 #       zoxide/cd, starship, atuin, fzf — do NOT duplicate those here
 #
-# Most of this file is generated from roles/shell_dotfiles/vars/main.yml,
+# Most of this file is generated from home/.chezmoidata.yaml,
 # the single source shared with the fish aliases template. To add/change
 # a plain alias, edit that file, not this one — it'll show up in both
 # shells. Only shell-specific-syntax aliases are hand-written below.
-{% for group in alias_groups %}
-{% if group.guard is defined %}
-if command -v {{ group.guard }} &>/dev/null; then
-{% endif %}
-{% for a in group.aliases %}
-{{ '  ' if group.guard is defined else '' }}alias {{ a.name }}='{{ a.cmd }}'
-{% endfor %}
-{% if group.guard is defined %}
+{{- range $group := .alias_groups }}
+{{- $guarded := hasKey $group "guard" }}
+{{- if $guarded }}
+if command -v {{ $group.guard }} &>/dev/null; then
+{{- end }}
+{{- range $a := $group.aliases }}
+{{ if $guarded }}  {{ end }}alias {{ $a.name }}='{{ $a.cmd }}'
+{{- end }}
+{{- if $guarded }}
 fi
-{% endif %}
-{% endfor %}
+{{- end }}
+{{- end }}
 # ── Shell-specific aliases (syntax differs from fish; not in the shared source) ──
 alias -- -='cd -'
 alias dots='cd ~/.local/share/dotfiles && just apply-nosecrets'
@@ -26,9 +27,9 @@ alias reload='exec $SHELL -l'
 alias path='tr ":" "\n" <<< "$PATH"'
 alias myip='curl -s ifconfig.me && echo'
 alias please='sudo $(fc -ln -1)'
-{% if is_desktop | bool %}
+{{- if .is_desktop }}
 alias open='xdg-open'
-{% endif %}
+{{- end }}
 
 # ── Local secrets (not committed to git) ──────────────────────────
 [ -f ~/.config/shell/secrets.sh ] && source ~/.config/shell/secrets.sh

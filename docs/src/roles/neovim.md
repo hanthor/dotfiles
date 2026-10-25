@@ -1,16 +1,11 @@
 # neovim
 
+**Unit:** `chezmoi` (`units/chezmoi.sh`; see [Units](../units.md))  
 **Tags:** `dotfiles`, `neovim`, `editor`  
 **Secrets needed:** No  
-**Runs on:** All machines
+**Runs on:** All machines with `chezmoi` installed
 
-Deploys [Neovim](https://neovim.io/) configuration.
-
-## What It Does
-
-1. Creates `~/.config/nvim/` directory structure
-2. Deploys init.lua and plugin configuration
-3. Installs Lazy.nvim plugin manager and configured plugins
+[Neovim](https://neovim.io/) configuration, deployed from `home/dot_config/nvim/` (`init.lua`, `lua/config/`, `lua/plugins/`) by chezmoi. After each apply, `.chezmoiscripts/run_after_20-nvim-sync.sh` bootstraps lazy.nvim and runs `nvim --headless "+Lazy! sync" +qa` (best effort, 300 s timeout, never fails the apply).
 
 ## Key Plugins
 

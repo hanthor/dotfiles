@@ -53,6 +53,8 @@ just add-machine NAME   # Onboard + bootstrap an already-reachable machine via S
 - `kube` fetches `~/.kube/config` + `~/.talos/config` from Bitwarden — desktops only.
 - `ssh_keys` round-trips per-machine ed25519 keys through Bitwarden, building cross-machine `authorized_keys`.
 
+After the playbook, `just apply*` runs bash **units** (`units/`, via mise through `scripts/run-units.sh`; see [`docs/src/units.md`](docs/src/units.md)): `omp`, `chezmoi`, `atuin`, `shell-ai`. `home/` is the chezmoi source for shell, git, neovim and atuin config; `ssh_keys` remains an Ansible role.
+
 Roles are conditional on inventory group (`desktop`, `server`, `vps`, `test_fleet`, `termux_hosts`; `llm` is dormant/commented out) and on `skip_*` flags / `machine_profile` in `host_vars/`. See [`docs/src/roles/`](docs/src/roles/) for the full reference.
 
 ## Kubeconfig + Talos secrets

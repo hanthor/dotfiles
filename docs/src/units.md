@@ -35,3 +35,12 @@ Everything not listed under `units/` is still an Ansible role.
 `tests/test_units_registry.py` fails if the three places disagree.
 
 `units/`, `mise.toml` and `scripts/run-units.sh` are executed by the fleet timer, so they are intentionally not carved out of CODEOWNERS.
+
+## chezmoi
+
+File-based config (shell, git, neovim, atuin config) is managed by [chezmoi](https://www.chezmoi.io/) from `home/` (`.chezmoiroot` contains `home`, so `.chezmoi.toml.tmpl`, `.chezmoidata.yaml` and `.chezmoiscripts/` live there). `unit:chezmoi` runs `chezmoi --source <repo> --keep-going --force --no-tty apply --init`: `--keep-going` continues past a failing file or script, `--force` overwrites like the old roles did, `--no-tty` keeps the timer from hanging on a prompt, `--init` regenerates the config from `home/.chezmoi.toml.tmpl`.
+
+- Data: `machine`, `is_desktop` (true when the host is in the `desktop` group of `inventory.yml`), `user_name`, `user_email`, `alias_groups`.
+- Secrets are **not** chezmoi templates: the `bitwarden` template function aborts a whole template on a missing item. The `shell-ai` and `atuin` units handle secrets.
+- chezmoi never deletes files it does not manage (no `exact_` directories).
+- `ssh_keys` stays an Ansible role (key lifecycle, `authorized_keys` merge).

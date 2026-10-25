@@ -1,12 +1,15 @@
 ---
 # Single source of truth for aliases shared across bash/zsh and fish.
-# Rendered into aliases.sh.j2 (POSIX `alias`) and aliases.fish.j2 (fish
+# Rendered into aliases.sh.tmpl (POSIX `alias`) and aliases.fish.tmpl (fish
 # `abbr`, or `alias` where fish_kind: alias is set — e.g. vim→nvim, where
 # an abbreviation's visual text-expansion would be surprising).
 #
 # Entries requiring shell-specific syntax (&&/`; and`, ${VAR:-default},
 # heredocs, etc.) are NOT here — they're hand-written once per shell
 # template instead, clearly marked, to avoid subtle translation bugs.
+user_name: James Reilly
+user_email: jreilly1821@gmail.com
+
 alias_groups:
   - guard: nvim
     fish_kind: alias

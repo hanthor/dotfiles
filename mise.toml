@@ -5,3 +5,15 @@ depends = ["unit:*"]
 [tasks."unit:omp"]
 description = "omp: skills, Kiro plugin, routing, and the auth-broker client"
 file = "units/omp.sh"
+
+[tasks."unit:chezmoi"]
+description = "chezmoi: shell, git, neovim and atuin config files from home/"
+file = "units/chezmoi.sh"
+
+[tasks."unit:atuin"]
+description = "atuin: sync login from Bitwarden and history import"
+file = "units/atuin.sh"
+
+[tasks."unit:shell-ai"]
+description = "shell-ai: API secrets from Bitwarden into the shell secret files"
+file = "units/shell-ai.sh"

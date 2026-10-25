@@ -2,6 +2,8 @@
 # Shared helpers for units/*.sh. Source this; do not execute it.
 # Units use `set -uo pipefail` and never `set -e`: a failing step is recorded
 # and the later independent steps still run.
+# Homebrew tools come last so a stub or an earlier install wins; BREW_PREFIX is overridable for tests.
+PATH="$PATH:${BREW_PREFIX:-/home/linuxbrew/.linuxbrew}/bin"
 UNIT_FAILED=0
 step() { local d="$1"; shift; if "$@"; then echo "ok    $d"; else echo "FAIL  $d (exit $?)"; UNIT_FAILED=1; fi; }
 soft() { local d="$1"; shift; if "$@"; then echo "ok    $d"; else echo "warn  $d (exit $?, ignored)"; fi; }
@@ -23,3 +25,4 @@ bw_session() {
   [ -n "$s" ] && bw unlock --check --session "$s" >/dev/null 2>&1 && printf '%s' "$s"
   return 0
 }
+MACHINE="$(cat /etc/dotfiles-machine 2>/dev/null || hostname)"

@@ -460,7 +460,7 @@ doctor:
     echo "→ Machine identity"
     if [ -f /etc/dotfiles-machine ]; then pass "machine: $(cat /etc/dotfiles-machine)"; else warn "/etc/dotfiles-machine missing — run bootstrap"; fi
     echo "→ Core binaries"
-    for bin in brew bw gh tailscale ansible-playbook just mise; do
+    for bin in brew bw gh tailscale ansible-playbook just mise chezmoi; do
       if command -v "$bin" >/dev/null 2>&1; then pass "$bin"; else warn "$bin missing"; fi
     done
     echo "→ Tailscale"

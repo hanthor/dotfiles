@@ -7,7 +7,7 @@
 # own usage-aware fallback and retry.fallbackChains.default (same order) take
 # over mid-session.
 #
-#   omp-route [omp args...]   # aliased to `omp` by shell_dotfiles
+#   omp-route [omp args...]   # aliased to `omp` by the chezmoi shell aliases
 #   omp-route --pick          # print the chosen model and why, then exit
 set -uo pipefail
 
