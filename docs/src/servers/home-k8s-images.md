@@ -2,10 +2,10 @@
 
 These are proposed bootable K3s images, not the current OS or workloads of either machine. Karnataka runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server bound to tailnet address `100.66.158.127`; KubeVirt `v1.9.1`, CDI and Corral are installed. The `corral-vms/punjab` VM is staging, not a migrated replacement for active EC2 Punjab. Bihar's current OS and services are unverified. Image build and installer acceptance are under repair: verify provenance and acceptance before any future installation or switch.
 
-The Utah-based images built in CI, but installer acceptance stopped at its
-2 GiB size guard: the starter ISO was about 5.94 GiB. This build has not
-passed installation or cluster acceptance. The guard protects
-the existing publication workflow and must not simply be removed. See
+The Utah-based images built in CI; the starter ISO was about 5.94 GiB.
+Acceptance allows media up to 8 GiB, but the publication workflow still
+rejects release assets of 2 GiB or more. This build has not yet passed
+installation or cluster acceptance. See
 [issue #351](https://github.com/hanthor/dotfiles/issues/351).
 
 ## Image Variants
