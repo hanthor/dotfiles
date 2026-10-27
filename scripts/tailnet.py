@@ -8,14 +8,14 @@
   tailnet.py sync [--apply]         gc, then rename, then fix-inventory (planned as one sequence)
   tailnet.py release NAME           delete offline devices called NAME or NAME-<n> (run before joining)
 
-Everything is a dry run unless --apply. Reads come from the Tailscale API when a credential is
+Except for release, commands are dry runs unless --apply. Reads come from the Tailscale API when a credential is
 available (TS_OAUTH_CLIENT_SECRET, or Bitwarden item `tailscale-apikey`), otherwise from the local
 `tailscale status --json` (read-only: enough for audit and for planning). Writes need the API.
 
 Names: a device's tailnet name is its first MagicDNS label. An inventory host's *intended* name is
 its `tailnet_name` var, else the inventory name; a `tailnet_name` of the form <host>-<n> is the
 auto-suffix Tailscale adds when a stale device still holds <host>, so it is treated as "wants <host>".
-Retired hosts (the `vps` group), home cluster nodes, devices shared in from other tailnets,
+Retired hosts (the `vps` group), protected Bihar/Karnataka device names, devices shared in from other tailnets,
 and Kubernetes proxies of unverifiable cluster ownership are never deleted.
 """
 import argparse
@@ -40,7 +40,7 @@ TEST_VM = re.compile(r"(^gate-|^repro-|^tuna-v1-preflight-|.-vm$)")
 IP100 = re.compile(r"^100\.\d+\.\d+\.\d+$")
 DEVICE_ID = re.compile(r"[A-Za-z0-9_-]+\Z")
 DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
-# The home Talos cluster is offline temporarily, not retired.
+# Protect former home-node names even though Karnataka is now fleet-managed Utah.
 HOME_CLUSTER_NAMES = {"bihar", "karnataka"}
 
 

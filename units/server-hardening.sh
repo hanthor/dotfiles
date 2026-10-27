@@ -18,6 +18,27 @@ hardening_main() {
   hardening_line() {
     "${rootcmd[@]}" python3 "$DOTFILES_DIR/units/server-hardening-file.py" "$@"
   }
+  local root_options swap_root=unknown
+  if root_options=$(findmnt -n -o OPTIONS --mountpoint /); then
+    case ",$root_options," in
+      *,ro,*) swap_root=readonly ;;
+      *,rw,*) swap_root=writable ;;
+      *) step "inspect root mount options" false ;;
+    esac
+  else
+    step "inspect root mount options" false
+  fi
+  hardening_immutable_swap() {
+    if swap_output=$("${rootcmd[@]}" swapon --show=NAME --noheadings); then
+      if [[ "$swap_output" =~ [^[:space:]] ]]; then
+        note "ok    active swap preserved on read-only root"
+      else
+        step "active swap required on read-only root" false
+      fi
+    else
+      step "inspect active swap on read-only root" false
+    fi
+  }
   if [ "${UNITS_CHECK:-0}" = 1 ]; then
     local rule pattern line mode chrony_unit chrony_state chrony_active=0
     hardening_inspect_line() {
@@ -36,25 +57,29 @@ hardening_main() {
     else
       step "inspect journal usage" false
     fi
-    if "${rootcmd[@]}" test -e /swapfile; then
-      if mode=$("${rootcmd[@]}" stat -c '%a:%u:%g' /swapfile); then
-        [ "$mode" = '600:0:0' ] && note "ok    swap permissions" || note "would set swap ownership and permissions"
+    if [ "$swap_root" = readonly ]; then
+      hardening_immutable_swap
+    elif [ "$swap_root" = writable ]; then
+      if "${rootcmd[@]}" test -e /swapfile; then
+        if mode=$("${rootcmd[@]}" stat -c '%a:%u:%g' /swapfile); then
+          [ "$mode" = '600:0:0' ] && note "ok    swap permissions" || note "would set swap ownership and permissions"
+        else
+          step "inspect swap permissions" false
+        fi
       else
-        step "inspect swap permissions" false
+        note "would create 2 GiB /swapfile with root ownership and mode 0600"
       fi
-    else
-      note "would create 2 GiB /swapfile with root ownership and mode 0600"
-    fi
-    if swap_output=$("${rootcmd[@]}" swapon --show=NAME --noheadings); then
-      if printf '%s\n' "$swap_output" | grep -Fxq /swapfile; then
-        note "ok    swap enabled"
+      if swap_output=$("${rootcmd[@]}" swapon --show=NAME --noheadings); then
+        if printf '%s\n' "$swap_output" | grep -Fxq /swapfile; then
+          note "ok    swap enabled"
+        else
+          note "would format and enable /swapfile"
+        fi
       else
-        note "would format and enable /swapfile"
+        step "inspect active swap" false
       fi
-    else
-      step "inspect active swap" false
+      hardening_inspect_line "swap fstab" /etc/fstab '^/swapfile none swap sw 0 0$' '/swapfile none swap sw 0 0'
     fi
-    hardening_inspect_line "swap fstab" /etc/fstab '^/swapfile none swap sw 0 0$' '/swapfile none swap sw 0 0'
     for chrony_unit in chrony chronyd; do
       chrony_state=$(systemctl show "$chrony_unit" --property=LoadState --property=ActiveState 2>/dev/null); rc=$?
       if [ "$rc" != 0 ] && [[ "$chrony_state" != *'LoadState=not-found'* ]]; then
@@ -99,31 +124,35 @@ hardening_main() {
   esac
   step "vacuum journals" "${rootcmd[@]}" journalctl --vacuum-size=500M
 
-  local swap_ready=1
-  if [ ! -e /swapfile ]; then
-    if ! (umask 077; "${rootcmd[@]}" dd if=/dev/zero of=/swapfile bs=1M count=2048); then
-      step "create swap file" false; swap_ready=0
-    fi
-  fi
-  if [ "$swap_ready" = 1 ] && [ -e /swapfile ]; then
-    if ! "${rootcmd[@]}" chown root:root /swapfile; then step "protect swap file" false; swap_ready=0; fi
-    if ! "${rootcmd[@]}" chmod 0600 /swapfile; then step "set swap permissions" false; swap_ready=0; fi
-    if [ "$swap_ready" = 1 ]; then
-      if swap_output=$("${rootcmd[@]}" swapon --show=NAME --noheadings); then
-        if ! printf '%s\n' "$swap_output" | grep -Fxq /swapfile; then
-          if ! "${rootcmd[@]}" mkswap /swapfile; then
-            step "format swap" false; swap_ready=0
-          elif ! "${rootcmd[@]}" swapon /swapfile; then
-            step "enable swap" false; swap_ready=0
-          fi
-        fi
-      else
-        step "check active swap" false; swap_ready=0
+  if [ "$swap_root" = readonly ]; then
+    hardening_immutable_swap
+  elif [ "$swap_root" = writable ]; then
+    local swap_ready=1
+    if [ ! -e /swapfile ]; then
+      if ! (umask 077; "${rootcmd[@]}" dd if=/dev/zero of=/swapfile bs=1M count=2048); then
+        step "create swap file" false; swap_ready=0
       fi
     fi
-    if [ "$swap_ready" = 1 ]; then
-      hardening_line /etc/fstab '^/swapfile none swap sw 0 0$' '/swapfile none swap sw 0 0'; rc=$?
-      case "$rc" in 0|10) note "ok    swap fstab" ;; *) step "swap fstab" false ;; esac
+    if [ "$swap_ready" = 1 ] && [ -e /swapfile ]; then
+      if ! "${rootcmd[@]}" chown root:root /swapfile; then step "protect swap file" false; swap_ready=0; fi
+      if ! "${rootcmd[@]}" chmod 0600 /swapfile; then step "set swap permissions" false; swap_ready=0; fi
+      if [ "$swap_ready" = 1 ]; then
+        if swap_output=$("${rootcmd[@]}" swapon --show=NAME --noheadings); then
+          if ! printf '%s\n' "$swap_output" | grep -Fxq /swapfile; then
+            if ! "${rootcmd[@]}" mkswap /swapfile; then
+              step "format swap" false; swap_ready=0
+            elif ! "${rootcmd[@]}" swapon /swapfile; then
+              step "enable swap" false; swap_ready=0
+            fi
+          fi
+        else
+          step "check active swap" false; swap_ready=0
+        fi
+      fi
+      if [ "$swap_ready" = 1 ]; then
+        hardening_line /etc/fstab '^/swapfile none swap sw 0 0$' '/swapfile none swap sw 0 0'; rc=$?
+        case "$rc" in 0|10) note "ok    swap fstab" ;; *) step "swap fstab" false ;; esac
+      fi
     fi
   fi
 

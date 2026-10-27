@@ -9,6 +9,7 @@ tasks_for_tag() { case "$1" in
   sudo) echo sudo ;;
   sshd) echo sshd ;;
   packages) echo "apk-packages termux-packages homebrew flatpak" ;;
+  homebrew) echo homebrew ;;
   apk) echo apk-packages ;;
   termux) echo termux-packages ;;
   homebrew) echo homebrew ;;

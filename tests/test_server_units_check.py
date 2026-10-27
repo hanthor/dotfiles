@@ -78,7 +78,8 @@ echo "tailscale $*" >> "$CALLS"
 ''')
     write_stub(bindir, "loginctl", 'echo "loginctl $*" >> "$CALLS"\n[ "$1" = show-user ] || exit 99\necho no\n')
     write_stub(bindir, "journalctl", '[ "$1" = --disk-usage ] || exit 99\necho 1G\n')
-    write_stub(bindir, "swapon", '[ "$1" = --show=NAME ] || exit 99\n')
+    write_stub(bindir, "findmnt", '[ "${FAIL_FINDMNT:-0}" != 1 ] || exit 1\nprintf "%s\\n" "${ROOT_OPTIONS:-rw,relatime}"\n')
+    write_stub(bindir, "swapon", '[ "$1" = --show=NAME ] || exit 99\n[ "${FAIL_SWAPON:-0}" != 1 ] || exit 1\nprintf "%s\\n" "${ACTIVE_SWAP:-}"\n')
     write_stub(bindir, "ufw", '[ "$1" = status ] || exit 99\necho "Status: inactive"\n')
     write_stub(bindir, "pro", '[ "$1" = status ] || exit 99\necho \'{"livepatch": "enabled"}\'\n')
     write_stub(bindir, "ss", 'printf "%s\\n" "${SOCKETS:-}"\n')
@@ -91,6 +92,140 @@ def run_check(check_system, name, **extra):
     repo, _, env, _ = check_system
     return subprocess.run(["bash", str(repo / "units" / f"{name}.sh")],
                           env={**env, **extra}, capture_output=True, text=True)
+
+
+def prepare_hardening_commands(check_system):
+    _, _, env, _ = check_system
+    bindir = Path(env["PATH"].split(":", 1)[0])
+    write_stub(bindir, "systemctl", '''
+echo "systemctl $*" >> "$CALLS"
+if [[ "$*" == *show* ]]; then
+  printf 'LoadState=loaded\\nActiveState=inactive\\nUnitFileState=disabled\\n'
+elif [ "$1" = is-active ]; then
+  exit 1
+fi
+''')
+    write_stub(bindir, "journalctl", 'echo "journalctl $*" >> "$CALLS"\n')
+    write_stub(bindir, "swapon", '''
+echo "swapon $*" >> "$CALLS"
+if [ "$1" = --show=NAME ]; then
+  [ "${FAIL_SWAPON:-0}" != 1 ] || exit 1
+  printf "%s\\n" "${ACTIVE_SWAP:-}"
+fi
+''')
+    write_stub(bindir, "dd", '''
+echo "dd $*" >> "$CALLS"
+for arg in "$@"; do case "$arg" in of=*) : > "${arg#of=}" ;; esac; done
+''')
+    for command in ("chown", "chmod", "mkswap"):
+        write_stub(bindir, command, f'echo "{command} $*" >> "$CALLS"\n')
+
+
+@pytest.mark.parametrize("check", [True, False])
+@pytest.mark.parametrize("existing_swapfile", [True, False])
+@pytest.mark.parametrize("active", [True, False])
+def test_readonly_root_preserves_swap_and_continues_hardening(check_system, check, existing_swapfile, active):
+    _, root, env, _ = check_system
+    prepare_hardening_commands(check_system)
+    swapfile = root / "swapfile"
+    if existing_swapfile:
+        swapfile.write_text("existing swapfile\n")
+        swapfile.chmod(0o640)
+    fstab = root / "etc/fstab"
+    if existing_swapfile:
+        fstab.write_text(fstab.read_text() + "/swapfile none swap sw 0 0\n")
+    original_fstab = fstab.read_bytes()
+    result = run_check(check_system, "server-hardening", UNITS_CHECK="1" if check else "0",
+                       ROOT_OPTIONS="ro,relatime", ACTIVE_SWAP="/dev/zram0" if active else "  ")
+    assert result.returncode == (0 if active else 1), (result.stdout, result.stderr)
+    assert ("active swap preserved on read-only root" if active else
+            "FAIL  active swap required on read-only root") in result.stdout
+    assert fstab.read_bytes() == original_fstab
+    assert swapfile.exists() == existing_swapfile
+    if existing_swapfile:
+        assert swapfile.read_text() == "existing swapfile\n"
+        assert swapfile.stat().st_mode & 0o777 == 0o640
+    calls = Path(env["CALLS"]).read_text().splitlines()
+    assert [line for line in calls if line.startswith("swapon ")] == ["swapon --show=NAME --noheadings"]
+    assert not any(line.startswith(("dd ", "chown ", "chmod ", "mkswap ")) for line in calls)
+    if check:
+        assert "would update SSH limit MaxSessions" in result.stdout
+    else:
+        assert "MaxSessions 10" in (root / "etc/ssh/sshd_config").read_text()
+
+
+@pytest.mark.parametrize("check", [True, False])
+@pytest.mark.parametrize("failure", ["swap", "mount", "unknown_mount"])
+def test_swap_inspection_failures_are_reported_without_blocking_hardening(check_system, check, failure):
+    _, root, env, _ = check_system
+    prepare_hardening_commands(check_system)
+    extra = {"ROOT_OPTIONS": "ro,relatime"}
+    if failure == "swap":
+        extra["FAIL_SWAPON"] = "1"
+        expected = "FAIL  inspect active swap on read-only root"
+    else:
+        extra.update({"FAIL_FINDMNT": "1"} if failure == "mount" else {"ROOT_OPTIONS": "noexec"})
+        expected = "FAIL  inspect root mount options"
+    fstab = root / "etc/fstab"
+    original_fstab = fstab.read_bytes()
+    result = run_check(check_system, "server-hardening", UNITS_CHECK="1" if check else "0", **extra)
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert expected in result.stdout
+    assert fstab.read_bytes() == original_fstab
+    assert not (root / "swapfile").exists()
+    calls = Path(env["CALLS"]).read_text().splitlines()
+    assert not any(line.startswith(("dd ", "chown ", "chmod ", "mkswap ")) for line in calls)
+    if check:
+        assert "would update SSH limit MaxSessions" in result.stdout
+    else:
+        assert "MaxSessions 10" in (root / "etc/ssh/sshd_config").read_text()
+
+
+@pytest.mark.parametrize("check", [True, False])
+def test_writable_root_still_manages_swapfile(check_system, check):
+    _, root, env, _ = check_system
+    prepare_hardening_commands(check_system)
+    result = run_check(check_system, "server-hardening", UNITS_CHECK="1" if check else "0",
+                       ROOT_OPTIONS="rw,relatime", ACTIVE_SWAP="/dev/zram0")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    swapfile = root / "swapfile"
+    fstab = (root / "etc/fstab").read_text()
+    calls = Path(env["CALLS"]).read_text().splitlines()
+    if check:
+        assert "would create 2 GiB" in result.stdout
+        assert "would format and enable" in result.stdout
+        assert "would update swap fstab" in result.stdout
+        assert not swapfile.exists() and str(swapfile) not in fstab
+    else:
+        assert swapfile.exists()
+        assert f"{swapfile} none swap sw 0 0" in fstab
+        assert any(line.startswith("dd ") for line in calls)
+        assert f"chown root:root {swapfile}" in calls
+        assert f"chmod 0600 {swapfile}" in calls
+        assert f"mkswap {swapfile}" in calls
+        assert f"swapon {swapfile}" in calls
+
+
+@pytest.mark.parametrize("check", [True, False])
+def test_writable_root_preserves_active_swapfile(check_system, check):
+    _, root, env, _ = check_system
+    prepare_hardening_commands(check_system)
+    swapfile = root / "swapfile"
+    swapfile.write_text("existing swapfile\n")
+    result = run_check(check_system, "server-hardening", UNITS_CHECK="1" if check else "0",
+                       ROOT_OPTIONS="rw,relatime", ACTIVE_SWAP=str(swapfile))
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert swapfile.read_text() == "existing swapfile\n"
+    calls = Path(env["CALLS"]).read_text().splitlines()
+    assert not any(line.startswith(("dd ", "mkswap ")) for line in calls)
+    assert [line for line in calls if line.startswith("swapon ")] == ["swapon --show=NAME --noheadings"]
+    if check:
+        assert "ok    swap enabled" in result.stdout
+        assert str(swapfile) not in (root / "etc/fstab").read_text()
+    else:
+        assert f"chown root:root {swapfile}" in calls
+        assert f"chmod 0600 {swapfile}" in calls
+        assert f"{swapfile} none swap sw 0 0" in (root / "etc/fstab").read_text()
 
 
 @pytest.mark.parametrize("unit,expected", [
