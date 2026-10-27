@@ -38,6 +38,11 @@ interface to that zone. The public LAN interface remains in `public`. Both
 bridge rules are present in the permanent configuration; verify them after
 network or firewall changes with `firewall-cmd --zone=internal --list-all`.
 
+K3s logged `iptables-save` nftables parsing errors during network-policy
+reconciliation. No NetworkPolicy objects were present when checked. Policy
+enforcement has not been verified; do not rely on it for isolation until the
+iptables/nftables incompatibility is resolved and enforcement is tested.
+
 ## Historical configuration
 
 Karnataka was the worker of the home Talos cluster. The [cluster handbook](../cluster.md),
