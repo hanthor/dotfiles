@@ -107,7 +107,7 @@ step "routing merged" routing_merge
 step "broker url" broker_url
 step "broker token" broker_token
 if [ "$(yq '.auth.broker | has("token")' "$cfg" 2>/dev/null)" != true ]; then
-  note "PARTIAL: broker token not written (vault locked or item missing); run: just seed-omp-broker on punjab, then just apply-tags omp"
+  note "PARTIAL: broker token not written (vault locked or item missing); run: just seed-omp-broker from a client with SSH access to spindle, then just apply-tags omp"
 fi
 if have_omp; then soft "broker status" broker_status; else note "skip  broker status (omp missing)"; fi
 finish

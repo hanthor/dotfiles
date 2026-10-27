@@ -25,16 +25,16 @@ Each step is independent: a failure prints `FAIL  <step>`, fails the unit, and t
 
 ## Auth broker
 
-`omp auth-broker` is the fleet's credential vault: provider logins live on one broker, and every other host is a client that holds only a URL and a bearer token. The broker runs on `punjab` as a user unit (`omp-auth-broker.service`, `omp auth-broker serve --bind=<tailnet ip>:8765`). That unit is created by hand and is **not** managed by this repo.
+`omp auth-broker` is the fleet's credential vault: provider logins live on one broker, and every other host is a client that holds only a URL and a bearer token. The broker runs on the OCI `spindle` VPS as a user unit bound to its Tailscale address, `100.113.75.88:8765`. That unit is created by hand and is **not** managed by this repo.
 
 | Key in `~/.omp/agent/config.yml` | Source |
 |---|---|
-| `auth.broker.url` | `units/omp/auth-broker.conf` (`OMP_AUTH_BROKER_URL`, punjab's tailnet address, port 8765; keep in step with `inventory.yml`) |
+| `auth.broker.url` | `units/omp/auth-broker.conf` (`OMP_AUTH_BROKER_URL`, spindle's Tailscale address, port 8765) |
 | `auth.broker.token` | Bitwarden password item `omp-auth-broker-token` (`OMP_AUTH_BROKER_BW_ITEM`) |
 
 The token is written only when Bitwarden is unlocked; a locked vault or `--no-secrets` leaves the existing token as it is. The config file is `0600`.
 
-To seed the token, run `just seed-omp-broker` **on punjab** with the vault unlocked. It reads `omp auth-broker token` (which does not rotate it) and creates or updates the Bitwarden item. Then run `just apply-tags omp` on each client. Verify with `omp auth-broker status`. If the token is rotated (`omp auth-broker token --regenerate` on punjab), seed again and re-apply on the clients.
+To seed the token, run `just seed-omp-broker` on a client with the vault unlocked and SSH access to `ubuntu@100.113.75.88`. It reads the live token over SSH without rotating it and creates or updates the Bitwarden item. `OMP_AUTH_BROKER_SSH` overrides the SSH destination. Then run `just apply-tags omp` on each client and verify with `omp auth-broker status`. If the token is rotated on spindle, seed again and re-apply on the clients.
 
 `DEEPSEEK_API_KEY` and the other provider keys are exposed to the shell by the `shell_ai` role's secret files, not by this unit.
 
