@@ -1,0 +1,73 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: corral-vms
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: punjab
+  namespace: corral-vms
+  labels:
+    app.kubernetes.io/name: punjab
+spec:
+  runStrategy: Always
+  dataVolumeTemplates:
+    - metadata:
+        name: punjab-root
+      spec:
+        source:
+          http:
+            url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+        storage:
+          storageClassName: local-path
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 320Gi
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: punjab
+    spec:
+      domain:
+        cpu:
+          cores: 4
+        resources:
+          requests:
+            memory: 12Gi
+        devices:
+          disks:
+            - name: rootdisk
+              disk:
+                bus: virtio
+            - name: cloudinit
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: rootdisk
+          dataVolume:
+            name: punjab-root
+        - name: cloudinit
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              hostname: punjab-migration
+              manage_etc_hosts: true
+              ssh_pwauth: false
+              users:
+                - name: ubuntu
+                  groups: [adm, sudo]
+                  shell: /bin/bash
+                  sudo: ALL=(ALL) NOPASSWD:ALL
+                  lock_passwd: true
+                  ssh_authorized_keys:
+                    - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKTteKkOac3kryqONYQB91nN9tuVTxogiiRG5LRmiiIH punjab

@@ -1,6 +1,6 @@
 # Home Kubernetes Server Images
 
-These are proposed bootable K3s images, not the current OS or workloads of either machine. Karnataka currently runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` as its default; Bihar's current OS and services are unverified. Image build and installer acceptance are under repair: verify provenance and acceptance before installing or switching any host.
+These are proposed bootable K3s images, not the current OS or workloads of either machine. Karnataka runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server bound to tailnet address `100.66.158.127`; KubeVirt `v1.9.1`, CDI and Corral are installed. The `corral-vms/punjab` VM is staging, not a migrated replacement for active EC2 Punjab. Bihar's current OS and services are unverified. Image build and installer acceptance are under repair: verify provenance and acceptance before any future installation or switch.
 
 ## Image Variants
 
@@ -47,7 +47,9 @@ just server-installer bihar ghcr.io/hanthor/home-k8s-bihar:testing artifacts/bih
 
 Both are public (no login required).
 
-## Installation
+## Proposed Installation (Not for Current Hosts)
+
+The following is retained for planning and disposable testing, not a rollout instruction. Do not install, switch, reboot, or activate these profiles on Karnataka or other existing hosts: installation can wipe disks, and the proposed Karnataka agent conflicts with its current K3s server. Any future change requires a separately approved plan and independently verified backups. Preserve the historical Talos and AWS recovery material.
 
 ### From Installer ISO
 
@@ -58,15 +60,18 @@ Both are public (no login required).
    ```
 3. **Select image:** Custom URL → `oci:/usr/share/home-k8s/payload`
 4. **Choose filesystem:** ext4 (default), xfs, or btrfs
-5. **Set hostname:** `bihar`, `karnataka`, or `starter` (enables K3s role)
+5. **Set hostname:** `bihar`, `karnataka`, or `starter` (selects the proposed K3s role)
 6. **Create admin user:** `nodeadmin` (or any name)
 7. **Confirm and install**
 
-The TUI automatically configures:
+The intended installed configuration includes:
 - Disk partitioning (EFI + /boot + root)
-- K3s service enablement (based on hostname)
+- The proposed hostname-based K3s role (gated until explicit activation)
 - Tailscale daemon (unenrolled at install time)
 - SELinux enforcing mode
+
+Verify these against the specific installer and artifact; the proposed image's
+SELinux policy is not the current Utah/K3s configuration.
 
 After reboot, the node boots to **text console** (multi-user.target). K3s is gated (disabled) until you manually enable it.
 
@@ -99,7 +104,7 @@ All three mkfs tools are included. Choose at install time or format a custom lay
 | **xfs** | High-throughput, servers | Fast journal | Requires `mkfs.xfs` (included) |
 | **btrfs** | Snapshots, COW | Modern, complex | Requires `mkfs.btrfs` + `btrfs` CLI |
 
-Deployed images support all three without additional tools. If a filesystem option fails to appear in the TUI, verify the mkfs tool exists: `which mkfs.xfs` etc.
+The intended images include all three tools; verify the actual artifact. If a filesystem option fails to appear in the TUI, verify the mkfs tool exists: `which mkfs.xfs` etc.
 
 ## Graphical Target (Desktop)
 
@@ -130,7 +135,7 @@ sudo toggle-graphical --reboot
 
 ## K3s Enablement
 
-K3s is **installed but gated (disabled)** at boot. Roles are determined by hostname:
+In the proposed images, K3s is **installed but gated (disabled)** at boot. These hostname roles do not describe the current Karnataka server:
 
 | Hostname | K3s Role | Service | Enabled at boot |
 |----------|----------|---------|-----------------|
@@ -171,11 +176,7 @@ kubectl get nodes -o wide
 
 ### iSCSI (Longhorn)
 
-Both nodes are configured for Longhorn iSCSI workloads:
-- `iscsid.socket` running
-- `iscsi-initiator-utils` installed
-- Unique initiator name generated at first boot
-- `/var/lib/longhorn/` mounted to second NVMe (karnataka only)
+The proposed images intend to support Longhorn iSCSI workloads. Verify actual service, package and storage configuration on any target; do not assume a second Karnataka NVMe is usable (historically the WD Black was failing).
 
 ### Temporary Disks
 
@@ -264,7 +265,7 @@ sudo tailscale up
 
 ## See Also
 
-- [Talos K8s Cluster Handbook](./talos-k8s/cluster.md) — Bihar & karnataka hardware, networking, advanced operations
-- [AWS K8s Cluster Handbook](./aws-k8s/cluster.md) — Production cluster migration info
+- [Talos K8s Cluster Handbook](./talos-k8s/cluster.md) — historical hardware, networking and recovery reference
+- [AWS K8s Cluster Handbook](./aws-k8s/cluster.md) — historical cluster and recovery material
 - [Roles Documentation](../roles/) — Individual role configurations
 - [GitHub Releases](https://github.com/hanthor/dotfiles/releases) — Download ISOs and archives

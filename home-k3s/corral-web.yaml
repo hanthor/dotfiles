@@ -1,0 +1,223 @@
+# Based on tuna-os/corral commit 8cff2423a2ba6704348ef225e2ab66438112411b deploy/corral-web.yaml.
+# Ingress intentionally omitted; access through an authenticated SSH port-forward only.
+# Corral web UI — Proxmox-style dashboard for KubeVirt, served in-cluster.
+# Image: built from the corral repo Containerfile, pushed to
+# ghcr.io/tuna-os/corral (public — no pull secret needed).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: corral
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: corral-web
+  namespace: corral
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: corral-web
+rules:
+  - apiGroups: ["kubevirt.io"]
+    resources: ["virtualmachines", "virtualmachineinstances"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["subresources.kubevirt.io"]
+    resources:
+      - virtualmachines/start
+      - virtualmachines/stop
+      - virtualmachines/restart
+      - virtualmachines/migrate
+      - virtualmachines/addvolume
+      - virtualmachines/removevolume
+      - virtualmachineinstances/vnc
+      - virtualmachineinstances/console
+      - virtualmachineinstances/pause
+      - virtualmachineinstances/unpause
+      - virtualmachineinstances/guestosinfo
+      - virtualmachineinstances/filesystemlist
+      - virtualmachineinstances/userlist
+    verbs: ["get", "update"]
+  # Snapshot / restore / clone / export (Proxmox-parity ops)
+  - apiGroups: ["snapshot.kubevirt.io"]
+    resources: ["virtualmachinesnapshots", "virtualmachinerestores"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: ["clone.kubevirt.io"]
+    resources: ["virtualmachineclones"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: ["export.kubevirt.io"]
+    resources: ["virtualmachineexports"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: ["cdi.kubevirt.io"]
+    resources: ["datavolumes"]
+    verbs: ["get", "list", "create", "delete"]
+  # PVC: create (new disks), patch (online expand), delete (cleanup)
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "create", "patch", "update", "delete"]
+  # Capability detection (storage classes + snapshot classes)
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotclasses", "volumesnapshots"]
+    verbs: ["get", "list"]
+  # Export download: virtctl vmexport --port-forward needs the token secret +
+  # a port-forward to the exporter pod.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "delete"]
+  # User-defined custom image/ISO sources persist in a ConfigMap.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  # Bootc builder reads pod logs to extract build variables.
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "create", "patch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+  # VDI claims (#226, #227): one Lease per desktop pool member. The opt-in
+  # broker (CORRAL_VDI_BROKER) claims, renews, and releases them.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "create", "update", "delete"]
+  # Events tab (Proxmox-style task log) + live metrics on the summary
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+  # Instancetype/preference pickers in the create wizard
+  - apiGroups: ["instancetype.kubevirt.io"]
+    resources: ["virtualmachineclusterinstancetypes", "virtualmachineclusterpreferences"]
+    verbs: ["get", "list"]
+  # Bootc builder creates jobs to build VM disks on-cluster.
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "create", "delete"]
+  # Tailscale operator detection (ApplyProxy): tailscaleOperatorPresent() checks
+  # for the `tailscale` IngressClass the operator registers.
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingressclasses"]
+    verbs: ["get", "list"]
+  # Per-VM Tailscale operator proxy (ApplyProxy): create the SA/Role/RoleBinding/
+  # Service/Deployment that expose a VM on the tailnet; VM deletion cleans them up.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "serviceaccounts"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+  # Per-VM proxy + schedule RBAC (ApplyProxy/DeleteProxy, cronops): the only
+  # Role/RoleBinding objects corral-web ever creates are namespaced ones named
+  # corral-<vm>-proxy or corral-sched — never ClusterRoles or ClusterRoleBindings,
+  # and the proxy Role it grants holds only vmi get + vnc get (see
+  # GenerateProxyRBAC). Cluster scope (rather than a Role in the corral
+  # namespace) is required because VM namespaces are dynamic per create (-n);
+  # there is no static namespace list to bind to. `list` is deliberately
+  # absent: no code path lists roles/rolebindings (apply + get + delete only).
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: corral-web
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: corral-web
+subjects:
+  - kind: ServiceAccount
+    name: corral-web
+    namespace: corral
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: corral-web
+  namespace: corral
+  labels:
+    app: corral-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: corral-web
+  template:
+    metadata:
+      labels:
+        app: corral-web
+    spec:
+      serviceAccountName: corral-web
+      containers:
+        - name: corral-web
+          image: ghcr.io/tuna-os/corral@sha256:b0dcfc6972a050b2ac48f00c192844f1c59bb061591839cf4c330e8136c3880f
+          imagePullPolicy: IfNotPresent
+          # --metrics starts the background fleet collector and serves
+          # Prometheus text exposition on /metrics (ADR-0011, pkg/web/prometheus.go).
+          # Without it the endpoint exists but always renders corral_collection_success 0:
+          # the collector that would populate it never runs.
+          args: ["--metrics"]
+          env:
+            # This deployment manages its Kubernetes cluster by default. Other
+            # configured contexts remain visible in the aggregated inventory.
+            - name: CORRAL_DEFAULT_BACKEND
+              value: kubevirt
+            # Default VM namespace (code default is corral-vms).
+            # Override with CORRAL_NAMESPACE=custom-ns if needed.
+            - name: CORRAL_NAMESPACE
+              value: corral-vms
+            # The UI is open inside the cluster. Only trusted cluster workloads
+            # and SSH administrators may access it; do not expose this service.
+          ports:
+            - containerPort: 8006
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8006
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8006
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: corral-web
+  namespace: corral
+spec:
+  type: ClusterIP
+  selector:
+    app: corral-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8006

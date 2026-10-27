@@ -63,7 +63,7 @@ check_file() {
   [ "$actual" = "$mode" ] || note "would set mode $mode on $dest"
 }
 check_enabled() {
-  local unit="$1" start="$2" state rc
+  local unit="$1" start="$2" state enabled_state rc
   if state=$(systemctl --user is-enabled "$unit" 2>/dev/null); then rc=0; else rc=$?; fi
   case "$state:$rc" in
     enabled:0) ;;
@@ -71,10 +71,14 @@ check_enabled() {
       note "would enable $unit" ;;
     *) echo "Cannot inspect enabled state of $unit" >&2; return 1 ;;
   esac
+  enabled_state=$state
   [ "$start" = 1 ] || return 0
   if state=$(systemctl --user is-active "$unit" 2>/dev/null); then rc=0; else rc=$?; fi
   case "$state:$rc" in
     active:0|reloading:0|refreshing:0) ;;
+    inactive:4)
+      [ "$enabled_state" = not-found ] || { echo "Cannot inspect active state of $unit" >&2; return 1; }
+      note "would start $unit" ;;
     inactive:3|failed:3|activating:3|deactivating:3|unknown:3|unknown:4)
       note "would start $unit" ;;
     *) echo "Cannot inspect active state of $unit" >&2; return 1 ;;

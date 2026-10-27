@@ -6,6 +6,7 @@ from unit_helpers import calls
 
 
 def setup_system_services(tmp_path, env, host, variables, podman):
+    write_stub(Path(env["PATH"].split(":", 1)[0]), "loginctl", 'echo yes\n')
     repo = tmp_path / "repo"
     (repo / "host_vars").mkdir(parents=True)
     (repo / "host_vars" / f"{host}.yml").write_text(variables)
@@ -56,6 +57,34 @@ def test_nonlaptop_daily_timer_and_user_service_are_idempotent(stub_env, tmp_pat
     assert result.returncode == 0, result.stdout + result.stderr
     assert "daemon-reload" not in calls(env)
     assert "restart" not in calls(env)
+
+
+def test_headless_timer_enables_linger_without_mutating_check_mode(stub_env, tmp_path):
+    bindir, env = stub_env
+    write_stub(bindir, "systemctl", '''echo "$*" >> "$HOME/calls"
+case "$1 $2" in
+  "--user is-enabled") echo enabled ;;
+  "--user is-active") echo active ;;
+esac
+''')
+    program, env, _ = setup_system_services(tmp_path, env, "server", "", False)
+    write_stub(bindir, "sudo", 'test "$1" = -n && shift\nexec "$@"\n')
+    write_stub(bindir, "loginctl", '''case "$1" in
+  show-user) if [ -e "$STUB_STATE/linger" ]; then echo yes; else echo no; fi ;;
+  enable-linger) touch "$STUB_STATE/linger" ;;
+  *) exit 1 ;;
+esac
+''')
+    check = run(program, {**env, "UNITS_CHECK": "1"})
+    assert check.returncode == 0, check.stdout + check.stderr
+    assert "would enable user linger" in check.stdout
+    assert not (tmp_path / "linger").exists()
+    applied = run(program, env)
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    assert (tmp_path / "linger").exists()
+    second = run(program, env)
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "ok    ensure user linger" in second.stdout
 
 
 def test_missing_template_does_not_start_stale_update_timer(stub_env, tmp_path):

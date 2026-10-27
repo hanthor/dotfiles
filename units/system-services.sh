@@ -52,7 +52,7 @@ check_file() {
   [ "$actual" = "$mode" ] || note "would set mode $mode on $dest"
 }
 check_enabled() {
-  local scope="$1" unit="$2" state rc
+  local scope="$1" unit="$2" state enabled_state rc
   local -a args=()
   [ "$scope" != user ] || args+=(--user)
   CHECK_ACTIVE=0
@@ -63,9 +63,13 @@ check_enabled() {
       note "would enable $unit" ;;
     *) echo "Cannot inspect enabled state of $unit" >&2; return 1 ;;
   esac
+  enabled_state=$state
   if state=$(systemctl "${args[@]}" is-active "$unit" 2>/dev/null); then rc=0; else rc=$?; fi
   case "$state:$rc" in
     active:0|reloading:0|refreshing:0) CHECK_ACTIVE=1 ;;
+    inactive:4)
+      [ "$enabled_state" = not-found ] || { echo "Cannot inspect active state of $unit" >&2; return 1; }
+      note "would start $unit" ;;
     inactive:3|failed:3|activating:3|deactivating:3|unknown:3|unknown:4)
       note "would start $unit" ;;
     *) echo "Cannot inspect active state of $unit" >&2; return 1 ;;
@@ -153,6 +157,22 @@ if [ "$(host_var is_laptop false)" = true ]; then
   finish
 fi
 
+ensure_timer_linger() {
+  local user state
+  user=$(id -un) || return 1
+  state=$(loginctl show-user "$user" --property=Linger --value 2>/dev/null) || return 1
+  case "$state" in
+    yes) return 0 ;;
+    no)
+      if [ "${UNITS_CHECK:-0}" = 1 ]; then
+        note "would enable user linger"
+      else
+        root loginctl enable-linger "$user"
+      fi ;;
+    *) echo "Cannot inspect user linger for $user" >&2; return 1 ;;
+  esac
+}
+
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -S "$XDG_RUNTIME_DIR/bus" ]; then
   export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
@@ -219,6 +239,9 @@ if render_service "$templates/atuin-daemon.service.j2" "$tmp/atuin-daemon.servic
   note "ok    deploy atuin daemon"
 else
   step "render and deploy atuin daemon" false
+fi
+if [ "$update_ready" = 1 ] && [ "$timer_ready" = 1 ]; then
+  step "ensure user linger" ensure_timer_linger
 fi
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
   [ "$changed" != 1 ] || note "would reload user systemd"

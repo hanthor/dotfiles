@@ -16,11 +16,11 @@ case "$1" in
     if [ "${INSPECTION_ERROR:-0}" = 1 ]; then exit 1; fi
     echo "${ENABLED_STATE:-enabled}"
     [ "${ENABLED_STATE:-enabled}" = enabled ] && exit 0
-    exit 1 ;;
+    exit "${ENABLED_RC:-1}" ;;
   is-active)
     echo "${ACTIVE_STATE:-active}"
     [ "${ACTIVE_STATE:-active}" = active ] && exit 0
-    exit 3 ;;
+    exit "${ACTIVE_RC:-3}" ;;
   *) [ "${CHECK_GUARD:-0}" != 1 ] || exit 99 ;;
 esac
 ''')
@@ -105,7 +105,7 @@ def test_laptop_missing_units_and_inspection_failures(stub_env, tmp_path):
     home = Path(env["HOME"])
     before = snapshot(home)
     args = {"DOTFILES_DIR": str(repo), "DOTFILES_MACHINE": "kanpur"}
-    result = run_unit("laptop-services", {**env, "ENABLED_STATE": "not-found", "ACTIVE_STATE": "inactive"}, **args)
+    result = run_unit("laptop-services", {**env, "ENABLED_STATE": "not-found", "ENABLED_RC": "4", "ACTIVE_STATE": "inactive", "ACTIVE_RC": "4"}, **args)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "would install" in result.stdout and "would start atuin-daemon.service" in result.stdout
     assert snapshot(home) == before
@@ -152,6 +152,20 @@ def test_system_user_service_check_reports_drift_and_missing_template(stub_env, 
     assert result.returncode != 0
     assert "FAIL" in result.stdout
     assert snapshot(home) == before
+    assert_read_only_calls(env)
+
+
+def test_system_check_handles_absent_unit_but_rejects_manager_error(stub_env, tmp_path):
+    bindir, original_env = stub_env
+    systemctl_stub(bindir)
+    env = check_env(tmp_path, original_env)
+    program, env, _ = setup_system_services(tmp_path, env, "server", "", False)
+    missing = run_script(program, {**env, "ENABLED_STATE": "not-found", "ENABLED_RC": "4", "ACTIVE_STATE": "inactive", "ACTIVE_RC": "4"})
+    assert missing.returncode == 0, missing.stdout + missing.stderr
+    assert "would start dotfiles-update.timer" in missing.stdout
+    failed = run_script(program, {**env, "ACTIVE_STATE": "inactive", "ACTIVE_RC": "4"})
+    assert failed.returncode != 0
+    assert "Cannot inspect active state" in failed.stderr
     assert_read_only_calls(env)
 
 

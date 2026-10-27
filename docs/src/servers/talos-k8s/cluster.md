@@ -1,10 +1,15 @@
 # Historical Cluster Handbook — Talos Linux on Bihar + Karnataka
 
 > **Historical architecture and recovery reference, not a current deployment.**
-> Bihar was recently online but is currently unreachable; its OS and services
-> are unverified. Karnataka runs `projectbluefin/utah:testing` and defaults to
-> `multi-user.target`. Neither this handbook nor retained manifests establish
-> what services either machine runs now.
+> Bihar's OS and services are unverified. Karnataka runs `projectbluefin/utah:testing`
+> with `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server bound to
+> tailnet address `100.66.158.127`. KubeVirt `v1.9.1`, CDI and Corral are installed;
+> `corral-vms/punjab` is staging, not a migrated replacement for active EC2 Punjab.
+> On the current server, firewalld puts `cni0` in the internal zone and accepts
+> pod subnet `10.42.0.0/16` to kubelet port `10250` on that tailnet address;
+> internal-zone services, including SSH, are accessible from pods. NetworkPolicy
+> enforcement is unverified. Utah is enforcing SELinux, but `k3s-selinux` is
+> absent and K3s container SELinux is disabled.
 >
 > **Do not run the reinstall, reset, bootstrap, configuration, migration, or
 > workload commands below against repurposed nodes.** They can wipe disks or
@@ -182,11 +187,12 @@ After install, the node exposes `/dev/dri/card0`, `/dev/dri/renderD128`, and `/d
 
 > **Talos version note:** Pinned to `v1.13.2`. `v1.13.3` had multi-arch registry pull errors on AMD64 at the time of writing.
 
-### User volume for /var/mnt/storage
+### Historical user volume for /var/mnt/storage
 
-nvme0n1 is the **Crucial P3** (healthy, boot disk). The WD Black failed with I/O errors
-and was replaced as the boot disk. Forgejo / local-path PVCs use a `directory`-type
-user volume on the Crucial P3's EPHEMERAL partition:
+At the time, nvme0n1 was the **Crucial P3** (boot disk). The WD Black had failed
+with I/O errors and was replaced as the boot disk. Forgejo / local-path PVCs used
+a `directory`-type user volume on the Crucial P3's EPHEMERAL partition. Current
+disk health and contents are not established by this record:
 
 ```bash
 # Apply the user volume config (idempotent):
@@ -483,9 +489,9 @@ The former procedure for a wiped or replaced node was:
 
 If only the worker was reset, the existing kubeconfig still works — only steps 1, 2, 5, and 6 are needed for that node, plus re-applying any DaemonSet pods.
 
-> **WD Black failure:** Do not use the WD Black (`/dev/nvme1n1`) for installs or user volumes.
-> Install only to the Crucial P3 (`/dev/nvme0n1`). Storage uses a directory-type volume
-> on the Crucial P3's EPHEMERAL partition.
+> **Historical WD Black failure:** The former procedure excluded `/dev/nvme1n1`
+> and selected the Crucial P3 (`/dev/nvme0n1`). Do not treat this as a current
+> disk selection: verify identity, health, contents and backups before any recovery.
 
 ---
 
@@ -563,13 +569,13 @@ After reboot (~2 min), all pods recover automatically. PVC-backed services
 
 ### Scope and acceptance status
 
-This section records a proposed replacement OS and **new K3s cluster**, not a
-Talos upgrade or evidence of current services. Bihar's present OS and services
-are unverified. Karnataka runs `projectbluefin/utah:testing`, not the proposed
-K3s worker. Do not install, switch, activate, or configure these
-images on repurposed nodes. The procedures below and sections 1–11 are retained
-for historical context and recovery planning only. The terminated
-[AWS Talos cluster's](../aws-k8s/cluster.md) recovery material remains separate.
+This section records a proposed replacement OS and **new two-node K3s cluster**,
+not a Talos upgrade or instructions for the current single-node K3s server on
+Utah. Bihar's present OS and services are unverified. Do not install, switch,
+activate, or configure these images on Karnataka or other existing hosts. The
+procedures below and sections 1–11 are retained for historical context and recovery
+planning only. The terminated [AWS Talos cluster's](../aws-k8s/cluster.md)
+recovery material remains separate.
 
 Image builds alone do not prove installation. The GitHub Actions acceptance
 workflow builds all three images and offline ISOs, drives the **real
@@ -720,12 +726,13 @@ Keep the old Bitwarden secure notes `kubeconfig` / `talosconfig` and their
 `kubeconfig-aws-migration` / `talosconfig-aws-migration` notes and files unchanged.
 Use a new home kubeconfig below; do not overwrite any of these.
 
-**Karnataka's `/dev/nvme1n1` (WD Black) is failing: never select it.**
-Only the healthy `/dev/nvme0n1` is a candidate, **after off-node backups and an
-explicit physical operator choice**. Identify disks by model, serial, size,
-and current contents at the console (`lsblk -o NAME,SIZE,MODEL,SERIAL,FSTYPE,MOUNTPOINTS`);
-do not assume device enumeration is sufficient. Apply the same backup and
-operator-choice gate to Bihar's intended `/dev/nvme0n1`.
+**Karnataka's `/dev/nvme1n1` (WD Black) was reported failing: never select it
+without an independent assessment.** The former plan named `/dev/nvme0n1` as a
+candidate, not as permission to overwrite the current Utah/K3s server. Any future
+disk choice requires off-node backups and an explicit physical operator decision.
+Identify disks by model, serial, size, and current contents at the console
+(`lsblk -o NAME,SIZE,MODEL,SERIAL,FSTYPE,MOUNTPOINTS`); do not assume device
+enumeration or historical health. Apply the same gate to Bihar.
 
 ### Build node images and optional starter media
 

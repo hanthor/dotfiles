@@ -1,9 +1,11 @@
 # Historical Talos Kubernetes Cluster
 
-> **Historical reference, not a current deployment.** Bihar was recently online
-> but is currently unreachable; its OS and services are unverified. Karnataka is
-> running `projectbluefin/utah:testing`, with `multi-user.target` as its default.
-> Retain `talos-k8s/`, cluster configs and Bitwarden
+> **Historical reference, not a current deployment.** Bihar's OS and services
+> are unverified. Karnataka runs `projectbluefin/utah:testing` with
+> `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server on its
+> tailnet address `100.66.158.127`. KubeVirt `v1.9.1`, CDI and Corral are
+> installed; `corral-vms/punjab` is a staging VM, not a migrated replacement
+> for active EC2 Punjab. Retain `talos-k8s/`, cluster configs and Bitwarden
 > notes as recovery material, not proof either machine still runs Talos.
 >
 > **Do not run historical reinstall, configuration or workload commands against
