@@ -71,10 +71,19 @@ gh_login() {
   printf '%s' "$tok" | gh auth login --with-token
 }
 
-# register_key TYPE: add the SSH key as TYPE unless a `... TYPE` line already lists it.
+# Query each key type separately: `gh ssh-key list` exits nonzero for an empty account.
 register_key() {
-  local type="$1" title="$MACHINE-$2"
-  grep -Eq "${type}\$" <<<"$key_lines" && return 0
+  local type="$1" title="$MACHINE-$2" endpoint keys
+  case "$type" in
+    authentication) endpoint=user/keys ;;
+    signing) endpoint=user/ssh_signing_keys ;;
+    *) return 1 ;;
+  esac
+  if ! keys="$(gh api --paginate --jq '.[].key' "$endpoint" 2>/dev/null)"; then
+    note "warn: failed to list GitHub SSH $type keys; registration skipped"
+    return 1
+  fi
+  if awk -v key="$key_body" '$2 == key { found=1 } END { exit !found }' <<<"$keys"; then return 0; fi
   if ! gh ssh-key add "$pub" --title "$title" --type "$type"; then
     note "warn: failed to upload SSH $type key for $MACHINE to GitHub"
     return 1
@@ -82,7 +91,7 @@ register_key() {
 }
 
 register_keys() {
-  local scopes key_body key_list
+  local scopes key_body
   scopes="$(gh auth status -t 2>&1 | grep -o 'Token scopes:.*' || true)"
   case "$scopes" in
     *admin:public_key*admin:ssh_signing_key*|*admin:ssh_signing_key*admin:public_key*) ;;
@@ -92,15 +101,12 @@ register_keys() {
   esac
   [ -f "$pub" ] || { note "warn: $pub missing; no SSH key to register"; return 1; }
   key_body="$(awk '{print $2}' "$pub")"
-  if ! key_list="$(gh ssh-key list 2>/dev/null)"; then
-    note "warn: failed to list GitHub SSH keys; registration skipped"
-    return 1
-  fi
-  key_lines="$(grep -F -- "$key_body" <<<"$key_list" || true)"
-  register_key authentication auth && register_key signing signing
+  local rc=0
+  register_key authentication auth || rc=1
+  register_key signing signing || rc=1
+  return "$rc"
 }
 
-key_lines=""
 step "github known_hosts" known_hosts
 if [ "${UNITS_NO_SECRETS:-0}" = 1 ]; then
   note "SKIPPED: GitHub authentication and SSH key registration (--no-secrets)"

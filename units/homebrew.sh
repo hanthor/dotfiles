@@ -69,17 +69,14 @@ install_brew() {
 }
 
 ensure_yq() {
-  local version
-  if command -v yq >/dev/null 2>&1 && version="$(yq --version 2>/dev/null)" && [[ "$version" == *github.com/mikefarah/yq* ]]; then
-    return 0
-  fi
+  if package_require_yq >/dev/null 2>&1; then return 0; fi
   echo 'Installing Mike Farah yq for package configuration'
   GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0='' "$brew_bin" install yq || {
     echo 'Unable to install yq with Homebrew' >&2
     return 1
   }
   hash -r
-  if ! command -v yq >/dev/null 2>&1 || ! version="$(yq --version 2>/dev/null)" || [[ "$version" != *github.com/mikefarah/yq* ]]; then
+  if ! package_require_yq >/dev/null 2>&1; then
     echo 'Mike Farah yq is unavailable after Homebrew installation' >&2
     return 1
   fi
@@ -173,7 +170,7 @@ check_brew_query() {
 }
 
 check_brew() {
-  local parent="${brew_prefix%/.linuxbrew}" owner uid version rc mode result pkg tap seen=' ' taps line info kind count
+  local parent="${brew_prefix%/.linuxbrew}" owner uid rc mode result pkg tap seen=' ' taps line info kind count
   if [ -d "$parent" ]; then
     if owner="$(stat -c %u "$parent" 2>/dev/null || stat -f %u "$parent" 2>/dev/null)" && uid="$(id -u)"; then
       [ "$owner" = "$uid" ] || note 'CHANGE: repair Homebrew directory ownership'
@@ -185,7 +182,7 @@ check_brew() {
     note 'CHANGE: Homebrew compiler toolchain is missing'
   fi
   if [ ! -x "$brew_bin" ]; then note 'CHANGE: install Homebrew'; fi
-  if ! command -v yq >/dev/null 2>&1 || ! version="$(yq --version 2>/dev/null)" || [[ "$version" != *github.com/mikefarah/yq* ]]; then
+  if ! package_require_yq >/dev/null 2>&1; then
     echo 'Cannot inspect Homebrew configuration: Mike Farah yq is required' >&2
     UNIT_FAILED=1; return
   fi
@@ -297,9 +294,19 @@ else
   step 'Homebrew configuration' false
   finish
 fi
-step 'Brewfile' deploy_brewfile
+if deploy_brewfile; then
+  note 'ok    Brewfile'
+  brewfile_ready=1
+else
+  step 'Brewfile' false
+  brewfile_ready=0
+fi
 step 'Homebrew taps' tap_and_trust
-step 'Homebrew bundle' bundle
+if [ "$brewfile_ready" = 1 ]; then
+  step 'Homebrew bundle' bundle
+else
+  note 'SKIPPED: Homebrew bundle (Brewfile deployment failed)'
+fi
 step 'blocked Homebrew packages' uninstall_blocked
 case "${DOTFILES_UPGRADE:-0}" in 1|true) soft 'Homebrew upgrade' "$brew_bin" upgrade ;; esac
 soft 'brew Python packaging' "$brew_prefix/bin/python3" -m pip install packaging --break-system-packages --quiet

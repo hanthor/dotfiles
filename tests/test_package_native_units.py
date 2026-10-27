@@ -153,6 +153,17 @@ INSTALLER
     assert 'brew "desktop-pkg"' in (Path(env["HOME"]) / "Brewfile").read_text()
 
 
+def test_homebrew_uses_existing_valid_yq_without_installing(package_env, tmp_path):
+    _, env, log = package_env
+    bindir = isolate_bootstrap_path(env, tmp_path)
+    (bindir / "yq").symlink_to(env["YQ_BINARY"])
+    result = run_unit("homebrew", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    args = [entry["args"] for entry in calls(log, "brew")]
+    assert ["install", "yq"] not in args
+    assert any(call[:2] == ["bundle", "install"] for call in args)
+
+
 def test_failed_yq_bootstrap_stops_before_bundle(package_env, tmp_path):
     _, env, log = package_env
     isolate_bootstrap_path(env, tmp_path)
@@ -220,6 +231,41 @@ def test_brew_continues_after_tap_failure(package_env):
     args = [entry["args"] for entry in calls(log, "brew")]
     assert any(call[:2] == ["bundle", "install"] for call in args)
     assert ["uninstall", "--formula", "trash-cli"] in args
+
+
+def test_failed_brewfile_deployment_skips_stale_bundle_but_continues(package_env):
+    _, env, log = package_env
+    bindir = Path(env["PATH"].split(os.pathsep)[0])
+    brewfile = Path(env["HOME"]) / "Brewfile"
+    brewfile.write_text('brew "stale-package"\n')
+    write_stub(bindir, "install", 'exit 1\n')
+    result = run_unit("homebrew", env)
+    assert result.returncode != 0
+    assert 'SKIPPED: Homebrew bundle' in result.stdout
+    assert brewfile.read_text() == 'brew "stale-package"\n'
+    args = [entry["args"] for entry in calls(log, "brew")]
+    assert not any(call[:2] == ["bundle", "install"] for call in args)
+    assert any(call[:1] == ["tap"] for call in args)
+    assert ["uninstall", "--formula", "trash-cli"] in args
+
+
+def test_flatpak_selects_brew_yq_when_path_yq_is_incompatible(package_env):
+    _, env, log = package_env
+    bindir = Path(env["PATH"].split(os.pathsep)[0])
+    write_stub(bindir, "yq", 'echo "another yq"; exit 0\n')
+    (Path(env["BREW_PREFIX"]) / "bin/yq").symlink_to(shutil.which("yq"))
+    result = run_unit("flatpak", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert calls(log, "flatpak")
+
+
+def test_flatpak_rejects_incompatible_yq_even_when_it_exits_successfully(package_env):
+    _, env, log = package_env
+    bindir = Path(env["PATH"].split(os.pathsep)[0])
+    write_stub(bindir, "yq", 'echo "not Mike Farah yq"; exit 0\n')
+    result = run_unit("flatpak", env)
+    assert result.returncode != 0
+    assert not calls(log, "flatpak")
 
 
 def test_flatpak_system_scope_batch_fallback_and_wrappers(package_env):

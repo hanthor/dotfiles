@@ -4,6 +4,8 @@
 
 If the private key is absent, the unit requires an unlocked vault and a successful item listing before restoring the complete `<login>@<machine>` SSH item or generating a new pair when no item exists. It checks restored and local key pairs and refuses conflicting keys. An existing local key is retained; if its public key differs from the vault item, the vault is left unchanged unless `SSH_KEYS_FORCE_PUSH=true` or `ssh_keys_force_push: true` explicitly permits rotation.
 
+Passphrase-protected OpenSSH identities are not prompted for. Existing identities and vault restores are retained when the public key matches the encrypted key's public envelope, but the private contents cannot be verified without the passphrase. The envelope is unauthenticated, so the unit will not create or replace a Bitwarden key from that unverified identity, even with forced rotation. A missing, invalid or mismatched public key remains an error.
+
 The unit preserves user entries outside its marked SSH config and `authorized_keys` blocks. Vault public keys and `extra_authorized_keys` are merged into the authorization block; previous managed entries remain by default. `SSH_KEYS_FORCE_AUTHORIZED=true` (or the corresponding host variable) permits removing obsolete entries only within that block. A locked vault, disabled secrets, or an empty vault key list leaves vault authorization unchanged. Host-key scans only replace an entry after a usable scan; failed scans leave existing entries intact. Existing signers are retained.
 
 `--no-secrets` skips vault access; a missing identity is deferred rather than generated. Config and other independent steps still run. The separate [ssh_mesh](ssh_mesh.md) unit adds committed fleet public keys and checks connectivity.

@@ -29,7 +29,11 @@ def run(args, *, data=None, env=None, timeout=30):
     return subprocess.run(args, input=data, text=True, capture_output=True, env=env, timeout=timeout)
 
 
-def yaml_file(path):
+def yaml_file(path, *, allow_empty=False):
+    if allow_empty:
+        lines = [line.split("#", 1)[0].strip() for line in path.read_text().splitlines()]
+        if [line for line in lines if line] in ([], ["---"]):
+            return {}
     try:
         result = run(["yq", "-o=json", ".", str(path)])
     except FileNotFoundError:
@@ -121,6 +125,75 @@ def key_parts(key):
     return parts[:2]
 
 
+def encrypted_public_key(private):
+    # OpenSSH exposes an unauthenticated public key in its encrypted envelope.
+    # Matching it catches a mismatched .pub, but cannot validate the ciphertext.
+    lines = private.strip().splitlines()
+    if len(lines) < 3 or lines[0] != "-----BEGIN OPENSSH PRIVATE KEY-----" or lines[-1] != "-----END OPENSSH PRIVATE KEY-----":
+        raise RuntimeError("cannot inspect encrypted SSH private key")
+    try:
+        blob = base64.b64decode("".join(lines[1:-1]), validate=True)
+        magic = b"openssh-key-v1\x00"
+        if not blob.startswith(magic):
+            raise ValueError()
+        pos = len(magic)
+
+        def field():
+            nonlocal pos
+            if pos + 4 > len(blob):
+                raise ValueError()
+            size = int.from_bytes(blob[pos:pos + 4], "big")
+            pos += 4
+            if size > len(blob) - pos:
+                raise ValueError()
+            value = blob[pos:pos + size]
+            pos += size
+            return value
+
+        cipher, kdf, options = field(), field(), field()
+        ciphers = {
+            b"aes128-ctr": (16, 0), b"aes192-ctr": (16, 0), b"aes256-ctr": (16, 0),
+            b"aes128-cbc": (16, 0), b"aes192-cbc": (16, 0), b"aes256-cbc": (16, 0),
+            b"3des-cbc": (8, 0), b"aes128-gcm@openssh.com": (16, 16),
+            b"aes256-gcm@openssh.com": (16, 16), b"chacha20-poly1305@openssh.com": (8, 16),
+        }
+        if cipher not in ciphers or kdf != b"bcrypt" or len(options) < 9 or pos + 4 > len(blob):
+            raise ValueError()
+        salt_len = int.from_bytes(options[:4], "big")
+        if not salt_len or len(options) != 8 + salt_len or not int.from_bytes(options[-4:], "big"):
+            raise ValueError()
+        count = int.from_bytes(blob[pos:pos + 4], "big")
+        pos += 4
+        if count != 1:
+            raise ValueError()
+        public = field()
+        encrypted = field()
+        block_size, tag_size = ciphers[cipher]
+        if len(encrypted) < block_size or len(encrypted) % block_size or len(blob) - pos != tag_size:
+            raise ValueError()
+        return key_parts("ssh-ed25519 " + base64.b64encode(public).decode("ascii"))
+    except (ValueError, UnicodeError) as exc:
+        raise RuntimeError("cannot inspect encrypted SSH private key") from exc
+
+
+def inspect_private_key(private, public, *, private_path=None):
+    try:
+        if private_path is not None:
+            result = run(["ssh-keygen", "-y", "-P", "", "-f", str(private_path)])
+            if result.returncode:
+                raise RuntimeError("cannot validate SSH private key without prompting")
+            return key_parts(result.stdout), True
+        return derive_private_key(private), True
+    except RuntimeError:
+        if not public.exists():
+            raise RuntimeError("encrypted or invalid SSH private key requires an existing public key")
+        parts = encrypted_public_key(private)
+        if key_parts(public.read_text()) != parts:
+            raise RuntimeError("local SSH private and public keys do not match")
+        print("PARTIAL: encrypted SSH key envelope matches; private contents cannot be verified without a passphrase")
+        return parts, False
+
+
 def ssh_data(item):
     data = item.get("sshKey") or {}
     if not isinstance(data, dict):
@@ -154,13 +227,14 @@ class Fleet:
         self.hosts = inventory.get("hosts") or {}
         self.vps = set(((inventory.get("children") or {}).get("vps") or {}).get("hosts") or {})
         host_file = ROOT / "host_vars" / (MACHINE + ".yml")
-        self.host_vars = yaml_file(host_file) if host_file.exists() else {}
+        self.host_vars = yaml_file(host_file, allow_empty=True) if host_file.exists() else {}
         self.login = self.host_vars.get("user_login", self.vars["user_login"])
         self.email = self.host_vars.get("user_email", self.vars["user_email"])
         self.machines = self.vars["machines"]
         self.env = None
         self.items = None
         self.key_ready = False
+        self.key_verified = False
         self.key_deferred = False
         self.failed = False
 
@@ -228,8 +302,15 @@ class Fleet:
                 try:
                     with os.fdopen(fd, "w") as f:
                         f.write(priv.rstrip("\n") + "\n")
-                    derived = run(["ssh-keygen", "-y", "-f", name])
-                    if derived.returncode or key_parts(derived.stdout) != key_parts(pub):
+                    derived = run(["ssh-keygen", "-y", "-P", "", "-f", name])
+                    if derived.returncode:
+                        try:
+                            restored_public = encrypted_public_key(priv)
+                        except RuntimeError as exc:
+                            raise RuntimeError("Bitwarden SSH key pair is invalid or does not match") from exc
+                    else:
+                        restored_public = key_parts(derived.stdout)
+                    if restored_public != key_parts(pub):
                         raise RuntimeError("Bitwarden SSH key pair is invalid or does not match")
                     atomic(public, pub.rstrip("\n") + "\n", 0o644)
                     os.replace(name, private)
@@ -244,10 +325,7 @@ class Fleet:
                 if result.returncode:
                     raise RuntimeError("ssh-keygen failed")
         private.chmod(0o600)
-        derived = run(["ssh-keygen", "-y", "-f", str(private)])
-        if derived.returncode:
-            raise RuntimeError("cannot read existing private key")
-        derived_parts = key_parts(derived.stdout)
+        derived_parts, self.key_verified = inspect_private_key(private.read_text(), public, private_path=private)
         if not public.exists():
             atomic(public, " ".join(derived_parts) + " " + MACHINE + "\n", 0o644)
         if key_parts(public.read_text()) != derived_parts:
@@ -272,6 +350,9 @@ class Fleet:
             if force.lower() not in ("true", "1", "yes"):
                 print("WARNING: local SSH key differs from Bitwarden; vault left unchanged (set SSH_KEYS_FORCE_PUSH=true for an intentional rotation)")
                 return
+        if not self.key_verified:
+            print("PARTIAL: encrypted SSH key not verified; Bitwarden key left unchanged")
+            return
         fingerprint = run(["ssh-keygen", "-lf", str(public)])
         if fingerprint.returncode or len(fingerprint.stdout.split()) < 2:
             raise RuntimeError("cannot determine SSH fingerprint")
@@ -550,7 +631,7 @@ class CheckFleet(Fleet):
             return
         if not private.is_file():
             raise RuntimeError(f"not a regular file: {private}")
-        derived = derive_private_key(private.read_text())
+        derived, self.key_verified = inspect_private_key(private.read_text(), public)
         if stat.S_IMODE(private.stat().st_mode) != 0o600:
             print(f"would set {private} mode 0600")
         if not public.exists():

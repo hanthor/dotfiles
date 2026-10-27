@@ -272,3 +272,97 @@ def test_invalid_vault_key_pair_is_not_installed_or_logged(fleet):
     assert "does not match" in result.stdout
     assert not (home / ".ssh/id_ed25519").exists()
     assert fleet["private"] not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("mismatch", [False, True])
+def test_restores_encrypted_vault_identity_without_prompting(fleet, tmp_path, mismatch):
+    source = tmp_path / "encrypted-vault-key"
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "test-passphrase", "-f", str(source)],
+                   check=True, capture_output=True)
+    private = source.read_text()
+    public = source.with_suffix(".pub").read_text().strip()
+    home = fleet["home"]
+    item = json.loads((home / "item.json").read_text())
+    item["sshKey"] = {"privateKey": private, "publicKey": fleet["other_public"] if mismatch else public}
+    (home / "item.json").write_text(json.dumps(item))
+    (home / "items.json").write_text(json.dumps([item]))
+    result = execute(fleet)
+    if mismatch:
+        assert result.returncode != 0
+        assert not (home / ".ssh/id_ed25519").exists()
+    else:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (home / ".ssh/id_ed25519").read_text() == private
+        assert (home / ".ssh/id_ed25519.pub").read_text().strip() == public
+    assert not (home / "encoded-item").exists()
+    assert private not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("contents,parsed,valid", [
+    ("---\n", "null", True),
+    ("# onboarding\n--- # empty\n", "null", True),
+    ("- unexpected\n", '["unexpected"]', False),
+    ("null\n", "null", False),
+])
+def test_host_vars_accepts_empty_document_but_rejects_nonmapping(fleet, tmp_path, contents, parsed, valid):
+    root = tmp_path / "fleet-root"
+    (root / "host_vars").mkdir(parents=True)
+    (root / "host_vars/newhost.yml").write_text(contents)
+    (fleet["data"] / "newhost.yml.json").write_text(parsed)
+    script = '''
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("ssh_fleet", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.Fleet()
+'''
+    result = subprocess.run(["python3", "-c", script, str(REPO / "units/ssh-fleet.py")],
+                            env={**fleet["env"], "DOTFILES_DIR": str(root)}, capture_output=True, text=True)
+    assert (result.returncode == 0) is valid
+    if not valid:
+        assert "invalid YAML mapping" in result.stderr
+
+
+@pytest.mark.parametrize("mismatch", [False, True])
+@pytest.mark.parametrize("check", [False, True])
+def test_encrypted_identity_never_prompts_or_overwrites_vault(fleet, mismatch, check):
+    ssh = fleet["home"] / ".ssh"
+    ssh.mkdir()
+    private = ssh / "id_ed25519"
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "test-passphrase", "-f", str(private)],
+                   check=True, capture_output=True)
+    public = ssh / "id_ed25519.pub"
+    if mismatch:
+        public.write_text(fleet["other_public"] + "\n")
+    private_before, public_before = private.read_bytes(), public.read_bytes()
+    result = execute(fleet, SSH_KEYS_FORCE_PUSH="true", **({"UNITS_CHECK": "1"} if check else {}))
+    if mismatch:
+        assert result.returncode != 0
+        assert "local SSH private and public keys do not match" in result.stdout
+    else:
+        assert "encrypted SSH key envelope matches" in result.stdout
+        if not check:
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert "Bitwarden key left unchanged" in result.stdout
+    assert private.read_bytes() == private_before and public.read_bytes() == public_before
+    assert not (fleet["home"] / "encoded-item").exists()
+    assert "test-passphrase" not in result.stdout + result.stderr
+    assert private_before.decode() not in result.stdout + result.stderr
+
+
+def test_encrypted_identity_without_public_key_is_not_replaced(fleet):
+    ssh = fleet["home"] / ".ssh"
+    ssh.mkdir()
+    private = ssh / "id_ed25519"
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "test-passphrase", "-f", str(private)],
+                   check=True, capture_output=True)
+    before = private.read_bytes()
+    public = ssh / "id_ed25519.pub"
+    public.unlink()
+    result = execute(fleet, SSH_KEYS_FORCE_PUSH="true")
+    assert result.returncode != 0
+    assert "requires an existing public key" in result.stdout
+    assert private.read_bytes() == before
+    assert not public.exists()
+    assert not (fleet["home"] / "encoded-item").exists()
+    assert before.decode() not in result.stdout + result.stderr

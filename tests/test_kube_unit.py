@@ -68,3 +68,38 @@ def test_skip_kube_host_var_wins_over_desktop(env, tmp_path):
     (repo / "units").symlink_to(Path(__file__).resolve().parent.parent / "units")
     r = run_unit("kube", env, DOTFILES_DIR=str(repo), DOTFILES_MACHINE="phone")
     assert "SKIPPED:" in r.stdout and not (Path(env["HOME"]) / ".kube").exists()
+
+
+@pytest.mark.parametrize("result", ["failure", "malformed", "invalid"])
+def test_unknown_desktop_inventory_fails_without_reading_secrets(env, tmp_path, result):
+    repo = tmp_path / "repo"
+    (repo / "host_vars").mkdir(parents=True)
+    (repo / "units").symlink_to(Path(__file__).resolve().parent.parent / "units")
+    bindir = Path(env["PATH"].split(":")[0])
+    write_stub(bindir, "yq", '''\
+if [ "$LOOKUP" = failure ]; then exit 1; fi
+case "$*" in
+  *'| tag'*) [ "$LOOKUP" = malformed ] && echo '!!seq' || echo '!!map' ;;
+  *) echo invalid ;;
+esac
+''')
+    r = run_unit("kube", env, DOTFILES_DIR=str(repo), DOTFILES_MACHINE="unknown",
+                 DOTFILES_IS_DESKTOP="", LOOKUP=result)
+    assert r.returncode != 0
+    assert "FAIL" in r.stdout
+    assert not (Path(env["HOME"]) / ".kube").exists()
+    assert calls(env) == ""
+
+
+@pytest.mark.parametrize("profile", ["skip_kube: true\n", "machine_profile: vm-test\n"])
+def test_profile_skips_without_desktop_lookup(env, tmp_path, profile):
+    repo = tmp_path / "repo"
+    (repo / "host_vars").mkdir(parents=True)
+    (repo / "host_vars/phone.yml").write_text(profile)
+    (repo / "units").symlink_to(Path(__file__).resolve().parent.parent / "units")
+    bindir = Path(env["PATH"].split(":")[0])
+    write_stub(bindir, "yq", 'exit 1\n')
+    r = run_unit("kube", env, DOTFILES_DIR=str(repo), DOTFILES_MACHINE="phone",
+                 DOTFILES_IS_DESKTOP="")
+    assert r.returncode == 0 and "SKIPPED" in r.stdout
+    assert calls(env) == ""

@@ -8,7 +8,7 @@ export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" +
 # Resolve online fleet hosts: intersect tailscale online peers with inventory (excluding vps + self)
 _online_hosts := shell('python3 "$1"', justfile_directory() / "scripts/online_hosts.py")
 
-_secret_tag_pattern := "secrets|ssh|ssh_keys|github|tailscale|kube|forgejo|registry|atuin|ai|omp|desktop|browser|zen_browser"
+_secret_tag_pattern := "secrets|ssh|ssh_keys|github|tailscale|kube|forgejo|registry|atuin|ai|omp|desktop|browser|zen_browser|shell|dotfiles"
 
 # Apply all config to this machine (unlocks BW interactively if needed)
 apply *args:
@@ -134,7 +134,20 @@ apply-remote name *args:
       if [ '$EXPECT_SESSION' = 1 ] && [ -z \"\${BW_SESSION:-}\" ]; then
         echo 'SSH server did not accept BW_SESSION; remote apply aborted.' >&2; exit 1
       fi
-      [ -n \"\${BW_SESSION:-}\" ] && (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
+      if [ -n \"\${BW_SESSION:-}\" ]; then
+        python3 -c '
+    import os, tempfile
+    path = \"/tmp/bw_session\"
+    fd, temp = tempfile.mkstemp(prefix=\".bw_session.\", dir=\"/tmp\")
+    try:
+        with os.fdopen(fd, \"w\") as f:
+            f.write(os.environ[\"BW_SESSION\"])
+        os.replace(temp, path)
+    finally:
+        if os.path.exists(temp):
+            os.unlink(temp)
+    ' || exit 1
+      fi
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply {{ args }}
     "
     just push-terminfo {{ name }}

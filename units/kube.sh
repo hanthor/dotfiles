@@ -7,21 +7,27 @@ set -uo pipefail
 # shellcheck source=units/kube.conf
 . "$DOTFILES_DIR/units/kube.conf"
 
-if [ "${UNITS_CHECK:-0}" = 1 ] && ! skipped_by_profile skip_kube; then
-  desktop="${DOTFILES_IS_DESKTOP:-$(host_var is_desktop)}"
-  case "$desktop" in
-    1|true|0|false) ;;
-    *)
-      if ! command -v yq >/dev/null 2>&1 || ! desktop="$(yq ".all.children.desktop.hosts | has(\"$MACHINE\")" "$DOTFILES_DIR/inventory.yml" 2>/dev/null)"; then
-        note "FAIL  cannot inspect desktop inventory (yq required)"
-        exit 1
-      fi
-      case "$desktop" in true|false) ;; *) note "FAIL  invalid desktop inventory result"; exit 1 ;; esac ;;
-  esac
-  DOTFILES_IS_DESKTOP="$desktop"
+if skipped_by_profile skip_kube; then
+  note "SKIPPED: not a desktop (or skip_kube / vm-test)"
+  exit 0
 fi
 
-if ! is_desktop || skipped_by_profile skip_kube; then
+desktop="${DOTFILES_IS_DESKTOP:-$(host_var is_desktop)}"
+case "$desktop" in
+  1|true|0|false) ;;
+  '')
+    if ! command -v yq >/dev/null 2>&1 ||
+       ! kind="$(yq -r '.all.children.desktop.hosts | tag' "$DOTFILES_DIR/inventory.yml" 2>/dev/null)" ||
+       [ "$kind" != '!!map' ] ||
+       ! desktop="$(MACHINE="$MACHINE" yq -r '.all.children.desktop.hosts | has(strenv(MACHINE))' "$DOTFILES_DIR/inventory.yml" 2>/dev/null)"; then
+      note "FAIL  cannot inspect desktop inventory (yq and valid inventory required)"
+      exit 1
+    fi
+    case "$desktop" in true|false) ;; *) note "FAIL  invalid desktop inventory result"; exit 1 ;; esac ;;
+  *) note "FAIL  invalid desktop classification"; exit 1 ;;
+esac
+
+if [ "$desktop" = 0 ] || [ "$desktop" = false ]; then
   note "SKIPPED: not a desktop (or skip_kube / vm-test)"
   exit 0
 fi

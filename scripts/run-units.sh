@@ -131,7 +131,9 @@ elif selected browser-fxa; then
   echo "SKIPPED: browser-fxa requires a configured Zen profile" >&2
 fi
 if [ "$ssh_ok" = 1 ]; then
-  later+=(ssh-mesh github)
+  # Both units update known_hosts; serialize them to avoid lost updates.
+  run_stage ssh-mesh || rc=1
+  run_stage github || rc=1
 else
   for unit in ssh-mesh github; do selected "$unit" && echo "SKIPPED: $unit requires a valid SSH identity" >&2; done
 fi

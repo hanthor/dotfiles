@@ -8,7 +8,7 @@ All secrets live in [Bitwarden](https://bitwarden.com/) and are resolved at runt
 2. The recipe validates the session and runs `bw sync` with a 15-second timeout before invoking `scripts/run-units.sh`. If resolution or sync fails it continues with `--no-secrets`.
 3. Unit helpers validate `BW_SESSION` or `/tmp/bw_session` noninteractively, and honor `UNITS_NO_SECRETS=1`. Units handle unavailable sessions and items independently; inspect their `SKIPPED` and `PARTIAL` output.
 
-For `just apply-tags` with a secret-bearing tag such as `kube`, `ai` or `omp`, the recipe resolves and syncs a session before running. If this fails it runs the selected units with secrets disabled and returns nonzero. Unrelated tags do not prompt.
+For `just apply-tags` with a secret-bearing tag such as `kube`, `ai`, `omp`, `shell` or `dotfiles`, the recipe resolves and syncs a session before running. If this fails it runs the selected units with secrets disabled and returns nonzero. Unrelated tags do not prompt.
 
 ## Remote Apply
 
@@ -19,7 +19,7 @@ For `just apply-tags` with a secret-bearing tag such as `kube`, `ai` or `omp`, t
    out it tries `bw login --apikey` with the `bw-api-key` item from your local
    vault; to unlock it pipes the master password (item `James Bitwarden`) over
    stdin, falling back to an interactive `bw unlock` over `ssh -t`.
-2. Sends a resolved remote session through SSH `SendEnv=BW_SESSION`, not in the command line. The target SSH daemon must accept `BW_SESSION`; if it rejects a resolved session, the apply aborts. `apply-remote` also caches it in the remote's `/tmp/bw_session`.
+2. Sends a resolved remote session through SSH `SendEnv=BW_SESSION`, not in the command line. The target SSH daemon must accept `BW_SESSION`; if it rejects a resolved session, the apply aborts. `apply-remote` also atomically replaces the remote's `/tmp/bw_session` with a mode-0600 file; it never writes through an existing symlink and aborts if caching fails. Bootstrap uses the same private replacement when caching a validated session.
 3. The remote full apply, or a targeted apply with a secret-bearing tag, resolves and syncs a session before invoking native units. Other targeted applies do not prompt for one.
 
 **Caveat:** sessions are host-specific. If remote resolution fails, the target apply still attempts its own local session resolution and sync; if that fails, it runs units with secrets disabled, and targeted secret applies return nonzero. Each unit determines how to preserve or report existing data; consult its reference.

@@ -3,29 +3,31 @@
 set -uo pipefail
 # shellcheck source=units/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=units/package-config.bash
+. "$(dirname "${BASH_SOURCE[0]}")/package-config.bash"
+
+resolve_desktop() {
+  local hint="${DOTFILES_IS_DESKTOP:-$(host_var is_desktop)}"
+  case "$hint" in
+    1|true) desktop=1 ;;
+    0|false) desktop=0 ;;
+    '')
+      package_require_yq && package_desktop || return 1
+      desktop="$PACKAGE_DESKTOP"
+      ;;
+    *) echo 'Invalid desktop classification' >&2; return 1 ;;
+  esac
+}
 
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
   if ! command -v chezmoi >/dev/null 2>&1; then
     note "FAIL: chezmoi not installed; cannot inspect managed files"
     exit 1
   fi
-  desktop_hint="${DOTFILES_IS_DESKTOP:-$(host_var is_desktop)}"
-  case "$desktop_hint" in
-    1|true) desktop=1 ;;
-    0|false) desktop=0 ;;
-    *)
-      if ! command -v yq >/dev/null 2>&1; then
-        note "FAIL: yq required to inspect desktop membership"
-        exit 1
-      fi
-      export DOTFILES_MACHINE="$MACHINE"
-      membership="$(yq '(.all.children.desktop.hosts // {}) | has(strenv(DOTFILES_MACHINE))' "$DOTFILES_DIR/inventory.yml" 2>/dev/null)" || {
-        note "FAIL: cannot inspect desktop membership"
-        exit 1
-      }
-      case "$membership" in true) desktop=1 ;; false) desktop=0 ;; *) note "FAIL: invalid desktop membership"; exit 1 ;; esac
-      ;;
-  esac
+  if ! resolve_desktop; then
+    note "FAIL: cannot inspect desktop membership"
+    exit 1
+  fi
   export DOTFILES_MACHINE="$MACHINE" DOTFILES_IS_DESKTOP="$desktop"
   # Supply the same data as .chezmoi.toml.tmpl without --init: older chezmoi
   # versions write even during a dry-run init. The config is a pipe, not a file.
@@ -58,8 +60,10 @@ if ! command -v chezmoi >/dev/null 2>&1; then
   exit 1
 fi
 
-command -v yq >/dev/null 2>&1 || note "warn: yq missing, assuming non-desktop"
-if is_desktop; then desktop=1; else desktop=0; fi
+if ! resolve_desktop; then
+  note "FAIL: cannot determine desktop membership; chezmoi apply skipped"
+  exit 1
+fi
 export DOTFILES_MACHINE="$MACHINE" DOTFILES_IS_DESKTOP="$desktop"
 
 step "chezmoi apply" chezmoi --source "$DOTFILES_DIR" --keep-going --force --no-tty apply --init

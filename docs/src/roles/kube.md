@@ -27,6 +27,7 @@ A missing or empty note prints `warn:` and leaves its existing file untouched.
 | `warn: kubeconfig ... missing in BW` | The note is unavailable or empty | Check the vault; if it needs seeding, run `just seed-kube` from a host with the intended home configs |
 | Configs deployed but auth fails when the home cluster is running | Cluster PKI may have rotated — local configs are stale | Re-run `just seed-kube` from a healthy host, then re-apply on consumers |
 | Unit prints `SKIPPED: not a desktop` on a host that should have it | `skip_kube: true` in `host_vars/<host>.yml`, or host not in the `desktop` group | Adjust inventory or host_vars |
+| `FAIL  cannot inspect desktop inventory` | Missing `yq`, unreadable inventory, or malformed desktop hosts | Install `yq` and fix `inventory.yml`; no configs are changed while classification is unknown |
 
 ## Seeding BW
 

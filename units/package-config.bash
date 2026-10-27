@@ -1,11 +1,19 @@
 # shellcheck shell=bash
 # Helpers for the package units. The repository YAML remains authoritative.
 package_require_yq() {
-  if ! command -v yq >/dev/null 2>&1; then
-    echo 'yq is required to read package and inventory configuration' >&2
-    return 1
-  fi
+  local candidate version
+  for candidate in "$(type -P yq || :)" "${BREW_PREFIX:-/home/linuxbrew/.linuxbrew}/bin/yq"; do
+    [ -n "$candidate" ] && [ -x "$candidate" ] || continue
+    if version="$("$candidate" --version 2>/dev/null)" && [[ "$version" == *github.com/mikefarah/yq* ]]; then
+      PACKAGE_YQ="$candidate"
+      return 0
+    fi
+  done
+  echo 'Mike Farah yq is required to read package and inventory configuration' >&2
+  return 1
 }
+
+yq() { "$PACKAGE_YQ" "$@"; }
 
 # package_list KEY [FILE]: populate PACKAGE_LIST from a YAML sequence. Group
 # defaults are overridden by the host file; FILE selects an authoritative role
@@ -30,12 +38,15 @@ package_list() {
 
 # Resolve desktop membership; malformed or missing inputs fail.
 package_desktop() {
-  local value="${DOTFILES_IS_DESKTOP:-}" host="$DOTFILES_DIR/host_vars/$MACHINE.yml" has
+  local value="${DOTFILES_IS_DESKTOP:-}" host="$DOTFILES_DIR/host_vars/$MACHINE.yml" has kind
   if [ -z "$value" ] && [ -f "$host" ]; then
     has="$(yq -r 'has("is_desktop")' "$host")" || return 1
+    case "$has" in true|false) ;; *) echo 'Invalid host desktop configuration' >&2; return 1 ;; esac
     if [ "$has" = true ]; then value="$(yq -r '.is_desktop' "$host")" || return 1; fi
   fi
   if [ -z "$value" ]; then
+    kind="$(yq -r '.all.children.desktop.hosts | tag' "$DOTFILES_DIR/inventory.yml")" || return 1
+    [ "$kind" = '!!map' ] || { echo 'Invalid desktop inventory hosts' >&2; return 1; }
     value="$(MACHINE="$MACHINE" yq -r '.all.children.desktop.hosts | has(strenv(MACHINE))' "$DOTFILES_DIR/inventory.yml")" || return 1
   fi
   case "$value" in 1|true) PACKAGE_DESKTOP=1 ;; 0|false) PACKAGE_DESKTOP=0 ;; *) echo 'Invalid desktop classification' >&2; return 1 ;; esac

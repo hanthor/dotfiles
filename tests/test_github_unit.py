@@ -15,7 +15,15 @@ case "$1 $2" in
     [ "$3" = "-t" ] || exit "${STUB_AUTHED:-0}"
     exit 0 ;;
   "auth login") cat > "$HOME/token"; exit 0 ;;
-  "ssh-key list") printf '%s' "$STUB_KEYS"; exit "${STUB_LIST_RC:-0}" ;;
+  "api --paginate")
+    case "$*" in *user/ssh_signing_keys*) kind=signing ;; *) kind=authentication ;; esac
+    printf '%s' "$STUB_KEYS" | awk -v kind="$kind" '$NF == kind { print $2, $3 }'
+    exit "${STUB_LIST_RC:-0}" ;;
+  "ssh-key add")
+    case "$*" in
+      *"--type authentication"*) [ "${STUB_FAIL_AUTH:-0}" = 0 ] || exit 1 ;;
+      *"--type signing"*) touch "$HOME/signing-registered" ;;
+    esac ;;
   "config set") mkdir -p "$HOME/.config/gh"; echo 'git_protocol: ssh' > "$HOME/.config/gh/config.yml" ;;
 esac
 exit 0
@@ -59,6 +67,12 @@ def test_only_the_missing_key_type_is_added(env):
     run_unit("github", env, STUB_KEYS=keys)
     c = calls(env)
     assert "--type signing" in c and "--type authentication" not in c
+
+
+def test_signing_key_is_registered_even_if_authentication_key_fails(env):
+    result = run_unit("github", env, STUB_FAIL_AUTH="1")
+    assert result.returncode != 0
+    assert Path(env["HOME"], "signing-registered").exists()
 
 
 def test_token_without_key_scopes_is_partial_and_adds_nothing(env):
@@ -106,7 +120,7 @@ def test_gh_config_is_left_for_chezmoi(env, authed):
 def test_failed_key_list_never_registers_even_with_partial_output(env, partial_output):
     r = run_unit("github", env, STUB_LIST_RC="1", STUB_KEYS=partial_output)
     assert r.returncode != 0
-    assert "failed to list GitHub SSH keys; registration skipped" in r.stdout
+    assert "registration skipped" in r.stdout
     assert "FAIL  register SSH keys" in r.stdout
-    assert "ssh-key list" in calls(env)
+    assert "gh api --paginate" in calls(env)
     assert "ssh-key add" not in calls(env)

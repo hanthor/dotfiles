@@ -115,3 +115,72 @@ touch "$HOME/remote-applied"
     assert "sentinel-session" not in result.stdout + result.stderr
     if drop_session:
         assert "did not accept BW_SESSION" in result.stderr
+
+
+@pytest.mark.parametrize("tag", ["shell", "dotfiles"])
+def test_secret_bearing_aggregate_tags_resolve_locally(apply_env, tag):
+    env, repo, log = apply_env
+    result = run_apply(env, repo, "apply-tags", tag)
+    assert result.returncode == 0, result.stderr
+    assert log.read_text().splitlines() == [
+        "bw unlock --check", "resolve", "bw unlock --check", "bw sync", f"units --tags {tag}"
+    ]
+    assert "valid-session" not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("tag", ["shell", "dotfiles"])
+def test_secret_bearing_aggregate_tags_fail_closed_on_sync_error(apply_env, tag):
+    env, repo, log = apply_env
+    env["SYNC_FAIL"] = "1"
+    result = run_apply(env, repo, "apply-tags", tag)
+    assert result.returncode != 0
+    assert log.read_text().splitlines()[-1] == f"units --tags {tag} --no-secrets"
+
+
+
+@pytest.mark.parametrize("tag", ["shell", "dotfiles"])
+def test_secret_bearing_aggregate_tags_resolve_remotely(apply_env, tag):
+    env, repo, log = apply_env
+    result = run_apply(env, repo, "apply-remote-tags", "phone", tag)
+    assert result.returncode == 0, result.stderr
+    assert log.read_text().splitlines() == ["resolve", "ssh"]
+
+
+@pytest.mark.parametrize("existing", ["insecure", "symlink", "directory"])
+def test_remote_apply_cache_is_private_and_never_follows_symlinks(apply_env, tmp_path, existing):
+    env, repo, _ = apply_env
+    cache = tmp_path / "bw_session"
+    target = tmp_path / "target"
+    target.write_text("untouched")
+    if existing == "insecure":
+        cache.write_text("old")
+        cache.chmod(0o666)
+    elif existing == "symlink":
+        cache.symlink_to(target)
+    else:
+        cache.mkdir()
+    justfile = repo / "Justfile"
+    justfile.write_text(justfile.read_text().replace("/tmp/bw_session", str(cache)).replace(
+        r'dir=\"/tmp\"', f'dir=\\"{tmp_path}\\"'))
+    bindir = Path(env["HOME"]) / ".local/bin"
+    write_stub(repo / "scripts", "bw-resolve.sh", 'printf "sentinel-session"\n')
+    write_stub(bindir, "ssh", '''
+case "$*" in *sentinel-session*) exit 90 ;; esac
+exec bash -c "${!#}"
+''')
+    write_stub(bindir, "just", '''
+[ "$1" = push-terminfo ] && exit 0
+[ "${BW_SESSION:-}" = sentinel-session ] || exit 91
+touch "$HOME/remote-applied"
+''')
+    result = subprocess.run([shutil.which("just"), "-f", str(justfile), "apply-remote", "phone"],
+                            cwd=repo, env=env, capture_output=True, text=True)
+    assert (result.returncode != 0) is (existing == "directory")
+    assert (Path(env["HOME"]) / "remote-applied").exists() is (existing != "directory")
+    assert target.read_text() == "untouched"
+    assert "sentinel-session" not in result.stdout + result.stderr
+    if existing != "directory":
+        assert not cache.is_symlink()
+        assert cache.read_text() == "sentinel-session"
+        assert cache.stat().st_mode & 0o777 == 0o600
+    assert not list(tmp_path.glob(".bw_session.*"))

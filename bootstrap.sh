@@ -318,7 +318,18 @@ setup_bitwarden() {
     echo "Bitwarden sync failed; secrets setup skipped." >&2
     return 1
   fi
-  (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session) || return 1
+  python3 -c '
+import os, tempfile
+path = "/tmp/bw_session"
+fd, temp = tempfile.mkstemp(prefix=".bw_session.", dir="/tmp")
+try:
+    with os.fdopen(fd, "w") as f:
+        f.write(os.environ["BW_SESSION"])
+    os.replace(temp, path)
+finally:
+    if os.path.exists(temp):
+        os.unlink(temp)
+' || return 1
   return 0
 }
 
@@ -335,18 +346,21 @@ run_phase2() {
 push_inventory_changes() {
   if [ "$INVENTORY_MODIFIED" != "true" ]; then return; fi
 
-  cd "$DOTFILES_DIR"
+  cd "$DOTFILES_DIR" || return $?
 
   # Switch to SSH remote now that GitHub auth is configured
-  git remote set-url origin git@github.com:hanthor/dotfiles.git
+  git remote set-url origin git@github.com:hanthor/dotfiles.git || return $?
 
-  git add inventory.yml "host_vars/$MACHINE_NAME.yml" 2>/dev/null || true
+  git add inventory.yml "host_vars/$MACHINE_NAME.yml" || return $?
   if git diff --cached --quiet; then
-    return  # Nothing to commit (already pushed from another machine)
+    return 0  # Nothing to commit (already pushed from another machine)
+  else
+    local diff_rc=$?
+    [ "$diff_rc" -eq 1 ] || return "$diff_rc"
   fi
 
-  git commit -m "inventory: add $MACHINE_NAME ($MACHINE_TYPE)"
-  git push
+  git commit -m "inventory: add $MACHINE_NAME ($MACHINE_TYPE)" || return $?
+  git push || return $?
   echo "✓ Inventory pushed to GitHub."
 }
 
