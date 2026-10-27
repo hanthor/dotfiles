@@ -151,6 +151,6 @@ Every flag `site.yml` reads, all defaulting to `false` (`| default(false)`). Set
 1. Ansible requests a Bitwarden session (env var, cached file, or interactive unlock)
 2. The `bitwarden` role resolves `BW_SESSION` and caches it
 3. Secrets-tagged roles consume the session token for API calls
-4. For remote applies, `scripts/bw-resolve.sh remote <host>` unlocks the vault on the target and the recipe exports that session inline over `ssh -t` (no `SendEnv`) — see [Remote Apply](bitwarden.md#remote-apply)
+4. For remote applies, `scripts/bw-resolve.sh remote <host>` unlocks the vault on the target and SSH forwards that session using `SendEnv=BW_SESSION`; the target must accept it — see [Remote Apply](bitwarden.md#remote-apply).
 
 No secrets are stored in git — the repo is fully public.

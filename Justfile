@@ -120,9 +120,12 @@ apply-remote-tags name tags:
           break ;;
       esac
     done
-    ssh -t {{ name }} "
+    EXPECT_SESSION=0; [ -z "$REMOTE_BW_SESSION" ] || EXPECT_SESSION=1
+    BW_SESSION="$REMOTE_BW_SESSION" ssh -o SendEnv=BW_SESSION -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-      export BW_SESSION='${REMOTE_BW_SESSION}'
+      if [ '$EXPECT_SESSION' = 1 ] && [ -z \"\${BW_SESSION:-}\" ]; then
+        echo 'SSH server did not accept BW_SESSION; remote apply aborted.' >&2; exit 1
+      fi
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply-tags {{ tags }}
     "
 
@@ -160,10 +163,13 @@ apply-remote name *args:
       echo "Bitwarden unlocked on {{ name }} (session: ${#APPLY_BW_SESSION} chars)"
     fi
     echo "Applying to {{ name }} with forwarded BW session..."
-    ssh -t {{ name }} "
+    EXPECT_SESSION=0; [ -z "$APPLY_BW_SESSION" ] || EXPECT_SESSION=1
+    BW_SESSION="$APPLY_BW_SESSION" ssh -o SendEnv=BW_SESSION -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-      export BW_SESSION='${APPLY_BW_SESSION}'
-      [ -n \"\$BW_SESSION\" ] && (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
+      if [ '$EXPECT_SESSION' = 1 ] && [ -z \"\${BW_SESSION:-}\" ]; then
+        echo 'SSH server did not accept BW_SESSION; remote apply aborted.' >&2; exit 1
+      fi
+      [ -n \"\${BW_SESSION:-}\" ] && (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply {{ args }}
     "
     just push-terminfo {{ name }}
