@@ -14,8 +14,8 @@ ExecStart=-{{ brew_prefix }}/bin/ansible-playbook -i inventory.yml -e target=ter
 ExecStart=-{{ brew_prefix }}/bin/ansible-playbook -i inventory.yml -e target=mumbai site.yml --skip-tags secrets
 # Run the same tracked revision on each target, even if its Ansible pass failed.
 # An archive avoids assuming the phones have a checkout or Ansible installed.
-ExecStart=-:/bin/bash -c "set -o pipefail; /usr/bin/git archive HEAD | /usr/bin/ssh -o BatchMode=yes termux 'mkdir -p \"$HOME/.cache\"; d=$(mktemp -d \"$HOME/.cache/dotfiles-phone.XXXXXXXX\") || exit 1; tar -xf - -C \"$d\" && bash \"$d/scripts/run-units.sh\" --no-secrets; rc=$?; rm -rf -- \"$d\"; exit \"$rc\"'"
-ExecStart=-:/bin/bash -c "set -o pipefail; /usr/bin/git archive HEAD | /usr/bin/ssh -o BatchMode=yes mumbai 'mkdir -p \"$HOME/.cache\"; d=$(mktemp -d \"$HOME/.cache/dotfiles-phone.XXXXXXXX\") || exit 1; tar -xf - -C \"$d\" && bash \"$d/scripts/run-units.sh\" --no-secrets; rc=$?; rm -rf -- \"$d\"; exit \"$rc\"'"
+ExecStart=-:/bin/bash -c "set -o pipefail; /usr/bin/git archive HEAD | /usr/bin/ssh -o BatchMode=yes termux 'mkdir -p \"$HOME/.cache\"; d=$(mktemp -d \"$HOME/.cache/dotfiles-phone.XXXXXXXX\") || exit 1; tar -xf - -C \"$d\" && DOTFILES_MACHINE=termux bash \"$d/scripts/run-units.sh\" --no-secrets; rc=$?; rm -rf -- \"$d\"; exit \"$rc\"'"
+ExecStart=-:/bin/bash -c "set -o pipefail; /usr/bin/git archive HEAD | /usr/bin/ssh -o BatchMode=yes mumbai 'mkdir -p \"$HOME/.cache\"; d=$(mktemp -d \"$HOME/.cache/dotfiles-phone.XXXXXXXX\") || exit 1; tar -xf - -C \"$d\" && DOTFILES_MACHINE=mumbai bash \"$d/scripts/run-units.sh\" --no-secrets; rc=$?; rm -rf -- \"$d\"; exit \"$rc\"'"
 Environment="PATH={{ brew_prefix }}/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="HOME={{ ansible_facts['env']['HOME'] }}"
 StandardOutput=journal
