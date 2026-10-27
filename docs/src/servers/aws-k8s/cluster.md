@@ -1,5 +1,7 @@
 # AWS Talos Cluster
 
+> **Terminated 2026-10-25.** The nodes, volumes, snapshots and Elastic IPs were deleted (CloudTrail: `TerminateInstances` by root at 17:16 UTC) after the AWS credits ran out; this page is history. The data lives in the S3 bucket `hanthor-fleet-backups-*` and in a mirror on himachal-1 (`~/backups/tunaos-aws-2026-10-25`, with a `CLUSTER-INVENTORY.md` of everything that ran). Matrix is moving to the [Spindle VPS](../spindle-vps/README.md). OpenTofu in `aws/` still describes these nodes.
+
 > **TunaOS infrastructure.** This runs in the TunaOS AWS account and serves
 > the TunaOS project (Hive, Matrix, CI), not James's personal fleet. See
 > [TunaOS AWS Account & IaC](../aws/README.md).

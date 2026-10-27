@@ -9,7 +9,7 @@ Ansible-driven dotfiles + infra for a personal fleet (desktops, servers, VPS). E
 Three distinct concerns live here:
 1. **Workstation config** (`roles/`, `site.yml`, `host_vars/`, `group_vars/`) — shells, packages, browser, SSH, Tailscale, kubeconfig, etc.
 2. **Talos K8s cluster IaC** (`talos-k8s/`) — manifests for the Bihar + Karnataka cluster. Detailed handbook in [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md).
-3. **TunaOS AWS account IaC** (`aws/`, OpenTofu) — the account is **TunaOS infrastructure**, not the personal fleet: the AWS Talos cluster's VPC/nodes/EIPs, punjab's instance, backups (DLM + S3), IAM, budgets. Handbook: [`docs/src/servers/aws/README.md`](docs/src/servers/aws/README.md).
+3. **TunaOS AWS account IaC** (`aws/`, OpenTofu) — the account is **TunaOS infrastructure**, not the personal fleet: punjab's instance, backups (S3), IAM, budgets, and (terminated, still in the code) the AWS Talos cluster's VPC/nodes/EIPs. Credits are exhausted: everything left here costs real money. Handbook: [`docs/src/servers/aws/README.md`](docs/src/servers/aws/README.md).
 
 ### Two Talos clusters, not one
 
@@ -18,9 +18,10 @@ Three distinct concerns live here:
   temporarily offline, not decommissioned — don't delete its configs, Bitwarden
   notes, or `talos-k8s/` manifests, and expect `just doctor`/`kubectl` against it
   to fail until it returns.
-- **AWS** (`eu-north-1`, built 2026-08-27) — runs Matrix/ESS, the Hives (school.tunaos.org, reef.tunaos.org, hive.reilly.asia — all visible on hub.tunaos.org), and the CFP dashboard.
-  Configs: `~/.kube/config-aws-migration`, `~/.talos/config-aws-migration`.
+- **AWS** (`eu-north-1`, built 2026-08-27) — **terminated 2026-10-25** (CloudTrail `TerminateInstances` by root; credits were one-time and are exhausted). It ran Matrix (Spindle, `reilly.asia`), the Hives (school.tunaos.org, reef.tunaos.org, hive.reilly.asia) and the CFP dashboard. The nodes, EBS volumes, snapshots and both Elastic IPs are gone; what survives is the S3 bucket `hanthor-fleet-backups-*` and a full mirror on himachal-1 (`~/backups/`, see its `README.md` and `verify.sh`). OpenTofu still describes the old nodes, so a plan shows drift until the `aws/` cluster resources are removed.
+  Configs (kept, now useless): `~/.kube/config-aws-migration`, `~/.talos/config-aws-migration`.
   Handbook: [`docs/src/servers/aws-k8s/cluster.md`](docs/src/servers/aws-k8s/cluster.md).
+- **Spindle VPS** — `matrix.reilly.asia` moves to one Oracle Always Free A1 VM (home region `ap-sydney-1`, 2 OCPU / 12 GB; tenancy `trogdor3000`), joined to the tailnet and locked down; kit and runbook in [`docs/src/servers/spindle-vps/`](docs/src/servers/spindle-vps/README.md). Oracle API key/config are in Bitwarden (`oci-api-key (Oracle Cloud, tenancy trogdor3000)`).
 
 Neither cluster's nodes are Ansible-managed — Talos has no SSH. They are not in
 `inventory.yml`; access is `talosctl`/`kubectl` only.

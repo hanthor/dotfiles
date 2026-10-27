@@ -5,7 +5,7 @@
 > the box they're administered from. James's personal fleet (desktops, goa,
 > the home Talos cluster) lives elsewhere in this handbook.
 
-One AWS account (credits-funded) hosts three unrelated things. Everything
+One AWS account (was credits-funded; the credits were a one-time grant and are exhausted, so everything here now bills) hosts three unrelated things. Everything
 created by hand has been adopted into **OpenTofu** in
 [`aws/`](https://github.com/hanthor/dotfiles/tree/master/aws); the one exception
 is `runs-on`, which is its own CloudFormation stack.
