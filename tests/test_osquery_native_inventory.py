@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import sys
+import shutil
 
 import pytest
 
@@ -73,6 +74,37 @@ def test_sanitized_snapshot_preserves_exclusions_without_yaml_dependency(tmp_pat
     assert fleet.group_hosts(got, "vps") == {"matrix"}
     assert got["_meta"]["hostvars"]["kerala"]["osquery_supported"] is False
 
+
+@pytest.mark.skipif(shutil.which("yq") is None, reason="yq is required to parse the real inventory")
+def test_real_inventory_poller_snapshot_preserves_effective_hosts_and_exclusions(tmp_path):
+    renderer_spec = importlib.util.spec_from_file_location(
+        "osquery_poller_renderer", REPO / "units/osquery-poller-render.py")
+    renderer = importlib.util.module_from_spec(renderer_spec)
+    renderer_spec.loader.exec_module(renderer)
+    source = REPO / "inventory.yml"
+    expected = native.load_inventory(source)
+    snapshot = tmp_path / "inventory.yml"
+    put(snapshot, renderer.inventory(source))
+    installed = native.load_inventory(snapshot)
+
+    assert installed["_meta"]["hostvars"] == expected["_meta"]["hostvars"]
+    for group in ("vps", "test_fleet", "termux_hosts"):
+        assert fleet.group_hosts(installed, group) == fleet.group_hosts(expected, group)
+
+
+@pytest.mark.skipif(shutil.which("yq") is None, reason="yq is required to parse the real inventory")
+def test_real_inventory_unavailable_discovery_is_not_offline(monkeypatch):
+    inventory = native.load_inventory(REPO / "inventory.yml")
+    calls = []
+    monkeypatch.setattr(fleet, "command_json", lambda command, label: calls.append(command) or {})
+    result = fleet.collect_fleet(inventory, {}, identities={"punjab"},
+                                 discovery_error="Tailscale could not run")
+    by_host = {host["inventory_host"]: host for host in result["hosts"]}
+    for host in ("mumbai", "dilli"):
+        assert by_host[host]["status"] == "error"
+        assert by_host[host]["reason"] == "Tailscale could not run"
+    assert not any(host["status"] == "offline" for host in result["hosts"])
+    assert calls == [["sudo", "-n", "cat", fleet.REPORT_PATH]]
 
 def test_host_gate_checks_nested_vps_and_rejects_unknown_machine(tmp_path, capsys):
     path = tmp_path / "inventory.yml"

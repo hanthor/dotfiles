@@ -19,7 +19,7 @@ def desktop(tmp_path, stub_env):
     config = tmp_path / "config"
     (config / "host_vars").mkdir(parents=True)
     (config / "inventory.yml").write_text("all: {}\n")
-    (config / "roles").symlink_to(REPO / "roles", target_is_directory=True)
+    (config / "units").symlink_to(REPO / "units", target_is_directory=True)
     env.update(DOTFILES_DIR=str(config), DOTFILES_MACHINE="test-desktop",
                DOTFILES_IS_DESKTOP="true", BREW_PREFIX="/nonexistent",
                DBUS_SESSION_BUS_ADDRESS="")

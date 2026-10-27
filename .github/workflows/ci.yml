@@ -80,6 +80,14 @@ jobs:
             "https://github.com/mikefarah/yq/releases/download/v4.47.2/yq_linux_$arch" -o /usr/local/bin/yq
           sudo chmod 755 /usr/local/bin/yq
 
+      # The hosted runner is not on the fleet tailnet. Keep Punjab's real
+      # inventory variables and server membership, but do not claim remote
+      # discovery or remote host health in this local integration smoke.
+      - name: Select local smoke inventory
+        run: |
+          yq -i '.all.hosts |= with_entries(select(.key == "punjab")) |
+            .all.children = {"server": {"hosts": {"punjab": null}}}' inventory.yml
+
       - name: Install actual native osquery and private reporting
         run: |
           echo punjab | sudo tee /etc/dotfiles-machine >/dev/null
@@ -98,6 +106,19 @@ jobs:
           test "$(systemctl show fleet-osquery-poll.timer -p ActiveState --value)" = inactive
           test "$(systemctl show fleet-osquery-poll.timer -p UnitFileState --value)" = disabled
           test "$(systemctl show fleet-osquery-poll.service -p ActiveState --value)" = inactive
+
+      - name: Diagnose osquery smoke failure
+        if: ${{ failure() }}
+        run: |
+          sudo systemctl status fleet-osquery-poll.service fleet-osquery-report.service osqueryd.service --no-pager -l || true
+          sudo journalctl -b --no-pager -u fleet-osquery-poll.service -u fleet-osquery-report.service -u osqueryd.service -n 200 || true
+          if [ -f "$HOME/.local/state/fleet-osquery/latest.json" ]; then
+            echo 'Snapshot error reasons (no report contents):'
+            jq -r '(.error // empty), (.hosts[]? | select(.status == "error" or .status == "stale") | .reason // empty)' \
+              "$HOME/.local/state/fleet-osquery/latest.json" | sort -u || true
+          fi
+          command -v tailscale || echo 'tailscale CLI not found'
+          systemctl is-active tailscaled.service || true
 
   # Renovate may bump pi's npm deps unreviewed (CODEOWNERS carve-out); this
   # makes sure a PR can't *add* or remove one without a human.

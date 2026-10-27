@@ -110,6 +110,12 @@ previous poller and applying the unit stops its timer and in-flight service;
 the last private snapshot remains for inspection. The manual fleet CLI still works
 from other machines and supports `--output PATH` for explicit private snapshots.
 
+CI exercises the real local reporter and poller using a Punjab-only inventory:
+hosted runners are not fleet tailnet members, so this is not a remote discovery
+or fleet-health check. The full inventory's poller snapshot and unavailable
+discovery behavior are covered separately by unit tests. On smoke failure, CI
+prints service journals and sanitized snapshot error reasons, not report contents.
+
 ### Baseline and local investigation
 
 First apply records the machine's **existing** state, not an audited known-safe
