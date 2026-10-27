@@ -96,3 +96,29 @@ def test_full_apply_skips_vault_units_when_unlock_fails(apply_env):
     calls = log.read_text().splitlines()
     assert "--skip-tags secrets" in calls[-2]
     assert calls[-1] == "units --no-secrets"
+
+
+@pytest.mark.parametrize("drop_session", [False, True])
+def test_remote_secret_apply_rejects_lost_ssh_session(apply_env, drop_session):
+    env, repo, _ = apply_env
+    bindir = Path(env["HOME"]) / ".local/bin"
+    write_stub(repo / "scripts", "bw-resolve.sh", 'printf "sentinel-session"\n')
+    write_stub(bindir, "ssh", '''
+case "$*" in *sentinel-session*) exit 90 ;; esac
+if [ "${DROP_SESSION:-0}" = 1 ]; then unset BW_SESSION; fi
+exec bash -c "${!#}"
+''')
+    write_stub(bindir, "just", '''
+[ "${BW_SESSION:-}" = sentinel-session ] || exit 91
+touch "$HOME/remote-applied"
+''')
+    env["DROP_SESSION"] = "1" if drop_session else "0"
+    result = subprocess.run(
+        [shutil.which("just"), "-f", str(repo / "Justfile"), "apply-remote-tags", "phone", "omp"],
+        env=env, capture_output=True, text=True,
+    )
+    assert (result.returncode == 0) is not drop_session
+    assert (Path(env["HOME"]) / "remote-applied").exists() is not drop_session
+    assert "sentinel-session" not in result.stdout + result.stderr
+    if drop_session:
+        assert "did not accept BW_SESSION" in result.stderr

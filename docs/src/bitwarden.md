@@ -24,9 +24,7 @@ For `just apply-tags` with an explicit secret-bearing tag such as `kube`, `ai` o
    out it tries `bw login --apikey` with the `bw-api-key` item from your local
    vault; to unlock it pipes the master password (item `James Bitwarden`) over
    stdin, falling back to an interactive `bw unlock` over `ssh -t`.
-2. Runs `ssh -t <host> "export BW_SESSION='…'; …; just apply"` — the session
-   is exported inline in the remote command, not via `SendEnv`. `apply-remote`
-   also caches it in the remote's `/tmp/bw_session`.
+2. Sends the remote session through SSH `SendEnv=BW_SESSION`, not in the command line. The target SSH daemon must accept `BW_SESSION`; if it rejects a resolved session, the apply aborts. `apply-remote` also caches it in the remote's `/tmp/bw_session`.
 3. The `bitwarden` role on the remote runs `bw status`: if it reports
    `unlocked`, `bw_unlocked` flips to true and secrets work proceeds.
 
