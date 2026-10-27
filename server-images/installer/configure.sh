@@ -8,6 +8,8 @@ dnf5 -y --enablerepo=fedora-storage --setopt=install_weak_deps=False \
 systemctl mask k3s@server.service k3s@agent.service
 # The Utah base masks serial-getty; live media needs both consoles for installation.
 systemctl unmask getty@tty1.service serial-getty@ttyS0.service
+# The image also masks this instance in /usr/lib; an /etc override wins over it.
+ln -sfn /usr/lib/systemd/system/serial-getty@.service /etc/systemd/system/serial-getty@ttyS0.service
 systemctl enable getty@tty1.service serial-getty@ttyS0.service
 mkdir -p /var/roothome
 kernel=$(basename /usr/lib/modules/*)

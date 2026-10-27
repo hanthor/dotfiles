@@ -51,6 +51,8 @@ Both are public (no login required).
 
 ### From Installer ISO
 
+Live media enables the local console and serial `ttyS0` for installation, including when the base image masks the serial instance.
+
 1. **Boot the ISO** from USB stick (UEFI, Secure Boot must be disabled)
 2. **At root console:**
    ```bash
