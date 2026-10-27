@@ -1,0 +1,19 @@
+port: 7880
+logging:
+  level: info
+  pion_level: error
+  json: true
+rtc:
+  use_external_ip: false
+  node_ip: 92.5.82.232
+  tcp_port: 30001
+  port_range_start: 32700
+  port_range_end: 32767
+room:
+  auto_create: false
+turn:
+  enabled: false
+webhook:
+  api_key: matrix-rtc
+  urls:
+    - http://matrixrtc-auth:8080/sfu_webhook

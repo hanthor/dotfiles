@@ -1,23 +1,5 @@
-# Same routing as the ESS ingress it replaces (federation rides 443 via .well-known).
-# MatrixRTC (call.reilly.asia, LiveKit) is not migrated yet, so no rtc_foci is advertised.
-reilly.asia {
-	handle /.well-known/matrix/client {
-		header Content-Type application/json
-		header Access-Control-Allow-Origin *
-		respond `{"m.homeserver":{"base_url":"https://matrix.reilly.asia"}}`
-	}
-	handle /.well-known/matrix/server {
-		header Content-Type application/json
-		respond `{"m.server":"matrix.reilly.asia:443"}`
-	}
-	handle /.well-known/matrix/support {
-		header Content-Type application/json
-		respond `{}`
-	}
-	handle {
-		respond "not found" 404
-	}
-}
+# Public Matrix routing; federation rides 443 via .well-known.
+# MatrixRTC uses standalone LiveKit and lk-jwt-service containers; no ESS chart/runtime.
 
 matrix.reilly.asia {
 	request_body {
@@ -41,4 +23,14 @@ matrix.reilly.asia {
 
 auth.reilly.asia {
 	reverse_proxy mas:8080
+}
+
+call.reilly.asia {
+	@matrixrtc_auth path /sfu/get /get_token /delegate_delayed_leave
+	handle @matrixrtc_auth {
+		reverse_proxy matrixrtc-auth:8080
+	}
+	handle {
+		reverse_proxy livekit:7880
+	}
 }

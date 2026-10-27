@@ -1,34 +1,32 @@
 # Spindle VPS (matrix.reilly.asia)
 
-Runs the Matrix homeserver that was on the AWS Talos cluster (terminated 2026-10-25) on one small
-host: **Spindle** (the homeserver, embedded store), **MAS** (login; Spindle delegates auth to it),
-**Postgres** (MAS's database only) and **Caddy** (TLS). Everything is `docker compose` under
-`/srv/spindle`.
+Runs the Matrix homeserver that was on the AWS Talos cluster (terminated 2026-10-25) on one host:
+**Spindle**, **MAS** (delegated login), **Postgres** (MAS database only), standalone **LiveKit** and
+**lk-jwt-service** (MatrixRTC; no ESS chart/runtime), and **Caddy**. Everything is `docker compose`
+under `/srv/spindle`.
 
 | Piece | Source |
 |---|---|
 | Host | Oracle Cloud Always Free, `VM.Standard.A1.Flex`, Ubuntu 24.04 aarch64 (see below) |
 | Spindle | `ghcr.io/tuna-os/spindle:perf-723-de17805-arm64`, the production commit (`main` + #723, amd64 digest `7021ada8…`) built for arm64 from `tuna-os/spindle` branch `ops/arm64-perf-723` |
+| MatrixRTC | `livekit-server:v1.13.5` + `lk-jwt-service:0.6.0` as standalone containers |
 | Data | `ess_ess-spindle-data.tar.gz` (the store, taken 15:33 UTC) and `postgres/2026-10-25/mas.dump` (15:22 UTC), from `~/backups/tunaos-aws-2026-10-25` on himachal-1 |
-| Config | production `runtime-base.toml` + the delegated-auth block, MAS under/overrides, all read from `cluster-state` by `deploy.sh` |
+| Config | production runtime + delegated-auth block, MAS under/overrides and LiveKit template; deploy.sh renders credentials from cluster-state |
 
-Not migrated: MatrixRTC/LiveKit (`call.reilly.asia`; no `rtc_foci` is advertised, so Element Call is
-off) and element-admin (`matrixadmin.reilly.asia`).
+MatrixRTC is enabled by the standalone services above. `element-admin` (`matrixadmin.reilly.asia`)
+remains unmigrated.
 
 ## 1. Create the instance (Oracle console)
 
-- Shape `VM.Standard.A1.Flex`. This tenancy (`trogdor3000`, home region `ap-sydney-1`) is limited to
-  2 OCPU / 12 GB (`oci limits resource-availability get`), so that is what the instance uses; other
-  tenancies may get 4 / 24. Spindle had an 11 GiB ceiling in the cluster; here it is capped at 7 GiB.
-  Always Free compute must be in the home region.
-- Image: Canonical Ubuntu 24.04 (aarch64). Boot volume 100 GB (free limit is 200 GB total).
-- Assign a public IPv4 and **reserve** it so it survives stop/start.
-- Under *Advanced options -> Cloud-init script* paste [`cloud-init.yaml`](cloud-init.yaml). It installs
-  Docker, opens the host firewall for 80/443 and authorises the punjab and himachal-1 SSH keys.
-- In the subnet's security list (or an NSG) allow ingress TCP **80** and **443** from `0.0.0.0/0`
-  (22 is open by default).
-- Idle Always Free instances can be reclaimed by Oracle. Upgrading the account to pay-as-you-go keeps
-  usage inside the free limits at $0 and removes that risk.
+- Shape `VM.Standard.A1.Flex`. `spindle` is in `eu-frankfurt-1`, AD-1, with 2 OCPU / 12 GB; stay
+  within that Always Free ceiling. Spindle is capped at 7 GiB, LiveKit at 2 GiB / 1 OCPU.
+- Image: Canonical Ubuntu 24.04 (aarch64); 100-GB boot volume.
+- Assign and reserve a public IPv4. Paste [`cloud-init.yaml`](cloud-init.yaml); it installs Docker,
+  opens direct host 80/443, and authorizes the punjab and himachal-1 SSH keys.
+- In the OCI security list allow TCP **80, 443, 30001** and UDP **32700–32767** from
+  `0.0.0.0/0`. Remove the default public SSH rule after tailnet access works.
+- Oracle may reclaim idle Always Free instances. We accept that risk and will not upgrade this
+  tenancy to a paid account.
 
 A1 capacity is often "out of host capacity"; retry another availability domain or region later.
 
@@ -36,7 +34,7 @@ A1 capacity is often "out of host capacity"; retry another availability domain o
 
 ```bash
 cd ~/.local/share/dotfiles/docs/src/servers/spindle-vps   # a checkout of this branch
-./deploy.sh <vps-ip>            # idempotent; re-run after fixing anything
+./deploy.sh <vps-tailnet-ip-or-host>  # SSH destination; use the tailnet address after lockdown
 ./deploy.sh --render-only /tmp/r   # just render the configs (contains secrets; delete after)
 ```
 
@@ -52,26 +50,50 @@ ssh ubuntu@spindle true                                              # confirm S
 scp lockdown.sh ubuntu@spindle: && ssh ubuntu@spindle 'sudo ./lockdown.sh'
 ```
 
-Then delete the public SSH rule from the OCI security list. Only 80/443 stay public.
+Then delete the public SSH rule from the OCI security list. Docker publishes the listed LiveKit
+ports; keep the OCI ingress list in sync with all public ports in `compose.yaml`.
 
-## 3. Cut DNS over
+## 3. DNS cutover
 
-Point `reilly.asia`, `matrix.reilly.asia` and `auth.reilly.asia` A records at the VPS (Cloudflare
-DNS-only is simplest for the first certificate). Caddy fetches Let's Encrypt certificates on first
-request.
+Cloudflare DNS-only A records for `matrix.reilly.asia`, `auth.reilly.asia`, and
+`call.reilly.asia` point to the VPS at `92.5.82.232` with a 60-second TTL. `call` must remain
+DNS-only: its UDP media ports do not pass through Cloudflare's HTTP proxy.
+
+Verify the public endpoints:
 
 ```bash
 curl https://matrix.reilly.asia/_matrix/client/versions
-curl https://reilly.asia/.well-known/matrix/client
 curl https://auth.reilly.asia/.well-known/openid-configuration
+curl https://reilly.asia/.well-known/matrix/client
+curl -i https://call.reilly.asia/sfu/get  # GET should return 405
 ```
+
+The apex `reilly.asia` is a Cloudflare Worker custom domain (`reilly-asia`) serving the personal
+portfolio and active Matrix client `.well-known` document. Keep it on the Worker; pointing the apex
+at this VPS or removing the Worker domain would take the homepage offline. The Worker advertises the
+same `https://call.reilly.asia` MatrixRTC service as this deployment.
+
+`call.reilly.asia` routes JWT requests to the standalone `lk-jwt-service` and LiveKit signaling to
+the standalone SFU. The separate authorizer preserves federated Matrix participants; Spindle's
+built-in minter only supports local users.
+
+This is manual DNS cutover, not automatic failover. The zone is on Cloudflare Free; health-checked
+Load Balancing is an add-on, and no second Matrix origin is available. A 60-second TTL only limits
+resolver caching; it does not detect failures or switch records automatically.
+
+The authorizer resolves `matrix.reilly.asia` and `call.reilly.asia` through Docker's host gateway
+to avoid public-IP hairpin routing; `reilly.asia` remains on the portfolio Worker.
 
 ## Caveats
 
-- The two data sets are three minutes apart (MAS 15:22, Spindle's last write 15:25 UTC): an account
-  created in that window could exist in Spindle but not in MAS.
-- The store was tarred after Spindle had stopped writing, but that is inferred from file times;
-  do a login and a room read before pointing everyone at it.
-- The AWS backup (S3 bucket and himachal-1) is untouched; rollback is "stop the VPS stack".
-- When `tuna-os/spindle` publishes a release with an arm64 image that contains #723, switch the image
-  in `compose.yaml` and delete the `ops/arm64-perf-723` branch.
+- The MAS dump is from 15:22 UTC. The Spindle store's last write was 15:25 UTC and its archive was
+  taken at 15:33 UTC; the old cluster continued until 17:16 UTC. Writes after the store archive are
+  only in the encrypted cluster-state backup and are not in this VPS store. A real login and joined
+  room read passed against the VPS, but that does not prove the later writes were restored.
+- The AWS cluster is terminated. The S3 and himachal-1 backups are untouched, but stopping the VPS
+  stack is an outage, not a rollback; recovery requires provisioning and restoring from backup.
+- When `tuna-os/spindle` publishes an arm64 release containing #723, switch the image in
+  `compose.yaml` and delete the `ops/arm64-perf-723` branch.
+- LiveKit is capped at 2 GiB and 1 OCPU to leave room for Spindle and the Hives on this 2-OCPU host;
+  suitable for light personal calls, not high-concurrency conferencing. No TURN relay is configured,
+  so clients on networks that block UDP may fail to connect.

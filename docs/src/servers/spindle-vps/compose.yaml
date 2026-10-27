@@ -1,6 +1,5 @@
-# Spindle + MAS + Postgres + Caddy on one host. Everything under /srv/spindle.
-# Secrets are not in this file: mas/config.yaml, spindle.toml's [auth.delegated] block and
-# .env are written by deploy.sh from the 2026-10-25 cluster-state backup.
+# Standalone Spindle + MAS + Postgres + LiveKit + lk-jwt-service + Caddy; no ESS chart/runtime.
+# Secrets are rendered by deploy.sh from the encrypted cluster-state; none are committed.
 name: spindle
 services:
   caddy:
@@ -10,7 +9,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy:/data
-    depends_on: [spindle, mas]
+    depends_on: [spindle, mas, matrixrtc-auth, livekit]
 
   spindle:
     # arm64 build of exactly the code production ran (main + #723); see README.
@@ -24,6 +23,38 @@ services:
       - ./spindle.toml:/etc/spindle/spindle.toml:ro
     # The cluster allowed 11 GiB; this host has 12 GiB in total (2 OCPU Always Free tenancy).
     mem_limit: 7g
+
+  livekit:
+    image: docker.io/livekit/livekit-server:v1.13.5
+    restart: unless-stopped
+    user: "10030:10030"
+    command: ["--config", "/etc/livekit/livekit.yaml"]
+    ports:
+      - "30001:30001/tcp"
+      - "32700-32767:32700-32767/udp"
+    volumes:
+      - ./livekit.yaml:/etc/livekit/livekit.yaml:ro
+    depends_on: [matrixrtc-auth]
+    cpus: 1.0
+    mem_limit: 2g
+
+  matrixrtc-auth:
+    image: oci.element.io/lk-jwt-service:0.6.0
+    restart: unless-stopped
+    user: "10033:10033"
+    environment:
+      LIVEKIT_URL: "wss://call.reilly.asia"
+      LIVEKIT_KEY: "matrix-rtc"
+      LIVEKIT_SECRET_FROM_FILE: /run/secrets/livekit_secret
+      LIVEKIT_FULL_ACCESS_HOMESERVERS: "reilly.asia"
+      LIVEKIT_CS_API_URL_OVERRIDES: "reilly.asia=http://spindle:8008"
+    extra_hosts:
+      - "matrix.reilly.asia:host-gateway"
+      - "call.reilly.asia:host-gateway"
+    secrets: [livekit_secret]
+    depends_on: [spindle]
+    cpus: 0.25
+    mem_limit: 256m
 
   postgres:
     image: docker.io/library/postgres:16
@@ -54,3 +85,5 @@ services:
 secrets:
   pg_superuser:
     file: ./pg_superuser.secret
+  livekit_secret:
+    file: ./livekit.secret

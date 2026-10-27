@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Deploy the migrated matrix.reilly.asia stack (Spindle + MAS + Postgres + Caddy) to the VPS.
+# Deploy the standalone Matrix stack (Spindle + MAS + Postgres + LiveKit + lk-jwt-service + Caddy).
 # Run on himachal-1: it holds the 2026-10-25 backup and the key that decrypts cluster-state.
 #
-#   ./deploy.sh <vps-ip-or-host> [ssh-user]       full deploy (idempotent)
+#   ./deploy.sh <vps-tailnet-ip-or-host> [ssh-user]  full deploy (idempotent)
 #   ./deploy.sh --render-only <dir>               write the rendered configs to <dir> and stop
 #
-# Secrets (MAS keys, shared secret, DB password) are read from the age-encrypted cluster-state,
-# rendered into a private temp dir, copied over SSH with mode 600 and never printed or committed.
+# Secrets are read from the age-encrypted cluster-state into a private temp directory, then copied
+# into /srv/spindle (0700); they are never printed or committed. No ESS chart or workload runs here.
 set -euo pipefail
 
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,9 +47,11 @@ for k in MAS_SYNAPSE_SHARED_SECRET MAS_ENCRYPTION_SECRET MAS_RSA_PRIVATE_KEY MAS
   secret ess ess-generated "$k" > "$out/mas/secrets/$k"
 done
 secret ess ess-matrix-authentication-service POSTGRES_PASSWORD > "$out/mas/secrets/POSTGRES_PASSWORD"
-for f in "$out"/mas/secrets/*; do [ -s "$f" ] || { echo "empty secret $(basename "$f")" >&2; exit 1; }; done
+secret ess ess-generated ELEMENT_CALL_LIVEKIT_SECRET > "$out/livekit.secret"
+jq -n --rawfile secret "$out/livekit.secret" '{"keys":{"matrix-rtc": $secret}}' > "$work/livekit-keys.yaml"
+for f in "$out"/mas/secrets/* "$out/livekit.secret"; do [ -s "$f" ] || { echo "empty secret $(basename "$f")" >&2; exit 1; }; done
 
-# Spindle: production runtime base + the delegated-auth block the ESS init container appended.
+# Spindle: production runtime base + delegated-auth block preserved from the old deployment.
 {
   cat "$KIT/spindle.base.toml"
   printf '\n[auth.delegated]\n'
@@ -58,7 +60,7 @@ for f in "$out"/mas/secrets/*; do [ -s "$f" ] || { echo "empty secret $(basename
   printf 'homeserver_secret = %s\n' "$(jq -Rs '.' < "$out/mas/secrets/MAS_SYNAPSE_SHARED_SECRET")"
 } > "$out/spindle.toml"
 
-# MAS: the ESS under/overrides, repointed at this compose network and the mounted secret files.
+# MAS: the previous deployment's overrides, repointed at this Compose network and secret paths.
 configmap ess ess-matrix-authentication-service mas-config-underrides.yaml > "$work/underrides.yaml"
 configmap ess ess-matrix-authentication-service mas-config-overrides.yaml |
   sed -e 's#/secrets/ess-matrix-authentication-service/#/config/secrets/#g' \
@@ -72,11 +74,13 @@ grep -q '/secrets/ess-' "$out/mas/config.yaml" && { echo "unrewritten secret pat
 grep -q 'svc.cluster.local' "$out/mas/config.yaml" && { echo "unrewritten cluster hostname left in MAS config" >&2; exit 1; }
 
 cp "$KIT/compose.yaml" "$KIT/Caddyfile" "$out/"
+yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$KIT/livekit.yaml" "$work/livekit-keys.yaml" > "$out/livekit.yaml"
 python3 - "$out/spindle.toml" <<'PY'
 import sys, tomllib
 tomllib.load(open(sys.argv[1], "rb"))
 PY
 yq '.' "$out/mas/config.yaml" > /dev/null
+yq '.' "$out/livekit.yaml" > /dev/null
 
 if [ -n "$render_only" ]; then
   echo "rendered into $render_only (secrets inside; remove it when done)"
@@ -91,8 +95,9 @@ rsh 'docker --version >/dev/null && test -d /srv/spindle' || { echo "VPS not boo
 
 # The containers run as their own uids (Spindle 1000, MAS and Caddy others), so the files they read
 # are 0644; the secrets stay private because /srv/spindle itself is 0700 for the ssh user.
+rsh 'chmod 700 /srv/spindle'
 rsync -a -e "ssh ${ssh_opts[*]}" --chmod=D755,F644 "$out/" "$user@$vps:/srv/spindle/"
-rsh 'chmod 700 /srv/spindle && { test -s /srv/spindle/pg_superuser.secret || (umask 077; openssl rand -hex 24 > /srv/spindle/pg_superuser.secret); }'
+rsh '{ test -s /srv/spindle/pg_superuser.secret || (umask 077; openssl rand -hex 24 > /srv/spindle/pg_superuser.secret); }'
 
 # ── data ──────────────────────────────────────────────────────────────────
 if ! rsh 'test -f /srv/spindle/data/.restored'; then
@@ -115,7 +120,8 @@ printf '%s\n' "$psql_script" | rsh 'cd /srv/spindle && docker compose exec -T po
 rsh 'cd /srv/spindle && { test -f import/.mas-restored || { docker compose exec -T postgres pg_restore -U postgres -d mas --no-owner --role=mas_user /import/mas.dump && touch import/.mas-restored; }; }'
 
 # ── run ───────────────────────────────────────────────────────────────────
-rsh 'cd /srv/spindle && docker compose pull && docker compose run --rm mas database migrate --config /config/config.yaml && docker compose up -d'
-echo "up. Point DNS (reilly.asia, matrix.reilly.asia, auth.reilly.asia) at $vps, then:"
+rsh 'cd /srv/spindle && docker compose pull && docker compose run --rm mas database migrate --config /config/config.yaml && docker compose up -d && docker compose restart caddy spindle'
+echo "up. Point matrix.reilly.asia, auth.reilly.asia, and call.reilly.asia to 92.5.82.232; keep the reilly.asia Worker domain unchanged, then:"
 echo "  curl https://matrix.reilly.asia/_matrix/client/versions"
-echo "  curl https://reilly.asia/.well-known/matrix/client"
+echo "  curl https://auth.reilly.asia/.well-known/openid-configuration"
+echo "  curl -i https://call.reilly.asia/sfu/get  # GET should return 405"

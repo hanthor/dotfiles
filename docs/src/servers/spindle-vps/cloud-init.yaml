@@ -1,9 +1,9 @@
 #cloud-config
 # Bootstrap for the Spindle VPS (Ubuntu 24.04 on Oracle Cloud Always Free A1, aarch64).
-# Installs Docker and Tailscale, opens the host firewall for 80/443, turns on unattended security
-# upgrades and authorises the two fleet machines that finish the job over SSH. No secrets are in
-# it; the node joins the tailnet by an interactive `tailscale up` afterwards (lockdown.sh then
-# restricts SSH to the tailnet). See README.md in this directory.
+# Installs Docker/Tailscale and unattended upgrades, opens direct host ingress on 80/443, and
+# authorizes fleet SSH keys. OCI rules restrict Docker-published LiveKit media ports separately.
+# The node joins the tailnet via interactive `tailscale up`; lockdown.sh then restricts SSH to it.
+# No secrets are in this file. See README.md in this directory.
 package_update: true
 packages:
   - docker.io

@@ -40,8 +40,8 @@ registrations = []
 uris = []
 
 [rtc]
-# LiveKit (call.reilly.asia) is not migrated yet; production advertised one focus here.
-foci = []
+# MatrixRTC is standalone: the auth service mints LiveKit tokens; this URL is not the SFU.
+foci = [{ type = "livekit", livekit_service_url = "https://call.reilly.asia" }]
 
 [logging]
 filter = "info,spindle_server::push=debug"
