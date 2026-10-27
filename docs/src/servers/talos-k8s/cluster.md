@@ -647,9 +647,11 @@ unit and a real KubeVirt guest on physical Bihar before cutover.
 ### Image contents and state
 
 The source is `server-images/Containerfile`, `compose.sh`, `nodes/`, and `rootfs/`.
-All three targets use the digest-pinned Hummingbird Community `os-minimal` base,
-without a desktop. The Bihar/Karnataka images were proposed as direct installation
-paths; `starter` was optional for future x86_64 AMD/Intel nodes. These are not current deployment instructions.
+The earlier targets used a digest-pinned Hummingbird Community `os-minimal`
+base without a desktop. The proposed targets now use Utah; see the
+[current image guide](../home-k8s-images.md). Bihar/Karnataka images were
+proposed as direct installation paths; `starter` was optional for future
+x86_64 AMD/Intel nodes. These are not current deployment instructions.
 Explicit AMD/Intel GPU and CPU, Intel Wi-Fi, Realtek, MediaTek, Atheros, and
 Broadcom firmware subpackages come through the digest-pinned Utah package factory.
 That local repository is authenticated by its OCI digest, **not RPM signatures**.
