@@ -6,8 +6,11 @@ dnf5 -y --enablerepo=fedora-storage --setopt=install_weak_deps=False \
     install dracut-live systemd-boot-unsigned
 # These masks belong to live media only, never to the embedded server payload.
 systemctl mask k3s@server.service k3s@agent.service
-# Utah masks serial getty; live-media acceptance and recovery need it.
+# Utah masks this instance in both /etc and /usr; only the live image needs it.
 systemctl unmask getty@tty1.service serial-getty@ttyS0.service
+if [ "$(readlink /usr/lib/systemd/system/serial-getty@ttyS0.service || :)" = /dev/null ]; then
+    rm /usr/lib/systemd/system/serial-getty@ttyS0.service
+fi
 systemctl enable getty@tty1.service serial-getty@ttyS0.service
 mkdir -p /var/roothome
 kernel=$(basename /usr/lib/modules/*)
