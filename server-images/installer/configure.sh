@@ -13,7 +13,8 @@ ln -sfn /usr/lib/systemd/system/serial-getty@.service /etc/systemd/system/serial
 systemctl enable getty@tty1.service serial-getty@ttyS0.service
 mkdir -p /var/roothome
 kernel=$(basename /usr/lib/modules/*)
-dracut --force --reproducible --no-hostonly --add dmsquash-live     --omit 'tpm2-tss pcsc'     --add-drivers 'squashfs overlay loop iso9660 sr_mod cdrom'     "/usr/lib/modules/$kernel/initramfs.img" "$kernel" 2>&1 | tee /tmp/dracut-installer.log
+# The bootc payload deliberately clears /var; use the build container's /tmp.
+TMPDIR=/tmp dracut --force --reproducible --no-hostonly --add dmsquash-live     --omit 'tpm2-tss pcsc'     --add-drivers 'squashfs overlay loop iso9660 sr_mod cdrom'     "/usr/lib/modules/$kernel/initramfs.img" "$kernel" 2>&1 | tee /tmp/dracut-installer.log
 if grep -q 'dracut\[E\]: FAILED' /tmp/dracut-installer.log; then
     echo 'Live initramfs construction failed' >&2
     exit 1
