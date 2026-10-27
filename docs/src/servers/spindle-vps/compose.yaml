@@ -18,11 +18,12 @@ services:
     restart: unless-stopped
     command: ["/etc/spindle/spindle.toml"]
     environment:
-      TOKIO_WORKER_THREADS: "4"
+      TOKIO_WORKER_THREADS: "2"
     volumes:
       - ./data:/var/lib/spindle-data
       - ./spindle.toml:/etc/spindle/spindle.toml:ro
-    mem_limit: 11g
+    # The cluster allowed 11 GiB; this host has 12 GiB in total (2 OCPU Always Free tenancy).
+    mem_limit: 7g
 
   postgres:
     image: docker.io/library/postgres:16

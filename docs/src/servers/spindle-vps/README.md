@@ -17,9 +17,10 @@ off) and element-admin (`matrixadmin.reilly.asia`).
 
 ## 1. Create the instance (Oracle console)
 
-- Shape `VM.Standard.A1.Flex`: 4 OCPU / 24 GB if the tenancy allows (Always Free is 3,000 OCPU-hours
-  and 18,000 GB-hours a month; some tenancies get half). Spindle was given an 11 GiB memory ceiling in
-  the cluster, so avoid going below 2 OCPU / 12 GB.
+- Shape `VM.Standard.A1.Flex`. This tenancy (`trogdor3000`, home region `ap-sydney-1`) is limited to
+  2 OCPU / 12 GB (`oci limits resource-availability get`), so that is what the instance uses; other
+  tenancies may get 4 / 24. Spindle had an 11 GiB ceiling in the cluster; here it is capped at 7 GiB.
+  Always Free compute must be in the home region.
 - Image: Canonical Ubuntu 24.04 (aarch64). Boot volume 100 GB (free limit is 200 GB total).
 - Assign a public IPv4 and **reserve** it so it survives stop/start.
 - Under *Advanced options -> Cloud-init script* paste [`cloud-init.yaml`](cloud-init.yaml). It installs
@@ -42,6 +43,16 @@ cd ~/.local/share/dotfiles/docs/src/servers/spindle-vps   # a checkout of this b
 It renders the secrets from `cluster-state.himachal.tar.gz.age`, copies the kit to `/srv/spindle`,
 streams the store (excluding `store.pre723`), restores `mas.dump`, runs `mas database migrate` and
 starts the stack. Nothing secret is printed or committed.
+
+## 2b. Join the tailnet and lock down
+
+```bash
+ssh ubuntu@<ip> 'sudo tailscale up --hostname=spindle --ssh=false'   # prints a login URL; approve it
+ssh ubuntu@spindle true                                              # confirm SSH over the tailnet
+scp lockdown.sh ubuntu@spindle: && ssh ubuntu@spindle 'sudo ./lockdown.sh'
+```
+
+Then delete the public SSH rule from the OCI security list. Only 80/443 stay public.
 
 ## 3. Cut DNS over
 
