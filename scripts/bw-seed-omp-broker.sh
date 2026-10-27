@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Seed Bitwarden with the omp auth-broker bearer token. Run on the broker host
-# (punjab), where `omp auth-broker token` reads the broker's own token.
+# Seed Bitwarden with the live omp auth-broker bearer token over tailnet SSH.
+# Run on a client with an unlocked vault and SSH access to ubuntu@spindle.
 # Usage: ./scripts/bw-seed-omp-broker.sh
-# Re-run safely — updates the existing item in place. `omp auth-broker token`
-# prints the current token and does not rotate it. Clients fetch the item with
-# `just apply-tags omp`.
+# Re-run safely — updates the existing item in place. The server command prints
+# the current token without rotating it. Clients fetch it with just apply-tags omp.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/bw-item.sh"
@@ -17,9 +16,10 @@ fi
 
 NAME="${OMP_AUTH_BROKER_BW_ITEM:-omp-auth-broker-token}"
 
-token=$(omp auth-broker token)
+broker_host="${OMP_AUTH_BROKER_SSH:-ubuntu@100.113.75.88}"
+token=$(ssh -o BatchMode=yes "$broker_host" '/home/ubuntu/.local/bin/omp auth-broker token')
 if [ -z "$token" ]; then
-  echo "no token from 'omp auth-broker token' — is this the broker host?" >&2
+  echo "no token from broker host $broker_host" >&2
   exit 1
 fi
 
@@ -29,7 +29,7 @@ payload=$(bw get template item \
       . + {
         name: $name,
         type: 1,
-        notes: "Bearer token for the omp auth-broker on punjab. Managed by scripts/bw-seed-omp-broker.sh.",
+        notes: "Bearer token for the omp auth-broker on spindle. Managed by scripts/bw-seed-omp-broker.sh.",
         login: {username: "omp-auth-broker", password: $tok}
       }')
 

@@ -5,13 +5,15 @@ All secrets live in [Bitwarden](https://bitwarden.com/) and are resolved at runt
 ## How It Works
 
 1. The `bitwarden` role runs first in the secrets phase.
-2. It resolves a session token in order: `BW_SESSION` env var → `/tmp/bw_session` → interactive `bw unlock`.
+2. The apply wrapper can prompt via `scripts/bw-resolve.sh`; the role itself reads `BW_SESSION` from the environment, then falls back to `/tmp/bw_session`.
 3. It runs `bw sync` (with a 15 s hard timeout, so a flaky vault server can't hang the play) to refresh the local cached vault.
 4. It calls `bw status` and sets a `bw_unlocked` host fact: `true` only if the CLI is installed, a session was resolved, *and* the vault actually unlocks.
 5. Every BW-using role gates on `when: bw_unlocked | default(false)`. The end-of-play `post_tasks` summary prints one of:
    - `vault unlocked — all secret roles executed normally`
    - `Bitwarden vault was LOCKED — … skipped. To enable: bw unlock …`
    - `SKIPPED (--skip-tags secrets). Run dots-apply to include …`
+
+For `just apply-tags` with an explicit secret-bearing tag such as `kube`, `ai` or `omp`, the wrapper validates and syncs a session before running, and adds the `bitwarden` tag so legacy secret roles receive `bw_unlocked`. It skips secret work and returns non-zero if the session or sync fails; unrelated tags do not prompt.
 
 ## Remote Apply
 
@@ -61,11 +63,11 @@ just apply-nosecrets   # git pull + apply with --skip-tags secrets
 dots                   # alias: cd to the repo + just apply-nosecrets
 ```
 
-The daily systemd timer (`dotfiles-update.service`) calls `apply-nosecrets` for the same reason: it can't unlock the vault non-interactively, so it doesn't try.
+The daily systemd timer (`dotfiles-update.service`) calls `apply-nosecrets`: Ansible skips secret-tagged roles and units receive `--no-secrets`, even if a cached session exists.
 
 ## No Session?
 
-If Bitwarden can't unlock (first run, no BW CLI installed, vault genuinely locked on this host), every secret-touching task is skipped automatically. Non-secret roles (system, packages, dotfiles, desktop, most services) run normally and the play exits successfully — the end-of-play summary tells you exactly which roles didn't get to do their BW work.
+If Bitwarden can't unlock (first run, no BW CLI installed, vault genuinely locked on this host), `just apply` skips secret work and continues with non-secret configuration. A targeted secret apply (`just apply-tags`) also continues non-secret work but exits non-zero, so the requested secret update is not mistaken for success.
 
 ## Seeding New Secrets
 

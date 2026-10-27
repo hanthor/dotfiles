@@ -22,7 +22,7 @@ bw_session() {
   command -v bw >/dev/null 2>&1 || return 0
   local s="${BW_SESSION:-}"
   [ -n "$s" ] || { [ -s /tmp/bw_session ] && s="$(cat /tmp/bw_session)"; }
-  [ -n "$s" ] && bw unlock --check --session "$s" >/dev/null 2>&1 && printf '%s' "$s"
+  [ -n "$s" ] && BW_SESSION="$s" bw unlock --check >/dev/null 2>&1 && printf '%s' "$s"
   return 0
 }
 MACHINE="$(cat /etc/dotfiles-machine 2>/dev/null || hostname)"

@@ -8,7 +8,7 @@ from conftest import REPO, write_stub
 
 pytestmark = pytest.mark.skipif(shutil.which("yq") is None, reason="yq not installed")
 
-BROKER_URL = "http://100.78.73.8:8765"
+BROKER_URL = "http://100.113.75.88:8765"
 
 OMP_STUB = """\
 case "$1 $2" in
