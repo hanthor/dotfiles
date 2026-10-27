@@ -18,6 +18,55 @@ hardening_main() {
   hardening_line() {
     "${rootcmd[@]}" python3 "$DOTFILES_DIR/units/server-hardening-file.py" "$@"
   }
+  hardening_journald() {
+    local dropin=/etc/systemd/journald.conf.d/90-dotfiles-server-hardening.conf
+    if "${rootcmd[@]}" test -e /etc/systemd/journald.conf || "${rootcmd[@]}" test -L /etc/systemd/journald.conf; then
+      hardening_line "$@" /etc/systemd/journald.conf '^#?SystemMaxUse=' 'SystemMaxUse=500M'
+      return $?
+    fi
+    # Never follow a pre-existing link to a file outside our managed drop-in.
+    if "${rootcmd[@]}" test -L "$dropin"; then return 1; fi
+    if "${rootcmd[@]}" test -e "$dropin"; then
+      # Only edit a valid journald drop-in; do not make a directive effective in the wrong section.
+      if ! "${rootcmd[@]}" python3 -c '
+import re, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    journal = False
+    for line in f:
+        if re.match(r"^\s*\[", line):
+            if not re.fullmatch(r"\s*\[Journal\]\s*", line):
+                sys.exit("invalid journald drop-in section")
+            journal = True
+        if re.match(r"^#?SystemMaxUse=", line) and not journal:
+            sys.exit("journald limit is outside [Journal]")
+    if not journal:
+        sys.exit("journald drop-in has no [Journal] section")
+' "$dropin"; then return 1; fi
+      hardening_line "$@" "$dropin" '^#?SystemMaxUse=' 'SystemMaxUse=500M'
+      return $?
+    fi
+    if { "${rootcmd[@]}" test -e "${dropin%/*}" || "${rootcmd[@]}" test -L "${dropin%/*}"; } &&
+       ! "${rootcmd[@]}" test -d "${dropin%/*}"; then
+      return 1
+    fi
+    [ "${1:-}" != --check ] || return 10
+    # Stage in the same directory and link without replacing a concurrently created file.
+    "${rootcmd[@]}" python3 -c '
+import os, sys, tempfile
+path = sys.argv[1]
+directory = os.path.dirname(path)
+os.makedirs(directory, mode=0o755, exist_ok=True)
+fd, temp = tempfile.mkstemp(prefix=".dotfiles-journald-", dir=directory)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write("[Journal]\nSystemMaxUse=500M\n")
+        os.fchmod(f.fileno(), 0o644)
+    os.link(temp, path)
+finally:
+    os.unlink(temp)
+' "$dropin" || return 1
+    return 10
+  }
   local root_options swap_root=unknown
   if root_options=$(findmnt -n -o OPTIONS --mountpoint /); then
     case ",$root_options," in
@@ -51,7 +100,12 @@ hardening_main() {
         *) step "inspect $description" false ;;
       esac
     }
-    hardening_inspect_line "journald limit (and restart journald)" /etc/systemd/journald.conf '^#?SystemMaxUse=' 'SystemMaxUse=500M'
+    hardening_journald --check; rc=$?
+    case "$rc" in
+      0) note "ok    journald limit (and restart journald)" ;;
+      10) note "would update journald limit (and restart journald)" ;;
+      *) step "inspect journald limit (and restart journald)" false ;;
+    esac
     if "${rootcmd[@]}" journalctl --disk-usage >/dev/null; then
       note "would vacuum journals to 500M"
     else
@@ -116,7 +170,7 @@ hardening_main() {
     if [ -e /var/run/reboot-required ]; then note "REBOOT REQUIRED on $MACHINE — kernel was updated and needs a restart."; fi
     finish
   fi
-  hardening_line /etc/systemd/journald.conf '^#?SystemMaxUse=' 'SystemMaxUse=500M'; rc=$?
+  hardening_journald; rc=$?
   case "$rc" in
     0) note "ok    journald limit" ;;
     10) note "ok    journald limit"; step "restart journald" "${rootcmd[@]}" systemctl restart systemd-journald ;;

@@ -122,6 +122,122 @@ for arg in "$@"; do case "$arg" in of=*) : > "${arg#of=}" ;; esac; done
 
 
 @pytest.mark.parametrize("check", [True, False])
+def test_missing_journald_dropin_directory(check_system, check):
+    _, root, env, _ = check_system
+    prepare_hardening_commands(check_system)
+    (root / "etc/systemd/journald.conf").unlink()
+    directory = root / "etc/systemd/journald.conf.d"
+    result = run_check(check_system, "server-hardening", UNITS_CHECK="1" if check else "0",
+                       ROOT_OPTIONS="ro,relatime", ACTIVE_SWAP="/dev/zram0")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    calls = Path(env["CALLS"]).read_text().splitlines()
+    if check:
+        assert "would update journald limit" in result.stdout
+        assert not directory.exists()
+        assert "systemctl restart systemd-journald" not in calls
+    else:
+        assert (directory / "90-dotfiles-server-hardening.conf").read_text() == "[Journal]\nSystemMaxUse=500M\n"
+        assert calls.count("systemctl restart systemd-journald") == 1
+
+
+@pytest.mark.parametrize("check", [True, False])
+@pytest.mark.parametrize("existing", ["absent", "current", "outdated"])
+def test_missing_journald_main_uses_preserving_dropin(check_system, check, existing):
+    _, root, env, _ = check_system
+    prepare_hardening_commands(check_system)
+    (root / "etc/systemd/journald.conf").unlink()
+    vendor = root / "usr/lib/systemd/journald.conf"
+    vendor.write_text("[Journal]\nSystemMaxUse=2G\n")
+    directory = root / "etc/systemd/journald.conf.d"
+    directory.mkdir()
+    other = directory / "20-other.conf"
+    other.write_text("[Journal]\nStorage=persistent\n")
+    managed = directory / "90-dotfiles-server-hardening.conf"
+    if existing != "absent":
+        managed.write_text("[Journal]\n# keep this setting\nStorage=auto\nSystemMaxUse=" +
+                           ("500M\n" if existing == "current" else "1G\n"))
+        managed.chmod(0o640)
+    before = managed.read_bytes() if managed.exists() else None
+    result = run_check(check_system, "server-hardening", UNITS_CHECK="1" if check else "0",
+                       ROOT_OPTIONS="ro,relatime", ACTIVE_SWAP="/dev/zram0")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert vendor.read_text() == "[Journal]\nSystemMaxUse=2G\n"
+    assert other.read_text() == "[Journal]\nStorage=persistent\n"
+    assert not (root / "etc/systemd/journald.conf").exists()
+    calls = Path(env["CALLS"]).read_text().splitlines()
+    restarts = [line for line in calls if line == "systemctl restart systemd-journald"]
+    if check:
+        assert ("ok    journald limit" if existing == "current" else "would update journald limit") in result.stdout
+        assert (managed.read_bytes() if managed.exists() else None) == before
+        assert not restarts
+    else:
+        assert managed.read_text() == ("[Journal]\nSystemMaxUse=500M\n" if existing == "absent" else
+                                       "[Journal]\n# keep this setting\nStorage=auto\nSystemMaxUse=500M\n")
+        assert managed.stat().st_mode & 0o777 == (0o644 if existing == "absent" else 0o640)
+        assert len(restarts) == (0 if existing == "current" else 1)
+        result = run_check(check_system, "server-hardening", UNITS_CHECK="0",
+                           ROOT_OPTIONS="ro,relatime", ACTIVE_SWAP="/dev/zram0")
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        calls = Path(env["CALLS"]).read_text().splitlines()
+        assert len([line for line in calls if line == "systemctl restart systemd-journald"]) == len(restarts)
+
+
+@pytest.mark.parametrize("check", [True, False])
+@pytest.mark.parametrize("invalid", ["missing_section", "wrong_section", "limit_before_section", "directory", "symlink"])
+def test_invalid_journald_dropin_fails_without_stopping_hardening(check_system, check, invalid):
+    _, root, env, _ = check_system
+    prepare_hardening_commands(check_system)
+    (root / "etc/systemd/journald.conf").unlink()
+    directory = root / "etc/systemd/journald.conf.d"
+    if invalid == "directory":
+        directory.write_text("not a directory\n")
+        original = directory.read_bytes()
+    else:
+        directory.mkdir()
+        managed = directory / "90-dotfiles-server-hardening.conf"
+        if invalid == "symlink":
+            vendor = root / "usr/lib/systemd/journald.conf"
+            vendor.write_text("[Journal]\nSystemMaxUse=1G\n")
+            managed.symlink_to(vendor)
+        else:
+            content = {"missing_section": "SystemMaxUse=1G\n", "wrong_section": "[Other]\nSystemMaxUse=1G\n",
+                       "limit_before_section": "SystemMaxUse=1G\n[Journal]\n"}[invalid]
+            managed.write_text(content)
+        original = managed.read_bytes()
+    result = run_check(check_system, "server-hardening", UNITS_CHECK="1" if check else "0",
+                       ROOT_OPTIONS="ro,relatime", ACTIVE_SWAP="/dev/zram0")
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert "FAIL" in result.stdout and "journald limit" in result.stdout
+    assert (directory if invalid == "directory" else managed).read_bytes() == original
+    if invalid == "symlink":
+        assert managed.is_symlink() and vendor.read_bytes() == original
+    assert "systemctl restart systemd-journald" not in Path(env["CALLS"]).read_text().splitlines()
+    if check:
+        assert "would update SSH limit MaxSessions" in result.stdout
+    else:
+        assert "MaxSessions 10" in (root / "etc/ssh/sshd_config").read_text()
+
+
+def test_existing_journald_main_remains_the_managed_file(check_system):
+    _, root, env, _ = check_system
+    prepare_hardening_commands(check_system)
+    main = root / "etc/systemd/journald.conf"
+    directory = root / "etc/systemd/journald.conf.d"
+    directory.mkdir()
+    other = directory / "20-other.conf"
+    other.write_text("[Journal]\nStorage=persistent\n")
+    for _ in range(2):
+        result = run_check(check_system, "server-hardening", UNITS_CHECK="0",
+                           ROOT_OPTIONS="ro,relatime", ACTIVE_SWAP="/dev/zram0")
+        assert result.returncode == 0, (result.stdout, result.stderr)
+    assert main.read_text() == "SystemMaxUse=500M\n"
+    assert other.read_text() == "[Journal]\nStorage=persistent\n"
+    assert not (directory / "90-dotfiles-server-hardening.conf").exists()
+    calls = Path(env["CALLS"]).read_text().splitlines()
+    assert calls.count("systemctl restart systemd-journald") == 1
+
+
+@pytest.mark.parametrize("check", [True, False])
 @pytest.mark.parametrize("existing_swapfile", [True, False])
 @pytest.mark.parametrize("active", [True, False])
 def test_readonly_root_preserves_swap_and_continues_hardening(check_system, check, existing_swapfile, active):
