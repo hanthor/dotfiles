@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 """Join Tailscale without placing vault or Tailscale credentials in argv."""
-import base64
 import json
 import os
 import signal
 import subprocess
 import sys
 import tempfile
-import urllib.error
-import urllib.parse
-import urllib.request
 
 
 def fail(message):
@@ -24,7 +20,7 @@ def interrupt(_signal, _frame):
 def main():
     if len(sys.argv) != 4:
         return fail("Tailscale enrollment requires machine, domain and privilege mode")
-    machine, domain, root_mode = sys.argv[1:]
+    machine, _domain, root_mode = sys.argv[1:]
     try:
         result = subprocess.run(["bw", "get", "item", "tailscale-apikey"],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -35,30 +31,22 @@ def main():
     except (OSError, subprocess.SubprocessError, KeyError, TypeError, ValueError):
         return fail("Unable to read a nonempty Tailscale key from Bitwarden")
 
-    authorization = "Basic " + base64.b64encode((key + ":").encode()).decode()
-    headers = {"Authorization": authorization, "Content-Type": "application/json"}
+    # Cleanup is best effort. Suppress the helper's output: API errors may
+    # contain credentials, and a failed release must not prevent joining.
+    repo = os.environ.get("DOTFILES_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    environment = os.environ.copy()
+    environment.pop("BW_SESSION", None)
+    environment["TS_OAUTH_CLIENT_SECRET"] = key
     try:
-        request = urllib.request.Request("https://api.tailscale.com/api/v2/tailnet/-/devices", headers=headers)
-        with urllib.request.urlopen(request, timeout=30) as response:
-            devices = json.load(response).get("devices", [])
-        if not isinstance(devices, list):
-            raise ValueError("invalid device list")
-    except (OSError, ValueError, TypeError):
-        # The old role explicitly treated the list operation as best effort.
-        print("warn: could not read Tailscale device list; stale-device cleanup skipped")
-        devices = []
-    old = next((device.get("id") for device in devices
-                if isinstance(device, dict) and device.get("name") == machine + "." + domain
-                and device.get("id")), None)
-    if old is not None:
-        try:
-            url = "https://api.tailscale.com/api/v2/device/" + urllib.parse.quote(str(old), safe="")
-            request = urllib.request.Request(url, headers=headers, method="DELETE")
-            with urllib.request.urlopen(request, timeout=30) as response:
-                if response.status != 200:
-                    raise ValueError("unexpected response")
-        except (OSError, ValueError):
-            return fail("Unable to remove the matching stale Tailscale device; join skipped")
+        released = subprocess.run([sys.executable, os.path.join(repo, "scripts", "tailnet.py"),
+                                   "release", machine], env=environment,
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if released.returncode:
+            print("warn: Tailscale stale-device cleanup failed; continuing with join")
+    except OSError:
+        print("warn: Tailscale stale-device cleanup failed; continuing with join")
+    finally:
+        environment.pop("TS_OAUTH_CLIENT_SECRET", None)
 
     # The auth key is read from a private file by tailscale; the file and its
     # containing directory are removed even on normal termination signals.
@@ -73,8 +61,7 @@ def main():
                 "tailscale", "up", "--auth-key=file:" + path,
                 "--advertise-tags=tag:fleet", "--accept-routes", "--hostname", machine,
             ]
-            environment = os.environ.copy()
-            environment.pop("BW_SESSION", None)
+            # Neither the vault session nor the OAuth secret is needed by tailscale.
             result = subprocess.run(command, env=environment,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if result.returncode:

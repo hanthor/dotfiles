@@ -6,6 +6,7 @@
 
 - [Architecture](architecture.md)
 - [Units](units.md)
+- [Tailnet hygiene](tailnet.md)
 - [Inventory & Groups](inventory.md)
 - [Secrets with Bitwarden](bitwarden.md)
 - [Onboarding a New Machine](onboarding.md)

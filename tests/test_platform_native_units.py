@@ -35,6 +35,10 @@ def platform_env(tmp_path, stub_env):
                  "termux-start-sshd", "tailscale.sh", "tailscale-connect.py", "sudo.sh", "sshd.sh",
                  "platform-config.bash", "package-config.bash"):
         (units / name).symlink_to(REPO / "units" / name)
+    scripts = root / "scripts"
+    scripts.mkdir()
+    for name in ("tailnet.py", "inventory_parser.py"):
+        (scripts / name).symlink_to(REPO / "scripts" / name)
     lib = (REPO / "units/lib.sh").read_text()
     lib = lib.replace("IS_TERMUX=0; [ -d /data/data/com.termux/files/usr ] && IS_TERMUX=1",
                       'IS_TERMUX="${TEST_TERMUX:-0}"')
@@ -47,7 +51,7 @@ def platform_env(tmp_path, stub_env):
     (system / "etc/os-release").write_text('ID=ubuntu\nID_LIKE=debian\n')
     log = tmp_path / "calls"
     env.update(PATH=str(bindir), DOTFILES_DIR=str(root), DOTFILES_SYSTEM_ROOT=str(system),
-               DOTFILES_MACHINE="laptop", USER="james", LOG=str(log),
+               DOTFILES_INVENTORY=str(root / "inventory.yml"), DOTFILES_MACHINE="laptop", USER="james", LOG=str(log),
                BREW_PREFIX=str(tmp_path / "no-brew"), TMPDIR=str(tmp_path))
     write_stub(bindir, "id", '''\
 case "$1" in -u) echo 1000 ;; -un) echo james ;; -nG) echo "james podman" ;; *) exit 1 ;; esac
@@ -209,38 +213,61 @@ def tailscale_stubs(fixture):
     _, _, bindir, env, _ = fixture
     write_stub(bindir, "tailscale", '''\
 echo "tailscale $*" >> "$LOG"
-if [ "$1" = status ]; then exit "${TS_CONNECTED:-1}"; fi
+if [ "$1" = status ] && [ "${2:-}" != --json ]; then exit "${TS_CONNECTED:-1}"; fi
+if [ "$1" = status ] && [ "${2:-}" = --json ]; then
+  printf '%s' '{"Self":{"ID":"self-123"}}'
+  exit "${TS_CONNECTED:-1}"
+fi
 if [ "$1" = up ]; then
+  [ -z "${BW_SESSION:-}" ] && [ -z "${TS_OAUTH_CLIENT_SECRET:-}" ] || exit 1
   for arg in "$@"; do case "$arg" in --auth-key=file:*)
     file="${arg#--auth-key=file:}"
     /usr/bin/stat -c %a "$file" > "$KEY_MODE"
     /usr/bin/cat "$file" > "$KEY_CAPTURE"
     printf '%s' "$file" > "$KEY_PATH"
   ;; esac; done
+  exit "${FAIL_JOIN:-0}"
 fi
 ''')
     write_stub(bindir, "bw", '''\
 echo "bw $*" >> "$LOG"
-case "$1" in unlock) exit "${BW_LOCKED:-0}" ;; get) printf '%s' '{"login":{"password":"tskey-sensitive-test"}}' ;; esac
+case "$1" in unlock) exit "${BW_LOCKED:-0}" ;; get) printf '%s' '{"login":{"password":"tskey-client-example-sensitive-test"}}' ;; esac
 ''')
     tmp = Path(env["TMPDIR"])
     env.update(KEY_MODE=str(tmp / "key-mode"), KEY_CAPTURE=str(tmp / "captured-key"), KEY_PATH=str(tmp / "key-path"))
     mock = tmp / "mockpython"
     mock.mkdir()
     (mock / "sitecustomize.py").write_text('''\
-import io, json, os, urllib.error, urllib.request
+import io, json, os, urllib.error, urllib.parse, urllib.request
 class Response(io.BytesIO):
     status = 200
     def __enter__(self): return self
     def __exit__(self, *args): self.close()
 def open_mock(req, timeout):
-    assert req.get_header("Authorization").startswith("Basic ")
-    with open(os.environ["LOG"], "a") as f: f.write("api " + req.get_method() + " " + req.full_url + "\\n")
-    if req.get_method() == "GET":
+    url, method = req.full_url, req.get_method()
+    with open(os.environ["LOG"], "a") as f: f.write("api " + method + " " + url + "\\n")
+    if url.endswith("/oauth/token"):
+        assert method == "POST"
+        assert urllib.parse.parse_qs(req.data.decode()) == {
+            "client_id": ["example"], "client_secret": ["tskey-client-example-sensitive-test"]}
+        if os.environ.get("FAIL_OAUTH") == "1":
+            raise urllib.error.HTTPError(url, 401, "secret-bearing response", None,
+                                         io.BytesIO(b"tskey-client-example-sensitive-test"))
+        return Response(b'{"access_token":"access-sensitive-test"}')
+    assert req.get_header("Authorization") == "Bearer access-sensitive-test"
+    if method == "GET":
         name = os.environ.get("DEVICE_NAME", "laptop.example.ts.net")
-        return Response(json.dumps({"devices": [{"name": name, "id": "device-123"}]}).encode())
+        return Response(json.dumps({"devices": [
+            {"name": name, "id": "device-123", "connectedToControl": False},
+            {"name": "laptop-4.example.ts.net" if name.startswith("laptop.") else "other-1.example.ts.net",
+             "id": "device-suffix", "connectedToControl": False},
+            {"name": "laptop-1.example.ts.net", "id": "device-online", "connectedToControl": True},
+            {"name": "laptop-2.example.ts.net", "id": "self-123", "connectedToControl": False},
+            {"name": "laptop-3.example.ts.net", "id": "device-foreign", "isExternal": True},
+            {"name": "other.example.ts.net", "id": "device-other"},
+        ]}).encode())
     if os.environ.get("FAIL_DELETE") == "1":
-        raise urllib.error.HTTPError(req.full_url, 403, "secret-bearing response", None, None)
+        raise urllib.error.HTTPError(url, 403, "secret-bearing response", None, None)
     return Response(b"{}")
 urllib.request.urlopen = open_mock
 ''')
@@ -255,21 +282,30 @@ def test_tailscale_join_keeps_tokens_off_argv_and_no_secrets_skips_vault(platfor
     assert "PARTIAL:" in no_secrets.stdout
     assert not any(line.startswith("bw ") or line.startswith("api ") for line in log_lines(log))
     log.unlink()
+    locked = run_unit(platform_env, "tailscale", BW_LOCKED="1", BW_SESSION="session-sensitive")
+    assert locked.returncode == 0, locked.stdout + locked.stderr
+    assert "PARTIAL:" in locked.stdout
+    assert not any(line.startswith("api ") or line.startswith("tailscale up") or line.startswith("bw get")
+                   for line in log_lines(log))
+    log.unlink()
     joined = run_unit(platform_env, "tailscale", BW_SESSION="session-sensitive")
     assert joined.returncode == 0, joined.stdout + joined.stderr
     calls = log_lines(log)
-    assert any("api DELETE https://api.tailscale.com/api/v2/device/device-123" in line for line in calls)
+    assert any("api POST https://api.tailscale.com/api/v2/oauth/token" in line for line in calls)
+    assert {line.rsplit("/", 1)[-1] for line in calls if line.startswith("api DELETE ")} == {
+        "device-123", "device-suffix"}
     assert any("--auth-key=file:" in line and "--advertise-tags=tag:fleet" in line for line in calls)
     assert Path(env["KEY_MODE"]).read_text().strip() == "600"
-    assert Path(env["KEY_CAPTURE"]).read_text() == "tskey-sensitive-test"
-    assert not Path(Path(env["KEY_PATH"]).read_text()).exists()
-    assert "tskey-sensitive-test" not in "\n".join(calls) + joined.stdout + joined.stderr
-    assert "session-sensitive" not in "\n".join(calls) + joined.stdout + joined.stderr
+    assert Path(env["KEY_CAPTURE"]).read_text() == "tskey-client-example-sensitive-test"
+    key_path = Path(Path(env["KEY_PATH"]).read_text())
+    assert not key_path.exists() and not key_path.parent.exists()
+    for secret in ("tskey-client-example-sensitive-test", "access-sensitive-test", "session-sensitive"):
+        assert secret not in "\n".join(calls) + joined.stdout + joined.stderr
     traced = subprocess.run(["bash", "-x", str(platform_env[0] / "units/tailscale.sh")],
                             env={**env, "BW_SESSION": "session-sensitive"}, text=True, capture_output=True)
     assert traced.returncode == 0, traced.stdout + traced.stderr
-    assert "session-sensitive" not in traced.stdout + traced.stderr
-    assert "tskey-sensitive-test" not in traced.stdout + traced.stderr
+    for secret in ("session-sensitive", "tskey-client-example-sensitive-test", "access-sensitive-test"):
+        assert secret not in traced.stdout + traced.stderr
 
 
 def test_tailscale_resolver_routes_and_retired_service_guard(platform_env):
@@ -287,24 +323,37 @@ def test_tailscale_resolver_routes_and_retired_service_guard(platform_env):
     assert not dest.is_symlink() and dest.read_text() == "nameserver 1.1.1.1\nnameserver 8.8.8.8\n"
     assert external.read_text() == "existing resolver\n"
     assert any("--advertise-routes=192.168.0.0/24 --accept-dns=false --operator=james" in line for line in log_lines(log))
-    log.unlink()
-    result = run_unit(platform_env, "tailscale", DOTFILES_MACHINE="matrix", TS_CONNECTED="1", BW_SESSION="session-sensitive")
-    assert result.returncode == 0
-    assert not any("restart" in line or "reload" in line or line.startswith("bw ") for line in log_lines(log))
+    for retired in ("matrix", "telengana"):
+        for connected in ("0", "1"):
+            log.unlink(missing_ok=True)
+            result = run_unit(platform_env, "tailscale", DOTFILES_MACHINE=retired,
+                              TS_CONNECTED=connected, BW_SESSION="session-sensitive")
+            assert result.returncode == 0
+            assert not any("restart" in line or "reload" in line or line.startswith(("bw ", "api ", "tailscale up"))
+                           for line in log_lines(log))
 
 
-def test_tailscale_matching_stale_device_and_delete_failure(platform_env):
+@pytest.mark.parametrize("failure", ["FAIL_OAUTH", "FAIL_DELETE"])
+def test_tailscale_cleanup_failure_warns_and_join_continues(platform_env, failure):
     _, _, _, _, log = platform_env
     tailscale_stubs(platform_env)
-    other = run_unit(platform_env, "tailscale", BW_SESSION="x", DEVICE_NAME="other.example.ts.net")
-    assert other.returncode == 0, other.stdout + other.stderr
+    result = run_unit(platform_env, "tailscale", BW_SESSION="session-sensitive", **{failure: "1"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "warn: Tailscale stale-device cleanup failed; continuing with join" in result.stdout
+    assert any(line.startswith("tailscale up") for line in log_lines(log))
+    for secret in ("secret-bearing response", "tskey-client-example-sensitive-test", "access-sensitive-test", "session-sensitive"):
+        assert secret not in "\n".join(log_lines(log)) + result.stdout + result.stderr
+
+
+def test_tailscale_other_device_is_not_deleted_and_join_failure_cleans_key(platform_env):
+    _, _, _, env, log = platform_env
+    tailscale_stubs(platform_env)
+    result = run_unit(platform_env, "tailscale", BW_SESSION="x", DEVICE_NAME="other.example.ts.net", FAIL_JOIN="1")
+    assert result.returncode == 1
     assert not any("api DELETE" in line for line in log_lines(log))
-    log.unlink()
-    failed = run_unit(platform_env, "tailscale", BW_SESSION="x", FAIL_DELETE="1")
-    assert failed.returncode == 1
-    assert "stale Tailscale device" in failed.stderr
-    assert "secret-bearing response" not in failed.stderr
-    assert not any(line.startswith("tailscale up") for line in log_lines(log))
+    assert any(line.startswith("tailscale up") for line in log_lines(log))
+    key_path = Path(Path(env["KEY_PATH"]).read_text())
+    assert not key_path.exists() and not key_path.parent.exists()
 
 
 def test_tailscale_resolver_only_points_to_active_stub(platform_env):
