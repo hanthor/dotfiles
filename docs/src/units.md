@@ -19,6 +19,10 @@ Everything not listed under `units/` is still an Ansible role.
 
 `scripts/run-units.sh [--no-secrets] [--tags a,b]` is the one wrapper the recipes call. It maps Ansible tags to units (`tasks_for_tag`, mirroring the tags of the roles the units replaced), runs the selection with `mise run --continue-on-error --jobs 8 --output prefix --timeout 15m`, and exits with mise's status. Without `mise` on `PATH` it prints `mise not installed; running units sequentially` and runs the selected units one after another, continuing after failures, so hosts without mise (Termux, musl) keep updating.
 
+`just apply-tags` resolves, validates and syncs Bitwarden for explicitly secret-bearing tags (including `omp`), and selects the `bitwarden` role so legacy secret roles receive its facts. If that fails, it skips secrets, still runs the non-secret selection, and returns an error. Tags unrelated to secrets do not prompt for a vault unlock. `just apply-nosecrets` and bootstrap's first phase pass `--no-secrets` to units even if a session is already present.
+
+Bootstrap runs all units after its first Ansible pass and the `omp,secrets` selection after the secret pass. The phone push timer runs the non-secret units remotely from a temporary archive of the controller's tracked revision, after its Ansible passes.
+
 ## Rules for a unit
 
 - Idempotent bash. `set -uo pipefail`, never `set -e`.
@@ -38,7 +42,11 @@ Everything not listed under `units/` is still an Ansible role.
 
 ## chezmoi
 
-File-based config (shell, git, neovim, atuin config) is managed by [chezmoi](https://www.chezmoi.io/) from `home/` (`.chezmoiroot` contains `home`, so `.chezmoi.toml.tmpl`, `.chezmoidata.yaml` and `.chezmoiscripts/` live there). `unit:chezmoi` runs `chezmoi --source <repo> --keep-going --force --no-tty apply --init`: `--keep-going` continues past a failing file or script, `--force` overwrites like the old roles did, `--no-tty` keeps the timer from hanging on a prompt, `--init` regenerates the config from `home/.chezmoi.toml.tmpl`.
+File-based config (shell, git, neovim, atuin config) is managed by [chezmoi](https://www.chezmoi.io/) from `home/` (`.chezmoiroot` contains `home`, so `.chezmoi.toml.tmpl`, `.chezmoidata.yaml` and `.chezmoiscripts/` live there). `unit:chezmoi` runs `chezmoi --source <repo> --keep-going --force --no-tty apply --init`: `--keep-going` continues past a failing file or script, `--force` overwrites like the old roles did, `--no-tty` avoids a TTY, and `--init` regenerates the config from `home/.chezmoi.toml.tmpl`.
+
+**Back up and review existing dotfiles before the first apply.** The current `--force` will overwrite local edits to managed targets without prompting on every apply. First adoption can replace an existing target even without `--force`: chezmoi does not treat a pre-existing, never-written target as a conflict by default. Review the intended changes with `chezmoi --source <repo> diff` (after initializing the config with the correct machine data), and keep a private backup of any local files you need. A safer future cutover should detect both first-adoption and later local conflicts and fail closed for unattended runs, with interactive review; merely removing `--force` does not protect initial adoption.
+
+If chezmoi is absent the unit fails rather than reporting a successful skip. Homebrew hosts can run `just packages`, Termux users can run `pkg install chezmoi`, and Alpine/postmarketOS users can enable the community repository and run `sudo apk add chezmoi`.
 
 - Data: `machine`, `is_desktop` (true when the host is in the `desktop` group of `inventory.yml`), `user_name`, `user_email`, `alias_groups`.
 - Secrets are **not** chezmoi templates: the `bitwarden` template function aborts a whole template on a missing item. The `shell-ai` and `atuin` units handle secrets.

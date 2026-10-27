@@ -8,7 +8,6 @@ phone_apply_enabled: false
 web_services: []
 mic_hardware_volume_pct: 75
 
-# Hive ops (rotation, watchdog, peak windows) now run as CronJobs inside the
-# AWS cluster; himachal no longer drives the Hive. hive_ops removes its old
-# user timers on the next apply.
+# The AWS cluster was terminated; local Hive ops remain disabled.
+# The role removes any old local timers on the next apply.
 hive_ops_enabled: false

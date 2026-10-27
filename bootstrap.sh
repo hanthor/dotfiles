@@ -322,7 +322,8 @@ run_phase1() {
   echo "═══════════════════════════════════════════════════"
   echo ""
 
-  cd "$DOTFILES_DIR"
+  cd "$DOTFILES_DIR" || return 1
+  local rc=0 urc=0
   ansible-playbook \
     --connection=local \
     -l "$MACHINE_NAME" \
@@ -331,7 +332,10 @@ run_phase1() {
     -e ansible_host=127.0.0.1 \
     -e "is_desktop=$is_desktop" \
     --skip-tags secrets \
-    site.yml
+    site.yml || rc=$?
+  scripts/run-units.sh --no-secrets || urc=$?
+  [ "$rc" -ne 0 ] || rc=$urc
+  return "$rc"
 }
 
 # ── Bitwarden login ───────────────────────────────────────────────
@@ -346,6 +350,17 @@ setup_bitwarden() {
   fi
 
   local bw_status
+  # Prefer a usable session, including the cached session from a previous run.
+  if [ -n "${BW_SESSION:-}" ] && ! bw unlock --check >/dev/null 2>&1; then
+    unset BW_SESSION
+  fi
+  if [ -z "${BW_SESSION:-}" ] && [ -s /tmp/bw_session ]; then
+    local cached_session
+    cached_session=$(cat /tmp/bw_session)
+    if BW_SESSION="$cached_session" bw unlock --check >/dev/null 2>&1; then
+      export BW_SESSION="$cached_session"
+    fi
+  fi
   bw_status=$(bw status 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)['status'])" 2>/dev/null || echo "unauthenticated")
 
   echo ""
@@ -356,24 +371,24 @@ setup_bitwarden() {
   echo "═══════════════════════════════════════════════════"
   echo ""
 
-  case "$bw_status" in
-    unlocked)
-      BW_SESSION=$(bw unlock --raw 2>/dev/null || true)
-      ;;
-    locked)
-      echo "Unlocking Bitwarden..."
-      BW_SESSION=$(bw unlock --raw)
-      ;;
-    unauthenticated)
+  if [ -z "${BW_SESSION:-}" ]; then
+    if [ "$bw_status" = "unauthenticated" ]; then
       echo "Log in to Bitwarden to complete setup:"
-      bw login
-      BW_SESSION=$(bw unlock --raw)
-      ;;
-  esac
-
-  export BW_SESSION
-  rm -f /tmp/bw_session
-  (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session)
+      bw login || return 1
+    fi
+    echo "Unlocking Bitwarden..."
+    BW_SESSION=$(bw unlock --raw) || return 1
+    export BW_SESSION
+  fi
+  if [ -z "$BW_SESSION" ] || ! bw unlock --check >/dev/null 2>&1; then
+    echo "Bitwarden session is invalid; secrets setup skipped." >&2
+    return 1
+  fi
+  if ! timeout 15 bw sync >/dev/null; then
+    echo "Bitwarden sync failed; secrets setup skipped." >&2
+    return 1
+  fi
+  (umask 077 && printf '%s' "$BW_SESSION" > /tmp/bw_session) || return 1
   return 0
 }
 
@@ -382,7 +397,8 @@ run_phase2() {
   local is_desktop="false"
   [ "$MACHINE_TYPE" = "desktop" ] && is_desktop="true"
 
-  cd "$DOTFILES_DIR"
+  cd "$DOTFILES_DIR" || return 1
+  local rc=0 urc=0
   ansible-playbook \
     --connection=local \
     -l "$MACHINE_NAME" \
@@ -390,9 +406,11 @@ run_phase2() {
     -e ansible_connection=local \
     -e ansible_host=127.0.0.1 \
     -e "is_desktop=$is_desktop" \
-    -e "bw_session=${BW_SESSION:-}" \
     --tags secrets \
-    site.yml
+    site.yml || rc=$?
+  scripts/run-units.sh --tags omp,secrets || urc=$?
+  [ "$rc" -ne 0 ] || rc=$urc
+  return "$rc"
 }
 
 # ── Push inventory changes (after GitHub auth is set up) ─────────
@@ -434,12 +452,23 @@ main() {
   ensure_sudo
   ensure_tailscale
   install_collections
-  run_phase1
+  local rc=0 phase_rc=0
+  run_phase1 || rc=$?
 
-  # Phase 2 runs if Bitwarden CLI is now available (installed by Homebrew in Phase 1)
+  # Phase 2 still runs after a Phase 1 failure, if the vault is available.
   if setup_bitwarden; then
-    run_phase2
-    push_inventory_changes
+    run_phase2 || phase_rc=$?
+    [ "$rc" -ne 0 ] || rc=$phase_rc
+    if [ "$phase_rc" -eq 0 ]; then
+      push_inventory_changes || { phase_rc=$?; [ "$rc" -ne 0 ] || rc=$phase_rc; }
+    fi
+  else
+    echo "Bitwarden setup failed; Phase 2 was not run." >&2
+    [ "$rc" -ne 0 ] || rc=1
+  fi
+  if [ "$rc" -ne 0 ]; then
+    echo "Bootstrap failed (exit $rc); address the errors and re-run." >&2
+    return "$rc"
   fi
 
   echo ""
@@ -453,4 +482,6 @@ main() {
   echo "  To re-apply anytime: just apply"
 }
 
-main
+if [[ -z "${BASH_SOURCE[0]:-}" || "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main
+fi

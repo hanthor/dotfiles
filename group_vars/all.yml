@@ -70,6 +70,7 @@ ssh_mesh_exclude:
 # ── Core packages (all machines) ─────────────────────────────────
 core_brews:
   - bitwarden-cli
+  - bun
   - gh
   - git-lfs
   - node # Bluefin ships node OTB, but non-Bluefin hosts (e.g. mumbai, the phone's Debian VM) don't
@@ -102,6 +103,7 @@ brew_blocked:
 core_taps:
   - ublue-os/experimental-tap
 core_tap_brews:
+  - can1357/tap/omp
   - ublue-os/experimental-tap/bluefin-cli
 # ── Desktop-only packages ────────────────────────────────────────
 # Trimmed to essentials — Bluefin already ships gcc, python, node, etc.
