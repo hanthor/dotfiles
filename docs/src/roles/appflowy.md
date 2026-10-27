@@ -2,8 +2,8 @@
 
 **Migrated to Kubernetes (2026-06-12).**
 
-This Ansible role (Podman Quadlets on bihar) has been removed. AppFlowy Cloud now runs in the Talos K8s cluster.
+The former Ansible role (Podman Quadlets on bihar) was removed. Its Kubernetes manifests are retained for the home Talos cluster, which is currently offline.
 
 See [`talos-k8s/appflowy/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s/appflowy) for the commercial Helm chart deployment manifest and operational instructions.
 
-Access: `https://appflowy.manatee-basking.ts.net`
+Historical access: `https://appflowy.manatee-basking.ts.net` (unavailable while the cluster is offline).

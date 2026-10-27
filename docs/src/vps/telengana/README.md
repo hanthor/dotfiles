@@ -11,7 +11,7 @@ Former VPS node in the fleet (`vps` group in `inventory.yml`).
 
 - Ubuntu 24.04 LTS, x86_64
 - A single-node k3s hosting the tuna-os Hive
-- Managed by the fleet playbook (daily cron apply, no secrets/homebrew)
+- Previously managed by the fleet playbook (daily cron apply, no secrets/homebrew)
 
 ## Lessons carried forward
 

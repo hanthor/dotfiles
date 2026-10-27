@@ -19,4 +19,4 @@ Secondary workstation in the hanthor fleet.
 ## Notes
 
 - [PaperWM](https://github.com/paperwm/PaperWM), Papershell, Copyous extensions synced from fleet
-- Brew packages managed via dotfiles playbook
+- Brew packages managed via native dotfiles units
