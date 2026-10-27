@@ -26,10 +26,17 @@ Host SELinux is enforcing and `container-selinux` is installed. The running
 Utah image does not include `k3s-selinux`, and its policy store is read-only;
 K3s SELinux container labeling remains disabled. Our proposed image build
 includes the policy, but has not been installed on this host. Do not enable
-K3s SELinux until the policy and workload labeling are verified. Metrics-server
-cannot currently reach the kubelet over the Tailscale address; node metrics
-are unavailable. The default local-path volumes are node-local, without
-snapshot or expansion support; deleting a claim deletes its data.
+K3s SELinux until the policy and workload labeling are verified. The default
+local-path volumes are node-local, without snapshot or expansion support;
+deleting a claim deletes its data.
+
+Firewalld assigns `cni0` to the `internal` zone, permitting forwarding within
+that zone. A rich rule permits `10.42.0.0/16` to reach the Tailscale address on
+TCP port 10250 for kubelet metrics. The `internal` zone's default services,
+including SSH, are also reachable from pods; do not attach an untrusted
+interface to that zone. The public LAN interface remains in `public`. Both
+bridge rules are present in the permanent configuration; verify them after
+network or firewall changes with `firewall-cmd --zone=internal --list-all`.
 
 ## Historical configuration
 
