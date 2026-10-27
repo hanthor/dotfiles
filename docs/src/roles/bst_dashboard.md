@@ -1,22 +1,5 @@
 # bst_dashboard
 
-**Tags:** `services`, `bst_dashboard`  
-**Secrets needed:** No  
-**Runs on:** Machines with build infrastructure
+`units/bst-dashboard.sh` renders `units/bst-dashboard/bst-dashboard.service.j2` with `units/service-templates.py`, installs the resulting user service, reloads the user manager when changed, and enables and starts it. It also enables user linger via root or noninteractive `sudo -n`. It does not install the dashboard project or retrieve secrets.
 
-Deploys a BuildStream build monitoring dashboard.
-
-## What It Does
-
-1. Creates dashboard directory based on hostname
-2. Deploys dashboard web UI files
-3. Configures dashboard to track local BuildStream build queues
-
-## Access
-
-Proxied through Caddy at `https://<host>.manatee-basking.ts.net/bst/`.
-
-## Notes
-
-- Used to monitor BuildStream build jobs on machines that run builds
-- Dashboard shows build queue status, job history, and artifact cache
+The unit skips retired `matrix` and `telengana`, and skips when the project directory is missing. On `karnataka` it selects `/var/home/james/dev/kde-linux` and image `aurora`; elsewhere it selects `/var/home/james/dev/dakota` and image `dakota`. Access is through the Caddy `/bst/` route when that proxy is configured.

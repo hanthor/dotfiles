@@ -1,26 +1,5 @@
 # sshd
 
-**Tags:** `system`, `sshd`  
-**Secrets needed:** No  
-**Runs on:** All machines
+`units/sshd.sh` skips hosts without `/etc/ssh/sshd_config.d`. Otherwise it installs `99-bw-env.conf` with `AcceptEnv BW_SESSION BW_CLIENTID BW_CLIENTSECRET` as a best-effort step. If `sshd_harden: true` is set in host variables, it also validates and installs `10-hardening.conf`: root login, password and keyboard-interactive authentication, and X11 forwarding are disabled; authentication attempts and login grace time are limited.
 
-Configures the SSH daemon to accept Bitwarden environment variables. `just apply-remote` resolves the session on the target and forwards it back using `SendEnv=BW_SESSION` without putting it in the remote command line.
-
-## What It Does
-
-Drops a config file at `/etc/ssh/sshd_config.d/99-bw-env.conf`:
-
-```
-AcceptEnv BW_SESSION BW_CLIENTID BW_CLIENTSECRET
-```
-
-The drop-in is required for session-bearing remote applies; those applies fail if the target rejects `BW_SESSION`.
-
-## Handlers
-
-- **Reload sshd** — restarts the SSH service after config changes
-
-## Notes
-
-- Only runs if `/etc/ssh/sshd_config.d/` exists (Debian/Ubuntu/Fedora convention)
-- On Alpine/musl systems this directory may not exist — the role skips gracefully
+Files are staged and installed root-owned (0644); root or noninteractive `sudo -n` is required. After a change the unit attempts to reload `ssh` on Debian/Ubuntu and `sshd` elsewhere. The shared unit library skips retired `matrix` and `telengana` before changes; nothing on those hosts may be restarted. No vault access is required.

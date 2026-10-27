@@ -1,6 +1,6 @@
 # Dotfiles Fleet Handbook
 
-Ansible-driven dotfiles and infrastructure for a personal fleet. Three distinct concerns live here:
+Native-unit dotfiles and infrastructure for a personal fleet. Three distinct concerns live here:
 
 1. **Workstation config** — shells, packages, browser, SSH, Tailscale, kubeconfig, GNOME, and more
 2. **Home Talos K8s cluster** — manifests for the Bihar + Karnataka cluster
@@ -24,21 +24,21 @@ just apply-tags kube,shell
 # Apply to a remote machine
 just apply-remote himachal
 
-# Dry-run to see what would change
+# Request native inspection (coverage is subject to integration verification)
 just check
 
-# Lint all YAML and Ansible
+# Lint YAML and native unit shell scripts
 just lint
 ```
 
 ## Machine Fleet
 
-Ansible-managed hosts, from `inventory.yml`:
+Fleet hosts, from `inventory.yml`:
 
 | Machine | Group | Type | Role |
 |---------|-------|------|------|
 | kanpur | desktop | Laptop | Portable workstation |
-| himachal | desktop | Laptop | Portable workstation; runs `hive_ops` |
+| himachal | desktop | Laptop | Portable workstation |
 | dilli | desktop | Desktop | Secondary workstation |
 | kerala | desktop | Mobile | postmarketOS ARM device |
 | mumbai | desktop | VM | Debian VM on the phone, `machine_profile: cli-only` |
@@ -50,7 +50,7 @@ Ansible-managed hosts, from `inventory.yml`:
 | matrix | vps | VPS | **Retired** — see the cutover runbook |
 | telengana | vps | VPS | **Retired** — see the cutover runbook |
 
-Not Ansible-managed (Talos — `talosctl`/`kubectl` only):
+Not managed by fleet units (Talos — `talosctl`/`kubectl` only):
 
 - **bihar** (control plane) + **karnataka** (worker, AMD GPU) — the home cluster.
   Powered down and in storage, expected back. See the [cluster handbook](servers/talos-k8s/cluster.md).
@@ -58,16 +58,14 @@ Not Ansible-managed (Talos — `talosctl`/`kubectl` only):
 
 The `llm` group is dormant (commented out in `inventory.yml`).
 
-## Playbook Phases
+## Native units
 
-`site.yml` groups roles into four commented phases. Tags cut across them — use
-`just apply-tags <tag>` to target a subset.
+`just apply*` runs the [native units](units.md) via `scripts/run-units.sh`.
+Prerequisites run in stages; independent units can run concurrently via mise,
+with a sequential fallback. `just apply-tags <tag>` selects units from the
+wrapper's tag map, while `just apply-nosecrets` disables unit vault access.
+Unit-specific platform, profile and privilege gates still apply.
 
-| Phase | Roles | Main tags |
-|-------|-------|-----------|
-| 1 — System + packages + dotfiles | sudo, sshd, apk_packages, homebrew, termux_packages, bitwarden, hive_ops | `system`, `packages`, `dotfiles` |
-| 2 — Secrets + auth | ssh_keys, ssh_mesh, tailscale | `secrets` |
-| 3 — Desktop apps | flatpak, bluefin_common, gnome, zen_browser (+ browser_fxa), pipewire_audio | `desktop` |
-| 4 — Services | syncthing, systemd, bst_dashboard, kirocrew, proxy, tailscale_cert, server_hardening | `services` |
-
-After the playbook, `just apply*` runs the [bash units](units.md) (`chezmoi`, `fonts`, `omp`, `atuin`, `shell-ai`, `github`, `kube`, `forgejo-registry`) in parallel through mise. The `omp` unit also uses Bitwarden for its broker token. `just apply-nosecrets` skips secret-tagged roles and passes `--no-secrets` to units.
+The retired `matrix` and `telengana` VPSes remain powered on for burn-in.
+The shared unit library skips them; **nothing on either host may be restarted**.
+See the [cutover runbook](../matrix-cutover-runbook.md).

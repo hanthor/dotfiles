@@ -13,8 +13,8 @@ agents that get stuck.
 | hanthor (hive.reilly.asia) | `hive-hanthor` | `/state/hive-rotate-hanthor` |
 
 - `scripts/`: the contents of ConfigMap `hive-ops-scripts`, mounted at `/scripts`.
-  This directory is the source of truth. The older copies in `roles/hive_ops/files/bin/`
-  are no longer used (the role is disabled on every host).
+  This directory is the source of truth for the cluster ConfigMap. Separate host
+  timer helpers live under `units/hive-ops/` and are controlled by `hive_ops_enabled`.
 - `cronjobs.yaml`: only the hive-ops CronJobs the operator does not own (school's suspended
   rotate/watchdog/pace/nudge, kept for rollback). The rest are rendered by `HiveHousekeeping/fleet`
   in tuna-os/hive-operator (`config/samples/housekeeping.yaml`); `kubectl apply` of an old copy is drift.

@@ -14,42 +14,40 @@ out and can auto-merge once green. Hive PRs touching anything else are labelled
 never auto-merged. Details: [Bots, Agents & Guardrails](docs/src/automation.md).
 Don't widen the carve-outs to anything the fleet timer executes.
 
-## Local checks (mirror CI, `.github/workflows/ci.yml`)
+## Local checks
 
 ```bash
 yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, comments-indentation: disable, comments: disable, braces: disable, indentation: disable, commas: disable, empty-lines: disable}}" .
-ansible-lint site.yml
+# The commands below correspond to CI jobs; availability and results depend on your environment.
 find . -name "*.sh" -not -path "./.git/*" -type f -print0 | xargs -0 shellcheck -x -S error
 uvx --with pyyaml pytest -q tests
 just --justfile Justfile --list
 (cd aws && tofu fmt -check -recursive)
 ```
 
-CI also checks JSON validity, `py_compile`s tracked Python, runs
-`tofu validate` + `aws/tests/run.sh`, and gofmt/vet/tests `tools/secret-broker/`.
+CI also checks JSON validity, compiles tracked Python, runs native osquery smoke jobs,
+`tofu validate` + `aws/tests/run.sh`, and Go checks in `tools/secret-broker/`.
+See `.github/workflows/ci.yml` for the current jobs. These instructions do not
+assert that a particular checkout has passed them.
 
-Before applying a playbook change, dry-run it on a machine you own:
+`just check` requests native unit inspection (`UNITS_CHECK=1`). Its coverage and
+safety across platforms are subject to integration verification; do not assume
+it is a complete dry-run guarantee. `just apply-tags <tags>` runs the selected
+units and can change the host. Review [Architecture](docs/src/architecture.md)
+and [Units](docs/src/units.md) before applying, especially for privileged work.
 
-```bash
-just check               # ansible-playbook --check --diff
-just apply-tags <tags>   # apply only the roles you touched
-```
+## Units and docs
 
-Tags and `skip_*` host_vars flags are listed in
-[Architecture](docs/src/architecture.md#available-tags).
-
-## Roles and docs
-
-- New role: `roles/<name>/`, wired into the right phase of `site.yml` with
-  tags and any `when:` gate.
-- Document it in `docs/src/roles/<name>.md` and add it to
-  `docs/src/SUMMARY.md`.
+- Add unit entrypoints and assets under `units/`, register them in `mise.toml`
+  and `scripts/run-units.sh`, and implement platform, profile and privilege gates.
+- Document behavior, limitations and secrets in the relevant handbook page.
+  File-based shell, Git, Neovim and Atuin configuration comes from `home/` via chezmoi.
 
 ## Secrets
 
 The repo is public. Secrets come from Bitwarden at runtime only — never
-hardcode credentials, tokens or keys. BW-using tasks gate on
-`bw_unlocked | default(false)`.
+hardcode credentials, tokens or keys. Unit vault access uses a noninteractive
+session and honors `UNITS_NO_SECRETS=1`; preserve existing secret data when unavailable.
 
 ## Don'ts
 

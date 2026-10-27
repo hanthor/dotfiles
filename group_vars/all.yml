@@ -227,11 +227,6 @@ flatpak_remotes:
 # Bitwarden item name that holds Firefox Accounts credentials + TOTP
 fxa_bw_item: "accounts.firefox.com"
 fxa_bw_username: "jreilly1821@gmail.com"
-# Browsers to sign in to via FxA (skips any not installed on the host)
-fxa_browsers:
-  - zen
-  - firefox
-  - firefox-flatpak
 # ── GNOME Extensions ───────────────────────────────────────────────
 # Canonical list of enabled extensions, synced across fleet desktops.
 # To refresh from a source machine:

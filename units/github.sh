@@ -12,6 +12,42 @@ if ! command -v gh >/dev/null 2>&1; then
   note "SKIPPED: gh not installed (just packages)"
   exit 0
 fi
+if [ "${UNITS_CHECK:-0}" = 1 ]; then
+  check_known_hosts() {
+    local dir="$HOME/.ssh" path="$HOME/.ssh/known_hosts" mode rc
+    if [ ! -e "$dir" ]; then
+      note "would create $dir (mode 0700)"
+    elif [ ! -d "$dir" ] || ! mode="$(stat -Lc '%a' "$dir")"; then
+      note "FAIL  cannot inspect $dir"
+      return 1
+    elif [ "$mode" != 700 ]; then
+      note "would set $dir mode 0700"
+    fi
+    if [ ! -e "$path" ]; then
+      note "would add GitHub host key to $path"
+      return 0
+    fi
+    if [ ! -f "$path" ]; then
+      note "FAIL  cannot inspect $path"
+      return 1
+    fi
+    grep -qF "$GITHUB_HOST_KEY" "$path" 2>/dev/null; rc=$?
+    case "$rc" in
+      0) note "ok    GitHub host key" ;;
+      1) note "would add GitHub host key to $path" ;;
+      *) note "FAIL  cannot inspect $path"; return 1 ;;
+    esac
+  }
+  step "check github known_hosts" check_known_hosts
+  if [ "${UNITS_NO_SECRETS:-0}" = 1 ]; then
+    note "SKIPPED: GitHub authentication and SSH key registration (--no-secrets)"
+  else
+    note "FAIL  cannot safely inspect GitHub authentication or registered keys: gh may prompt via the OS keyring and Bitwarden reads may persist audit events"
+    UNIT_FAILED=1
+  fi
+  finish
+fi
+
 
 known_hosts() {
   install -d -m 0700 "$HOME/.ssh" || return 1

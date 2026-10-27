@@ -1,0 +1,12 @@
+[Unit]
+Description=Renew Tailscale TLS certificate
+After=tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/tailscale cert \
+  --cert-file /etc/ssl/tailscale/cert.pem \
+  --key-file /etc/ssl/tailscale/key.pem \
+  --min-validity 720h \
+  {{ inventory_hostname }}.{{ tailscale_domain }}

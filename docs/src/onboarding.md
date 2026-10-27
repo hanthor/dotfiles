@@ -60,13 +60,13 @@ curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.s
 ```
 
 The bootstrap script:
-1. Ensures python, git, uv and Ansible, then clones the dotfiles repo from [GitHub](https://github.com/hanthor/dotfiles)
-2. Registers the machine in `inventory.yml` if needed (prompts for the type when `--type` isn't given)
-3. Writes `/etc/dotfiles-machine` so the playbook can self-identify, sets the hostname, sets up sudo and Tailscale
-4. Runs `site.yml --skip-tags secrets`, then all bash units with `--no-secrets` (installing [Homebrew](https://brew.sh/) and core packages among the rest)
-5. Unlocks and syncs Bitwarden, runs `site.yml --tags secrets`, then the `omp` and `secrets` units, and pushes any inventory changes
+1. Ensures Python and git, then clones the dotfiles repo from [GitHub](https://github.com/hanthor/dotfiles).
+2. Registers the machine in `inventory.yml` if needed (prompts for the type when `--type` isn't given).
+3. Writes `/etc/dotfiles-machine`, sets the hostname, and sets up sudo and Tailscale.
+4. Runs native units with `--no-secrets` (including package installation).
+5. Resolves and syncs Bitwarden, runs the `omp,secrets` unit selection, and pushes any inventory changes.
 
-Each phase runs its units even if Ansible fails. Bootstrap continues to Phase 2 when possible, but exits non-zero if either phase or Bitwarden setup fails.
+Bootstrap continues to the secret phase when possible, but reports failure if a phase or Bitwarden setup fails. Review unit output: skips and partial results are not proof that every host component is configured.
 
 ## After Bootstrap Completes
 
@@ -81,11 +81,11 @@ just apply
 ```
 
 **Why this step matters:**
-- Bootstrap's first phase deliberately skips secrets; the second phase only covers secret-tagged roles and the broker unit.
-- `just apply` reruns the full playbook and units with secrets and completes any work that was skipped.
-- This distributes SSH keys across the fleet, registers with GitHub and Tailscale, and sets up daily/on-login automation.
+- Bootstrap's first phase disables secrets; the second selects secret-capable units and omp.
+- `just apply` reruns the full native selection with secrets where available.
+- This can distribute SSH keys, register with GitHub and Tailscale, and set up daily/on-login automation on eligible hosts.
 
-Do **not** edit `host_vars/<name>.yml` before the first `just apply` — bootstrap sets sensible defaults, and `just apply` will pull in critical secrets (SSH keys, GitHub tokens, Tailscale auth). Any per-machine customizations can follow once the first apply succeeds; the `skip_*` flags that turn individual roles off are listed in [Architecture → Skip Flags](architecture.md#skip-flags).
+Host-specific gates and overrides belong in `host_vars/<name>.yml`; consult [Architecture](architecture.md#conditional-execution) and the unit implementations when setting them.
 
 The details of what happens during this first apply are covered in the [Post-Onboarding](#post-onboarding) section below.
 
@@ -96,7 +96,7 @@ The details of what happens during this first apply are covered in the [Post-Onb
 | Type | Group | Has Desktop? | Notes |
 |------|-------|-------------|-------|
 | `desktop` | desktop | Yes | Laptops are desktops too — set `is_laptop: true` in `host_vars` |
-| `server` | server | No | Gets `server_hardening`; desktop roles skip automatically |
+| `server` | server | No | Gets `server_hardening`; desktop units skip automatically |
 | `vps` | vps | No | Also skips `syncthing`, `proxy`, `tailscale_cert` |
 
 There is no `laptop` type — a type that doesn't match a group leaves the host in
@@ -105,12 +105,12 @@ hand.
 
 ## Post-Onboarding
 
-1. The `ssh_keys` role generates a fresh ed25519 key on the new host, then pushes the pub key up to Bitwarden as `james@<hostname>`.
-2. The new host now needs to **trust the rest of the fleet, and the rest of the fleet needs to trust it**. The first apply on the new host downloads every other host's pub key into `~/.ssh/authorized_keys`. The other hosts will pick up the new host's pub key on *their* next full apply (`dots-apply` on each — the timer runs without secrets, so it skips `ssh_keys`).
-3. The `github` role registers the SSH key with GitHub for both auth and commit signing.
-4. The `tailscale` role joins the machine to the [Tailscale](https://tailscale.com/) network using the auth key in BW.
+1. The `ssh-keys` unit restores the host's ed25519 key from Bitwarden, or generates one if a successful unlocked vault listing has no item, and syncs it as `<login>@<machine>`.
+2. The unit merges available vault public keys into `~/.ssh/authorized_keys` without removing user entries. Other hosts pick up a new vault key on their next unlocked apply. The separate `ssh-mesh` unit also merges committed fleet public keys during no-secrets applies.
+3. The `github` unit can register the SSH key with GitHub for authentication and signing.
+4. The `tailscale` unit joins a disconnected eligible machine using its Bitwarden key.
 5. The daily `dotfiles-update.timer` (servers) or on-login service (laptops) runs `just apply-nosecrets` — secrets stay on the manual `dots-apply` cadence because BW can't be unlocked non-interactively.
 
 Run `just doctor` on the new host once it's bootstrapped — it'll tell you whether BW is unlocked, whether the timer is wired up, and the timestamp of the last successful apply.
 
-See [Architecture](architecture.md) for how the playbook runs on each machine and [Secrets with Bitwarden](bitwarden.md) for the details of the BW handshake.
+See [Architecture](architecture.md) for native unit execution and [Secrets with Bitwarden](bitwarden.md) for the BW handshake.

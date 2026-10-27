@@ -8,13 +8,11 @@ these from memory or commit logs more than twice, add it here.
 ## I rotated my SSH key on host X — how do I propagate it?
 
 An intentional local rotation is explicit: when the local public key differs
-from the Bitwarden item, the `ssh_keys` role leaves Bitwarden unchanged and
-warns. This protects the stored key if a new key was generated while the vault
-was locked. To publish an intentional rotation, on host X with BW unlocked:
+from the Bitwarden item, the `ssh-keys` unit leaves Bitwarden unchanged and
+warns. To publish an intentional rotation, on host X with BW unlocked:
 
 ```bash
-# `dots-apply` forwards these arguments to the Ansible playbook.
-dots-apply -e ssh_keys_force_push=true
+SSH_KEYS_FORCE_PUSH=true just apply-tags ssh_keys
 ```
 
 That updates the `james@<hostname>` item in Bitwarden and refreshes this host's
@@ -46,22 +44,22 @@ themselves (`scripts/bw-resolve.sh remote`), but that can fail — e.g. no
 that host:
 
 ```bash
-# From your laptop, let bw-resolve.sh handle unlock internally:
-just apply-remote-tags <host> bitwarden,ssh_keys
+# Resolve and apply the SSH key selection on the remote host:
+just apply-remote-tags <host> ssh_keys
 ```
 
 The `scripts/bw-resolve.sh remote <host>` script (invoked internally) will
 SSH to the remote, ensure Bitwarden is logged in and unlocked (either via
 stored API key, master password from your local vault, or interactive prompt),
-and return the session token. The `bitwarden` role will then confirm the vault
-is unlocked, and downstream secrets roles will run.
+and return the session token. The remote apply validates and syncs it before
+secret-capable units run; if resolution fails, they run with secrets disabled.
 
 ---
 
 ## The timer apply failed last night — what do I do?
 
-The user-level `dotfiles-update.service` runs `just apply-nosecrets` daily,
-which now writes `~/.cache/dotfiles/last-apply.json`. Quickest signal:
+The user-level `dotfiles-update.service` runs `just apply-nosecrets` on its
+configured schedule or laptop login, and records `~/.cache/dotfiles/last-apply.json`.
 
 ```bash
 just doctor                 # `→ Last apply` line shows status + age
@@ -76,9 +74,9 @@ journalctl --user -u dotfiles-update.service -e --no-pager | tail -80
 The most common causes:
 
 - **git pull failure** (DNS / network blip): the recipe tolerates it with
-  `git pull --ff-only || true`; the ansible run continues with whatever's
+  `git pull --ff-only || true`; native units continue with whatever is
   on disk. If the working tree drifted from main, fix manually.
-- **a role started failing after a config change**: re-run interactively
+- **a unit started failing after a config change**: re-run interactively
   with `just apply-nosecrets` and read the failure.
 - **`mkswap: /swapfile is mounted`** (resolved): `server_hardening` now
   gates `mkswap`/`swapon` on `swapon --show`, so an already-active swapfile
@@ -97,11 +95,11 @@ Fix is to re-login (downloads a clean vault):
 ```bash
 bw logout
 bw login              # email + master password + 2FA
-export BW_SESSION=$(scripts/bw-resolve.sh local)
+eval "$(scripts/bw-resolve.sh local)"
 ```
 
-The `bitwarden` role now has a 15 s timeout on `bw sync`, which prevents the
-race in most cases going forward.
+Apply recipes put a 15-second timeout on `bw sync`; this bounds a stalled sync
+but is not a guarantee against concurrent Bitwarden CLI races.
 
 ---
 
@@ -117,23 +115,23 @@ curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.s
 
 # 3. After bootstrap finishes, on the new machine, get BW into a usable state:
 bw login                            # if not logged in
-export BW_SESSION=$(scripts/bw-resolve.sh local)  # unlocks vault
+eval "$(scripts/bw-resolve.sh local)"  # unlocks vault
 
 # 4. Run the full apply (this pushes the new machine's pubkey to BW):
 dots-apply
 
-# 5. Back on each existing host (the no-secrets timer skips ssh_keys):
+# 5. Back on each existing host (no-secrets applies skip vault synchronization):
 dots-apply                          # picks up the new host's pubkey
 ```
 
-Verify with `just doctor` on the new host — should be all green and report
-"last apply <minutes> ago".
+Inspect `just doctor` and the unit output on the new host; partial or skipped
+work may need attention even when the apply exits successfully.
 
 ---
 
 ## I added a flatpak / brew package — how do I roll it out?
 
-Edit the package list — `system_flatpaks` in `roles/flatpak/vars/main.yml`,
+Edit the package list — `system_flatpaks` in `units/flatpak-packages.yml`,
 or the brew lists (`core_brews`, `desktop_brews`, …) in `group_vars/all.yml`,
 which render the Brewfile — then commit, push. Every host picks it up on the next
 `dots-apply` or the next timer fire.
@@ -146,18 +144,13 @@ just apply-tags packages
 
 ---
 
-## I want to disable a role on one host
+## I want to disable a unit on one host
 
-In that host's `host_vars/<name>.yml`, add a `skip_<role>: true` line. The
-flags `site.yml` actually checks:
-
-`skip_sudo`, `skip_ssh_mesh`, `skip_kube`, `skip_forgejo`, `skip_flatpak`,
-`skip_bluefin`, `skip_gnome`, `skip_zen_browser`, `skip_pipewire_audio`,
-`skip_syncthing`, `skip_systemd`, `skip_proxy`, `skip_tailscale_cert`.
-
-Roles without a flag are gated some other way — `server_hardening` on
-`server`/`vps` membership, `termux_packages` on `termux_hosts`, many roles on
-`machine_profile != 'vm-test'`. Grep `site.yml`.
+Many units inspect `skip_*` flags in `host_vars/<name>.yml`; others use
+inventory membership, `machine_profile`, platform detection or an enable flag.
+Read the relevant unit and [Architecture](architecture.md#conditional-execution)
+before setting a flag. Retired `matrix` and `telengana` are skipped by the shared
+unit library; nothing on either host may be restarted.
 
 ---
 

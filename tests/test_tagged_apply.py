@@ -31,9 +31,7 @@ case "$*" in
   *) exit 1 ;;
 esac
 ''')
-    write_stub(bindir, "ansible-playbook", 'printf "ansible %s\\n" "$*" >> "$CALLS"\nexit "${ANSIBLE_RC:-0}"\n')
     write_stub(bindir, "git", 'exit 0\n')
-    write_stub(bindir, "ansible-galaxy", 'exit 0\n')
     write_stub(bindir, "sudo", 'exit 0\n')
     write_stub(bindir, "ssh", 'printf "ssh\\n" >> "$CALLS"\n')
     write_stub(scripts, "bw-resolve.sh", '''
@@ -50,14 +48,13 @@ def run_apply(env, repo, *args):
     return subprocess.run(["just", "-f", str(repo / "Justfile"), *args], env=env, capture_output=True, text=True)
 
 
-def test_secret_tag_validates_syncs_and_initializes_legacy_roles(apply_env):
+def test_secret_tag_validates_syncs_and_does_not_expose_session(apply_env):
     env, repo, log = apply_env
     result = run_apply(env, repo, "apply-tags", "omp,kube")
     assert result.returncode == 0, result.stderr
     calls = log.read_text().splitlines()
     assert calls[:4] == ["bw unlock --check", "resolve", "bw unlock --check", "bw sync"]
-    assert "--tags omp,kube,bitwarden" in calls[4]
-    assert calls[5] == "units --tags omp,kube"
+    assert calls[4] == "units --tags omp,kube"
     assert "valid-session" not in result.stdout + result.stderr + "\n".join(calls)
 
 
@@ -66,9 +63,7 @@ def test_nonsecret_tag_does_not_prompt_or_sync(apply_env):
     result = run_apply(env, repo, "apply-tags", "git")
     assert result.returncode == 0, result.stderr
     calls = log.read_text().splitlines()
-    assert len(calls) == 2
-    assert "--tags git" in calls[0]
-    assert calls[1] == "units --tags git"
+    assert calls == ["units --tags git"]
 
 
 def test_remote_nonsecret_tag_does_not_resolve_vault(apply_env):
@@ -84,7 +79,6 @@ def test_failed_sync_runs_nonsecret_work_and_fails(apply_env):
     result = run_apply(env, repo, "apply-tags", "omp,kube")
     assert result.returncode != 0
     calls = log.read_text().splitlines()
-    assert "--skip-tags secrets" in calls[-2]
     assert calls[-1] == "units --tags omp,kube --no-secrets"
 
 
@@ -94,7 +88,6 @@ def test_full_apply_skips_vault_units_when_unlock_fails(apply_env):
     result = run_apply(env, repo, "apply")
     assert result.returncode == 0, result.stderr
     calls = log.read_text().splitlines()
-    assert "--skip-tags secrets" in calls[-2]
     assert calls[-1] == "units --no-secrets"
 
 

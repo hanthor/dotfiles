@@ -1,19 +1,5 @@
 # tailscale_cert
 
-**Tags:** `services`, `tailscale_cert`  
-**Secrets needed:** No  
-**Runs on:** All except VPS
+`units/tailscale-cert.sh` obtains a Tailscale certificate for `<machine>.<tailscale_domain>` and installs a systemd renewal service and timer from `units/tailscale-cert/`, rendered by `units/service-templates.py`. It checks whether `/etc/ssl/tailscale/cert.pem` remains valid for 30 days; otherwise it runs `tailscale cert` with a 720-hour minimum validity. The certificate is root-owned 0644 and its private key root-owned 0640.
 
-Fetches and deploys Tailscale TLS certificates for HTTPS on `*.manatee-basking.ts.net`.
-
-## What It Does
-
-1. Creates certificate storage directory
-2. Fetches TLS certificates from Tailscale for the machine's MagicDNS name
-3. Installs certificates where Caddy and other services can use them
-
-## Notes
-
-- Tailscale provides free TLS certificates for nodes on your tailnet
-- Certificates auto-renew — no Let's Encrypt needed for internal services
-- The Caddy proxy uses these certificates for all `*.manatee-basking.ts.net` services
+The unit requires `yq`, Python, OpenSSL, Tailscale, systemd, and root or noninteractive `sudo -n`. It does not retrieve a Bitwarden secret. The host domain overrides `group_vars/all.yml`. It skips inventory VPSes, retired `matrix`/`telengana`, `skip_tailscale_cert: true`, and `machine_profile: vm-test`. The timer is enabled only after both renewal units are installed successfully.

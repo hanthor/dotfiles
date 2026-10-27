@@ -26,6 +26,10 @@ bw_session() {
   return 0
 }
 MACHINE="${DOTFILES_MACHINE:-$(cat /etc/dotfiles-machine 2>/dev/null || hostname)}"
+# Package upgrades can restart services indirectly, so skip every unit here.
+case "$MACHINE" in
+  matrix|telengana) note "SKIPPED: retired VPS must not be modified"; exit 0 ;;
+esac
 # host_var KEY [DEFAULT]: KEY from host_vars/$MACHINE.yml (flat `key: value` lines only).
 host_var() {
   local v

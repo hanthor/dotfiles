@@ -3,9 +3,8 @@
 
 Used by the Justfile's `_online_hosts`. Tailscale failure → empty output.
 
-`--peers` prints just the online tailnet names, one per line, and needs
-nothing but this file: roles/ssh_mesh copies it to the target with the
-`script` module, so both callers share one matching rule (online_peers).
+`--peers` prints just the online tailnet names, one per line; both callers
+share the same matching rule (online_peers).
 """
 import json
 import os

@@ -1,4 +1,4 @@
-# Dotfiles management with Ansible
+# Fleet configuration with mise, bash units and chezmoi
 # Usage: just <recipe>
 
 dotfiles_dir := env("HOME") / ".local/share/dotfiles"
@@ -8,48 +8,32 @@ export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" +
 # Resolve online fleet hosts: intersect tailscale online peers with inventory (excluding vps + self)
 _online_hosts := shell('python3 "$1"', justfile_directory() / "scripts/online_hosts.py")
 
-# Every recipe below runs site.yml against THIS machine over the local
-# connection. The flags are not optional decoration: `-l`/`-e target` pin the
-# play to this host, and the ansible_connection/ansible_host overrides keep
-# Ansible from re-resolving the inventory address and SSHing to itself.
-# Defined once so a change to how the fleet addresses itself is a one-line
-# edit instead of eight.
-_play := "ansible-playbook --connection=local -l " + machine + " -e target=" + machine + " -e ansible_connection=local -e ansible_host=127.0.0.1"
-_secret_tag_pattern := "secrets|bitwarden|ssh|ssh_keys|github|tailscale|kube|forgejo|registry|atuin|ai|omp"
+_secret_tag_pattern := "secrets|ssh|ssh_keys|github|tailscale|kube|forgejo|registry|atuin|ai|omp|desktop|browser|zen_browser"
 
 # Apply all config to this machine (unlocks BW interactively if needed)
 apply *args:
     #!/usr/bin/env bash
-    set -euo pipefail
-    cd {{ dotfiles_dir }}
-    git pull --ff-only
-    ansible-galaxy collection install -r requirements.yml
-
-    BECOME_ARGS=""
-    if ! sudo -n true 2>/dev/null; then
-      echo "Sudo requires a password. Adding --ask-become-pass..."
-      BECOME_ARGS="--ask-become-pass"
-    fi
-
+    set -uo pipefail
+    cd {{ dotfiles_dir }} || exit 1
+    git pull --ff-only || exit $?
+    for arg in {{ args }}; do
+      case "$arg" in --upgrade) export DOTFILES_UPGRADE=1 ;; *) echo "Unknown apply option: $arg" >&2; exit 2 ;; esac
+    done
     SKIP_TAGS=""
-    if bw_env=$(scripts/bw-resolve.sh local); then
-      eval "$bw_env"
-    else
-      echo "Continuing without secrets (run scripts/bw-unlock.sh manually for details)..."
-      SKIP_TAGS="secrets"
-    fi
-    rc=0
     unit_args=()
-    if [ -n "$SKIP_TAGS" ]; then
-      unit_args+=(--no-secrets)
-      {{ _play }} site.yml --skip-tags "$SKIP_TAGS" $BECOME_ARGS {{ args }} || rc=$?
+    if bw_env=$(scripts/bw-resolve.sh local) && eval "$bw_env" &&
+       [ -n "${BW_SESSION:-}" ] && bw unlock --check >/dev/null 2>&1 &&
+       timeout 15 bw sync >/dev/null; then
+      :
     else
-      {{ _play }} site.yml $BECOME_ARGS {{ args }} || rc=$?
+      echo "Bitwarden unavailable or sync failed; continuing without secrets." >&2
+      unset BW_SESSION
+      SKIP_TAGS=secrets
+      unit_args+=(--no-secrets)
     fi
-    urc=0; scripts/run-units.sh "${unit_args[@]}" || urc=$?
-    [ "$rc" -ne 0 ] || rc=$urc
+    rc=0; scripts/run-units.sh "${unit_args[@]}" || rc=$?
     scripts/record-apply.py "$rc" apply "$SKIP_TAGS"
-    exit $rc
+    exit "$rc"
 
 # Apply only specific tags (e.g. just apply-tags kube,shell)
 apply-tags tags:
@@ -57,54 +41,42 @@ apply-tags tags:
     set -uo pipefail
     cd {{ dotfiles_dir }} || exit 1
     rc=0
-    ansible_tags="{{ tags }}"
     unit_args=(--tags "{{ tags }}")
-    skip_args=()
     needs_secrets=0
     IFS=',' read -ra tag_list <<< "{{ tags }}"
     for tag in "${tag_list[@]}"; do
-      case "$tag" in
-        {{ _secret_tag_pattern }}) needs_secrets=1 ;;
-      esac
+      case "$tag" in {{ _secret_tag_pattern }}) needs_secrets=1 ;; esac
     done
     if [ "$needs_secrets" -eq 1 ]; then
-      # bw-unlock accepts an environment session as-is; reject stale ones first.
-      if [ -n "${BW_SESSION:-}" ] && ! bw unlock --check >/dev/null 2>&1; then
-        unset BW_SESSION
-      fi
+      if [ -n "${BW_SESSION:-}" ] && ! bw unlock --check >/dev/null 2>&1; then unset BW_SESSION; fi
       if bw_env=$(scripts/bw-resolve.sh local) && eval "$bw_env" &&
          [ -n "${BW_SESSION:-}" ] && bw unlock --check >/dev/null 2>&1 &&
          timeout 15 bw sync >/dev/null; then
-        # Secret roles selected by their own tag still need bw_unlocked set.
-        ansible_tags="$ansible_tags,bitwarden"
+        :
       else
         echo "Bitwarden unavailable or sync failed; skipping secrets." >&2
         unset BW_SESSION
-        skip_args=(--skip-tags secrets)
         unit_args+=(--no-secrets)
         rc=1
       fi
     fi
-    arc=0
-    {{ _play }} site.yml --tags "$ansible_tags" "${skip_args[@]}" || arc=$?
-    [ "$rc" -ne 0 ] || rc=$arc
     urc=0; scripts/run-units.sh "${unit_args[@]}" || urc=$?
     [ "$rc" -ne 0 ] || rc=$urc
     scripts/record-apply.py "$rc" apply-tags "{{ tags }}"
-    exit $rc
+    exit "$rc"
 
 # Apply without unlocking Bitwarden — fast path for the daily timer and `dots`
 apply-nosecrets *args:
     #!/usr/bin/env bash
     set -uo pipefail
-    cd {{ dotfiles_dir }}
+    cd {{ dotfiles_dir }} || exit 1
     git pull --ff-only || true
-    rc=0
-    {{ _play }} site.yml --skip-tags secrets {{ args }} || rc=$?
-    urc=0; scripts/run-units.sh --no-secrets || urc=$?
-    [ "$rc" -ne 0 ] || rc=$urc
+    for arg in {{ args }}; do
+      case "$arg" in --upgrade) export DOTFILES_UPGRADE=1 ;; *) echo "Unknown apply option: $arg" >&2; exit 2 ;; esac
+    done
+    rc=0; scripts/run-units.sh --no-secrets || rc=$?
     scripts/record-apply.py "$rc" apply-nosecrets secrets
-    exit $rc
+    exit "$rc"
 
 # Apply to a remote machine with specific tags (e.g. just apply-remote-tags bihar kube,shell)
 apply-remote-tags name tags:
@@ -131,18 +103,11 @@ apply-remote-tags name tags:
 
 # Verify (and self-heal) passwordless SSH to all online fleet members
 mesh-check:
-    cd {{ dotfiles_dir }} && {{ _play }} site.yml --tags mesh_check
+    cd {{ dotfiles_dir }} && scripts/run-units.sh --tags mesh_check
 
 # Apply only dotfile configs (shell, git, tmux, etc.)
 dotfiles:
-    #!/usr/bin/env bash
-    set -uo pipefail
-    cd {{ dotfiles_dir }}
-    rc=0
-    {{ _play }} site.yml --tags dotfiles || rc=$?
-    urc=0; scripts/run-units.sh --tags dotfiles || urc=$?
-    [ "$rc" -ne 0 ] || rc=$urc
-    exit $rc
+    cd {{ dotfiles_dir }} && scripts/run-units.sh --tags dotfiles
 
 # Run the bash units (units/*.sh) in parallel via mise, e.g. `just units --tags omp`
 units *args:
@@ -150,7 +115,7 @@ units *args:
 
 # Apply only packages (Homebrew + Flatpak)
 packages:
-    cd {{ dotfiles_dir }} && {{ _play }} site.yml --tags packages
+    cd {{ dotfiles_dir }} && scripts/run-units.sh --tags packages
 
 # Apply to a remote machine, forwarding your local BW session over SSH
 apply-remote name *args:
@@ -438,7 +403,7 @@ update *args:
 
 # Pull latest, apply, and upgrade all packages
 update-all:
-    just update -e upgrade=true
+    just update --upgrade
 
 # Sync current Homebrew state back to dotfiles variables
 sync-brews:
@@ -453,8 +418,8 @@ flatpak-install app:
     set -euo pipefail
     flatpak install --system -y flathub {{ app }}
     cd {{ dotfiles_dir }}
-    yq -i '.system_flatpaks += ["{{ app }}"]' roles/flatpak/vars/main.yml
-    git add roles/flatpak/vars/main.yml
+    yq -i '.system_flatpaks += ["{{ app }}"]' units/flatpak-packages.yml
+    git add units/flatpak-packages.yml
     git commit -m "flatpak: add {{ app }}"
     git push
 
@@ -470,7 +435,7 @@ nvim-update:
 vim *args:
     nvim {{ args }}
 
-# Lint YAML + Ansible playbook (uses tools from Brewfile when available)
+# Lint YAML and check native unit shell syntax
 lint:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -482,17 +447,14 @@ lint:
     else
       echo "yamllint not installed (brew install yamllint) — skipping"
     fi
-    if command -v ansible-lint >/dev/null 2>&1; then
-      echo "→ ansible-lint"
-      ansible-lint site.yml || rc=$?
-    else
-      echo "ansible-lint not installed (uv tool install ansible-lint) — skipping"
-    fi
+    for file in bootstrap.sh scripts/run-units.sh units/*.sh; do
+      bash -n "$file" || rc=$?
+    done
     exit $rc
 
-# Dry-run apply (no changes) — quick way to see what would change
+# Inspect native configuration without applying changes
 check *args:
-    cd {{ dotfiles_dir }} && {{ _play }} site.yml --check --diff {{ args }}
+    cd {{ dotfiles_dir }} && UNITS_CHECK=1 scripts/run-units.sh {{ args }}
 
 # Log omp into all providers (OAuth prompts only for missing ones)
 omp-login:
@@ -513,7 +475,7 @@ doctor:
     echo "→ Machine identity"
     if [ -f /etc/dotfiles-machine ]; then pass "machine: $(cat /etc/dotfiles-machine)"; else warn "/etc/dotfiles-machine missing — run bootstrap"; fi
     echo "→ Core binaries"
-    for bin in brew bw gh tailscale ansible-playbook just mise chezmoi; do
+    for bin in brew bw gh tailscale just mise chezmoi yq python3; do
       if command -v "$bin" >/dev/null 2>&1; then pass "$bin"; else warn "$bin missing"; fi
     done
     echo "→ Tailscale"

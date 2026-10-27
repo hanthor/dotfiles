@@ -1,0 +1,5 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Run at boot via Termux:Boot and periodically via Android's JobScheduler.
+# Termux:Boot and Termux:API are separate companion apps.
+termux-wake-lock
+sshd

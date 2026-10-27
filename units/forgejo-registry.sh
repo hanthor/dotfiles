@@ -15,6 +15,10 @@ if ! command -v podman >/dev/null 2>&1; then
   note "SKIPPED: podman not installed"
   exit 0
 fi
+if [ "${UNITS_CHECK:-0}" = 1 ]; then
+  note "FAIL  cannot safely inspect $FORGEJO_REGISTRY login: Podman credential helpers may prompt; registry check unsupported"
+  exit 1
+fi
 if podman login --get-login "$FORGEJO_REGISTRY" >/dev/null 2>&1; then
   note "ok    already logged in to $FORGEJO_REGISTRY"
   exit 0

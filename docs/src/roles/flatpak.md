@@ -1,39 +1,12 @@
 # flatpak
 
+**Unit:** `units/flatpak.sh`  
 **Tags:** `packages`, `desktop`, `flatpak`  
 **Secrets needed:** No  
-**Runs on:** Desktop group only (`skip_flatpak: false`)
+**Runs on:** desktops, except `skip_flatpak: true` or `machine_profile: vm-test`.
 
-Installs and manages [Flatpak](https://flatpak.org/) applications from [Flathub](https://flathub.org/).
+The unit requires Flatpak and `yq`. It reads system remotes and `system_flatpaks` from `units/flatpak-packages.yml`, repairs a dangling `/var/lib/flatpak` symlink, adds remotes, removes system Firefox and Thunderbird Flatpaks, and installs missing applications from Flathub. A failed batch is retried individually. `DOTFILES_UPGRADE=1` or `true` requests a best-effort system update. System operations require root or non-interactive sudo.
 
-## What It Does
+Host-specific `user_flatpak_remotes` and `user_flatpaks` in `host_vars/<machine>.yml` are applied with `--user`, separately from the system store. For `himachal`, these configure FlatPark and user Flathub, then install `org.tunaos.blueshell`, `org.tunaos.tavern`, and `org.tunaos.compass` from FlatPark. An already installed user app with a different origin is preserved rather than switched. This installation does not configure or unlock Compass's keyring or establish an application login; those depend on the user's session and app setup.
 
-1. Fixes broken Flatpak symlinks if present
-2. Adds the Flathub remote
-3. Removes unwanted system flatpaks (Firefox, Thunderbird — replaced by Zen)
-4. Installs missing flatpaks in batch (fast path), falling back to individual installs
-5. Updates all flatpaks when `upgrade: true` is set
-6. Creates Chromium wrapper scripts for CLI compatibility
-
-## Package List
-
-Defined in `roles/flatpak/vars/main.yml` as `system_flatpaks` (the Flathub remote is in `flatpak_remotes`, also set in `group_vars/all.yml`). Key apps:
-
-| App | Flatpak ID |
-|-----|-----------|
-| Zen Browser | `app.zen_browser.zen` |
-| VS Code | `com.visualstudio.code` |
-| Ungoogled Chromium | `com.github.Eloston.UngoogledChromium` |
-| Flatseal | `com.github.tchx84.Flatseal` |
-| GNOME apps | Calculator, Calendar, Clocks, Contacts, Loupe, etc. |
-| Vesktop | `dev.vencord.Vesktop` |
-| Obsidian | `md.obsidian.Obsidian` |
-
-## Wrapper Scripts
-
-Creates `~/.local/bin/chromium`, `~/.local/bin/google-chrome`, and `~/.local/bin/chromium-browser` that exec into the Ungoogled Chromium flatpak — tools that hardcode `google-chrome` or `chromium-browser` still work.
-
-## Notes
-
-- Installs system-wide (`--system`) with `become: true`
-- Batch install tolerates partial failures — individual retries catch stragglers
+The unit also writes `chromium`, `chromium-browser`, `google-chrome`, and `google-chrome-stable` wrappers in `~/.local/bin`, invoking `org.chromium.Chromium` via Flatpak. Wrappers are attempted even if Flatpak is unavailable.

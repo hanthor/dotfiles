@@ -7,9 +7,53 @@ set -uo pipefail
 # shellcheck source=units/kube.conf
 . "$DOTFILES_DIR/units/kube.conf"
 
+if [ "${UNITS_CHECK:-0}" = 1 ] && ! skipped_by_profile skip_kube; then
+  desktop="${DOTFILES_IS_DESKTOP:-$(host_var is_desktop)}"
+  case "$desktop" in
+    1|true|0|false) ;;
+    *)
+      if ! command -v yq >/dev/null 2>&1 || ! desktop="$(yq ".all.children.desktop.hosts | has(\"$MACHINE\")" "$DOTFILES_DIR/inventory.yml" 2>/dev/null)"; then
+        note "FAIL  cannot inspect desktop inventory (yq required)"
+        exit 1
+      fi
+      case "$desktop" in true|false) ;; *) note "FAIL  invalid desktop inventory result"; exit 1 ;; esac ;;
+  esac
+  DOTFILES_IS_DESKTOP="$desktop"
+fi
+
 if ! is_desktop || skipped_by_profile skip_kube; then
   note "SKIPPED: not a desktop (or skip_kube / vm-test)"
   exit 0
+fi
+if [ "${UNITS_CHECK:-0}" = 1 ]; then
+  if [ "${UNITS_NO_SECRETS:-0}" = 1 ]; then
+    note "SKIPPED: secrets disabled; existing kube/talos configs left untouched"
+    exit 0
+  fi
+  for dir in "$HOME/.kube" "$HOME/.talos"; do
+    if [ ! -e "$dir" ]; then
+      note "PARTIAL: $dir absent; apply would create it if the vault is unlocked"
+    elif [ ! -d "$dir" ] || ! mode="$(stat -Lc '%a' "$dir")"; then
+      note "FAIL  cannot inspect directory $dir"
+    elif [ "$mode" != 700 ]; then
+      note "PARTIAL: $dir mode differs from 0700; apply would change it if the vault is unlocked"
+    else
+      note "ok    $dir mode 0700"
+    fi
+  done
+  for path in "$HOME/.kube/config" "$HOME/.talos/config" "$HOME/.kube/config-aws-migration" "$HOME/.talos/config-aws-migration"; do
+    if [ -L "$path" ] || [ ! -e "$path" ]; then
+      note "PARTIAL: $path absent or symlinked; apply would replace it if the note is available"
+    elif [ ! -f "$path" ] || ! mode="$(stat -c '%a' "$path")"; then
+      note "FAIL  cannot inspect $path"
+    elif [ "$mode" != 600 ]; then
+      note "PARTIAL: $path mode differs from 0600; apply would replace it if the note is available"
+    else
+      note "ok    $path mode 0600"
+    fi
+  done
+  note "FAIL  cannot compare kube/talos notes or TLS pin safely: Bitwarden item reads may persist audit events"
+  exit 1
 fi
 s="$(bw_session)"
 if [ -z "$s" ]; then

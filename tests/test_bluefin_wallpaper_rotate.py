@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock, call
 import tempfile
 
 # Import the script's logic (we'll create a testable module from it)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../roles/bluefin_common/files"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../units/bluefin/files"))
 
 
 class WallpaperRotationTests(TestCase):

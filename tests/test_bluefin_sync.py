@@ -12,7 +12,7 @@ import pytest
 
 from conftest import REPO
 
-SRC = REPO / "roles/bluefin_common/files/bluefin-sync.py"
+SRC = REPO / "units/bluefin/files/bluefin-sync.py"
 spec = importlib.util.spec_from_file_location("bluefin_sync", SRC)
 bluefin_sync = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bluefin_sync)

@@ -1,53 +1,7 @@
 # ssh_mesh
 
-Self-healing passwordless SSH mesh across the fleet.
+`units/ssh-mesh.sh` invokes `units/ssh-fleet.py` under the same SSH lock as [ssh_keys](ssh_keys.md). It skips `machine_profile: vm-test` and `skip_ssh_mesh: true`. It merges valid `machine_pubkeys` from `group_vars/all.yml` into `~/.ssh/authorized_keys` without removing existing user or vault entries, and warns if the local public key is missing or stale in git.
 
-## What it does
+The unit probes online tailnet peers selected by `scripts/online_hosts.py --peers`, intersected with `machines` and excluding the local host, `ssh_mesh_exclude`, and inventory VPSes. It uses inventory port and login overrides, bypasses connection multiplexing, and on failure closes an existing mux, attempts a fresh ed25519 host-key scan, and retries. Existing known-host entries are not removed unless the scan succeeds. Persistent failures fail the unit and name the peers.
 
-1. Ensures the machine has an ed25519 keypair (generates if missing).
-2. Merges all fleet public keys from `machine_pubkeys` (in
-   `group_vars/all.yml`) into `~/.ssh/authorized_keys` — non-destructive
-   `lineinfile`, so Bitwarden-managed keys and extras survive.
-3. Warns if this machine's own public key is missing or stale in git.
-4. Probes passwordless SSH to every fleet machine currently **online on
-   the tailnet**: `scripts/online_hosts.py --peers` (the same matcher as
-   `just apply-all`) gives the online MagicDNS names, each inventory host
-   is matched by its `tailnet_name` (or its own name), then ∩ `machines` −
-   `ssh_mesh_exclude` − the `vps` group. Port and login user come from
-   `inventory.yml` (`ansible_port`, `ansible_user`).
-5. On failure: reaps stale ControlMaster sockets, refreshes the host key
-   in `known_hosts` (rebuilt machines), and retries.
-6. Fails the apply if the mesh is still broken, naming the unreachable
-   hosts.
-
-## Why it's self-healing
-
-- Public keys live **in git**, not only in Bitwarden — safe to publish,
-  and every apply replants them. A machine missing a peer's key heals on
-  its next `just apply` or the daily `dotfiles-update.timer`
-  (`apply-nosecrets`), no vault unlock needed.
-- The role is tagged `[ssh, mesh_check]` but **not** `secrets`, so the
-  daily no-secrets timer runs it.
-- Probes bypass SSH multiplexing (`ControlMaster=no`) so a hung mux
-  socket can't fake an outage, and are capped with `timeout`.
-
-## Usage
-
-```bash
-just mesh-check                        # verify + heal from this machine
-just apply-remote-tags HOST mesh_check # verify + heal from HOST
-```
-
-## Adding a machine to the mesh
-
-Add its public key to `machine_pubkeys` in `group_vars/all.yml` and its
-entry to the `machines` dict. If its MagicDNS name differs from its
-inventory name, set `tailnet_name` on it in `inventory.yml`. Machines whose
-sshd isn't always reachable (phones, port-forwarded test VMs) go in
-`ssh_mesh_exclude`: a failed probe fails the apply.
-
-## Relationship to ssh_keys
-
-`ssh_keys` (tag `secrets`) still round-trips **private** keys through
-Bitwarden and rebuilds `authorized_keys` from the vault when unlocked.
-`ssh_mesh` is the vault-free safety net + verification layer on top.
+Normally no vault is needed. If the local identity is missing, the shared implementation consults Bitwarden before restoring or creating it; locked vault or `--no-secrets` defers the identity and probes instead of generating an unmirrored key. Add new public keys to `machine_pubkeys` and host entries to `machines`; configure `tailnet_name` and exclusions where needed.

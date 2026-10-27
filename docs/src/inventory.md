@@ -60,7 +60,7 @@ test_fleet:
 ```
 
 ### `termux_hosts`
-The raw Termux/Android layer on the phone. Gates the `termux_packages` role.
+The raw Termux/Android layer on the phone. Gates the `termux-packages` unit.
 
 ```yaml
 termux_hosts:
@@ -88,17 +88,16 @@ skip_flatpak: true     # Skip Flatpak installs
 skip_gnome: true       # Skip GNOME config
 skip_kube: true        # Skip kubeconfig deploy
 skip_proxy: true       # Skip Caddy proxy
-machine_profile: cli-only  # Free-form profile; `vm-test` skips desktop + service roles
+machine_profile: cli-only  # Free-form profile; some units skip `vm-test`
 web_services: []       # Service links for the local dashboard
 ```
 
-The full set of `skip_*` flags `site.yml` honours: `skip_sudo`, `skip_ssh_mesh`,
-`skip_kube`, `skip_forgejo`, `skip_flatpak`, `skip_bluefin`, `skip_gnome`,
-`skip_zen_browser`, `skip_pipewire_audio`, `skip_syncthing`, `skip_systemd`,
-`skip_proxy`, `skip_tailscale_cert`.
+Units read their own `skip_*` flags and profile settings; see the relevant
+unit under `units/` and [Architecture](architecture.md#conditional-execution).
+The flags are not all interpreted identically.
 
 ## Group Variables
 
 - **`group_vars/all.yml`** — Homebrew package lists, Flatpak remotes, Firefox Accounts config, GNOME extensions, authorized SSH keys
-- **`roles/flatpak/vars/main.yml`** — the `system_flatpaks` list
+- **`units/flatpak-packages.yml`** — the `system_flatpaks` list
 - **`group_vars/vps.yml`** — currently empty

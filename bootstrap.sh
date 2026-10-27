@@ -65,52 +65,6 @@ ensure_git() {
   esac
 }
 
-# ── Install uv ────────────────────────────────────────────────────
-ensure_uv() {
-  if command -v uv &>/dev/null || [ -x "$HOME/.local/bin/uv" ]; then
-    export PATH="$HOME/.local/bin:$PATH"
-    echo "uv found."
-    return
-  fi
-  echo "Installing uv..."
-  # Retry up to 3 times — DNS may not be ready immediately on fresh installs
-  local attempts=0
-  local tmp_install
-  tmp_install=$(mktemp)
-  while [ $attempts -lt 3 ]; do
-    if curl -LsSf --max-time 30 https://astral.sh/uv/install.sh -o "$tmp_install" && [ -s "$tmp_install" ] && sh "$tmp_install"; then
-      rm -f "$tmp_install"
-      export PATH="$HOME/.local/bin:$PATH"
-      return
-    fi
-    attempts=$((attempts + 1))
-    echo "uv install attempt $attempts failed, retrying in 5s..."
-    sleep 5
-  done
-  rm -f "$tmp_install"
-  # Fallback: install via pip3
-  echo "astral.sh unreachable, falling back to pip3 install uv..."
-  pip3 install --user uv
-  export PATH="$HOME/.local/bin:$PATH"
-}
-
-# ── Install Ansible ───────────────────────────────────────────────
-ensure_ansible() {
-  for p in "$HOME/.local/bin" "/home/linuxbrew/.linuxbrew/bin"; do
-    if [ -x "$p/ansible-playbook" ]; then
-      export PATH="$p:$PATH"
-      echo "Ansible found in $p."
-      return
-    fi
-  done
-  if command -v ansible-playbook &>/dev/null; then
-    echo "Ansible found."
-    return
-  fi
-  echo "Installing Ansible via uv..."
-  uv tool install --with ansible ansible-core
-  export PATH="$HOME/.local/bin:$PATH"
-}
 
 # ── Install Tailscale + join Tailnet ──────────────────────────────
 ensure_tailscale() {
@@ -303,39 +257,15 @@ ensure_sudo() {
   sudo chmod 0440 "$sudo_file"
 }
 
-# ── Install Galaxy collections ────────────────────────────────────
-install_collections() {
-  echo "Installing Ansible collections..."
-  ansible-galaxy collection install -r "$DOTFILES_DIR/requirements.yml" --force-with-deps 2>/dev/null || \
-    ansible-galaxy collection install community.general
-}
 
 # ── Phase 1: system + packages + dotfiles (no secrets) ───────────
 run_phase1() {
   local is_desktop="false"
   [ "$MACHINE_TYPE" = "desktop" ] && is_desktop="true"
-
-  echo ""
-  echo "═══════════════════════════════════════════════════"
-  echo "  Phase 1: system, packages, dotfiles"
-  echo "  Machine: $MACHINE_NAME ($MACHINE_TYPE)"
-  echo "═══════════════════════════════════════════════════"
-  echo ""
-
+  echo "Phase 1: system, packages and dotfiles (no secrets)"
   cd "$DOTFILES_DIR" || return 1
-  local rc=0 urc=0
-  ansible-playbook \
-    --connection=local \
-    -l "$MACHINE_NAME" \
-    -e "target=$MACHINE_NAME" \
-    -e ansible_connection=local \
-    -e ansible_host=127.0.0.1 \
-    -e "is_desktop=$is_desktop" \
-    --skip-tags secrets \
-    site.yml || rc=$?
-  scripts/run-units.sh --no-secrets || urc=$?
-  [ "$rc" -ne 0 ] || rc=$urc
-  return "$rc"
+  DOTFILES_MACHINE="$MACHINE_NAME" DOTFILES_IS_DESKTOP="$is_desktop" \
+    scripts/run-units.sh --no-secrets
 }
 
 # ── Bitwarden login ───────────────────────────────────────────────
@@ -396,21 +326,9 @@ setup_bitwarden() {
 run_phase2() {
   local is_desktop="false"
   [ "$MACHINE_TYPE" = "desktop" ] && is_desktop="true"
-
   cd "$DOTFILES_DIR" || return 1
-  local rc=0 urc=0
-  ansible-playbook \
-    --connection=local \
-    -l "$MACHINE_NAME" \
-    -e "target=$MACHINE_NAME" \
-    -e ansible_connection=local \
-    -e ansible_host=127.0.0.1 \
-    -e "is_desktop=$is_desktop" \
-    --tags secrets \
-    site.yml || rc=$?
-  scripts/run-units.sh --tags omp,secrets || urc=$?
-  [ "$rc" -ne 0 ] || rc=$urc
-  return "$rc"
+  DOTFILES_MACHINE="$MACHINE_NAME" DOTFILES_IS_DESKTOP="$is_desktop" \
+    scripts/run-units.sh --tags omp,secrets
 }
 
 # ── Push inventory changes (after GitHub auth is set up) ─────────
@@ -441,8 +359,6 @@ main() {
 
   ensure_python
   ensure_git
-  ensure_uv
-  ensure_ansible
   clone_repo
   get_machine_name
   get_machine_type
@@ -451,7 +367,6 @@ main() {
   set_hostname
   ensure_sudo
   ensure_tailscale
-  install_collections
   local rc=0 phase_rc=0
   run_phase1 || rc=$?
 
@@ -476,8 +391,7 @@ main() {
   echo "║  Bootstrap complete!                          ║"
   echo "╚═══════════════════════════════════════════════╝"
   echo ""
-  echo "  Start a new shell:"
-  echo "    eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" && exec zsh"
+  echo "  Start a new login shell to load your configuration."
   echo ""
   echo "  To re-apply anytime: just apply"
 }

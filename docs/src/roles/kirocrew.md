@@ -1,16 +1,5 @@
 # kirocrew
 
-Keeps the [Kiro Crew](https://github.com/kirodotdev/KiroCrew) gateway
-(dashboard + Slack + cron) healthy on hosts that run it — currently punjab.
+`units/kirocrew.sh` manages an existing [Kiro Crew](https://github.com/kirodotdev/KiroCrew) installation only when `kirocrew_enabled: true` is set in host variables. It skips retired `matrix` and `telengana`. If `~/.local/bin/kirocrew` or `/etc/systemd/system/kirocrew.service` is missing, it skips and prints upstream installation guidance; it does not install either.
 
-- **Enable**: `kirocrew_enabled: true` in `host_vars/<host>.yml`
-- **Tags**: `services`, `kirocrew`
-
-The venv (`~/.kiro/crew-venv`) and the systemd unit are owned by Kiro's own
-installer (`kirocrew service install`), so the role does **not** template them.
-It:
-
-1. warns if the binary or unit is missing (install per upstream first),
-2. keeps `/etc/kirocrew/kirocrew.env` `root:root 0600` — tokens go there,
-3. enables and starts `kirocrew.service`,
-4. fails the play if the dashboard listens on anything but localhost.
+With root or noninteractive `sudo -n`, it makes `/etc/kirocrew/kirocrew.env` root-owned mode 0600, then enables and starts the service only if those permissions succeeded. It checks listeners using `ss` and `units/kirocrew-sockets.py`, failing the unit if the check fails. The existing environment file contains credentials; this unit neither fetches nor rewrites them.

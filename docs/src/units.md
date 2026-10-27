@@ -1,54 +1,34 @@
 # Units
 
-A **unit** is an idempotent bash script in `units/` that configures one independent piece of a machine. Units exist because Ansible aborts a whole role when one task fails: on himachal the `omp` role died at `Deploy omp-kiro-provider config` (`~/.config/omp` did not exist), so the routing merge, `omp-route` and the auth-broker config never ran. In a unit, a failing step is recorded and the next independent step still runs; independent units run in parallel.
-
-[mise](https://mise.jdx.dev) is the runner: each unit is a `mise.toml` task, and `mise run` supplies the dependency graph, parallel jobs and `--continue-on-error`.
-
-Everything not listed under `units/` is still an Ansible role.
+A unit is a Bash entrypoint in `units/` configuring one concern. Shared helpers in `units/lib.sh` let a unit record failed steps while continuing independent work. Native units replace the fleet playbook; their supporting scripts, templates and files are under `units/`, with chezmoi-managed files under `home/`.
 
 ## Running units
 
-| Command | What it does |
+| Command | Behavior |
 |---|---|
-| `just units` | Run every unit in parallel (`just units --tags omp`, `--no-secrets` also accepted) |
-| `mise run units` | Same, straight through mise |
-| `mise run unit:omp` | One unit |
-| `mise run --dry-run units` | Show what would run |
-| `mise tasks deps units` | Show the task graph |
-| `just apply`, `apply-nosecrets`, `apply-tags`, `dotfiles` | Run Ansible first, then `scripts/run-units.sh` (never skipped because Ansible failed; exit codes are combined) |
+| `just apply` | Pull, resolve and sync Bitwarden when possible, and run the fleet units. |
+| `just apply-nosecrets` | Run units with vault access disabled; pull failure is tolerated. |
+| `just apply-tags omp,shell` | Select units mapped from tags; secret-bearing selections attempt vault resolution. |
+| `just dotfiles` / `just packages` | Run the corresponding tag selection. |
+| `just units --tags omp` | Run the wrapper directly; `--no-secrets` is also accepted. |
+| `mise run units` | Run the same wrapper. |
+| `mise run unit:omp` | Run one registered unit directly, without wrapper prerequisite ordering. |
+| `just check` | Set `UNITS_CHECK=1` and run the native selection in inspection mode. Coverage and safety remain subject to integration verification; do not assume a complete or universally non-mutating dry run. |
 
-`scripts/run-units.sh [--no-secrets] [--tags a,b]` is the one wrapper the recipes call. It maps Ansible tags to units (`tasks_for_tag`, mirroring the tags of the roles the units replaced), runs the selection with `mise run --continue-on-error --jobs 8 --output prefix --timeout 15m`, and exits with mise's status. Without `mise` on `PATH` it prints `mise not installed; running units sequentially` and runs the selected units one after another, continuing after failures, so hosts without mise (Termux, musl) keep updating.
+`scripts/run-units.sh [--no-secrets] [--tags a,b]` is the authoritative tag map and registry. It runs package managers and other prerequisites in stages, then runs independent later units in parallel using mise (`UNITS_JOBS`, default 8), continuing after independent failures. Without mise, stages run sequentially. A failure in a selected SSH keys, Tailscale or Zen unit suppresses its selected dependent units; unselected prerequisites are not implicitly applied. Fleet facts runs last. `SKIPPED` and `PARTIAL` lines describe exclusions or incomplete work and are not, by themselves, proof of a complete configuration.
 
-`just apply-tags` resolves, validates and syncs Bitwarden for explicitly secret-bearing tags (including `omp`), and selects the `bitwarden` role so legacy secret roles receive its facts. If that fails, it skips secrets, still runs the non-secret selection, and returns an error. Tags unrelated to secrets do not prompt for a vault unlock. `just apply-nosecrets` and bootstrap's first phase pass `--no-secrets` to units even if a session is already present.
+`just apply-tags` resolves and syncs Bitwarden for explicitly secret-bearing tags; if it fails, selected units run with secrets disabled and the recipe reports failure. The no-secrets path prevents unit vault access even when a session exists. Himachal's phone timer sends a temporary archive of the tracked checkout and runs native units with `--no-secrets` on each target independently.
 
-Bootstrap runs all units after its first Ansible pass and the `omp,secrets` selection after the secret pass. The phone push timer runs the non-secret units remotely from a temporary archive of the controller's tracked revision, after its Ansible passes.
+The shared unit library skips identities `matrix` and `telengana` before unit work, including package transactions. These retired VPSes remain powered on for burn-in: nothing on them may be restarted. The guard does not authorize other changes to those hosts.
 
-## Rules for a unit
+## Implementing a unit
 
-- Idempotent bash. `set -uo pipefail`, never `set -e`.
-- Source `units/lib.sh`: `step "desc" cmd...` (a failure marks the unit failed and continues), `soft "desc" cmd...` (a failure is only a warning), `note "..."`, `finish` (exit 1 only if a `step` failed), `install_if_changed src dest mode`, `bw_session` (a usable Bitwarden session or nothing; never prompts; honours `UNITS_NO_SECRETS=1`).
-- mise treats any non-zero exit as failure, so "skipped" and "partial" are printed as `SKIPPED: ...` / `PARTIAL: ...` lines with exit 0.
-- Never echo a secret or put one on a command line.
+Use idempotent Bash with `set -uo pipefail`, source `units/lib.sh` with a shellcheck source directive, and use `step` for recorded failures, `soft` for best-effort work, `note` for status and `finish` for the resulting exit status. `bw_session` is noninteractive and honors `UNITS_NO_SECRETS=1`; do not log secret values. Preserve user data and make platform, profile, privilege and retired-host safeguards explicit. Direct unit invocation does not provide wrapper ordering.
 
-## Adding a unit
-
-1. Create `units/<name>.sh` (executable) with a `# shellcheck source=units/lib.sh` line above its `. lib.sh` line.
-2. Add `[tasks."unit:<name>"]` with `file = "units/<name>.sh"` to `mise.toml`.
-3. Add `<name>` to `ALL_UNITS` and to the right `tasks_for_tag` branches in `scripts/run-units.sh`.
-
-`tests/test_units_registry.py` fails if the three places disagree.
-
-`units/`, `mise.toml` and `scripts/run-units.sh` are executed by the fleet timer, so they are intentionally not carved out of CODEOWNERS.
+Register a new executable `units/<name>.sh` in `mise.toml`, `ALL_UNITS` and the relevant `tasks_for_tag` branches and stage in `scripts/run-units.sh`. Executable configuration paths are not intended to bypass CODEOWNERS review.
 
 ## chezmoi
 
-File-based config (shell, git, neovim, atuin config) is managed by [chezmoi](https://www.chezmoi.io/) from `home/` (`.chezmoiroot` contains `home`, so `.chezmoi.toml.tmpl`, `.chezmoidata.yaml` and `.chezmoiscripts/` live there). `unit:chezmoi` runs `chezmoi --source <repo> --keep-going --force --no-tty apply --init`: `--keep-going` continues past a failing file or script, `--force` overwrites like the old roles did, `--no-tty` avoids a TTY, and `--init` regenerates the config from `home/.chezmoi.toml.tmpl`.
+`.chezmoiroot` points to `home/`, which contains the source files, `.chezmoi.toml.tmpl`, `.chezmoidata.yaml` and `.chezmoiscripts/`. `units/chezmoi.sh` applies shell, Git, Neovim and Atuin configuration with `--keep-going --force --no-tty apply --init`. It fails if chezmoi is unavailable (on Termux it first attempts a best-effort `pkg install`). Desktop detection honors `DOTFILES_IS_DESKTOP` or host `is_desktop`, then inventory membership; without `yq` the unit warns and assumes non-desktop.
 
-**Back up and review existing dotfiles before the first apply.** The current `--force` will overwrite local edits to managed targets without prompting on every apply. First adoption can replace an existing target even without `--force`: chezmoi does not treat a pre-existing, never-written target as a conflict by default. Review the intended changes with `chezmoi --source <repo> diff` (after initializing the config with the correct machine data), and keep a private backup of any local files you need. A safer future cutover should detect both first-adoption and later local conflicts and fail closed for unattended runs, with interactive review; merely removing `--force` does not protect initial adoption.
-
-If chezmoi is absent the unit fails rather than reporting a successful skip. Homebrew hosts can run `just packages`, Termux users can run `pkg install chezmoi`, and Alpine/postmarketOS users can enable the community repository and run `sudo apk add chezmoi`.
-
-- Data: `machine`, `is_desktop` (true when the host is in the `desktop` group of `inventory.yml`), `user_name`, `user_email`, `alias_groups`.
-- Secrets are **not** chezmoi templates: the `bitwarden` template function aborts a whole template on a missing item. The `shell-ai` and `atuin` units handle secrets.
-- chezmoi never deletes files it does not manage (no `exact_` directories).
-- `ssh_keys` stays an Ansible role (key lifecycle, `authorized_keys` merge).
+**Back up and review existing dotfiles before first apply.** `--force` overwrites local edits to managed targets without prompting, including on subsequent runs. Even without `--force`, first adoption of an existing target can replace it. The source uses no `exact_` directories, so unmanaged files are not deleted by directory synchronization. Secrets are handled by units rather than chezmoi templates, so unavailable vault items do not abort unrelated file templates. `units/ssh-keys.sh` and `units/ssh-mesh.sh` manage SSH key lifecycle and authorization separately.

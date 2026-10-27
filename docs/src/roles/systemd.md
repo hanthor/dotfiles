@@ -1,44 +1,9 @@
-# systemd
+# systemd services
 
-**Tags:** `services`, `systemd`  
-**Secrets needed:** No  
-**Runs on:** All machines
+`units/system-services.sh` and `units/laptop-services.sh` manage system and user services. Both skip Termux, `skip_systemd: true`, and retired `matrix`/`telengana`. They do not need vault secrets. System Podman configuration requires root or noninteractive `sudo -n`; user services require a working user systemd manager.
 
-Deploys systemd user services and timers for background tasks.
+When `/usr/bin/podman` exists, system-services creates the `podman` group, adds the current user, installs a socket drop-in with group access (0660), and enables `podman.socket`. It restarts an already-active socket only when the drop-in changed. This applies to laptops too.
 
-## Services Deployed
+For non-laptops, system-services renders `units/system-services/` templates for the user `dotfiles-update` service and timer and the Atuin daemon, then enables the timer and daemon. For `is_laptop: true`, laptop-services instead deploys the login-triggered update service and Atuin daemon, removes an obsolete update timer, and respects `dotfiles_auto_update`. The update uses `just apply-nosecrets`.
 
-### dotfiles-update
-
-Keeps the dotfiles repo up to date automatically.
-
-- **Desktops/servers:** Daily timer (`dotfiles-update.timer`)
-- **Laptops:** Runs on login via `graphical-session.target` (no timer)
-
-### phone-apply (himachal only)
-
-Pushes non-secret Ansible configuration to `termux` and `mumbai`, then runs the non-secret units on each phone from a temporary archive of the controller's tracked revision. Each operation is attempted independently; an unreachable phone does not fail the service. SSH aliases for the two inventory hosts must be configured on himachal.
-
-### atuin-daemon
-
-Keeps [Atuin](https://atuin.sh/) shell history synced in the background.
-
-### Podman socket (conditional)
-
-If podman is installed:
-- Creates the `podman` group
-- Adds the user to the group
-- Configures the podman socket for group access (mode 0660)
-- Enables and starts `podman.socket`
-
-### system-mitigator (himachal only)
-
-A Python daemon that monitors for Lenovo EC firmware bugs:
-- Detects false `BD_PROCHOT` signals that lock CPU cores to 400 MHz
-- Watches for `systemd-journald` watchdog loops
-- Sends desktop notifications when issues are detected
-
-## Notes
-
-- The `dotfiles-update.timer` on laptops is removed during the laptop-specific path
-- All services run as user-level systemd units (no root needed)
+On himachal, laptop-services also deploys `units/laptop-services/system-mitigator.py` and its user service. Unless `phone_apply_enabled: false`, it deploys a timer and service that archive the tracked checkout and run native units with `--no-secrets` independently over SSH on `termux` and `mumbai`. Unreachable phones do not fail that service. Disabling phone apply removes the timer and service.

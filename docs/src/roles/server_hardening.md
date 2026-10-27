@@ -1,23 +1,5 @@
 # server_hardening
 
-**Tags:** `system`, `hardening`, `security`  
-**Secrets needed:** No  
-**Runs on:** `server` and `vps` groups (`site.yml` gates on group membership)
+`units/server-hardening.sh` runs for inventory `server` or `vps` members, but explicitly skips retired `matrix` and `telengana`. It requires `yq`, Python, and root or noninteractive `sudo -n`; it uses no vault secrets. `units/server-hardening-file.py` performs the managed line edits.
 
-Applies reliability and light security hardening for long-running server hosts.
-
-## What It Does
-
-- **journald:** sets `SystemMaxUse=500M` and vacuums journals to that size
-- **swap:** creates a 2G `/swapfile` if missing, sets 0600, runs `mkswap` + `swapon` only when it isn't already active, adds it to `/etc/fstab`
-- **NTP:** enables and starts `systemd-timesyncd`
-- **SSH rate limits:** `MaxStartups 3:50:10`, `MaxSessions 10`, `ClientAliveCountMax 3` in `sshd_config` (reloads sshd)
-- **UFW:** turns logging on if UFW is already active (doesn't enable UFW or add rules)
-- **Livepatch:** runs `pro enable livepatch` if Ubuntu Pro is attached (best-effort)
-- **Reboot check:** prints a warning if `/var/run/reboot-required` exists
-
-## Notes
-
-- Does **not** install fail2ban, change SSH auth/cipher settings, set sysctls, or configure automatic updates
-- No `skip_` flag — to keep a host out, take it out of `server`/`vps`
-- The retired VPSes (`matrix`, `telengana`) are still in `vps`; don't apply to them (see the cutover runbook) — this role reloads sshd and restarts journald
+The unit sets journald's maximum size to 500 MiB, restarts journald on change and vacuums old journals. It creates a 2 GiB `/swapfile` if absent, sets root ownership and mode 0600, formats and enables it if not active, and adds an fstab entry. It enables systemd-timesyncd only when present and chrony is not active. It sets SSH `MaxStartups`, `MaxSessions`, and `ClientAliveCountMax`, reloading SSH best-effort on change. It enables UFW logging only when UFW is already active, attempts Ubuntu Pro livepatch when its status indicates it is needed, and reports a pending reboot. It does not configure firewall rules or install fail2ban.

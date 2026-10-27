@@ -13,6 +13,11 @@ if [ "$IS_TERMUX" = 1 ]; then
   exit 0
 fi
 
+if [ "${UNITS_CHECK:-0}" = 1 ]; then
+  note "FAIL: omp plugin and broker state cannot be inspected safely without invoking omp; its startup side effects are not constrained"
+  exit 1
+fi
+
 # shellcheck source=units/omp/auth-broker.conf
 . "$DOTFILES_DIR/units/omp/auth-broker.conf"
 

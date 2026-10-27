@@ -13,6 +13,11 @@ if ! command -v atuin >/dev/null 2>&1; then
   exit 0
 fi
 
+if [ "${UNITS_CHECK:-0}" = 1 ]; then
+  note "FAIL: atuin login status cannot be inspected safely: atuin status opens and may initialize its SQLite stores"
+  exit 1
+fi
+
 step "atuin data dir" install -d -m 0700 "$data"
 [ "$UNIT_FAILED" = 0 ] || finish
 

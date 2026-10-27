@@ -1,67 +1,7 @@
 # hive_ops
 
-**Tags:** `hive`, `hive_ops`
-**Secrets needed:** No (uses the AWS cluster kubeconfig from the `kube` role)
-**Runs on:** Opt-in — exactly one host (`hive_ops_enabled: true`)
+`units/hive-ops.sh` manages optional user timers for the [Hive](https://hub.tunaos.org) on the [AWS Talos cluster](../servers/aws-k8s/cluster.md). It requires `yq` and a working user systemd manager, and skips Termux, inventory VPSes, and retired `matrix`/`telengana`. It does not read the vault; the configured kubeconfig is sensitive and must already exist for the helpers to access the cluster.
 
-Drives the [tuna-os Hive](https://school.tunaos.org) (all Hives: [hub.tunaos.org](https://hub.tunaos.org)) running on the
-[AWS Talos cluster](../servers/aws-k8s/cluster.md): backend rotation, a
-watchdog, capability tiers, and peak/off-peak scheduling.
+With `hive_ops_enabled: true`, it installs three helpers from `units/hive-ops/bin/` and service/timer pairs from `units/hive-ops/systemd/`. The default list in `units/hive-ops/defaults.yml` includes rotation, watchdog, tiers, Hive peak pause/resume, and pi peak start/stop. A host may override `hive_ops_timers`, `hive_ops_kubeconfig` (default `~/.kube/config-aws-migration`) and `hive_ops_path`. A drop-in pins KUBECONFIG and PATH for each service. Only enable one controller so timers do not compete.
 
-These previously lived as hand-managed user units on `telengana`, talking to a
-local k3s via `sudo -n k3s kubectl`. When telengana was retired they were moved
-into this role and retargeted at plain `kubectl` against the AWS cluster.
-
-## What It Does
-
-Deploys three scripts to `~/.local/bin/` and seven user timer/service pairs:
-
-| Timer | Schedule | Does |
-|---|---|---|
-| `hive-rotate` | every 5 min | Capability-preserving backend rotation — fails agents over between providers on headroom |
-| `hive-watchdog` | every 5 min | Health check / unwedge |
-| `hive-tiers` | weekly | Refresh capability tiers |
-| `hive-peak-pause` / `hive-peak-resume` | 01:00 / 04:00 | Pause agents during the provider's peak-price window |
-| `pi-peak-start` / `pi-peak-stop` | 04:00 / 01:00 | Start/stop the local `pi.service` around DeepSeek off-peak pricing |
-
-Peak windows default to `01:00-04:00,06:00-10:00` for `deepseek` and are
-overridable via `HIVE_PEAK_WINDOWS` / `HIVE_PEAK_PROVIDERS`.
-
-## Why the drop-in exists
-
-The scripts reach the hive through `kubectl exec` into the pod. Two things
-break that under systemd that don't break it interactively:
-
-1. **`KUBECONFIG` is unset** — there is no shell rc file to source.
-2. **The systemd *user* manager's PATH is `/usr/local/bin:/usr/bin:/snap/bin`**,
-   which excludes Homebrew — where `kubectl` and `jq` actually live.
-
-Both fail *opaquely*: the scripts capture `kubectl` output with `2>/dev/null`,
-so a missing binary surfaces as `ERROR: no hive pod found` rather than
-"command not found". The role writes a `.service.d/kubeconfig.conf` drop-in
-pinning `KUBECONFIG` and `PATH` for every unit.
-
-This is why it worked on telengana without a drop-in: `k3s` sits on the
-standard PATH, Homebrew does not.
-
-## Variables
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `hive_ops_enabled` | `false` | Opt a host in. Two hosts both rotating would fight each other. |
-| `hive_ops_kubeconfig` | `~/.kube/config-aws-migration` | Cluster to drive |
-| `hive_ops_path` | `/home/linuxbrew/.linuxbrew/bin:…` | PATH for the units |
-| `hive_ops_timers` | 7 timers | Which units to deploy/enable |
-
-## Notes
-
-- Prefer `hive-peak.sh status|pause|resume` over hand-rolled curl — the
-  authentication path is subtle (see the `tunaos-hive-checkin` skill).
-- `hive-rotate.sh apply` takes **~2 minutes** — it makes many `kubectl exec`
-  round-trips. Don't mistake a short timeout for a failure.
-- **Enabled on no host (2026-09-24).** Rotation, watchdog and peak windows run
-  as `CronJob`s inside the AWS cluster (ns `hive`), which is where they belong —
-  a desktop that sleeps silently skips them. It previously ran on himachal.
-  Setting `hive_ops_enabled: false` now also **removes** the timers, units,
-  drop-ins and scripts from a host on its next apply, so a retired host can't
-  keep fighting the in-cluster jobs.
+When disabled, cleanup is attempted only if `hive-watchdog.timer` exists: listed timers are disabled, their unit files and kubeconfig drop-ins removed, and the three helpers removed if cleanup succeeded. Retired hosts and VPSes are excluded even from cleanup. Existing kubeconfigs and cluster data are not removed.

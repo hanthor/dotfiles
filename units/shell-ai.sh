@@ -5,6 +5,26 @@
 set -uo pipefail
 # shellcheck source=units/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+if [ "${UNITS_CHECK:-0}" = 1 ]; then
+  if [ "${UNITS_NO_SECRETS:-0}" = 1 ]; then
+    note "SKIPPED: secrets disabled; secret files left untouched"
+    exit 0
+  fi
+  for path in "$HOME/.config/shell/secrets.sh" "$HOME/.config/fish/conf.d/secrets.fish"; do
+    if [ -L "$path" ] || [ ! -e "$path" ]; then
+      note "PARTIAL: $path absent or symlinked; apply would replace it if secrets are available"
+    elif [ ! -f "$path" ] || ! mode="$(stat -c '%a' "$path")"; then
+      note "FAIL  cannot inspect $path"
+    elif [ "$mode" != 600 ]; then
+      note "PARTIAL: $path mode differs from 0600; apply would replace it if secrets are available"
+    else
+      note "ok    $path mode 0600"
+    fi
+  done
+  note "FAIL  cannot compare shell secrets safely: Bitwarden item reads may persist audit events"
+  exit 1
+fi
+
 
 s="$(bw_session)"
 if [ -z "$s" ]; then
@@ -51,6 +71,7 @@ if command -v bw >/dev/null 2>&1; and test -r /tmp/bw_session
 end
 FISH
 }
+
 
 write_sh() { secrets_sh | write_atomic "$HOME/.config/shell/secrets.sh"; }
 write_fish() { secrets_fish | write_atomic "$HOME/.config/fish/conf.d/secrets.fish"; }

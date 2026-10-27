@@ -1,6 +1,6 @@
 [tasks.units]
-description = "Run every unit in parallel; one failing unit does not stop the others"
-depends = ["unit:*"]
+description = "Run fleet units in dependency order, continuing after independent failures"
+run = "scripts/run-units.sh"
 
 [tasks."unit:omp"]
 description = "omp: skills, Kiro plugin, routing, and the auth-broker client"
@@ -33,3 +33,81 @@ file = "units/kube.sh"
 [tasks."unit:forgejo-registry"]
 description = "forgejo-registry: podman login to the private Forgejo registry"
 file = "units/forgejo-registry.sh"
+
+[tasks."unit:sudo"]
+file = "units/sudo.sh"
+
+[tasks."unit:sshd"]
+file = "units/sshd.sh"
+
+[tasks."unit:apk-packages"]
+file = "units/apk-packages.sh"
+
+[tasks."unit:termux-packages"]
+file = "units/termux-packages.sh"
+
+[tasks."unit:homebrew"]
+file = "units/homebrew.sh"
+
+[tasks."unit:flatpak"]
+file = "units/flatpak.sh"
+
+[tasks."unit:ssh-keys"]
+file = "units/ssh-keys.sh"
+
+[tasks."unit:ssh-mesh"]
+file = "units/ssh-mesh.sh"
+
+[tasks."unit:tailscale"]
+file = "units/tailscale.sh"
+
+[tasks."unit:bluefin"]
+file = "units/bluefin.sh"
+
+[tasks."unit:gnome"]
+file = "units/gnome.sh"
+
+[tasks."unit:zen-browser"]
+file = "units/zen-browser.sh"
+
+[tasks."unit:browser-fxa"]
+file = "units/browser-fxa.sh"
+
+[tasks."unit:pipewire-audio"]
+file = "units/pipewire-audio.sh"
+
+[tasks."unit:syncthing"]
+file = "units/syncthing.sh"
+
+[tasks."unit:hive-ops"]
+file = "units/hive-ops.sh"
+
+[tasks."unit:laptop-services"]
+file = "units/laptop-services.sh"
+
+[tasks."unit:system-services"]
+file = "units/system-services.sh"
+
+[tasks."unit:osquery"]
+file = "units/osquery.sh"
+
+[tasks."unit:server-hardening"]
+file = "units/server-hardening.sh"
+
+[tasks."unit:retired-services"]
+file = "units/retired-services.sh"
+
+[tasks."unit:proxy"]
+file = "units/proxy.sh"
+
+[tasks."unit:tailscale-cert"]
+file = "units/tailscale-cert.sh"
+
+[tasks."unit:bst-dashboard"]
+file = "units/bst-dashboard.sh"
+
+[tasks."unit:kirocrew"]
+file = "units/kirocrew.sh"
+
+[tasks."unit:fleet-facts"]
+file = "units/fleet-facts.sh"

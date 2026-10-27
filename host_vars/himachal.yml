@@ -11,3 +11,17 @@ mic_hardware_volume_pct: 75
 # The AWS cluster was terminated; local Hive ops remain disabled.
 # The role removes any old local timers on the next apply.
 hive_ops_enabled: false
+
+# User-scoped FlatPark apps; Flathub supplies their runtimes.
+user_flatpak_remotes:
+  - name: flatpark
+    url: https://dl.flatpark.org/flatpark.flatpakrepo
+  - name: flathub
+    url: https://dl.flathub.org/repo/flathub.flatpakrepo
+user_flatpaks:
+  - remote: flatpark
+    id: org.tunaos.blueshell
+  - remote: flatpark
+    id: org.tunaos.tavern
+  - remote: flatpark
+    id: org.tunaos.compass
