@@ -1,0 +1,40 @@
+from pathlib import Path
+
+from conftest import write_stub
+from unit_helpers import calls, run_unit
+
+CURL = 'echo "curl $*" >> "$HOME/calls"\nout=""; while [ $# -gt 0 ]; do [ "$1" = -o ] && out="$2"; shift; done\n: > "$out"\nexit "${STUB_CURL_RC:-0}"\n'
+UNZIP = 'echo "unzip $*" >> "$HOME/calls"\nd=""; while [ $# -gt 0 ]; do [ "$1" = -d ] && d="$2"; shift; done\n: > "$d/JetBrainsMonoNerdFont-Regular.ttf"\n'
+
+
+def setup(stub_env, desktop):
+    bindir, env = stub_env
+    write_stub(bindir, "curl", CURL)
+    write_stub(bindir, "unzip", UNZIP)
+    write_stub(bindir, "fc-cache", 'echo "fc-cache $*" >> "$HOME/calls"\n')
+    env["DOTFILES_IS_DESKTOP"] = "1" if desktop else "0"
+    return env
+
+
+def test_desktop_installs_the_font_once(stub_env):
+    env = setup(stub_env, True)
+    r = run_unit("fonts", env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (Path(env["HOME"]) / ".local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFont-Regular.ttf").exists()
+    assert "fc-cache -f" in calls(env)
+    before = calls(env)
+    assert run_unit("fonts", env).returncode == 0
+    assert calls(env) == before  # second run downloads nothing
+
+
+def test_non_desktop_downloads_nothing(stub_env):
+    env = setup(stub_env, False)
+    r = run_unit("fonts", env)
+    assert r.returncode == 0 and "curl" not in calls(env)
+
+
+def test_failed_download_fails_the_unit_without_a_partial_install(stub_env):
+    env = setup(stub_env, True)
+    r = run_unit("fonts", env, STUB_CURL_RC="22")
+    assert r.returncode == 1 and "FAIL  install JetBrains Mono Nerd Font" in r.stdout
+    assert not (Path(env["HOME"]) / ".local/share/fonts/JetBrainsMono").exists()

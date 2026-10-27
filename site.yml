@@ -71,8 +71,6 @@
       when: inventory_hostname in groups.get('termux_hosts', [])
     - role: bitwarden
       tags: [secrets, bitwarden]
-    - role: shell_fonts
-      tags: [dotfiles, shell, fonts]
     - role: hive_ops
       tags: [hive, hive_ops]
 
@@ -82,16 +80,8 @@
     - role: ssh_mesh
       tags: [ssh, mesh_check]
       when: machine_profile != 'vm-test' and not skip_ssh_mesh | default(false)
-    - role: github
-      tags: [secrets, github]
     - role: tailscale
       tags: [secrets, tailscale]
-    - role: kube
-      tags: [secrets, kube]
-      when: is_desktop | bool and machine_profile != 'vm-test' and not skip_kube | default(false)
-    - role: forgejo_registry
-      tags: [secrets, forgejo, registry]
-      when: machine_profile != 'vm-test' and not skip_forgejo | default(false)
 
     # Phase 3: Desktop apps
     - role: flatpak

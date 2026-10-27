@@ -65,9 +65,9 @@ The `llm` group is dormant (commented out in `inventory.yml`).
 
 | Phase | Roles | Main tags |
 |-------|-------|-----------|
-| 1 — System + packages + dotfiles | sudo, sshd, apk_packages, homebrew, termux_packages, bitwarden, shell_fonts, hive_ops | `system`, `packages`, `dotfiles` |
-| 2 — Secrets + auth | ssh_keys, ssh_mesh, github, tailscale, kube, forgejo_registry | `secrets` |
+| 1 — System + packages + dotfiles | sudo, sshd, apk_packages, homebrew, termux_packages, bitwarden, hive_ops | `system`, `packages`, `dotfiles` |
+| 2 — Secrets + auth | ssh_keys, ssh_mesh, tailscale | `secrets` |
 | 3 — Desktop apps | flatpak, bluefin_common, gnome, zen_browser (+ browser_fxa), pipewire_audio | `desktop` |
 | 4 — Services | syncthing, systemd, bst_dashboard, kirocrew, proxy, tailscale_cert, server_hardening | `services` |
 
-After the playbook, `just apply*` runs the [bash units](units.md) (`chezmoi`, `omp`, `atuin`, `shell-ai`) in parallel through mise. The `omp` unit also uses Bitwarden for its broker token. `just apply-nosecrets` skips secret-tagged roles and passes `--no-secrets` to units.
+After the playbook, `just apply*` runs the [bash units](units.md) (`chezmoi`, `fonts`, `omp`, `atuin`, `shell-ai`, `github`, `kube`, `forgejo-registry`) in parallel through mise. The `omp` unit also uses Bitwarden for its broker token. `just apply-nosecrets` skips secret-tagged roles and passes `--no-secrets` to units.

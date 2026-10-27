@@ -50,10 +50,10 @@ just add-machine NAME   # Onboard + bootstrap an already-reachable machine via S
 `site.yml` runs roles in tagged phases. Notable wiring:
 
 - `bitwarden` resolves `BW_SESSION` (env, `/tmp/bw_session`, or interactive unlock), runs `bw sync` with a 15s timeout, and sets a `bw_unlocked` host fact. All BW-using roles gate on `when: bw_unlocked | default(false)`.
-- `kube` fetches `~/.kube/config` + `~/.talos/config` from Bitwarden — desktops only.
+- the `kube` unit fetches `~/.kube/config` + `~/.talos/config` from Bitwarden — desktops only.
 - `ssh_keys` round-trips per-machine ed25519 keys through Bitwarden, building cross-machine `authorized_keys`.
 
-After the playbook, `just apply*` runs bash **units** (`units/`, via mise through `scripts/run-units.sh`; see [`docs/src/units.md`](docs/src/units.md)): `omp`, `chezmoi`, `atuin`, `shell-ai`. `home/` is the chezmoi source for shell, git, neovim and atuin config; `ssh_keys` remains an Ansible role.
+After the playbook, `just apply*` runs bash **units** (`units/`, via mise through `scripts/run-units.sh`; see [`docs/src/units.md`](docs/src/units.md)): `chezmoi`, `fonts`, `omp`, `atuin`, `shell-ai`, `github`, `kube`, `forgejo-registry`. `home/` is the chezmoi source for shell, git, neovim and atuin config; `ssh_keys` remains an Ansible role.
 
 Roles are conditional on inventory group (`desktop`, `server`, `vps`, `test_fleet`, `termux_hosts`; `llm` is dormant/commented out) and on `skip_*` flags / `machine_profile` in `host_vars/`. See [`docs/src/roles/`](docs/src/roles/) for the full reference.
 
