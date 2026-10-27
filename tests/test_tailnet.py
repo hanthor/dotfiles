@@ -261,6 +261,16 @@ def test_release_refuses_offline_home_cluster_nodes(fake_api, name):
     assert api.reads == 0 and api.deletes == []
 
 
+def test_managed_karnataka_is_audited_without_releasing_its_device(fake_api, capsys):
+    api, inventory = fake_api
+    inventory.write_text(INVENTORY.replace("    telengana:\n", "    karnataka:\n      ansible_host: 100.1.1.1\n    telengana:\n", 1))
+    api.devices = [api_device("karnataka", "node", connectedToControl=True)]
+    tailnet.main(["audit"])
+    assert api.reads == 1
+    assert "conflicts with a protected name" not in capsys.readouterr().err
+    assert api.deletes == []
+
+
 def test_gc_keeps_home_cluster_nodes_with_explicit_k8s_gc(fake_api):
     api, _ = fake_api
     api.devices = [api_device("bihar", "bihar-node", tags=["tag:k8s"]),

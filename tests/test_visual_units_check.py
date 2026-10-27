@@ -65,6 +65,7 @@ echo "gsettings $*" >> "$CHECK_LOG"
 [ "${FAIL_GSETTINGS:-0}" = 0 ] || exit 1
 case "$*" in
   'get org.gnome.desktop.interface color-scheme') echo "'prefer-dark'" ;;
+  'get org.gnome.desktop.peripherals.touchpad tap-to-click') echo "${CHECK_TAP_TO_CLICK:-false}" ;;
   'get org.gnome.Ptyxis default-profile-uuid') echo "'profile'" ;;
   'get org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/profile/ custom-command') echo "'/custom/brew/bin/fish'" ;;
   'get org.gnome.Ptyxis font-name') echo "'JetBrainsMono Nerd Font 12'" ;;
@@ -172,13 +173,14 @@ def test_gnome_reports_deployment_and_session_drift_without_mutation(visual):
     env, _ = visual
     home = Path(env['HOME'])
     before = snapshot(home)
-    result = inspect('gnome', env)
+    result = inspect('gnome', env, CHECK_TAP_TO_CLICK='true')
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'WOULD update GNOME keybindings file' in result.stdout
     assert 'WOULD load GNOME keybindings' in result.stdout
     assert 'WOULD create or fix extension' in result.stdout
     assert 'WOULD load GNOME extension settings' in result.stdout
     assert 'WOULD enable and start GNOME Remote Desktop' in result.stdout
+    assert 'WOULD disable touchpad tap-to-click' in result.stdout
     assert 'remote image not inspected' in result.stdout
     assert 'private-test-password' not in result.stdout + result.stderr
     assert_read_only(env, before)

@@ -36,12 +36,14 @@ ssh ubuntu@100.113.75.88 'docker ps --filter name=hives-'
 > **Historical reference only — do not apply or run the Kubernetes, image-build,
 > secret, restart, or state-reset instructions below.** The AWS Talos cluster
 > was terminated on 2026-10-25; its Kubernetes resources and CronJobs are not a
-> current deployment. The home Talos cluster (bihar and karnataka) is powered
-> down temporarily, not decommissioned. Preserve its configurations. The
+> current deployment. Bihar was recently online but is currently unreachable;
+> its OS and services are unverified. Karnataka runs Utah. Preserve the
+> home cluster's configurations as historical recovery material, not proof of a
+> current deployment. Do not run these commands against repurposed nodes. The
 > sections below describe older home-cluster and AWS configurations at different
-> points in time, not the current Spindle service. See the
-> [AWS cluster history](../servers/aws-k8s/cluster.md) and
-> [historical cluster manifests](https://github.com/hanthor/dotfiles/tree/master/talos-k8s/hive).
+> points in time, not the current Spindle service; Kubernetes URLs are historical,
+> not running endpoints. See the [AWS cluster history](../servers/aws-k8s/cluster.md)
+> and [historical cluster manifests](https://github.com/hanthor/dotfiles/tree/master/talos-k8s/hive).
 > Examples are retained for context, not as instructions for either cluster.
 
 The earlier home-cluster Hive used pi with DeepSeek, tmux agents, a governor,

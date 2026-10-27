@@ -449,7 +449,10 @@ def main(argv=None):
         else:
             for host, h in hosts.items():
                 intended = h["intended"]
-                if is_retired(intended, protected) or any(is_retired(r, {intended}) for r in protected):
+                # A protected home node can be inventoried under its own name;
+                # it remains protected from release and garbage collection.
+                reserved = retired | (HOME_CLUSTER_NAMES - {host.lower()})
+                if is_retired(intended, reserved) or any(is_retired(r, {intended}) for r in reserved):
                     print(f"error: {host} conflicts with a protected name", file=sys.stderr)
                     return 2
         devs, api, label = load_devices("api" if (args.apply or args.cmd == "release") else args.source, now)

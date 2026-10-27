@@ -1,30 +1,30 @@
 # Home Kubernetes Server Images
 
-Bootable container images for the home K8s cluster (bihar, karnataka, starter). Built from **Fedora Hummingbird + GNOME desktop + K3s**, with graphical target disabled by default.
+These are proposed bootable K3s images, not the current OS or workloads of either machine. Karnataka currently runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` as its default; Bihar's current OS and services are unverified. Image build and installer acceptance are under repair: verify provenance and acceptance before installing or switching any host.
 
 ## Image Variants
 
 | Variant | Role | CPU/GPU | Image URI | Installer ISO |
 |---------|------|---------|-----------|----------------|
-| **bihar** | K3s control plane | Intel | `ghcr.io/hanthor/home-k8s-bihar:latest` | [Release](https://github.com/hanthor/dotfiles/releases) |
-| **karnataka** | K3s worker (AMD APU + GPU) | AMD Strix Halo | `ghcr.io/hanthor/home-k8s-karnataka:latest` | [Release](https://github.com/hanthor/dotfiles/releases) |
-| **starter** | Disposable test/staging node | Any | `ghcr.io/hanthor/home-k8s-starter:latest` | [Release](https://github.com/hanthor/dotfiles/releases) |
+| **bihar** | Proposed K3s control plane | Intel | `ghcr.io/hanthor/home-k8s-bihar:testing` | [Release](https://github.com/hanthor/dotfiles/releases) |
+| **karnataka** | Proposed K3s worker | AMD Strix Halo | `ghcr.io/hanthor/home-k8s-karnataka:testing` | [Release](https://github.com/hanthor/dotfiles/releases) |
+| **starter** | Disposable test/staging node | Any | `ghcr.io/hanthor/home-k8s-starter:testing` | [Release](https://github.com/hanthor/dotfiles/releases) |
 
 ## Image Composition
 
-Each image includes:
+The intended images include the following; existing published tags may contain older builds, so inspect their provenance first:
 
 - **Base:** `projectbluefin/utah` (Hummingbird + GNOME 51 desktop + Bluefin theming)
 - **K3s:** Kubernetes v1.36.1 + SELinux policy
 - **Storage:** iSCSI utils, NFS utils, Longhorn tools
 - **Networking:** NetworkManager, Tailscale, iptables-nft
-- **GPU:** AMD firmware + amdgpu kernel driver (built into boot image via Talos Image Factory)
+- **GPU:** AMD firmware + amdgpu kernel driver included by the image build
 - **Filesystems:** ext4, xfs, btrfs (all tools included)
 - **Default state:** Multi-user target (text console), GDM masked
 
 ## Obtaining Images
 
-### Latest Release (Recommended)
+### Released artifacts
 
 Download dated ISO releases from [GitHub Releases](https://github.com/hanthor/dotfiles/releases):
 - `{bihar,karnataka,starter}-installer.iso` — offline bootc-installer-tui ISOs

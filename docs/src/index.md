@@ -3,7 +3,7 @@
 Native-unit dotfiles and infrastructure for a personal fleet. Three distinct concerns live here:
 
 1. **Workstation config** — shells, packages, browser, SSH, Tailscale, kubeconfig, GNOME, and more
-2. **Home Talos K8s cluster** — manifests for the Bihar + Karnataka cluster
+2. **Home Talos history** — retained manifests and recovery material for the former Bihar + Karnataka cluster
 3. **Hosted infrastructure** — OCI spindle and AWS account configuration; the AWS Talos cluster is terminated
 
 > **This handbook is public.** It covers architecture, decisions and runbooks.
@@ -48,10 +48,13 @@ Fleet hosts, from `inventory.yml`:
 | matrix | vps | VPS | **Retired** — see the cutover runbook |
 | telengana | vps | VPS | **Retired** — see the cutover runbook |
 
-Not managed by fleet units (Talos — `talosctl`/`kubectl` only):
+Other hosts and historical infrastructure:
 
-- **bihar** (control plane) + **karnataka** (worker, AMD GPU) — the home cluster.
-  Powered down and in storage, expected back. See the [cluster handbook](servers/talos-k8s/cluster.md).
+- **Bihar** was recently online but is currently unreachable; its OS and services are unverified.
+- **Karnataka** runs `projectbluefin/utah:testing`, defaults to `multi-user.target`,
+  and is listed in the server inventory.
+- The [home Talos handbook](servers/talos-k8s/cluster.md), manifests, configs and
+  Bitwarden notes are historical recovery material, not proof of current state.
 - The [AWS Talos cluster](servers/aws-k8s/cluster.md) was terminated on 2026-10-25; its handbook is historical.
 
 [Spindle](servers/spindle-vps/README.md) is an OCI Frankfurt VPS running Matrix,

@@ -35,9 +35,11 @@ all:
     vm:
       ansible_host: localhost
       ansible_connection: local
-    # ── Talos K8s cluster (not ansible-managed — talosctl / kubectl only) ──
-    # karnataka:     Talos worker  — AMD Strix Halo APU, 192.168.0.6
-    # bihar:         Talos control-plane — Intel, 192.168.0.5
+    # Bihar's current OS is unverified; its former Talos configuration is retained.
+    karnataka:
+      ansible_host: 100.66.158.127
+      ansible_user: james
+      ansible_connection: ssh
     matrix:
       ansible_host: 100.73.19.81
       ansible_connection: ssh
@@ -73,7 +75,7 @@ all:
         kanpur:
         himachal:
         dilli:
-    # llm group is dormant — karnataka (former LLM host) is now a Talos worker
+    # llm group is dormant.
     # llm:
     #   hosts:
     #     karnataka:
@@ -82,6 +84,7 @@ all:
         punjab:
         vm:
         goa:
+        karnataka:
     test_fleet:
       hosts:
         test-fleet-fedora:

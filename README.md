@@ -66,9 +66,12 @@ From `inventory.yml`:
 | test-fleet-fedora, test-fleet-node2 | test_fleet | KubeVirt test VMs (`machine_profile: vm-test`) |
 | matrix, telengana | vps | **Retired** Hetzner VPSes, powered on for burn-in — restart nothing on them |
 
-The home Talos cluster, **bihar** + **karnataka**, is not managed by fleet units
-(access is via `talosctl`/`kubectl`): it is powered down and in storage, expected
-back. The AWS Talos cluster was terminated on 2026-10-25.
+**Bihar** was recently online but is currently unreachable; its OS and services
+are unverified. **Karnataka** runs `projectbluefin/utah:testing` with
+`multi-user.target` as its default and is listed in the server inventory.
+The home Talos manifests, configs and Bitwarden notes are historical recovery
+material, not evidence of their current state. The AWS Talos cluster was
+terminated on 2026-10-25.
 [Spindle](docs/src/servers/spindle-vps/README.md), an OCI VPS in Frankfurt running
 Matrix, standalone LiveKit and the School, Reef and Hub Hives, is not listed in
 this inventory. The `llm` group is dormant (commented out in `inventory.yml`).
@@ -85,7 +88,7 @@ Repo is public — no secrets in git, ever. Units fetch secrets from Bitwarden a
 
 Full handbook lives in [`docs/`](docs/) and is published at [reilly.asia/infra/handbook](https://reilly.asia/infra/handbook/) — run `just docs` to serve it locally.
 
-- [Talos cluster handbook](docs/src/servers/talos-k8s/cluster.md) — Bihar + Karnataka (home, offline), Lemonade, KubeVirt
+- [Home Talos cluster history](docs/src/servers/talos-k8s/cluster.md) — historical configuration and recovery reference
 - [Spindle VPS](docs/src/servers/spindle-vps/README.md) — Matrix, LiveKit and Hives on OCI
 - [TunaOS AWS cluster handbook](docs/src/servers/aws-k8s/cluster.md) — archived cluster history
 - [Adding a new machine](docs/src/onboarding.md)

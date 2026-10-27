@@ -237,6 +237,10 @@ def rdp():
     if 'Status: enabled' not in command('grdctl', 'rdp', 'status'):
         print('WOULD enable GNOME RDP protocol')
 
+def touchpad():
+    if settings('org.gnome.desktop.peripherals.touchpad', 'tap-to-click') != 'false':
+        print('WOULD disable touchpad tap-to-click')
+
 def remote_service():
     state = command('systemctl', '--user', 'show', '--property=LoadState', '--property=UnitFileState',
                     '--property=ActiveState', 'gnome-remote-desktop.service')
@@ -247,7 +251,7 @@ def remote_service():
         print('WOULD enable and start GNOME Remote Desktop user service')
 
 failed = False
-checks = [('extension settings', extension_settings), ('RDP', rdp), ('remote service', remote_service)]
+checks = [('extension settings', extension_settings), ('RDP', rdp), ('remote service', remote_service), ('touchpad', touchpad)]
 if config_ok:
     checks.extend((('Ptyxis profile', ptyxis), ('enabled extensions', enabled_extensions)))
 for label, inspect in checks:
@@ -264,6 +268,13 @@ PY
   step "inspect GNOME user session" check_gnome_session
   finish
 fi
+disable_tap_to_click() {
+  require_session || return 1
+  [ "$(gsettings get org.gnome.desktop.peripherals.touchpad tap-to-click)" = false ] ||
+    gsettings set org.gnome.desktop.peripherals.touchpad tap-to-click false
+}
+soft "disable touchpad tap-to-click" disable_tap_to_click
+
 
 configure_ptyxis() {
   local uuid current_cmd current_font

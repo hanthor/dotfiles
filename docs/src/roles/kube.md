@@ -5,7 +5,7 @@
 **Secrets needed:** Yes  
 **Runs on:** Desktops only (`SKIPPED:` otherwise, or with `skip_kube: true` / `machine_profile: vm-test` in `host_vars`)
 
-Pulls kube + Talos configs from Bitwarden for the home cluster (Bihar + Karnataka — powered down, expected back) and the historical [AWS cluster](../servers/aws-k8s/cluster.md), terminated 2026-10-25. Neither cluster is currently reachable; the AWS configs are retained separately.
+Pulls retained kube + Talos configs from Bitwarden for the former home cluster and the historical [AWS cluster](../servers/aws-k8s/cluster.md), terminated 2026-10-25. Bihar was recently online but is currently unreachable; its OS and services are unverified. Karnataka runs Utah. Preserve the home configs and notes as recovery material; they do not prove a cluster is running or reachable.
 
 ## Steps
 
@@ -23,9 +23,9 @@ A missing or empty note prints `warn:` and leaves its existing file untouched.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `kubectl` returns `Unable to connect to the server` | The home cluster is powered down, or the vault was locked and configs were never deployed | Home-cluster connectivity returns only after it is powered on; if configs are missing, unlock BW and re-run `just apply-tags kube` |
+| `kubectl` returns `Unable to connect to the server` | The historical endpoint may no longer host the cluster, or configs may be missing | Do not assume powering on a machine restores the cluster; inspect the intended target and, if configs are missing, unlock BW and re-run `just apply-tags kube` |
 | `warn: kubeconfig ... missing in BW` | The note is unavailable or empty | Check the vault; if it needs seeding, run `just seed-kube` from a host with the intended home configs |
-| Configs deployed but auth fails when the home cluster is running | Cluster PKI may have rotated — local configs are stale | Re-run `just seed-kube` from a healthy host, then re-apply on consumers |
+| Configs deployed but auth fails against a deliberately restored cluster | Cluster PKI may have rotated — local configs are stale | Confirm the intended cluster and configs before re-seeding, then re-apply on consumers |
 | Unit prints `SKIPPED: not a desktop` on a host that should have it | `skip_kube: true` in `host_vars/<host>.yml`, or host not in the `desktop` group | Adjust inventory or host_vars |
 | `FAIL  cannot inspect desktop inventory` | Missing `yq`, unreadable inventory, or malformed desktop hosts | Install `yq` and fix `inventory.yml`; no configs are changed while classification is unknown |
 
@@ -40,15 +40,15 @@ This packages `~/.kube/config` and `~/.talos/config` into BW notes named `kubeco
 
 ## How to verify
 
-Both commands below require the home cluster to be powered on; they fail while
-it remains in storage. The former AWS cluster cannot be queried.
+These historical commands require a deliberately restored, reachable home
+Talos cluster; do not assume one exists. The former AWS cluster cannot be queried.
 
 ```bash
-kubectl get nodes               # home cluster: bihar + karnataka (fails while it's powered down)
+kubectl get nodes               # historical home cluster
 talosctl --talosconfig ~/.talos/config get members
 ```
 
 ## Notes
 
 - These files contain cluster PKI material; the repo's `.gitignore` excludes the cluster source files, and these caches live in `~/` only — never commit.
-- The unit is gated by desktop membership and `skip_kube` / `machine_profile: vm-test`. Servers don't get a kubeconfig; the Talos cluster nodes are not in the inventory.
+- The unit is gated by desktop membership and `skip_kube` / `machine_profile: vm-test`. Servers don't get a kubeconfig; the former Talos cluster nodes were not Ansible-managed.

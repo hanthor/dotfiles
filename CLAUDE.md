@@ -8,23 +8,18 @@ Native Bash-unit dotfiles + infra for a personal fleet (desktops, servers, VPS).
 
 Three distinct concerns live here:
 1. **Workstation config** (`units/`, `home/`, `host_vars/`, `group_vars/`) — shells, packages, browser, SSH, Tailscale, kubeconfig, etc.
-2. **Talos K8s cluster IaC** (`talos-k8s/`) — manifests for the Bihar + Karnataka cluster. Detailed handbook in [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md).
+2. **Historical Talos K8s cluster IaC** (`talos-k8s/`) — retained home-cluster manifests and recovery reference in [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md).
 3. **TunaOS AWS account IaC** (`aws/`, OpenTofu) — the account is **TunaOS infrastructure**, not the personal fleet: punjab's instance, backups (S3), IAM, budgets, and (terminated, still in the code) the AWS Talos cluster's VPC/nodes/EIPs. Credits are exhausted: everything left here costs real money. Handbook: [`docs/src/servers/aws/README.md`](docs/src/servers/aws/README.md).
 
-### Two Talos clusters, not one
+### Cluster recovery and current hosts
 
-- **Home** (`bihar` + `karnataka`) — on the LAN. Configs: `~/.kube/config`, `~/.talos/config`.
-  **Currently powered down and in storage; expected back.** Treat it as
-  temporarily offline, not decommissioned — don't delete its configs, Bitwarden
-  notes, or `talos-k8s/` manifests, and expect `just doctor`/`kubectl` against it
-  to fail until it returns.
+- **Home:** Karnataka runs `ghcr.io/projectbluefin/utah:testing` and defaults to `multi-user.target`; it is in the fleet server inventory. Bihar was recently online but is currently unreachable; its OS and services are unverified. Retain the former home cluster's `~/.kube/config`, `~/.talos/config`, Bitwarden notes and `talos-k8s/` manifests as recovery material; don't assume the cluster is running or operate historical recovery commands on these machines.
 - **AWS** (`eu-north-1`, built 2026-08-27) — **terminated 2026-10-25** after credits were exhausted. It previously ran Matrix, the Hives and the CFP dashboard. The S3 bucket `hanthor-fleet-backups-*` and the himachal-1 mirror (`~/backups/tunaos-aws-2026-10-25`) were retained; verify individual AWS resources rather than assuming they are gone. OpenTofu still describes the old cluster and can propose recreating resources.
   Configs retained as recovery material: `~/.kube/config-aws-migration`, `~/.talos/config-aws-migration`.
   Handbook: [`docs/src/servers/aws-k8s/cluster.md`](docs/src/servers/aws-k8s/cluster.md).
 - **Spindle VPS** — Matrix, standalone LiveKit, School, Reef and Hub run on an Oracle Always Free A1 VM in `eu-frankfurt-1`, 2 OCPU / 12 GB, joined to the tailnet and locked down. The kit and runbook are in [`docs/src/servers/spindle-vps/`](docs/src/servers/spindle-vps/README.md); Oracle API key/config are in Bitwarden. Cloudflare DNS failover is manual, not automatic.
 
-Neither cluster's nodes are managed by fleet units — Talos has no SSH. They are not in
-`inventory.yml`; access is `talosctl`/`kubectl` only.
+The former AWS Talos nodes are not in `inventory.yml`. Karnataka is an SSH-managed Utah fleet host, not a current Talos node.
 
 The two Hetzner VPSes it replaced (`matrix`, `telengana`) are retired but still
 powered on for burn-in. **Nothing on them may be restarted** — see the
@@ -63,13 +58,9 @@ Groups in `inventory.yml`, `skip_*` flags and `machine_profile` influence indivi
 
 `talos-k8s/.gitignore` excludes `controlplane.yaml`, `worker.yaml`, and `talosconfig` from git.
 
-## Talos cluster
+## Historical home Talos cluster
 
-Two nodes: **bihar** (control plane, Intel) and **karnataka** (worker, AMD Strix Halo APU). Talos `v1.13.2`, K8s `v1.36.1`, flannel CNI. AMD GPU exposed to Kubernetes via the Image Factory schematic.
-
-Before shutdown, workloads included Lemonade (AMD-optimized local AI), KubeVirt v1.8.2 + KubeVirt Manager, and the Tailscale Operator (Ingress to `*.manatee-basking.ts.net`).
-
-**The cluster handbook is [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md)** — hardware, network, reinstall, troubleshooting.
+The former Bihar control plane and Karnataka worker ran Talos `v1.13.2`, Kubernetes `v1.36.1`, Lemonade and KubeVirt. This is historical architecture, not current workload status. The [cluster handbook](docs/src/servers/talos-k8s/cluster.md) preserves recovery instructions and warns against applying them to repurposed nodes.
 
 ## TunaOS AWS account (`aws/`)
 

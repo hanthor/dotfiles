@@ -28,6 +28,7 @@ server:
     punjab:   # EC2 agent box (us-east-1; current instance status unverified)
     vm:       # Local dev VM
     goa:      # Raspberry Pi 5 (ARM)
+    karnataka: # Utah host; multi-user.target by default
 ```
 
 Server roles: `server_hardening`, plus the service roles.
@@ -71,14 +72,16 @@ termux_hosts:
 ```
 
 ### `llm` (dormant)
-Commented out in `inventory.yml` — its only member, karnataka, is now a Talos
-worker.
+Commented out in `inventory.yml`; its only listed member is karnataka.
 
 ### Not in the inventory
 
-**bihar** and **karnataka** are Talos nodes (no SSH) and are managed with
-`talosctl`/`kubectl` only. The home cluster is powered down and in storage,
-expected back. The terminated AWS cluster's nodes were not in the inventory either.
+**Bihar** was recently online but is currently unreachable; its OS and services
+are unverified. It is not in the inventory.
+The [home Talos reference](servers/talos-k8s/cluster.md), manifests, configs and
+Bitwarden notes are retained for historical recovery, not evidence of either
+machine's current state. The terminated AWS cluster's nodes were not in the
+inventory either.
 
 ## Per-Machine Configuration
 
