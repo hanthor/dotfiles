@@ -1,22 +1,25 @@
-# AWS Talos Cluster
+# AWS Talos Cluster (archive)
 
-> **Terminated 2026-10-25.** The nodes, volumes, snapshots and Elastic IPs were deleted (CloudTrail: `TerminateInstances` by root at 17:16 UTC) after the AWS credits ran out; this page is history. The data lives in the S3 bucket `hanthor-fleet-backups-*` and in a mirror on himachal-1 (`~/backups/tunaos-aws-2026-10-25`, with a `CLUSTER-INVENTORY.md` of everything that ran). Matrix is moving to the [Spindle VPS](../spindle-vps/README.md). OpenTofu in `aws/` still describes these nodes.
+> **Terminated 2026-10-25.** This is a historical record, not an operating
+> runbook. The fleet-backups S3 bucket and a mirror on himachal-1
+> (`~/backups/tunaos-aws-2026-10-25`) were retained; the current status of
+> individual volumes, snapshots, IPs and other AWS resources is not established
+> here. Matrix and standalone LiveKit are deployed on the
+> [OCI spindle VPS](../spindle-vps/README.md).
+>
+> **OpenTofu still describes removed cluster resources.** `just aws-plan` may
+> propose recreating them, and `just aws-apply` can recreate infrastructure and
+> incur costs. Review live state and every proposed action before applying; see
+> [AWS account and IaC](../aws/README.md).
 
-> **TunaOS infrastructure.** This runs in the TunaOS AWS account and serves
-> the TunaOS project (Hive, Matrix, CI), not James's personal fleet. See
-> [TunaOS AWS Account & IaC](../aws/README.md).
+The following describes the former TunaOS two-node Talos Kubernetes cluster in
+AWS `eu-north-1`, built 2026-08-27 to consolidate the two Hetzner VPSes
+(`matrix` and `telengana`). Those retired hosts must not be restarted. The home
+Talos cluster is separately powered down in storage and expected back.
 
-Two-node Talos Kubernetes cluster in AWS `eu-north-1`, built 2026-08-27 to
-consolidate the two Hetzner VPSes (`matrix` and `telengana`) onto one cluster.
-
-All AWS resources here (VPC, security groups, nodes, Elastic IPs, volumes, snapshot policy) are
-codified in OpenTofu under [`aws/`](https://github.com/hanthor/dotfiles/tree/master/aws).
-See [AWS Account](../aws/README.md). Node *configuration* is not; that is
-`talosctl`'s job.
-
-Like the home cluster, these nodes are **talosctl/kubectl-managed only** — Talos
-has no SSH, no package manager, and an immutable root. They are deliberately
-*not* in `inventory.yml` and no Ansible role targets them.
+Historical descriptions and commands below refer to the cluster as it existed
+before termination; they cannot be used to access it now. The nodes were not
+in `inventory.yml` and no Ansible role targeted them.
 
 ## Nodes
 
@@ -25,18 +28,18 @@ has no SSH, no package manager, and an immutable root. They are deliberately
 | control-plane | `m6i.2xlarge` (8 vCPU / 32 GiB) | `workload-role=hive` |
 | worker | `m6i.xlarge` | `workload-role=matrix` |
 
-Each node has a private VPC address and an Elastic IP; the addresses live in
-the OpenTofu state and the talosconfig, not here.
+Each node had a private VPC address and an Elastic IP; addresses were recorded
+in OpenTofu state and talosconfig.
 
 Talos `v1.13.9`, Kubernetes `v1.36.2`, flannel CNI, `local-path` storage.
 
-The control-plane taint is removed so it schedules workloads too. `m6a` (AMD) is
-**not offered in `eu-north-1`** — `m6i` is the equivalent.
+The control-plane taint was removed so it could schedule workloads too. `m6a`
+(AMD) was not offered in `eu-north-1`; `m6i` was the equivalent.
 
 ## Network
 
 Dedicated VPC `10.20.0.0/16`, single AZ `eu-north-1a`, public subnet + IGW, no
-NAT gateway (unnecessary, and ~$32/mo).
+NAT gateway.
 
 Three security groups:
 
@@ -46,19 +49,15 @@ Three security groups:
 | public | web ingress, Matrix federation, and the MatrixRTC media ports |
 | admin | Talos and Kubernetes APIs, admin allowlist only |
 
-Both nodes carry the public group, so either node can serve web traffic. The
-RTC ports match what the ESS chart's MatrixRTC SFU exposes as NodePorts.
-
-> The admin allowlist **will go stale**. It lives in `aws/terraform.tfvars`
-> (Bitwarden `aws-tofu-tfvars`). Update it with `just aws-apply`, not in the
-> console. The long-term fix is a Tailscale subnet router in-cluster rather
-> than widening the CIDR.
+Both nodes carried the public group, allowing either to serve web traffic. The
+RTC ports matched what the ESS chart's MatrixRTC SFU exposed as NodePorts.
+The admin allowlist was in `aws/terraform.tfvars` (Bitwarden `aws-tofu-tfvars`).
 
 ## Ingress — the important gotcha
 
-The Traefik `Service` is `type: LoadBalancer` and stays **`<pending>` forever**:
-Talos on EC2 has no cloud-controller-manager, so nothing provisions an ELB.
-Public traffic works only because the Traefik pod binds **hostPorts 80/443**.
+The Traefik `Service` was `type: LoadBalancer` and remained **`<pending>`**:
+Talos on EC2 had no cloud-controller-manager to provision an ELB. Public traffic
+worked because the Traefik pod bound **hostPorts 80/443**.
 
 Driven from [`talos-k8s/traefik/values.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/traefik/values.yaml).
 Three non-obvious settings, all load-bearing:
@@ -72,7 +71,7 @@ Three non-obvious settings, all load-bearing:
 - **`nodeSelector: workload-role=matrix`.** Running Traefik on *every* node was
   tried and reverted — see the incident note below.
 
-DNS points only at the worker's Elastic IP.
+DNS pointed at the worker's Elastic IP at the time.
 
 ### Incident 2026-08-27: don't put workloads on an undersized control-plane
 
@@ -98,11 +97,10 @@ exec` took 10–35 s, the ops CronJobs hung until their deadlines, and agents
 were slow to reach a ready prompt. The in-place resize through OpenTofu took
 about 3 minutes of Hive downtime; Matrix on the worker stayed up.
 
-Lesson: hive cannot move to the worker (its PVC is `local-path` and node-bound),
-so the control-plane must be sized for it. Ingress HA on both nodes only becomes
-viable with that headroom.
+The node-bound `local-path` PVC prevented hive from moving to the worker, so
+the control-plane needed enough headroom for its workloads.
 
-## Workloads
+## Former workloads
 
 | Namespace | What | Exposure |
 |---|---|---|
@@ -110,24 +108,22 @@ viable with that headroom.
 | `hive` | tuna-os Hive (SCHOOL) + Discord bots | `school.tunaos.org` (legacy alias `hive.tunaos.org`), Cloudflare-proxied |
 | `hive-reef` | tuna-os Hive (REEF) | `reef.tunaos.org` |
 | `hive-hub` | Hive hub — every Hive's status in one place | `hub.tunaos.org` |
-| `postgres` | Postgres 16 — **the production DB** for Synapse + MAS | in-cluster only |
+| `postgres` | Postgres 16 — former production DB for Synapse + MAS | in-cluster only |
 | `default` | CFP review dashboard, searxng | Tailscale ingress |
 | `cert-manager` | Let's Encrypt via Cloudflare DNS-01 | — |
 | `tailscale` | Tailscale operator (ingress proxies) | — |
 
-### Postgres is in-cluster, by necessity
+### Former Postgres storage
 
-The original plan put Postgres on the host. Talos makes that impossible — there
-is no host to install packages on. The k8s-deployed Postgres in the `postgres`
-namespace **is** production.
+Talos made the original plan to install Postgres on the host impossible. The
+cluster's production Postgres ran in the `postgres` namespace, with durability
+depending on `local-path` on the worker's root volume. A separate 50GB gp3
+pgdata volume was attached at the EC2 level but not mounted by Talos.
 
-That means DB durability currently rests on `local-path` on the worker's root
-volume. The separate 50GB gp3 pgdata volume is attached at
-the EC2 level but **not mounted by Talos** — unfinished work.
+## Historical access
 
-## Access
-
-`kubectl`/`talosctl` need **`endpoints` = public EIP, `nodes` = private IP** —
+The old cluster is no longer reachable. Its `kubectl`/`talosctl` setup required
+**`endpoints` = public EIP, `nodes` = private IP** —
 not the same address for both. Talos does a two-hop call (client → endpoint →
 node); pointing both at the public EIP makes the node try to reach *itself* via
 its own Elastic IP from inside the VPC, which AWS's hairpin NAT does not
@@ -143,25 +139,24 @@ talosctl --talosconfig ~/.talos/config-aws-migration \
   -e <node-eip> -n <node-private-ip> version
 ```
 
-Configs live in Bitwarden as `kubeconfig-aws-migration` / `talosconfig-aws-migration`
-and are fetched by the [`kube`](../../roles/kube.md) role into
-`~/.kube/config-aws-migration` and `~/.talos/config-aws-migration` — kept
-separate from the home cluster's files so both stay independently usable.
+The configs were stored in Bitwarden as `kubeconfig-aws-migration` /
+`talosconfig-aws-migration`; the [`kube`](../../roles/kube.md) role still
+fetches them separately from the home cluster's files. They no longer provide
+access to this terminated cluster.
 
-## Cost
+## Historical cost context
 
-Covered by permanent AWS credits ($1400/mo). An AWS Budget
-(`migration-monthly-spend`) alerts at $150 / $500 / $1400. No Savings Plan —
-credits zero the bill, so a commitment buys nothing and locks in instance shape.
+The initial deployment used AWS credits, which have since been exhausted.
+See [AWS account costs](../aws/README.md) for the current caution.
 
-## Known gaps
+## Historical gaps
 
-- 50GB Postgres volume unmounted (above).
-- ~~Backups partial~~ — done 2026-09-24: nightly Postgres dumps are copied to
-  S3 (the fleet-backups bucket, `postgres/`) and size-verified, and DLM
-  snapshots both root volumes. See [`talos-k8s/backup/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s/backup).
-- API-server OIDC + finer-grained RBAC still deferred; access is a single admin
-  client cert.
+- The 50GB Postgres volume was unmounted.
+- Nightly Postgres dumps were copied to S3 and size-verified; DLM snapshot
+  schedules covered the root volumes. Retention of individual snapshots is not
+  established by this historical record.
+- API-server OIDC and finer-grained RBAC were deferred; access used an admin
+  client certificate.
 
 ## See also
 

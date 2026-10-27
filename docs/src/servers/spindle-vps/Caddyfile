@@ -34,3 +34,24 @@ call.reilly.asia {
 		reverse_proxy livekit:7880
 	}
 }
+
+# The Hive Compose project shares spindle_default with Caddy.
+school.tunaos.org {
+	reverse_proxy school:3001
+}
+
+reef.tunaos.org {
+	reverse_proxy reef:3001
+}
+
+hub.tunaos.org {
+	handle /api/* {
+		reverse_proxy hub:3001
+	}
+	handle /login/* {
+		reverse_proxy hub:3001
+	}
+	handle {
+		reverse_proxy hub-front:80
+	}
+}

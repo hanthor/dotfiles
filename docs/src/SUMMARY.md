@@ -37,7 +37,7 @@
 # TunaOS Infrastructure
 
 - [TunaOS AWS Account & IaC](servers/aws/README.md)
-  - [Talos Cluster (eu-north-1)](servers/aws-k8s/cluster.md)
+  - [Talos Cluster (terminated; archive)](servers/aws-k8s/cluster.md)
   - [Hive Agent Fleet](cluster/hive.md)
   - [Punjab (agent box)](servers/punjab/README.md)
 

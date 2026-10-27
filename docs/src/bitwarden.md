@@ -40,8 +40,8 @@ Every item a role or script reads (grep `bw get` / `bw list` under `roles/` and 
 | `tailscale-apikey` | Login (password) | `tailscale` role — key for `tailscale up --authkey` and stale-device cleanup via the API |
 | `kubeconfig` | Secure Note | `kube` role — home cluster kubeconfig |
 | `talosconfig` | Secure Note | `kube` role — home cluster Talos config |
-| `kubeconfig-aws-migration` | Secure Note | `kube` role — AWS cluster kubeconfig |
-| `talosconfig-aws-migration` | Secure Note | `kube` role — AWS cluster Talos config |
+| `kubeconfig-aws-migration` | Secure Note | `kube` role — retained kubeconfig for the terminated AWS cluster |
+| `talosconfig-aws-migration` | Secure Note | `kube` role — retained Talos config for the terminated AWS cluster |
 | `accounts.firefox.com` | Login + TOTP | `browser_fxa` role — Firefox Account credentials |
 | `github-token` | Login (password) | `github` role — PAT for `gh auth login` |
 | `atuin.sh` | Login + custom field `key` | `shell_atuin` role — atuin sync login + mnemonic |

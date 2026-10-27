@@ -59,16 +59,19 @@ From `inventory.yml`:
 | dilli | desktop | Secondary workstation (Bluefin) |
 | kerala | desktop | postmarketOS ARM device (musl, `apk`) |
 | mumbai | desktop | Debian VM on the phone (Android Virtualization Framework), `cli-only` |
-| punjab | server | Headless Ubuntu agent box (EC2 `t3.large`, us-east-1) |
+| punjab | server | EC2 agent box (us-east-1) |
 | goa | server | Raspberry Pi 5 (applies locally) |
 | vm | server | Local dev VM |
 | termux | termux_hosts | Raw Termux layer on the phone — `termux_packages` only |
 | test-fleet-fedora, test-fleet-node2 | test_fleet | KubeVirt test VMs (`machine_profile: vm-test`) |
 | matrix, telengana | vps | **Retired** Hetzner VPSes, powered on for burn-in — restart nothing on them |
 
-Not Ansible-managed (Talos, `talosctl`/`kubectl` only): **bihar** + **karnataka**
-(home cluster — powered down, in storage, expected back) and the AWS cluster in
-`eu-north-1`. The `llm` group is dormant (commented out in `inventory.yml`).
+The home Talos cluster, **bihar** + **karnataka**, is not Ansible-managed: it is
+powered down and in storage, expected back. The AWS Talos cluster was terminated
+on 2026-10-25. [Spindle](docs/src/servers/spindle-vps/README.md), an OCI VPS in
+Frankfurt running Matrix, standalone LiveKit and the School, Reef and Hub Hives,
+is not listed in this inventory.
+The `llm` group is dormant (commented out in `inventory.yml`).
 
 ---
 
@@ -83,7 +86,8 @@ Repo is public — no secrets in git, ever. All secrets are fetched from Bitward
 Full handbook lives in [`docs/`](docs/) and is published at [reilly.asia/infra/handbook](https://reilly.asia/infra/handbook/) — run `just docs` to serve it locally.
 
 - [Talos cluster handbook](docs/src/servers/talos-k8s/cluster.md) — Bihar + Karnataka (home, offline), Lemonade, KubeVirt
-- [TunaOS AWS cluster handbook](docs/src/servers/aws-k8s/cluster.md) — Matrix/ESS, the Hive, CFP dashboard (TunaOS infrastructure)
+- [Spindle VPS](docs/src/servers/spindle-vps/README.md) — Matrix, LiveKit and Hives on OCI
+- [TunaOS AWS cluster handbook](docs/src/servers/aws-k8s/cluster.md) — archived cluster history
 - [Adding a new machine](docs/src/onboarding.md)
 - [Roles reference](docs/src/roles/)
 - [Bitwarden vault setup](docs/src/bitwarden.md)

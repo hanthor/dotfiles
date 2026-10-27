@@ -18,10 +18,10 @@ Three distinct concerns live here:
   temporarily offline, not decommissioned — don't delete its configs, Bitwarden
   notes, or `talos-k8s/` manifests, and expect `just doctor`/`kubectl` against it
   to fail until it returns.
-- **AWS** (`eu-north-1`, built 2026-08-27) — **terminated 2026-10-25** (CloudTrail `TerminateInstances` by root; credits were one-time and are exhausted). It ran Matrix (Spindle, `reilly.asia`), the Hives (school.tunaos.org, reef.tunaos.org, hive.reilly.asia) and the CFP dashboard. The nodes, EBS volumes, snapshots and both Elastic IPs are gone; what survives is the S3 bucket `hanthor-fleet-backups-*` and a full mirror on himachal-1 (`~/backups/`, see its `README.md` and `verify.sh`). OpenTofu still describes the old nodes, so a plan shows drift until the `aws/` cluster resources are removed.
-  Configs (kept, now useless): `~/.kube/config-aws-migration`, `~/.talos/config-aws-migration`.
+- **AWS** (`eu-north-1`, built 2026-08-27) — **terminated 2026-10-25** after credits were exhausted. It previously ran Matrix, the Hives and the CFP dashboard. The S3 bucket `hanthor-fleet-backups-*` and the himachal-1 mirror (`~/backups/tunaos-aws-2026-10-25`) were retained; verify individual AWS resources rather than assuming they are gone. OpenTofu still describes the old cluster and can propose recreating resources.
+  Configs retained as recovery material: `~/.kube/config-aws-migration`, `~/.talos/config-aws-migration`.
   Handbook: [`docs/src/servers/aws-k8s/cluster.md`](docs/src/servers/aws-k8s/cluster.md).
-- **Spindle VPS** — `matrix.reilly.asia` moves to one Oracle Always Free A1 VM (home region `ap-sydney-1`, 2 OCPU / 12 GB; tenancy `trogdor3000`), joined to the tailnet and locked down; kit and runbook in [`docs/src/servers/spindle-vps/`](docs/src/servers/spindle-vps/README.md). Oracle API key/config are in Bitwarden (`oci-api-key (Oracle Cloud, tenancy trogdor3000)`).
+- **Spindle VPS** — Matrix, standalone LiveKit, School, Reef and Hub run on an Oracle Always Free A1 VM in `eu-frankfurt-1`, 2 OCPU / 12 GB, joined to the tailnet and locked down. The kit and runbook are in [`docs/src/servers/spindle-vps/`](docs/src/servers/spindle-vps/README.md); Oracle API key/config are in Bitwarden. Cloudflare DNS failover is manual, not automatic.
 
 Neither cluster's nodes are Ansible-managed — Talos has no SSH. They are not in
 `inventory.yml`; access is `talosctl`/`kubectl` only.
@@ -72,12 +72,12 @@ Production workloads: Lemonade (AMD-optimized local AI), KubeVirt v1.8.2 + KubeV
 
 ## TunaOS AWS account (`aws/`)
 
-- **punjab** (this repo's only AWS-hosted Ansible host) is an EC2 `t3.large` in `us-east-1`; the Talos cluster is in `eu-north-1`; `runs-on` (us-east-2) is its own CloudFormation stack — don't import it.
-- `just aws-plan` / `just aws-apply`. A plan against the live account must read "No changes"; console edits are drift — codify or revert them.
-- State is in S3 (`hanthor-fleet-backups-*/tofu/aws/`) and contains Talos PKI via node `user_data`. `aws/terraform.tfvars` (admin IPs, alert email) is gitignored and lives in Bitwarden note `aws-tofu-tfvars` (`just aws-tfvars` / `just aws-seed-tfvars`).
-- punjab has **no public inbound** (SG empty): Tailscale for access, SSM Session Manager for break-glass. Its EIP is allowlisted on the cluster admin SG, so kubectl/talosctl work from it.
-- Postgres dumps go off-cluster to `s3://hanthor-fleet-backups-*/postgres/` via IAM user `postgres-backup-writer` (no delete; key in BW `postgres-backup-s3` + k8s Secret, never in tofu state).
-- Never put Talos `user_data` in the config — nodes `ignore_changes` it. `prevent_destroy` guards nodes, punjab, the worker EIP (DNS), pgdata and the bucket.
+- **punjab** (this repo's AWS-hosted Ansible host) is an EC2 `t3.large` in `us-east-1`; the former Talos cluster in `eu-north-1` is terminated. `runs-on` (us-east-2) is its own CloudFormation stack — don't import it.
+- **Do not blindly apply `aws/`:** its configuration still describes the terminated cluster and may propose recreating paid infrastructure. Inspect live resources and review plans before changes; credits are exhausted.
+- State is in S3 (`hanthor-fleet-backups-*/tofu/aws/`) and contains Talos PKI. `aws/terraform.tfvars` is gitignored and lives in Bitwarden note `aws-tofu-tfvars`.
+- punjab uses Tailscale for access and SSM Session Manager for break-glass. Preserve its data and the S3 backups until a verified replacement and an explicit cleanup decision exist.
+- The former cluster uploaded Postgres dumps to `s3://hanthor-fleet-backups-*/postgres/`; the `postgres-backup-writer` key is in Bitwarden, never in tofu state.
+- `prevent_destroy` in configuration does not prevent creation of resources missing from the account. Never put Talos `user_data` in the config.
 
 ## Automation (bots + Hive)
 

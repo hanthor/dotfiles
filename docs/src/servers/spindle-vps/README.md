@@ -1,13 +1,18 @@
-# Spindle VPS (matrix.reilly.asia)
+# Spindle VPS (Matrix and Hive)
 
-Runs the Matrix homeserver that was on the AWS Talos cluster (terminated 2026-10-25) on one host:
-**Spindle**, **MAS** (delegated login), **Postgres** (MAS database only), standalone **LiveKit** and
-**lk-jwt-service** (MatrixRTC; no ESS chart/runtime), and **Caddy**. Everything is `docker compose`
-under `/srv/spindle`.
+The Oracle Cloud VPS in Frankfurt runs the Matrix homeserver that was on the AWS Talos cluster,
+terminated 2026-10-25. **Spindle**, **MAS** (delegated login), **Postgres** (MAS database only),
+standalone **LiveKit** and **lk-jwt-service** (MatrixRTC; no ESS chart/runtime), and **Caddy** run
+as Docker Compose services under `/srv/spindle`.
+
+The School and Reef Hives, Hub and branded hub frontend run separately under `/srv/hives`, sharing
+the `spindle_default` network and Caddy ingress. The `omp-auth-broker` user service also runs on
+this host. The Hive deployment's runtime configuration and data are not restored by `deploy.sh`;
+preserve and back them up separately.
 
 | Piece | Source |
 |---|---|
-| Host | Oracle Cloud Always Free, `VM.Standard.A1.Flex`, Ubuntu 24.04 aarch64 (see below) |
+| Host | Oracle Cloud Always Free, `VM.Standard.A1.Flex`, Ubuntu 24.04 aarch64, `eu-frankfurt-1` AD-1; public IPv4 `92.5.82.232`, Tailscale `100.113.75.88` |
 | Spindle | `ghcr.io/tuna-os/spindle:perf-723-de17805-arm64`, the production commit (`main` + #723, amd64 digest `7021ada8…`) built for arm64 from `tuna-os/spindle` branch `ops/arm64-perf-723` |
 | MatrixRTC | `livekit-server:v1.13.5` + `lk-jwt-service:0.6.0` as standalone containers |
 | Data | `ess_ess-spindle-data.tar.gz` (the store, taken 15:33 UTC) and `postgres/2026-10-25/mas.dump` (15:22 UTC), from `~/backups/tunaos-aws-2026-10-25` on himachal-1 |
@@ -26,7 +31,8 @@ remains unmigrated.
 - In the OCI security list allow TCP **80, 443, 30001** and UDP **32700–32767** from
   `0.0.0.0/0`. Remove the default public SSH rule after tailnet access works.
 - Oracle may reclaim idle Always Free instances. We accept that risk and will not upgrade this
-  tenancy to a paid account.
+  tenancy to a paid account. Cloud-init package installation failed on the existing instance and
+  required manual installation; check `cloud-init status --long` and installed packages before deploy.
 
 A1 capacity is often "out of host capacity"; retry another availability domain or region later.
 
@@ -40,7 +46,12 @@ cd ~/.local/share/dotfiles/docs/src/servers/spindle-vps   # a checkout of this b
 
 It renders the secrets from `cluster-state.himachal.tar.gz.age`, copies the kit to `/srv/spindle`,
 streams the store (excluding `store.pre723`), restores `mas.dump`, runs `mas database migrate` and
-starts the stack. Nothing secret is printed or committed.
+starts the stack. Restore markers prevent re-importing the original snapshots on a normal rerun;
+do not remove those markers or restore old data over live data. The script restarts Spindle and
+Caddy, causing an interruption. Nothing secret is printed or committed.
+
+The supplied Caddyfile includes the Hive routes. Do not deploy a Matrix-only Caddyfile over the
+shared live configuration: doing so removes Hive TLS sites and causes Cloudflare 525 errors.
 
 ## 2b. Join the tailnet and lock down
 
@@ -66,6 +77,9 @@ curl https://matrix.reilly.asia/_matrix/client/versions
 curl https://auth.reilly.asia/.well-known/openid-configuration
 curl https://reilly.asia/.well-known/matrix/client
 curl -i https://call.reilly.asia/sfu/get  # GET should return 405
+curl https://school.tunaos.org/api/health
+curl https://reef.tunaos.org/api/health
+curl https://hub.tunaos.org/api/fleet-stats
 ```
 
 The apex `reilly.asia` is a Cloudflare Worker custom domain (`reilly-asia`) serving the personal
