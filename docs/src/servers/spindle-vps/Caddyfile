@@ -1,0 +1,44 @@
+# Same routing as the ESS ingress it replaces (federation rides 443 via .well-known).
+# MatrixRTC (call.reilly.asia, LiveKit) is not migrated yet, so no rtc_foci is advertised.
+reilly.asia {
+	handle /.well-known/matrix/client {
+		header Content-Type application/json
+		header Access-Control-Allow-Origin *
+		respond `{"m.homeserver":{"base_url":"https://matrix.reilly.asia"}}`
+	}
+	handle /.well-known/matrix/server {
+		header Content-Type application/json
+		respond `{"m.server":"matrix.reilly.asia:443"}`
+	}
+	handle /.well-known/matrix/support {
+		header Content-Type application/json
+		respond `{}`
+	}
+	handle {
+		respond "not found" 404
+	}
+}
+
+matrix.reilly.asia {
+	request_body {
+		max_size 100MB
+	}
+	# Login, logout and refresh belong to MAS; the rest of the client API is Spindle.
+	@mas path_regexp mas ^/_matrix/client/(api/v1|r0|unstable|v3)/(login|logout|refresh)$
+	handle @mas {
+		reverse_proxy mas:8080
+	}
+	handle /_matrix/* {
+		reverse_proxy spindle:8008
+	}
+	handle /_synapse/* {
+		reverse_proxy spindle:8008
+	}
+	handle {
+		respond "not found" 404
+	}
+}
+
+auth.reilly.asia {
+	reverse_proxy mas:8080
+}

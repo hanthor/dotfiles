@@ -1,0 +1,55 @@
+# Spindle + MAS + Postgres + Caddy on one host. Everything under /srv/spindle.
+# Secrets are not in this file: mas/config.yaml, spindle.toml's [auth.delegated] block and
+# .env are written by deploy.sh from the 2026-10-25 cluster-state backup.
+name: spindle
+services:
+  caddy:
+    image: docker.io/library/caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy:/data
+    depends_on: [spindle, mas]
+
+  spindle:
+    # arm64 build of exactly the code production ran (main + #723); see README.
+    image: ghcr.io/tuna-os/spindle:perf-723-de17805-arm64
+    restart: unless-stopped
+    command: ["/etc/spindle/spindle.toml"]
+    environment:
+      TOKIO_WORKER_THREADS: "4"
+    volumes:
+      - ./data:/var/lib/spindle-data
+      - ./spindle.toml:/etc/spindle/spindle.toml:ro
+    mem_limit: 11g
+
+  postgres:
+    image: docker.io/library/postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser
+    secrets: [pg_superuser]
+    volumes:
+      - ./pg:/var/lib/postgresql/data
+      - ./import:/import:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 20
+    mem_limit: 2g
+
+  mas:
+    image: ghcr.io/element-hq/matrix-authentication-service:1.23.0
+    restart: unless-stopped
+    command: ["server", "--no-migrate", "--config", "/config/config.yaml"]
+    volumes:
+      - ./mas:/config:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    mem_limit: 512m
+
+secrets:
+  pg_superuser:
+    file: ./pg_superuser.secret

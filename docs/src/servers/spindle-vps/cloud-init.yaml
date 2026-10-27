@@ -1,0 +1,31 @@
+#cloud-config
+# Bootstrap for the Spindle VPS (Ubuntu 24.04 on Oracle Cloud Always Free A1, aarch64).
+# Paste this into "Cloud-init script" when creating the instance. It only installs Docker,
+# opens the host firewall for 80/443 and authorises the two fleet machines that finish the
+# job over SSH. No secrets are in it. See README.md in this directory.
+package_update: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - netfilter-persistent
+  - iptables-persistent
+  - rsync
+  - jq
+  - age
+  - postgresql-client
+
+# Public keys only: punjab (this repo's agent box) and himachal-1 (holds the backup).
+ssh_authorized_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKTteKkOac3kryqONYQB91nN9tuVTxogiiRG5LRmiiIH punjab
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHZvKYVwdjsZLZyWmllmfOKu2nichF0Z9BRFcDHwjXiF himachal
+
+runcmd:
+  # Oracle's Ubuntu image ends INPUT with a REJECT rule; accept web traffic before it.
+  - iptables -I INPUT 1 -p tcp -m multiport --dports 80,443 -m state --state NEW -j ACCEPT
+  - netfilter-persistent save
+  - systemctl enable --now docker
+  - usermod -aG docker ubuntu
+  - mkdir -p /srv/spindle/data /srv/spindle/pg /srv/spindle/caddy /srv/spindle/mas /srv/spindle/import
+  - chown -R ubuntu:ubuntu /srv/spindle
+  # Spindle runs as uid 1000 inside its image, which may not be the ubuntu user's uid here.
+  - chown 1000:1000 /srv/spindle/data
