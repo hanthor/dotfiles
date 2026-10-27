@@ -38,7 +38,11 @@ Everything not listed under `units/` is still an Ansible role.
 
 ## chezmoi
 
-File-based config (shell, git, neovim, atuin config) is managed by [chezmoi](https://www.chezmoi.io/) from `home/` (`.chezmoiroot` contains `home`, so `.chezmoi.toml.tmpl`, `.chezmoidata.yaml` and `.chezmoiscripts/` live there). `unit:chezmoi` runs `chezmoi --source <repo> --keep-going --force --no-tty apply --init`: `--keep-going` continues past a failing file or script, `--force` overwrites like the old roles did, `--no-tty` keeps the timer from hanging on a prompt, `--init` regenerates the config from `home/.chezmoi.toml.tmpl`.
+File-based config (shell, git, neovim, atuin config) is managed by [chezmoi](https://www.chezmoi.io/) from `home/` (`.chezmoiroot` contains `home`, so `.chezmoi.toml.tmpl`, `.chezmoidata.yaml` and `.chezmoiscripts/` live there). `unit:chezmoi` runs `chezmoi --source <repo> --keep-going --force --no-tty apply --init`: `--keep-going` continues past a failing file or script, `--force` overwrites like the old roles did, `--no-tty` avoids a TTY, and `--init` regenerates the config from `home/.chezmoi.toml.tmpl`.
+
+**Back up and review existing dotfiles before the first apply.** The current `--force` will overwrite local edits to managed targets without prompting on every apply. First adoption can replace an existing target even without `--force`: chezmoi does not treat a pre-existing, never-written target as a conflict by default. Review the intended changes with `chezmoi --source <repo> diff` (after initializing the config with the correct machine data), and keep a private backup of any local files you need. A safer future cutover should detect both first-adoption and later local conflicts and fail closed for unattended runs, with interactive review; merely removing `--force` does not protect initial adoption.
+
+If chezmoi is absent the unit fails rather than reporting a successful skip. Homebrew hosts can run `just packages`, Termux users can run `pkg install chezmoi`, and Alpine/postmarketOS users can enable the community repository and run `sudo apk add chezmoi`.
 
 - Data: `machine`, `is_desktop` (true when the host is in the `desktop` group of `inventory.yml`), `user_name`, `user_email`, `alias_groups`.
 - Secrets are **not** chezmoi templates: the `bitwarden` template function aborts a whole template on a missing item. The `shell-ai` and `atuin` units handle secrets.

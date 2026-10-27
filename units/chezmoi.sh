@@ -8,8 +8,14 @@ if ! command -v chezmoi >/dev/null 2>&1 && [ "$IS_TERMUX" = 1 ]; then
   soft "pkg install chezmoi" pkg install -y chezmoi
 fi
 if ! command -v chezmoi >/dev/null 2>&1; then
-  note "SKIPPED: chezmoi not installed (run: just packages)"
-  exit 0
+  if [ "$IS_TERMUX" = 1 ]; then
+    note "FAIL: chezmoi not installed; run: pkg install chezmoi"
+  elif [ "$IS_MUSL" = 1 ]; then
+    note "FAIL: chezmoi not installed; on Alpine/postmarketOS enable the community repository and run: sudo apk add chezmoi"
+  else
+    note "FAIL: chezmoi not installed; run: just packages"
+  fi
+  exit 1
 fi
 
 is_desktop=0

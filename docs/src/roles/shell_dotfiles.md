@@ -40,4 +40,4 @@ In fish these are abbreviations (`abbr`), not aliases.
 ## Notes
 
 - Shell secrets (`~/.config/shell/secrets.sh`, `~/.config/fish/conf.d/secrets.fish`) are written by the [`shell-ai` unit](shell_ai.md), not here.
-- One failing file does not stop the rest: the unit runs `chezmoi apply --init --keep-going --force --no-tty`.
+- One failing file does not stop the rest: the unit runs `chezmoi apply --init --keep-going --force --no-tty`. This overwrites managed files even when locally edited; back up and review existing dotfiles before adoption. See [Units](../units.md#chezmoi).

@@ -5,7 +5,7 @@
 **Secrets needed:** No  
 **Runs on:** All machines with `chezmoi` installed
 
-[Neovim](https://neovim.io/) configuration, deployed from `home/dot_config/nvim/` (`init.lua`, `lua/config/`, `lua/plugins/`) by chezmoi. After each apply, `.chezmoiscripts/run_after_20-nvim-sync.sh` bootstraps lazy.nvim and runs `nvim --headless "+Lazy! sync" +qa` (best effort, 300 s timeout, never fails the apply).
+[Neovim](https://neovim.io/) configuration, deployed from `home/dot_config/nvim/` (`init.lua`, `lua/config/`, `lua/plugins/`) by chezmoi. `.chezmoiscripts/run_after_20-nvim-sync.sh` bootstraps lazy.nvim and runs `nvim --headless "+Lazy! sync" +qa` on first apply and when Lua configuration files are added, changed, or removed. It skips synchronization on unrelated applies; failures are best effort and retried on the next apply (300 s timeout, never fails the apply). The last successful fingerprint lives in `~/.cache/dotfiles/nvim-config.cksum`.
 
 ## Key Plugins
 
