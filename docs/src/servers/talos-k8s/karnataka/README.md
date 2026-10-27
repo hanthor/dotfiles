@@ -34,6 +34,10 @@ transactional: review ownership conflicts before retrying. The storage profile
 and Corral manifests passed server-side dry-run against the current cluster;
 operator and resource reapplication has not been exercised on it.
 
+Corral has no authentication in this deployment. Its ClusterIP is reachable
+from cluster workloads and its service account can manage cluster resources;
+only run trusted workloads, and do not expose the dashboard publicly.
+
 Host SELinux is enforcing and `container-selinux` is installed. The running
 Utah image does not include `k3s-selinux`, and its policy store is read-only;
 K3s SELinux container labeling remains disabled. Our proposed image build
