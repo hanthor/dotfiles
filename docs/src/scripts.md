@@ -254,7 +254,7 @@ Sync the Homebrew package state: fetch the current installed packages from Homeb
 
 ### `ess-render-values.py`
 
-Render Helm values for the AWS Talos cluster (ESS) by applying substitution rules from Bitwarden.
+Historical helper for rendering ESS Helm values for the terminated AWS Talos cluster from Bitwarden. It does not configure the standalone OCI deployment.
 
 **Usage:**
 ```bash
@@ -266,7 +266,7 @@ python3 scripts/ess-render-values.py < ess-helm-values-template.yml > values.yml
 2. Applies environment and variable substitutions (e.g., `${DOMAIN}`)
 3. Outputs the rendered Helm values to stdout
 
-**Used by:** Cluster deployment pipelines to generate final Helm configurations.
+**Previously used by:** AWS cluster deployment pipelines to generate Helm configurations.
 
 **Prerequisites:**
 - `bw` CLI authenticated with Bitwarden vault access

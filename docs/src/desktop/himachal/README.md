@@ -2,21 +2,30 @@
 
 Laptop workstation in the hanthor fleet.
 
-## Hardware
+## Hardware and OS
 
-- Arch: x86_64
-- Laptop (runs on login, not periodic timer)
-- Tailscale: `himachal` (MagicDNS)
-
-## OS
-
-[Bluefin](https://projectbluefin.io/) (Fedora Atomic)
+- Architecture: x86_64
+- OS: [Bluefin](https://projectbluefin.io/)
+- The reachable Tailscale SSH name used for the 2026-10-27 inspection was
+  `james@himachal-1` (hostname `himachal`). The inventory entry for `himachal`
+  still specifies `100.73.3.51`; it should not be assumed to identify the
+  reachable node without checking.
 
 ## Services
 
-- ~~`hive_ops` timers~~ — retired 2026-09-24; the Hive's ops jobs run in-cluster. The next apply removes the old timers.
+- **Dotfiles updates:** `host_vars/himachal.yml` sets `is_laptop: true` and
+  `dotfiles_auto_update: false`. On 2026-10-27, `dotfiles-update.service` was
+  not found on `himachal-1`. The configured 90-second delay applies only if
+  login-time automatic updates are enabled; it is not evidence that updates
+  currently run. The host-vars comment suggests `just apply-nosecrets` for a
+  manual update.
+- **Hive operations:** `hive_ops_enabled: false` in host vars. Read-only
+  inspection on 2026-10-27 found the seven former Hive and pi peak timers
+  `not-found` and inactive on `himachal-1`. They previously targeted AWS
+  Kubernetes, which was terminated on 2026-10-25; the host-vars comment saying
+  those jobs now run in-cluster is stale. See
+  [hive_ops](../../roles/hive_ops.md) and the
+  [current Hive deployment](../../cluster/hive.md#current-deployment-spindle-vps).
 
-## Notes
-
-- `dotfiles_update_delay_seconds: 90` — applies dotfiles 90s after login
-- [PaperWM](https://github.com/paperwm/PaperWM) tiling, Papershell blur, Copyous clipboard — synced from fleet
+The fleet's GNOME role includes [PaperWM](https://github.com/paperwm/PaperWM),
+PaperShell and Copyous; their enabled state on this host was not checked.

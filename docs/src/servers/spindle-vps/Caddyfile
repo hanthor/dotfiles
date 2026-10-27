@@ -1,0 +1,57 @@
+# Public Matrix routing; federation rides 443 via .well-known.
+# MatrixRTC uses standalone LiveKit and lk-jwt-service containers; no ESS chart/runtime.
+
+matrix.reilly.asia {
+	request_body {
+		max_size 100MB
+	}
+	# Login, logout and refresh belong to MAS; the rest of the client API is Spindle.
+	@mas path_regexp mas ^/_matrix/client/(api/v1|r0|unstable|v3)/(login|logout|refresh)$
+	handle @mas {
+		reverse_proxy mas:8080
+	}
+	handle /_matrix/* {
+		reverse_proxy spindle:8008
+	}
+	handle /_synapse/* {
+		reverse_proxy spindle:8008
+	}
+	handle {
+		respond "not found" 404
+	}
+}
+
+auth.reilly.asia {
+	reverse_proxy mas:8080
+}
+
+call.reilly.asia {
+	@matrixrtc_auth path /sfu/get /get_token /delegate_delayed_leave
+	handle @matrixrtc_auth {
+		reverse_proxy matrixrtc-auth:8080
+	}
+	handle {
+		reverse_proxy livekit:7880
+	}
+}
+
+# The Hive Compose project shares spindle_default with Caddy.
+school.tunaos.org {
+	reverse_proxy school:3001
+}
+
+reef.tunaos.org {
+	reverse_proxy reef:3001
+}
+
+hub.tunaos.org {
+	handle /api/* {
+		reverse_proxy hub:3001
+	}
+	handle /login/* {
+		reverse_proxy hub:3001
+	}
+	handle {
+		reverse_proxy hub-front:80
+	}
+}

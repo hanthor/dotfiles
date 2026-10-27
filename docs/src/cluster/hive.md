@@ -1,40 +1,55 @@
-# Hive — 24/7 AI Agent Supervisor
+# Hive — AI Agent Supervisor
 
-> **TunaOS infrastructure.** This runs in the TunaOS AWS account and serves
-> the TunaOS project (Hive, Matrix, CI), not James's personal fleet. See
-> [TunaOS AWS Account & IaC](../servers/aws/README.md).
+## Current deployment: Spindle VPS
 
-> **Now runs on the [AWS Talos cluster](../servers/aws-k8s/cluster.md)** at
-> **https://school.tunaos.org** (namespace `hive`, Cloudflare-proxied, on the
-> control-plane node; `hive.tunaos.org` is a legacy alias). Every Hive — school,
-> reef, hive.reilly.asia — reports to **https://hub.tunaos.org**, the one place to
-> see them all. Point `kubectl` at it with
-> `export KUBECONFIG=~/.kube/config-aws-migration`. Operator timers (rotation,
-> watchdog, peak windows) live in the [`hive_ops`](../roles/hive_ops.md) role on
-> himachal. The architecture below was written for the home cluster (bihar,
-> Tailscale ingress `hive.manatee-basking.ts.net`), which is powered down —
-> treat node names and the Tailscale URL as historical.
+The school and reef Hives and their hub are deployed on the
+[Spindle VPS](../servers/spindle-vps/README.md), not Kubernetes. On 2026-10-27,
+read-only inspection found the `school`,
+`reef`, `hub`, and `hub-front` Docker Compose services running under
+`/srv/hives` on `spindle` (`ubuntu@100.113.75.88` over Tailscale). The live
+Caddy configuration routes [school.tunaos.org](https://school.tunaos.org) and
+[reef.tunaos.org](https://reef.tunaos.org) to their spokes, and
+[hub.tunaos.org](https://hub.tunaos.org) to the hub and its frontend. Container
+state alone does not establish that the public endpoints or agents are healthy.
 
-> **Hive** is an open-source AI agent orchestration system running on the Talos K8s cluster. A fleet of specialized agents autonomously maintain the `tuna-os/tunaos` repository — triaging issues, analyzing code, and creating PRs. A governor dynamically adjusts agent pace based on issue queue depth.
+The configured images are `ghcr.io/hivecommons/hive:v6-latest` for the two
+spokes and `ghcr.io/hivecommons/hive-hub:v6-latest` for the hub. The Compose
+services bind-mount `/srv/hives/bin/hive` over `/usr/local/bin/hive`, so the
+image tag alone does not describe the running binary. The observed school and
+reef seed configurations use the `omp` backend with
+`github-copilot/gpt-6-luna`, not the historical pi/DeepSeek backend below.
+Runtime state and model selection may differ from the seed files.
 
-## Table of contents
+The old AWS cluster also had a `hive.reilly.asia` spoke; no hanthor container
+was present in the inspected Spindle Docker inventory. Its current status was
+not established. The former [hive_ops role](../roles/hive_ops.md) targets the
+retired cluster, not this Compose deployment.
 
-1. [Architecture](#1-architecture)
-2. [What Hive does](#2-what-hive-does)
-3. [Deployment](#3-deployment)
-4. [AI backend: pi + DeepSeek](#4-ai-backend-pi--deepseek)
-5. [Agents](#5-agents)
-6. [ACMM levels](#6-acmm-levels)
-7. [Governor](#7-governor)
-8. [Configuration](#8-configuration)
-9. [Building the image](#9-building-the-image)
-10. [Day-to-day operations](#10-day-to-day-operations)
-11. [Troubleshooting](#11-troubleshooting)
-12. [GitHub App](#12-github-app)
+For a read-only inventory, run:
 
+```bash
+ssh ubuntu@100.113.75.88 'docker ps --filter name=hives-'
+```
+
+## Archived cluster guide
+
+> **Historical reference only — do not apply or run the Kubernetes, image-build,
+> secret, restart, or state-reset instructions below.** The AWS Talos cluster
+> was terminated on 2026-10-25; its Kubernetes resources and CronJobs are not a
+> current deployment. The home Talos cluster (bihar and karnataka) is powered
+> down temporarily, not decommissioned. Preserve its configurations. The
+> sections below describe older home-cluster and AWS configurations at different
+> points in time, not the current Spindle service. See the
+> [AWS cluster history](../servers/aws-k8s/cluster.md) and
+> [historical cluster manifests](https://github.com/hanthor/dotfiles/tree/master/talos-k8s/hive).
+> Examples are retained for context, not as instructions for either cluster.
+
+The earlier home-cluster Hive used pi with DeepSeek, tmux agents, a governor,
+and a GitHub App. The architecture and examples below are snapshots of that
+period; later AWS configurations and the current Compose deployment differ.
 ---
 
-## 1. Architecture
+## 1. Architecture (historical)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -92,7 +107,7 @@ Agents share a persistent `/data` volume (10Gi PVC) for beads, session state, an
 
 ---
 
-## 2. What Hive does
+## 2. What Hive did (historical)
 
 ### Advisory digest
 
@@ -112,11 +127,11 @@ Agents can contribute facts to a shared knowledge base. Facts are tagged by type
 
 ---
 
-## 3. Deployment
+## 3. Deployment (historical)
 
 ### Namespace and resources
 
-All Hive resources live in the `hive` namespace on the Talos cluster:
+The home-cluster deployment used the `hive` namespace on bihar:
 
 ```
 hive (namespace)
@@ -129,7 +144,7 @@ hive (namespace)
 └── secret/ghcr-auth      — GHCR pull credentials
 ```
 
-### Files
+### Historical files (not the current repository layout)
 
 ```
 talos-k8s/hive/
@@ -148,7 +163,7 @@ talos-k8s/hive/
 
 ### CI workflow
 
-`.github/workflows/hive-build.yml` — triggers on push to `master`:
+The former `.github/workflows/hive-build.yml` workflow did the following:
 
 1. Clones `kubestellar/hive` v2 source
 2. Applies `pi-marker.patch` and three sed patches to the Go source:
@@ -159,32 +174,17 @@ talos-k8s/hive/
 4. Builds Docker image with pi + pi-wrapper.sh + fd/ripgrep
 5. Pushes to `ghcr.io/hanthor/hive:latest`
 
-### Secrets
+### Secrets and deployment (historical)
 
-```bash
-kubectl create secret generic hive-secrets -n hive \
-  --from-literal=DEEPSEEK_API_KEY=sk-... \
-  --from-literal=GH_APP_ID=<app-id> \
-  --from-literal=GH_APP_INSTALLATION_ID=<installation-id> \
-  --from-file=gh-app-key.pem=/path/to/key.pem
-```
-
-### Deploy
-
-Each spoke's manifests live in `talos-k8s/hive/spokes/<spoke>/manifest.yaml`
-(exported from the cluster; secrets are out of band). The hive container
-image is owned by the hive-operator `HiveRelease` controller, so do not roll
-images by applying these files. See `talos-k8s/hive/README.md`.
-
-```bash
-kubectl apply -f talos-k8s/hive/spokes/school/manifest.yaml
-```
-
-Access: **https://school.tunaos.org** (AWS cluster; legacy alias `hive.tunaos.org`). Fleet-wide view of every Hive: **https://hub.tunaos.org**. The old home-cluster URL was `https://hive.manatee-basking.ts.net`.
+The home-cluster pod used a Kubernetes Secret for DeepSeek and GitHub App
+credentials. Later, the AWS deployment exported spoke manifests under
+`talos-k8s/hive/spokes/` and used the hive-operator to manage images. These
+manifests are historical records, **not deployment instructions**. The home
+cluster's former Tailscale ingress was `hive.manatee-basking.ts.net`.
 
 ---
 
-## 4. AI backend: pi + DeepSeek
+## 4. AI backend: pi + DeepSeek (historical)
 
 ### Why pi (not goose)
 
@@ -232,9 +232,9 @@ Written at runtime by the wrapper:
 
 ---
 
-## 5. Agents
+## 5. Agents (historical)
 
-### Current agents (ACMM L5)
+### Historical agents (ACMM L5)
 
 | Agent | Mode | Cadence | Role |
 |-------|------|---------|------|
@@ -296,7 +296,7 @@ governor:
 
 ---
 
-## 6. ACMM levels
+## 6. ACMM levels (historical)
 
 The ACMM (Autonomous Code Maintenance Maturity) framework defines 6 levels:
 
@@ -309,7 +309,7 @@ The ACMM (Autonomous Code Maintenance Maturity) framework defines 6 levels:
 | **L5** | Guarded Auto-Merge | Auto-merge on green CI with guardrails |
 | **L6** | Full Autonomy | Unrestricted agent actions |
 
-Our Hive runs at **L5**. At each level, the Go binary enables additional pack agents and upgrades agent modes.
+That historical configuration used **L5**; this is not a statement about the current spokes.
 
 ### Changing ACMM level
 
@@ -318,16 +318,12 @@ Our Hive runs at **L5**. At each level, the Go binary enables additional pack ag
 acmm_level: 5
 ```
 
-After changing, nuke the persistent state to clear stale overrides:
-
-```bash
-kubectl exec -n hive deploy/hive -- sh -c 'echo "{}" > /data/hive-state.json'
-kubectl rollout restart deploy/hive -n hive
-```
+The old procedure reset persistent state and restarted the pod; do not use it
+on the current deployment or on retained backups.
 
 ---
 
-## 7. Governor
+## 7. Governor (historical)
 
 The governor evaluates the issue queue every 5 minutes (`eval_interval_s: 300`) and switches between four modes:
 
@@ -338,7 +334,7 @@ The governor evaluates the issue queue every 5 minutes (`eval_interval_s: 300`) 
 | **busy** | ≤50 issues | Faster scanner, ci-maintainer still active |
 | **surge** | >50 issues | Scanner every 15m, ci-maintainer paused |
 
-### Current cadences
+### Historical cadences
 
 ```yaml
 governor:
@@ -371,7 +367,7 @@ The supervisor always runs at 5m regardless of mode.
 
 ---
 
-## 8. Configuration
+## 8. Configuration (historical)
 
 ### Backends (backends.conf)
 
@@ -381,7 +377,7 @@ The `backends.conf` in the ConfigMap defines supported AI backends. Adding a new
 2. `backend_binary()` — maps backend name to binary in PATH
 3. `backend_perm_flag()` — permission flag (pi returns empty — no permission popups)
 
-Current supported: `claude copilot bob gemini codex amazonq goose aider pi`
+The old supported list was `claude copilot bob gemini codex amazonq goose aider pi`.
 
 ### Agent configuration (hive.yaml)
 
@@ -402,34 +398,15 @@ Two locations store state that survives pod restarts:
 - **`/data/hive-state.json`** — Governor mode, agent overrides, kick history, cadence overrides
 - **`/data/agent-configs/*.yaml`** — Per-agent persistent config (backend, model, mode, enabled, display name)
 
-If the dashboard shows stale backend/model/mode values, these files have overrides from a previous configuration. Nuke them:
-
-```bash
-kubectl exec -n hive deploy/hive -- sh -c '
-  echo "{}" > /data/hive-state.json
-  for f in /data/agent-configs/*.yaml; do
-    sed -i "s/backend: copilot/backend: pi/" "$f"
-    sed -i "s/model: claude-sonnet-4-6/model: deepseek-v4-pro/" "$f"
-    sed -i "s/model: claude-opus-4-6/model: deepseek-v4-pro/" "$f"
-  done
-'
-kubectl rollout restart deploy/hive -n hive
-```
+Persistent overrides could cause stale values in that deployment. Do not copy
+its old state-reset and backend-rewrite commands to the current deployment.
 
 ---
 
-## 9. Building the image
+## 9. Building the image (historical)
 
-### CI (recommended)
-
-Push to `master` — the workflow builds and pushes to `ghcr.io/hanthor/hive:latest`.
-
-### Manual (Kaniko)
-
-```bash
-kubectl apply -f talos-k8s/hive/build-job.yaml
-kubectl logs -n hive -f job/hive-build
-```
+The former CI workflow built `ghcr.io/hanthor/hive:latest`; an older Kaniko
+job was also used. Neither is a current deployment procedure.
 
 ### What's in the image
 
@@ -444,76 +421,36 @@ kubectl logs -n hive -f job/hive-build
 
 ---
 
-## 10. Day-to-day operations
+## 10. Historical operations
 
-### Check agent status
+Operators inspected the old pod's health, tmux panes, pi processes and logs
+with `kubectl`. Those commands targeted the retired Kubernetes deployment;
+the read-only Compose inventory at the top of this page is the current starting
+point instead.
 
-```bash
-# Public health check (the dashboard itself is login-gated — 401 is normal)
-curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/api/health
+### Historical restarts and state resets
 
-# Full status: authenticated, from inside the pod (see the tunaos-hive-checkin skill)
-TOKEN=$(kubectl get secret -n hive hive-secrets -o jsonpath='{.data.HIVE_DASHBOARD_TOKEN}' | base64 -d)
-kubectl exec -n hive deploy/hive -- curl -sS -H "X-Hive-Internal: $TOKEN" http://127.0.0.1:3002/api/status | jq
-```
-
-### View agent terminal
-
-```bash
-# List tmux sessions
-kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-1001/default ls
-
-# View an agent's terminal
-kubectl exec -n hive deploy/hive -- tmux -S /tmp/tmux-1001/default capture-pane -t hive-scanner -p -S -30
-```
-
-### Check pi processes
-
-```bash
-kubectl exec -n hive deploy/hive -- ps aux | grep "pi$"
-# Should show 9 pi processes (one per active agent)
-```
-
-### View logs
-
-```bash
-kubectl logs -n hive -l app.kubernetes.io/name=hive -f --tail=100
-```
-
-### Restart
-
-```bash
-kubectl rollout restart deploy/hive -n hive
-```
-
-### Nuke persistent state
-
-If agents have stale backend/model overrides or wrong modes:
-
-```bash
-kubectl exec -n hive deploy/hive -- sh -c 'echo "{}" > /data/hive-state.json'
-# Also check /data/agent-configs/ for stale copilot/goose references
-kubectl rollout restart deploy/hive -n hive
-```
+The former procedure restarted the pod and sometimes reset persistent state.
+It is not a recovery procedure for Spindle; do not reset retained data.
 
 ---
 
-## 11. Troubleshooting
+## 11. Historical troubleshooting
 
 | Symptom | Check |
 |---------|-------|
-| ImagePullBackOff | IPv6 timeouts on ghcr.io. Verify `/etc/hosts` on bihar has a pinned IPv4 entry for `ghcr.io` (`<ghcr-ipv4> ghcr.io`, from `dig +short A ghcr.io`) |
+| ImagePullBackOff | The home cluster once encountered IPv6 timeouts to ghcr.io |
 | Agent CLI crashed | Check `ps aux \| grep pi` — should see 9 pi processes |
-| Agent stuck in ADVISORY mode | Check ACMM level in state file. May need state nuke |
-| Dashboard shows old backend/model | Stale overrides in `/data/agent-configs/*.yaml`. Fix with sed + state nuke |
+| Agent stuck in ADVISORY mode | Historical state-file ACMM overrides |
+| Dashboard shows old backend/model | Historical `/data/agent-configs/*.yaml` overrides |
 | No kicks sent | Governor eval cycle: 5min. Agent cadences vary per mode |
-| Issues not created | Verify GitHub App installed on tuna-os. Check token: `cat /var/run/hive-metrics/gh-app-token.cache` |
+| Issues not created | GitHub App installation and authentication were relevant |
 | "CLI did not reach input prompt" | pi is mid-response when kick arrives. Normal — agent will pick up next kick |
 | fd/ripgrep download errors | pi can't download tools through MITM proxy. Pre-installed in Docker image |
 | "backend binary not found" | Missing binary in PATH. Check `backends.conf` and verify wrapper is at `/usr/local/bin/pi` |
 | "failed to persist config" | Read-only ConfigMap mount. Cosmetic — config is cached in memory |
 
-### Common agent issues
+### Historical agent issues
 
 **Agent shows bare bash shell:**
 - pi process died or never started
@@ -526,12 +463,11 @@ kubectl rollout restart deploy/hive -n hive
 - Wait for next governor cycle
 
 **Agent mode mismatch:**
-- State file has persistent mode override
-- Nuke state and restart
+- The state file held persistent mode overrides in that deployment.
 
 ---
 
-## 12. GitHub App
+## 12. GitHub App (historical)
 
 Hive authenticates to GitHub via a GitHub App installed on `tuna-os` (App and installation IDs are in the `hive-secrets` Secret).
 
@@ -557,19 +493,17 @@ The entrypoint generates an installation token on startup and caches it at `/var
 
 The App gives Hive its own rate limit pool, separate from personal API usage.
 
-### Updating permissions
+### Permission changes (historical)
 
-1. Go to: `https://github.com/organizations/tuna-os/settings/apps/hanthor-hive-agent/permissions`
-2. Add the needed permissions
-3. Re-accept on the installation page
-4. Restart hive: `kubectl rollout restart deploy/hive -n hive`
+GitHub App permission changes required re-acceptance by the installation. Do
+not use the old Kubernetes restart procedure to apply them.
 
-## Images and upgrades
+## Images and upgrades on the former AWS cluster
 
-As of 2026-09-24 every Hive runs **stock upstream images**
-(`ghcr.io/hivecommons/hive`, `hive-hub`), not the `tuna-os/hive` fork. The fork's
-remaining delta was CI/registry plumbing plus two ACMM tweaks nothing here uses,
-and it had fallen a major version behind (v4 vs upstream's v5).
+On 2026-09-24 the AWS Hives used stock upstream images
+(`ghcr.io/hivecommons/hive`, `hive-hub`), not the `tuna-os/hive` fork.
+The configuration described below was subsequently superseded by the
+`HiveRelease` operator controller before the cluster was terminated.
 
 | Hive | Namespace | Branding |
 |---|---|---|
@@ -578,20 +512,11 @@ and it had fallen a major version behind (v4 vs upstream's v5).
 | school.tunaos.org (legacy alias hive.tunaos.org) | `hive` | SCHOOL |
 | hub.tunaos.org | `hive-hub` | — |
 
-**`hive-upgrade`** (CronJob in ns `hive`, daily 04:30 America/New_York) keeps
-them on upstream's newest `v5.x.y` release. It resolves the release to a
-digest, checks the amd64 image exists, and upgrades one Hive at a time, in the
-order in the table above. Each target soaks for 10 minutes. A health, branding
-or crash failure rolls that target back to its recorded digest, blocklists the
-version and stops the run. "Could not measure" (an RBAC or API error) aborts
-without rolling back. Results go to Discord. Details, dry-run, pin/block:
-[`talos-k8s/hive/upgrade/README.md`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/hive/upgrade/README.md).
+At that time the `hive-upgrade` CronJob checked upstream v5 releases daily,
+upgrading one Hive at a time with a soak and rollback. It was later deleted in
+favor of the operator's `HiveRelease` controller. The retained
+[`upgrade` history](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/hive/upgrade/README.md)
+is not an active upgrade runbook.
 
-It checks once a day, not on every release: upstream cuts several releases an
-hour, and each Hive restart costs a boot-time GitHub rescan against a shared
-App rate limit. Restarting `hive` and `hive-reef` back-to-back exhausted it on
-2026-09-24.
-
-The old `hive-fork-{switch,verify,drift,ai-check}` CronJobs are **suspended**
-(annotated with the reason). They targeted the fork and never had the RBAC to
-act.
+The old `hive-fork-{switch,verify,drift,ai-check}` CronJobs had been suspended;
+they do not run on the terminated AWS cluster.
