@@ -83,6 +83,7 @@ core_brews:
   - direnv
   - just
   - mise
+  - chezmoi
   - make
   - shellcheck
   - shfmt
@@ -128,7 +129,6 @@ desktop_brews:
   - ansible
   - block-goose-cli
   - charmbracelet/tap/crush
-  - chezmoi
   - cmake
   - cosign
   - curl

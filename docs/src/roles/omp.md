@@ -36,7 +36,7 @@ The token is written only when Bitwarden is unlocked; a locked vault or `--no-se
 
 To seed the token, run `just seed-omp-broker` on a client with the vault unlocked and SSH access to `ubuntu@100.113.75.88`. It reads the live token over SSH without rotating it and creates or updates the Bitwarden item. `OMP_AUTH_BROKER_SSH` overrides the SSH destination. Then run `just apply-tags omp` on each client and verify with `omp auth-broker status`. If the token is rotated on spindle, seed again and re-apply on the clients.
 
-`DEEPSEEK_API_KEY` and the other provider keys are exposed to the shell by the `shell_ai` role's secret files, not by this unit.
+`DEEPSEEK_API_KEY` and the other provider keys are exposed to the shell by the [`shell-ai` unit](shell_ai.md)'s secret files, not by this unit.
 
 ## Kiro authentication
 

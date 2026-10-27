@@ -39,7 +39,7 @@ def test_no_install_list_names_a_blocked_package():
 
 
 def test_no_alias_routes_through_trash():
-    groups = yaml.safe_load((REPO / "roles" / "shell_dotfiles" / "vars" / "main.yml").read_text())["alias_groups"]
+    groups = yaml.safe_load((REPO / "home" / ".chezmoidata.yaml").read_text())["alias_groups"]
     assert all(g.get("guard") != "trash" for g in groups)
     cmds = [a["cmd"] for g in groups for a in g.get("aliases", [])]
     assert not [c for c in cmds if c.split()[0] in {"trash", "trash-put"}]

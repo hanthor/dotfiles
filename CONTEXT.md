@@ -20,7 +20,8 @@
 
 ## Playbook
 
-- **Role** — an Ansible role that configures one concern (e.g. `shell_dotfiles`, `tailscale`, `proxy`). The interface is `tasks/main.yml`; the implementation is templates, files, and handlers.
+- **Role** — an Ansible role that configures one concern (e.g. `tailscale`, `proxy`, `ssh_keys`). The interface is `tasks/main.yml`; the implementation is templates, files, and handlers.
+- **Unit** — an idempotent bash script in `units/` run in parallel by mise after the playbook (`omp`, `chezmoi`, `atuin`, `shell-ai`). A failing step does not stop the rest of the unit. See `docs/src/units.md`.
 - **Phase** — a logical grouping of roles in `site.yml` (Phase 1: system + packages, Phase 2: secrets + auth, Phase 3: desktop, Phase 4: services). Phases are documented in comments, not enforced by the playbook.
 - **Tag** — an Ansible tag applied to roles so `just apply-tags <tag>` can target a subset.
 

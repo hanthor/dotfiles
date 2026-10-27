@@ -44,10 +44,10 @@ Every item a role or script reads (grep `bw get` / `bw list` under `roles/` and 
 | `talosconfig-aws-migration` | Secure Note | `kube` role — AWS cluster Talos config |
 | `accounts.firefox.com` | Login + TOTP | `browser_fxa` role — Firefox Account credentials |
 | `github-token` | Login (password) | `github` role — PAT for `gh auth login` |
-| `atuin.sh` | Login + custom field `key` | `shell_atuin` role — atuin sync login + mnemonic |
-| `deepseek-api-key` | Login (password) | `shell_ai` role — pi `auth.json` |
-| `forgejo` | Secure Note (`API Token:` line) | `shell_ai` role — `FORGEJO_TOKEN` |
-| `tavily-api-key` | Login (password) | `shell_ai` role — `TAVILY_API_KEY` |
+| `atuin.sh` | Login + custom field `key` | `atuin` unit — atuin sync login + mnemonic |
+| `deepseek-api-key` | Login (password) | `shell-ai` unit — pi `auth.json` |
+| `forgejo` | Secure Note (`API Token:` line) | `shell-ai` unit — `FORGEJO_TOKEN` |
+| `tavily-api-key` | Login (password) | `shell-ai` unit — `TAVILY_API_KEY` |
 | `forgejo.manatee-basking.ts.net` | Login | `forgejo_registry` role — podman registry login |
 | `bw-api-key` | Login | `scripts/bw-resolve.sh` — `bw login --apikey` on a remote |
 | `James Bitwarden` | Login | `scripts/bw-resolve.sh` — non-interactive unlock on a remote |

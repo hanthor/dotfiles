@@ -63,13 +63,8 @@ Every role in `site.yml` carries one or more tags. Tags fall into two kinds: **p
 | System + packages | `termux_packages` | `system`, `packages`, `termux` |
 | System + packages | `bitwarden` | `secrets`, `bitwarden` |
 | System + packages | `shell_fonts` | `dotfiles`, `shell`, `fonts` |
-| System + packages | `shell_dotfiles` | `dotfiles`, `shell`, `dotfiles` |
 | System + packages | `omp` unit | `dotfiles`, `omp` |
 | System + packages | `hive_ops` | `hive`, `hive_ops` |
-| System + packages | `git` | `dotfiles`, `git` |
-| System + packages | `neovim` | `dotfiles`, `neovim`, `editor` |
-| Secrets + auth | `shell_atuin` | `dotfiles`, `shell`, `atuin`, `secrets` |
-| Secrets + auth | `shell_ai` | `dotfiles`, `shell`, `ai`, `secrets` |
 | Secrets + auth | `ssh_keys` | `secrets`, `ssh`, `ssh_keys` |
 | Secrets + auth | `ssh_mesh` | `ssh`, `mesh_check` |
 | Secrets + auth | `github` | `secrets`, `github` |
@@ -91,9 +86,11 @@ Every role in `site.yml` carries one or more tags. Tags fall into two kinds: **p
 | Services | `server_hardening` | `system`, `hardening`, `security` |
 | Services | `fleet_facts` | `facts`, `fleet_facts` |
 
+Shell, git, neovim and atuin config, omp, and the shell/atuin secrets are not roles: they are [units](units.md) (`chezmoi`, `omp`, `atuin`, `shell-ai`) that `just apply*` runs after the playbook. The old tags `dotfiles`, `shell`, `git`, `neovim`, `editor`, `atuin`, `ai`, `secrets`, `omp` still select them through `scripts/run-units.sh`.
+
 Common phase-wide selections:
 
-- `--tags secrets` — every BW-backed role only (`bitwarden`, `shell_atuin`, `shell_ai`, `ssh_keys`, `github`, `tailscale`, `kube`, `forgejo_registry`)
+- `--tags secrets` — every BW-backed role only (`bitwarden`, `ssh_keys`, `github`, `tailscale`, `kube`, `forgejo_registry`)
 - `--tags desktop` — every desktop-app role (`flatpak`, `bluefin_common`, `gnome`, `zen_browser`, `pipewire_audio`)
 - `--tags services` — every long-running service role (`syncthing`, `systemd`, `bst_dashboard`, `kirocrew`, `proxy`, `tailscale_cert`)
 - `--skip-tags secrets` — everything except BW-backed roles. `just apply-nosecrets`, bootstrap's first phase and `phone-apply.service` also pass `--no-secrets` to units.

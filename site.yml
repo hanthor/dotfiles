@@ -73,20 +73,10 @@
       tags: [secrets, bitwarden]
     - role: shell_fonts
       tags: [dotfiles, shell, fonts]
-    - role: shell_dotfiles
-      tags: [dotfiles, shell, dotfiles]
     - role: hive_ops
       tags: [hive, hive_ops]
-    - role: git
-      tags: [dotfiles, git]
-    - role: neovim
-      tags: [dotfiles, neovim, editor]
 
     # Phase 2: Secrets + auth
-    - role: shell_atuin
-      tags: [dotfiles, shell, atuin, secrets]
-    - role: shell_ai
-      tags: [dotfiles, shell, ai, secrets]
     - role: ssh_keys
       tags: [secrets, ssh, ssh_keys]
     - role: ssh_mesh

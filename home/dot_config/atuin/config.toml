@@ -1,0 +1,18 @@
+sync_address = "https://api.atuin.sh"
+sync_frequency = "5m"
+auto_sync = true
+search_mode = "fuzzy"
+# ── filter_mode ──────────────────────────────────────────────
+# "global" = search all history across every machine & session.
+# "host"   = only this machine.
+# "session" = only this shell session (empty in fresh terminals!).
+# ──────────────────────────────────────────────────────────────
+# DO NOT set filter_mode_shell_up_key_binding to "session" —
+# it makes the Up arrow appear broken in fresh terminals because
+# a new shell session has no commands yet.
+# ──────────────────────────────────────────────────────────────
+filter_mode = "global"
+filter_mode_shell_up_key_binding = "global"
+style = "compact"
+show_preview = true
+max_preview_height = 4

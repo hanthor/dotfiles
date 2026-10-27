@@ -61,13 +61,13 @@
 ## Dotfiles
 
 - [shell_fonts](roles/shell_fonts.md)
-- [shell_dotfiles](roles/shell_dotfiles.md)
-- [shell_atuin](roles/shell_atuin.md)
-- [shell_ai](roles/shell_ai.md)
-- [omp](roles/omp.md)
+- [shell_dotfiles (chezmoi)](roles/shell_dotfiles.md)
+- [shell_atuin (chezmoi + unit)](roles/shell_atuin.md)
+- [shell_ai (unit)](roles/shell_ai.md)
+- [omp (unit)](roles/omp.md)
 - [hive_ops](roles/hive_ops.md)
-- [git](roles/git.md)
-- [neovim](roles/neovim.md)
+- [git (chezmoi)](roles/git.md)
+- [neovim (chezmoi)](roles/neovim.md)
 
 ## Secrets & Auth
 

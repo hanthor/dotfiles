@@ -4,7 +4,7 @@ set -uo pipefail
 # shellcheck source=units/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-PATH="$HOME/.bun/bin:$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH"
+PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH"
 cfg="$HOME/.omp/agent/config.yml"
 skills_dest="$HOME/.omp/agent/skills/james"
 
