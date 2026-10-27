@@ -51,4 +51,4 @@ Complete the browser sign-in, then select `kiro/auto` with `/model kiro/auto`. K
 
 ## Package source
 
-The OMP and Bun Homebrew formulas are in `can1357/tap`; both are core packages for Homebrew-supported hosts. On musl, the official OMP binary installer verifies its SHA-256 and requires `libgcc` and `libstdc++`. `roles/pi/files/package.json` is tracked by Renovate and protected by `deps-guard`; the unit does not install it.
+The OMP Homebrew formula is in `can1357/tap`; Bun comes from Homebrew core. Both are core packages for Homebrew-supported hosts. On musl, the official OMP binary installer verifies its SHA-256 and requires `libgcc` and `libstdc++`. `roles/pi/files/package.json` is tracked by Renovate and protected by `deps-guard`; the unit does not install it.

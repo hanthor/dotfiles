@@ -19,6 +19,10 @@ Everything not listed under `units/` is still an Ansible role.
 
 `scripts/run-units.sh [--no-secrets] [--tags a,b]` is the one wrapper the recipes call. It maps Ansible tags to units (`tasks_for_tag`, mirroring the tags of the roles the units replaced), runs the selection with `mise run --continue-on-error --jobs 8 --output prefix --timeout 15m`, and exits with mise's status. Without `mise` on `PATH` it prints `mise not installed; running units sequentially` and runs the selected units one after another, continuing after failures, so hosts without mise (Termux, musl) keep updating.
 
+`just apply-tags` resolves, validates and syncs Bitwarden for explicitly secret-bearing tags (including `omp`), and selects the `bitwarden` role so legacy secret roles receive its facts. If that fails, it skips secrets, still runs the non-secret selection, and returns an error. Tags unrelated to secrets do not prompt for a vault unlock. `just apply-nosecrets` and bootstrap's first phase pass `--no-secrets` to units even if a session is already present.
+
+Bootstrap runs all units after its first Ansible pass and the `omp,secrets` selection after the secret pass. The phone push timer runs the non-secret units remotely from a temporary archive of the controller's tracked revision, after its Ansible passes.
+
 ## Rules for a unit
 
 - Idempotent bash. `set -uo pipefail`, never `set -e`.
