@@ -263,8 +263,8 @@ def open_mock(req, timeout):
              "id": "device-suffix", "connectedToControl": False},
             {"name": "laptop-1.example.ts.net", "id": "device-online", "connectedToControl": True},
             {"name": "laptop-2.example.ts.net", "id": "self-123", "connectedToControl": False},
-            {"name": "laptop-3.example.ts.net", "id": "device-foreign", "isExternal": True},
-            {"name": "other.example.ts.net", "id": "device-other"},
+            {"name": "laptop-3.example.ts.net", "id": "device-foreign", "isExternal": True, "connectedToControl": False},
+            {"name": "other.example.ts.net", "id": "device-other", "connectedToControl": False},
         ]}).encode())
     if os.environ.get("FAIL_DELETE") == "1":
         raise urllib.error.HTTPError(url, 403, "secret-bearing response", None, None)
