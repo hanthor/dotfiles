@@ -46,7 +46,7 @@ register_key() {
 }
 
 register_keys() {
-  local scopes key_body
+  local scopes key_body key_list
   scopes="$(gh auth status -t 2>&1 | grep -o 'Token scopes:.*' || true)"
   case "$scopes" in
     *admin:public_key*admin:ssh_signing_key*|*admin:ssh_signing_key*admin:public_key*) ;;
@@ -56,13 +56,20 @@ register_keys() {
   esac
   [ -f "$pub" ] || { note "warn: $pub missing; no SSH key to register"; return 1; }
   key_body="$(awk '{print $2}' "$pub")"
-  key_lines="$(gh ssh-key list 2>/dev/null | grep -F "$key_body" || true)"
+  if ! key_list="$(gh ssh-key list 2>/dev/null)"; then
+    note "warn: failed to list GitHub SSH keys; registration skipped"
+    return 1
+  fi
+  key_lines="$(grep -F -- "$key_body" <<<"$key_list" || true)"
   register_key authentication auth && register_key signing signing
 }
 
 key_lines=""
 step "github known_hosts" known_hosts
+if [ "${UNITS_NO_SECRETS:-0}" = 1 ]; then
+  note "SKIPPED: GitHub authentication and SSH key registration (--no-secrets)"
+  finish
+fi
 step "gh login" gh_login
-soft "git protocol ssh" gh config set git_protocol ssh
 step "register SSH keys" register_keys
 finish
