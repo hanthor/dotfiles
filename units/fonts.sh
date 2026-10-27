@@ -3,6 +3,8 @@
 set -uo pipefail
 # shellcheck source=units/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=units/platform-config.bash
+. "$DOTFILES_DIR/units/platform-config.bash"
 
 dir="$HOME/.local/share/fonts"
 font="$dir/JetBrainsMono/JetBrainsMonoNerdFont-Regular.ttf"
@@ -13,23 +15,12 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
     exit 1
   fi
   [ -d "$dir" ] || note "CHANGE: create font directory $dir"
-  desktop_hint="${DOTFILES_IS_DESKTOP:-$(host_var is_desktop)}"
-  case "$desktop_hint" in
-    1|true) desktop=1 ;;
-    0|false) desktop=0 ;;
-    *)
-      if ! command -v yq >/dev/null 2>&1; then
-        note "FAIL: yq required to inspect desktop membership"
-        exit 1
-      fi
-      export DOTFILES_MACHINE="$MACHINE"
-      membership="$(yq '(.all.children.desktop.hosts // {}) | has(strenv(DOTFILES_MACHINE))' "$DOTFILES_DIR/inventory.yml" 2>/dev/null)" || {
-        note "FAIL: cannot inspect desktop membership"
-        exit 1
-      }
-      case "$membership" in true) desktop=1 ;; false) desktop=0 ;; *) note "FAIL: invalid desktop membership"; exit 1 ;; esac
-      ;;
-  esac
+  if platform_desktop; then
+    desktop=1
+  else
+    rc=$?
+    if [ "$rc" = 1 ]; then desktop=0; else note "FAIL: cannot inspect desktop membership"; exit 1; fi
+  fi
   if [ "$desktop" = 0 ]; then
     note "SKIPPED: not a desktop; no font install"
   elif [ -f "$font" ]; then
@@ -41,8 +32,12 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
 fi
 
 step "font directory" mkdir -p "$dir"
-if ! is_desktop; then
-  note "SKIPPED: not a desktop; no font install"
+if platform_desktop; then
+  :
+else
+  rc=$?
+  if [ "$rc" = 1 ]; then note "SKIPPED: not a desktop; no font install"
+  else step "desktop membership" false; fi
   finish
 fi
 if [ -f "$font" ]; then

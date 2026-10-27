@@ -15,5 +15,5 @@ Installs the [JetBrains Mono Nerd Font](https://github.com/ryanoasis/nerd-fonts)
 ## Notes
 
 - Idempotent on the presence of the Regular `.ttf`; delete it to force a re-download.
-- Desktop means: `DOTFILES_IS_DESKTOP`, else `is_desktop` in `host_vars`, else membership of the `desktop` group in `inventory.yml`.
+- Desktop means: `DOTFILES_IS_DESKTOP`, else `is_desktop` in `host_vars`, else membership of the `desktop` group in `inventory.yml`. An invalid override or unreadable inventory fails the unit rather than reporting a non-desktop skip.
 - The `gnome` unit sets Ptyxis to `JetBrainsMono Nerd Font 12`, which depends on this.

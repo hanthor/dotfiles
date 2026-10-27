@@ -95,7 +95,7 @@ esac
     env["BW_SESSION"] = "private-session-sentinel"
     bootstrap = tmp_path / "bootstrap.sh"
     bootstrap.write_text((REPO / "bootstrap.sh").read_text().replace("/tmp/bw_session", str(cache)).replace('dir="/tmp"', f'dir="{tmp_path}"'))
-    result = subprocess.run(["bash", "-c", 'source "$1"; setup_bitwarden', "bash", str(bootstrap)],
+    result = subprocess.run(["bash", "-c", 'source "$1" --name test --type desktop; setup_bitwarden', "bash", str(bootstrap)],
                             env=env, capture_output=True, text=True)
     assert (result.returncode != 0) is (existing == "directory")
     assert target.read_text() == "untouched"

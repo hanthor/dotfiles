@@ -4,7 +4,7 @@
 # for a missing group or an unrecognised hosts entry rather than guessing.
 platform_group_contains() {
   local group="$1" line in_children=0 in_group=0 in_hosts=0 group_seen=0 hosts_seen=0 found=1
-  if command -v yq >/dev/null 2>&1; then
+  if type -P yq >/dev/null 2>&1; then
     local answer
     answer="$(GROUP="$group" MACHINE="$MACHINE" yq -r '.all.children[strenv(GROUP)].hosts | has(strenv(MACHINE))' "$DOTFILES_DIR/inventory.yml")" || return 2
     case "$answer" in true) return 0 ;; false) return 1 ;; *) return 2 ;; esac

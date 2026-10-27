@@ -13,7 +13,9 @@ package_require_yq() {
   return 1
 }
 
-yq() { "$PACKAGE_YQ" "$@"; }
+yq() {
+  if [ -n "${PACKAGE_YQ:-}" ]; then "$PACKAGE_YQ" "$@"; else command yq "$@"; fi
+}
 
 # package_list KEY [FILE]: populate PACKAGE_LIST from a YAML sequence. Group
 # defaults are overridden by the host file; FILE selects an authoritative role

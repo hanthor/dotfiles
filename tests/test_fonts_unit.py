@@ -38,3 +38,11 @@ def test_failed_download_fails_the_unit_without_a_partial_install(stub_env):
     r = run_unit("fonts", env, STUB_CURL_RC="22")
     assert r.returncode == 1 and "FAIL  install JetBrains Mono Nerd Font" in r.stdout
     assert not (Path(env["HOME"]) / ".local/share/fonts/JetBrainsMono").exists()
+
+
+def test_failed_desktop_lookup_does_not_skip_font_configuration(stub_env):
+    bindir, env = stub_env
+    write_stub(bindir, "yq", "exit 2\n")
+    result = run_unit("fonts", env, DOTFILES_IS_DESKTOP="", DOTFILES_MACHINE="unknown-test-host")
+    assert result.returncode != 0
+    assert "curl" not in calls(env)
