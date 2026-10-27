@@ -1,0 +1,1041 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Talos K8s Cluster (offline) - Infrastructure Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="James Reilly&#x27;s personal fleet (Ansible dotfiles) and the TunaOS infrastructure it administers">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../../highlight.css">
+        <link rel="stylesheet" href="../../tomorrow-night.css">
+        <link rel="stylesheet" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Infrastructure Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/servers/talos-k8s/cluster.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="cluster-handbook--talos-linux-on-bihar--karnataka"><a class="header" href="#cluster-handbook--talos-linux-on-bihar--karnataka">Cluster Handbook — Talos Linux on Bihar + Karnataka</a></h1>
+<blockquote>
+<p><strong>Status: powered down and in storage (as of 2026-08-27), expected back.</strong>
+Temporarily offline, <em>not</em> decommissioned — keep its configs, Bitwarden notes
+(<code>kubeconfig</code> / <code>talosconfig</code>), and <code>talos-k8s/</code> manifests. <code>kubectl</code> and
+<code>just doctor</code> will fail against it until it returns. Matrix and the School,
+Reef and Hub Hives now run on the <a href="../spindle-vps/README.html">OCI Spindle VPS</a>.
+The <a href="../aws-k8s/cluster.html">AWS Talos cluster</a> was terminated on 2026-10-25.</p>
+<p><strong>When it returns</strong>, before applying anything under <code>talos-k8s/ai/</code>:
+run <a href="https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/migrate-pv-path.sh"><code>talos-k8s/ai/migrate-pv-path.sh</code></a>
+first. <code>lemonade.yaml</code> already points its PVs at <code>/var/lib/…</code>, but the models
+are still under <code>/var/tmp/…</code> on karnataka. Applying the manifest first
+orphans them (#29). Then follow the prerequisites in
+<a href="https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/README.md"><code>talos-k8s/ai/README.md</code></a>
+for the backup job and run <code>lemonade-warmup.sh</code> (#26, #27).</p>
+<p><strong>Home Hummingbird migration: prepared, not deployed.</strong> The build/install and
+activation procedure is in <a href="#12-hummingbirdbootc-migration-home-only">section 12</a>.
+The home machines remain offline/in storage; the Talos recovery instructions
+below and all existing home/AWS credentials remain valid recovery material.</p>
+</blockquote>
+<blockquote>
+<p><strong>Two-node <a href="https://www.talos.dev/">Talos Linux</a> <a href="https://kubernetes.io/">Kubernetes</a> cluster.</strong>
+AMD Strix Halo GPU acceleration · <a href="https://lemonade-sdk.github.io/">Lemonade</a> · <a href="https://kubevirt.io/">KubeVirt</a> · <a href="https://tailscale.com/">Tailscale</a> ingress.
+Everything you need to bring this cluster back from zero.</p>
+</blockquote>
+<h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of contents</a></h2>
+<ol>
+<li><a href="#1-overview">Overview</a></li>
+<li><a href="#2-hardware">Hardware</a></li>
+<li><a href="#3-network">Network</a></li>
+<li><a href="#4-talos-installer-image-with-amd-gpu">Talos installer image (with AMD GPU)</a></li>
+<li><a href="#5-cluster-bootstrap">Cluster bootstrap</a></li>
+<li><a href="#6-amd-gpu-exposed-to-kubernetes">AMD GPU exposed to Kubernetes</a></li>
+<li><a href="#7-production-workloads">Production workloads</a></li>
+<li><a href="#8-tailscale-operator-ingress">Tailscale operator (ingress)</a></li>
+<li><a href="#9-day-to-day-operations">Day-to-day operations</a></li>
+<li><a href="#10-reinstall-procedure">Reinstall procedure</a></li>
+<li><a href="#11-troubleshooting">Troubleshooting</a></li>
+<li><a href="#12-hummingbirdbootc-migration-home-only">Hummingbird/bootc migration (home only)</a></li>
+</ol>
+<hr />
+<h2 id="1-overview"><a class="header" href="#1-overview">1. Overview</a></h2>
+<pre><code>┌──────────────────────────────────────────────────────────────┐
+│                       Kubernetes v1.36.1                      │
+│                        (Talos v1.13.2)                        │
+│                                                               │
+│   ┌────────────────────────┐   ┌────────────────────────┐    │
+│   │  bihar  (control plane)│   │ karnataka  (worker)    │    │
+│   │  Intel CPU             │   │ AMD Ryzen AI MAX+ 395  │    │
+│   │  /dev/nvme0n1          │   │ AMD Radeon 8060S iGPU  │    │
+│   │                        │   │ /dev/nvme0n1           │    │
+│   │  kube-apiserver        │   │ amdgpu-device-plugin   │    │
+│   │  etcd / scheduler /    │   │ amdgpu-labeller        │    │
+│   │  controller-manager    │   │ Lemonade               │    │
+│   │  KubeVirt control      │   │ Forgejo + runner       │    │
+│   │  Forgejo + runner      │   │ Hive agent swarm       │    │
+│   │  ArgoCD + Argo WF      │   │ KubeVirt virt-handler  │    │
+│   │  Grafana / Prometheus  │   │ Longhorn CSI           │    │
+│   │  Authentik + n8n       │   │ AppFlowy Cloud         │    │
+│   │  Longhorn CSI / UI     │   │ Corral VMs             │    │
+│   │  KubeVirt Manager      │   │                        │    │
+│   └────────────────────────┘   └────────────────────────┘    │
+│                                                               │
+│   CNI: flannel · kube-proxy: on · Storage: longhorn + local-path      │
+│   Tailscale Operator → ts.net ingress for cluster services    │
+└──────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>The cluster is <strong>not diskless</strong> — Talos installs itself onto <code>/dev/nvme0n1</code> on each node and persists. Reboots survive.</p>
+<p><strong>Source of truth for manifests:</strong> <a href="https://github.com/hanthor/dotfiles/tree/master/talos-k8s"><code>talos-k8s/</code></a> in this repo.
+<strong>Source of truth for secrets</strong> (<code>talosconfig</code>, <code>controlplane.yaml</code>, <code>worker.yaml</code>, <code>kubeconfig</code>): Bitwarden, fetched onto your workstation by the <code>kube</code> role.</p>
+<hr />
+<h2 id="2-hardware"><a class="header" href="#2-hardware">2. Hardware</a></h2>
+<h3 id="karnataka-worker"><a class="header" href="#karnataka-worker">Karnataka (worker)</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Detail</th></tr></thead><tbody>
+<tr><td>CPU</td><td>AMD Ryzen AI MAX+ 395 (Strix Halo) — 16 cores / 32 threads, 5.18 GHz boost</td></tr>
+<tr><td>RAM</td><td>62 GB unified memory (CPU + GPU share via UMA)</td></tr>
+<tr><td>GPU</td><td>AMD Radeon 8060S — RDNA 3.5 (<code>gfx1151</code>), integrated</td></tr>
+<tr><td>NIC</td><td>Realtek RTL8126 5GbE (<code>enp191s0</code>)</td></tr>
+<tr><td>WiFi</td><td><a href="https://www.mediatek.com/products/broadband-wifi/mediatek-filogic-380">MediaTek MT7925</a> Wi-Fi 7</td></tr>
+<tr><td>Boot disk</td><td>Crucial P3 1TB (<code>/dev/nvme0n1</code>)</td></tr>
+<tr><td>Secondary</td><td>WD Black SN850X 1TB (<code>/dev/nvme1n1</code>) — <strong>FAILING</strong> (I/O errors). Do not use. Replace with new drive.</td></tr>
+</tbody></table>
+</div>
+<h3 id="bihar-control-plane"><a class="header" href="#bihar-control-plane">Bihar (control plane)</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Detail</th></tr></thead><tbody>
+<tr><td>CPU</td><td>Intel Core i7-13700K</td></tr>
+<tr><td>Integrated GPU</td><td>Intel UHD 770</td></tr>
+<tr><td>Boot disk</td><td><code>/dev/nvme0n1</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="3-network"><a class="header" href="#3-network">3. Network</a></h2>
+<h3 id="lan--flat-home-24"><a class="header" href="#lan--flat-home-24">LAN — flat home /24</a></h3>
+<p>DHCP/DNS are served by the home router, which hands out fixed addresses from its address-reservation table — see <a href="../../network/gateway/README.html">Gateway</a>. Older revisions of this page said dnsmasq on bihar; that predates Talos, which can't run it on the host.</p>
+<div class="table-wrapper"><table><thead><tr><th>Host</th><th>Address</th><th>Role</th></tr></thead><tbody>
+<tr><td>bihar</td><td>reserved</td><td>K8s control plane, home services</td></tr>
+<tr><td>karnataka</td><td>reserved</td><td>K8s worker, LLM host</td></tr>
+<tr><td>goa</td><td>reserved</td><td>Raspberry Pi, fleet control</td></tr>
+<tr><td>kvm</td><td>reserved</td><td>NanoKVM (plugged into karnataka)</td></tr>
+</tbody></table>
+</div>
+<p>The commands below use <code>&lt;bihar-ip&gt;</code> / <code>&lt;karnataka-ip&gt;</code> for the nodes' LAN
+addresses. Run <code>just inventory</code> to rescan with nmap and get the current values
+(they are also the endpoints in the talosconfig).</p>
+<h3 id="internet--data-capped"><a class="header" href="#internet--data-capped">Internet — data-capped</a></h3>
+<p>The home connection has a monthly data cap; exceeding it throttles to a crawl
+until the next billing cycle.</p>
+<blockquote>
+<p><strong>May 2026:</strong> The cap was hit (largely model downloads and image pulls) and
+the link was throttled for about a week. Lesson: budget large model
+downloads and bulk image pulls against the cap. LAN traffic is unaffected.</p>
+</blockquote>
+<h3 id="tailscale--manatee-baskingtsnet"><a class="header" href="#tailscale--manatee-baskingtsnet">Tailscale — <code>manatee-basking.ts.net</code></a></h3>
+<p>Cluster ingress goes through the <a href="https://tailscale.com/kb/1236/kubernetes-operator">Tailscale Operator</a>. Services with an <code>Ingress</code> resource targeting <code>tailscale</code> ingressClassName get a <code>&lt;name&gt;.manatee-basking.ts.net</code> URL automatically.</p>
+<div class="table-wrapper"><table><thead><tr><th>Service</th><th>URL</th></tr></thead><tbody>
+<tr><td>Cluster homepage</td><td><code>https://home.manatee-basking.ts.net</code></td></tr>
+<tr><td>Lemonade (AI)</td><td><code>https://lemonade.manatee-basking.ts.net/v1</code></td></tr>
+<tr><td>Hive (agent swarm)</td><td><code>https://hive.manatee-basking.ts.net</code></td></tr>
+<tr><td>Forgejo (git + CI)</td><td><code>https://forgejo.manatee-basking.ts.net</code></td></tr>
+<tr><td>ArgoCD (GitOps)</td><td><code>https://argocd.manatee-basking.ts.net</code></td></tr>
+<tr><td>Grafana (metrics)</td><td><code>https://grafana.manatee-basking.ts.net</code></td></tr>
+<tr><td>Corral (VM dashboard)</td><td><code>https://corral.manatee-basking.ts.net</code></td></tr>
+<tr><td>KubeVirt Manager</td><td><code>https://kubevirt-manager.manatee-basking.ts.net</code></td></tr>
+<tr><td>Authentik (SSO)</td><td><code>https://auth.manatee-basking.ts.net</code></td></tr>
+<tr><td>n8n (workflows)</td><td><code>https://n8n.manatee-basking.ts.net</code></td></tr>
+<tr><td>AppFlowy (collab)</td><td><code>https://appflowy.manatee-basking.ts.net</code></td></tr>
+</tbody></table>
+</div>
+<h3 id="kubernetes-internal"><a class="header" href="#kubernetes-internal">Kubernetes internal</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Network</th><th>CIDR</th></tr></thead><tbody>
+<tr><td>Pod</td><td><code>10.244.0.0/16</code> (flannel)</td></tr>
+<tr><td>Service</td><td><code>10.96.0.0/12</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="4-talos-installer-image-with-amd-gpu"><a class="header" href="#4-talos-installer-image-with-amd-gpu">4. Talos installer image (with AMD GPU)</a></h2>
+<p>Talos ships with an immutable root filesystem, so kernel modules cannot be added at runtime. The AMD GPU driver and the Longhorn iSCSI tooling are <strong>baked into the boot image</strong> via the <a href="https://factory.talos.dev">Talos Image Factory</a>.</p>
+<p><strong>Schematic ID (current, 2026-06-11):</strong> <code>3a33ec6dfc8cfd61d2a3db3caf97894f31e913952d71ce3c3fbbe565a3f08339</code></p>
+<p><strong>Extensions baked in:</strong></p>
+<ul>
+<li><code>siderolabs/amdgpu</code> — AMD GPU kernel driver</li>
+<li><code>siderolabs/iscsi-tools</code> — iscsid, for Longhorn block storage</li>
+<li><code>siderolabs/util-linux-tools</code> — fstrim/nsenter, for Longhorn</li>
+</ul>
+<p>Both nodes run this schematic. Earlier schematics were <code>e5912b95…</code> (amdgpu
+only) and, in older docs, <code>b6ab12e…</code>. Storage details: <a href="https://github.com/hanthor/dotfiles/blob/master/talos-k8s/longhorn/README.md"><code>talos-k8s/longhorn/</code></a>.</p>
+<pre><code class="language-yaml">machine:
+  install:
+    image: factory.talos.dev/installer/3a33ec6dfc8cfd61d2a3db3caf97894f31e913952d71ce3c3fbbe565a3f08339:v1.13.2
+    disk: /dev/nvme0n1
+</code></pre>
+<p>After install, the node exposes <code>/dev/dri/card0</code>, <code>/dev/dri/renderD128</code>, and <code>/dev/kfd</code> on the host.</p>
+<blockquote>
+<p><strong>Talos version note:</strong> Pinned to <code>v1.13.2</code>. <code>v1.13.3</code> had multi-arch registry pull errors on AMD64 at the time of writing.</p>
+</blockquote>
+<h3 id="user-volume-for-varmntstorage"><a class="header" href="#user-volume-for-varmntstorage">User volume for /var/mnt/storage</a></h3>
+<p>nvme0n1 is the <strong>Crucial P3</strong> (healthy, boot disk). The WD Black failed with I/O errors
+and was replaced as the boot disk. Forgejo / local-path PVCs use a <code>directory</code>-type
+user volume on the Crucial P3's EPHEMERAL partition:</p>
+<pre><code class="language-bash"># Apply the user volume config (idempotent):
+talosctl -n &lt;karnataka-ip&gt; patch mc --patch @storage-volume.yaml
+</code></pre>
+<p>The patch is stored at <a href="https://github.com/hanthor/dotfiles/blob/master/talos-k8s/longhorn/storage-volume.yaml"><code>talos-k8s/longhorn/storage-volume.yaml</code></a>.
+It creates <code>/var/mnt/storage</code> as a directory on the EPHEMERAL partition.
+The mount is automatically propagated into the kubelet namespace.</p>
+<blockquote>
+<p><strong>WD Black failure (2026-05-30):</strong> The WD Black SN850X (<code>/dev/nvme1n1</code>)
+developed I/O errors on its META partition during the 35B model download stress test.
+Error: <code>error writing config to file: input/output error</code>. The drive should be
+physically replaced. In the meantime, do not configure it as a Talos install disk
+or user volume.</p>
+</blockquote>
+<hr />
+<h2 id="5-cluster-bootstrap"><a class="header" href="#5-cluster-bootstrap">5. Cluster bootstrap</a></h2>
+<p>Configs are generated once with <code>talosctl gen config</code>, edited, and applied to each node. The generated files contain <strong>cluster PKI secrets</strong> (machine token, bootstrap token, shared secret) and are <strong>not committed</strong> — they live in Bitwarden.</p>
+<h3 id="one-time-generation"><a class="header" href="#one-time-generation">One-time generation</a></h3>
+<pre><code class="language-bash">cd talos-k8s
+talosctl gen config talos-k8s https://&lt;bihar-ip&gt;:6443
+# Produces: controlplane.yaml, worker.yaml, talosconfig
+</code></pre>
+<p>Then patch <code>machine.install.image</code> and <code>machine.install.disk</code> on each (see <code>talos-k8s/README.md</code> for the schematic ID).</p>
+<h3 id="apply-configs"><a class="header" href="#apply-configs">Apply configs</a></h3>
+<pre><code class="language-bash">talosctl apply-config --insecure --nodes &lt;bihar-ip&gt; --file controlplane.yaml
+talosctl apply-config --insecure --nodes &lt;karnataka-ip&gt; --file worker.yaml
+
+talosctl config endpoint &lt;bihar-ip&gt;
+talosctl config node &lt;bihar-ip&gt;
+
+talosctl bootstrap --nodes &lt;bihar-ip&gt;
+talosctl kubeconfig                  # writes ~/.kube/config
+</code></pre>
+<h3 id="seed-bitwarden-with-secrets"><a class="header" href="#seed-bitwarden-with-secrets">Seed Bitwarden with secrets</a></h3>
+<p>Once the cluster is up and you have working <code>~/.kube/config</code> and <code>~/.talos/config</code>:</p>
+<pre><code class="language-bash">just seed-kube     # uploads kubeconfig + talosconfig to Bitwarden as secure notes
+</code></pre>
+<p>Other workstations then pull them automatically:</p>
+<pre><code class="language-bash">just apply-tags kube
+</code></pre>
+<hr />
+<h2 id="6-amd-gpu-exposed-to-kubernetes"><a class="header" href="#6-amd-gpu-exposed-to-kubernetes">6. AMD GPU exposed to Kubernetes</a></h2>
+<p>The driver is loaded on the host (from the Talos image). Kubernetes needs two more pieces from ROCm to actually schedule on the GPU:</p>
+<pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml
+kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-labeller.yaml
+</code></pre>
+<p>Once the DaemonSets are running, <code>karnataka</code> exposes:</p>
+<ul>
+<li><code>amd.com/gpu: 1</code> as an allocatable resource</li>
+<li>Labels such as <code>amd.com/gpu.product-name=AMD_Radeon_8060S_Graphics</code>, <code>amd.com/gpu.vram=64G</code></li>
+</ul>
+<p>Workloads request the GPU with:</p>
+<pre><code class="language-yaml">resources:
+  limits:
+    amd.com/gpu: "1"
+</code></pre>
+<hr />
+<h2 id="7-production-workloads"><a class="header" href="#7-production-workloads">7. Production workloads</a></h2>
+<p>All manifests live in <a href="https://github.com/hanthor/dotfiles/tree/master/talos-k8s"><code>talos-k8s/</code></a>, organized by purpose:</p>
+<pre><code>talos-k8s/
+├── ai/              Lemonade (LLM runtime)
+├── appflowy/        AppFlowy Cloud (collaboration)
+├── authentik/       Authentik (SSO)
+├── forgejo/         Forgejo + runner + registry-mirror
+├── hive/            Hive (AI agent swarm)
+├── homepage/        Cluster landing page
+├── infrastructure/  KubeVirt + Corral
+├── kubestellar-hive/ KubeStellar multi-cluster hive
+├── longhorn/        Storage (CSI, snapshots)
+├── monitoring/      Prometheus + Grafana + metrics-server
+├── n8n/             n8n (workflow automation)
+├── networking/      Tailscale node configs
+├── searxng/         SearXNG (self-hosted search)
+├── testing-lab/     CI/CD test infrastructure
+└── topolvm/         TopoLVM (dynamic LVM storage)
+</code></pre>
+<h3 id="lemonade--amd-optimized-local-ai-runtime"><a class="header" href="#lemonade--amd-optimized-local-ai-runtime">Lemonade — AMD-optimized local AI runtime</a></h3>
+<p>Single-replica <a href="https://lemonade-sdk.github.io/">Lemonade</a> omni-modal server on the Strix Halo APU.
+Manifest: <a href="https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/lemonade.yaml"><code>talos-k8s/ai/lemonade.yaml</code></a>.</p>
+<p>Lemonade is an AMD-optimized, open-source local AI runtime that auto-detects hardware and provides standard OpenAI-compatible endpoints for chat, vision, image generation, image editing, speech generation, and transcription. Built on llama.cpp, ONNX Runtime, whisper.cpp, and stable-diffusion.cpp.</p>
+<p>Key env overrides (RDNA 3.5 needs special handling):</p>
+<div class="table-wrapper"><table><thead><tr><th>Env var</th><th>Value</th><th>Why</th></tr></thead><tbody>
+<tr><td><code>HSA_OVERRIDE_GFX_VERSION</code></td><td><code>11.5.1</code></td><td>Forces ROCm to treat gfx1151 as supported</td></tr>
+<tr><td><code>PYTORCH_ROCM_ARCH</code></td><td><code>gfx1151</code></td><td>Compile shaders for exact arch</td></tr>
+<tr><td><code>HSA_XNACK</code></td><td><code>1</code></td><td>Enables unified memory</td></tr>
+<tr><td><code>HSA_FORCE_FINE_GRAIN_PCIE</code></td><td><code>1</code></td><td>Fine-grained VM access</td></tr>
+</tbody></table>
+</div>
+<p><strong>Access:</strong></p>
+<ul>
+<li>LAN: <code>http://&lt;karnataka-ip&gt;:31305/v1</code> (NodePort)</li>
+<li>Tailscale: <code>https://lemonade.manatee-basking.ts.net/v1</code></li>
+</ul>
+<p>Model weights cached on <code>karnataka:/var/tmp/lemonade-cache</code> (HuggingFace) and <code>/var/tmp/lemonade-models</code> (llama models) via local-storage PersistentVolumes.</p>
+<p><strong>Web UI:</strong> Point a browser at <code>http://&lt;karnataka-ip&gt;:31305</code> for the built-in control panel to download models, configure endpoints, and test chat/vision/image generation.</p>
+<h3 id="kubevirt-v182"><a class="header" href="#kubevirt-v182">KubeVirt v1.8.2</a></h3>
+<p>Installed from upstream operator manifests:</p>
+<pre><code class="language-bash">kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-cr.yaml
+</code></pre>
+<p>The <code>default</code> namespace is labelled <code>pod-security.kubernetes.io/enforce=privileged</code> so privileged virtualization pods can run.</p>
+<h3 id="kubevirt-manager-web-ui"><a class="header" href="#kubevirt-manager-web-ui">KubeVirt Manager (web UI)</a></h3>
+<p>Manifest: deployed from upstream bundle. Also see <a href="https://github.com/hanthor/dotfiles/tree/master/talos-k8s/infrastructure"><code>talos-k8s/infrastructure/</code></a> for KubeVirt CR and Corral VM dashboard.</p>
+<pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
+</code></pre>
+<p>Reachable at <code>https://kubevirt-manager.manatee-basking.ts.net</code> via the Tailscale ingress (manifest in cluster — not in this repo since it's a stock bundle).</p>
+<p>Port-forward as fallback:</p>
+<pre><code class="language-bash">kubectl port-forward svc/kubevirt-manager 8080:8080 -n kubevirt-manager
+# http://localhost:8080
+</code></pre>
+<hr />
+<h3 id="additional-services"><a class="header" href="#additional-services">Additional services</a></h3>
+<p>All other production services have their own directory in <a href="https://github.com/hanthor/dotfiles/tree/master/talos-k8s"><code>talos-k8s/</code></a>:</p>
+<div class="table-wrapper"><table><thead><tr><th>Service</th><th>Directory</th><th>Description</th></tr></thead><tbody>
+<tr><td>Forgejo</td><td><code>forgejo/</code></td><td>Git hosting + Actions CI/CD</td></tr>
+<tr><td>Hive</td><td><code>hive/</code></td><td>AI coding agent swarm backed by Lemonade</td></tr>
+<tr><td>Authentik</td><td><code>authentik/</code></td><td>SSO (passkeys, OAuth2/OIDC) — Helm</td></tr>
+<tr><td>n8n</td><td><code>n8n/</code></td><td>Workflow automation — plain K8s manifest</td></tr>
+<tr><td>AppFlowy Cloud</td><td><code>appflowy/</code></td><td>Collaborative workspace — commercial Helm chart</td></tr>
+<tr><td>Grafana + Prometheus</td><td><code>monitoring/</code></td><td>kube-prometheus-stack + metrics-server</td></tr>
+<tr><td>ArgoCD</td><td>(Helm)</td><td>GitOps deployment</td></tr>
+<tr><td>Longhorn</td><td><code>longhorn/</code></td><td>Distributed block storage (CSI, snapshots)</td></tr>
+<tr><td>KubeStellar Hive</td><td><code>kubestellar-hive/</code></td><td>KubeStellar multi-cluster hive</td></tr>
+<tr><td>SearXNG</td><td><code>searxng/</code></td><td>Self-hosted metasearch</td></tr>
+<tr><td>TopoLVM</td><td><code>topolvm/</code></td><td>Dynamic LVM-backed storage</td></tr>
+<tr><td>Testing lab</td><td><code>testing-lab/</code></td><td>Argo Workflows CI/CD test infra</td></tr>
+</tbody></table>
+</div>
+<p>Each directory has a <code>README.md</code> with deploy and operational instructions.</p>
+<hr />
+<h2 id="8-tailscale-operator-ingress"><a class="header" href="#8-tailscale-operator-ingress">8. Tailscale operator (ingress)</a></h2>
+<p>The <a href="https://tailscale.com/kb/1236/kubernetes-operator">Tailscale Operator</a> creates a Tailscale-side proxy pod for any <code>Ingress</code> resource with <code>ingressClassName: tailscale</code>. The proxy joins the tailnet with a name derived from the Ingress, and routes incoming traffic to the backing Service.</p>
+<p>Example:</p>
+<pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lemonade
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: lemonade
+      port:
+        number: 13305
+  tls:
+    - hosts:
+        - lemonade
+</code></pre>
+<p>The operator namespace is <code>tailscale</code>. Auth keys are configured during operator install — see Tailscale docs for renewal.</p>
+<hr />
+<h2 id="9-day-to-day-operations"><a class="header" href="#9-day-to-day-operations">9. Day-to-day operations</a></h2>
+<h3 id="from-your-workstation"><a class="header" href="#from-your-workstation">From your workstation</a></h3>
+<p>The <code>kube</code> role syncs <code>~/.kube/config</code> and <code>~/.talos/config</code> from Bitwarden, so on any desktop:</p>
+<pre><code class="language-bash">kubectl get pods -A
+talosctl -n &lt;bihar-ip&gt; health
+talosctl -n &lt;karnataka-ip&gt; dmesg | grep -i amdgpu
+</code></pre>
+<h3 id="common-kubectl"><a class="header" href="#common-kubectl">Common kubectl</a></h3>
+<pre><code class="language-bash">kubectl get nodes -o wide
+kubectl top nodes                        # requires metrics-server (monitoring/metrics-server.yaml)
+kubectl logs -f deployment/lemonade
+kubectl describe pod -l app=lemonade    # check GPU scheduling / events
+</code></pre>
+<h3 id="common-talosctl"><a class="header" href="#common-talosctl">Common talosctl</a></h3>
+<pre><code class="language-bash">talosctl -n &lt;karnataka-ip&gt; list /dev/dri/   # confirm GPU devices visible to host
+talosctl -n &lt;karnataka-ip&gt; services         # systemd-equivalent services
+talosctl -n &lt;bihar-ip&gt; etcd status      # control-plane etcd health
+talosctl -n &lt;bihar-ip&gt; logs kubelet
+talosctl -n &lt;bihar-ip&gt; reboot           # graceful reboot
+</code></pre>
+<hr />
+<h2 id="10-reinstall-procedure"><a class="header" href="#10-reinstall-procedure">10. Reinstall procedure</a></h2>
+<p>If a node is wiped or replaced:</p>
+<ol>
+<li><strong>Boot Talos ISO</strong> on the node (or PXE if you set that up separately). Default Talos boots into maintenance mode and accepts an apply-config.</li>
+<li><strong>Apply config</strong>:
+<pre><code class="language-bash">talosctl apply-config --insecure --nodes &lt;node-ip&gt; --file &lt;controlplane|worker&gt;.yaml
+</code></pre>
+</li>
+<li><strong>Bootstrap etcd</strong> (control plane only, first time):
+<pre><code class="language-bash">talosctl bootstrap --nodes &lt;bihar-ip&gt;
+</code></pre>
+</li>
+<li><strong>Verify</strong>:
+<pre><code class="language-bash">talosctl -n &lt;bihar-ip&gt; health
+kubectl get nodes
+</code></pre>
+</li>
+<li><strong>Create user volume</strong> (karnataka/worker only):
+<pre><code class="language-bash">talosctl -n &lt;karnataka-ip&gt; patch mc --patch @talos-k8s/longhorn/storage-volume.yaml
+</code></pre>
+</li>
+<li><strong>Create host directories</strong> for local PVs (if re-creating from scratch):
+<pre><code class="language-bash">kubectl exec -n kube-system $(kubectl get pods -n kube-system --field-selector spec.nodeName=karnataka -l app=kube-flannel -o name) -- \
+  mkdir -p /proc/1/root/var/tmp/lemonade-cache
+  mkdir -p /proc/1/root/var/tmp/lemonade-models
+</code></pre>
+</li>
+<li><strong>Re-apply workloads</strong> (idempotent):
+<pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml
+kubectl apply -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-labeller.yaml
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-cr.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
+kubectl apply -f talos-k8s/ai/lemonade.yaml
+</code></pre>
+</li>
+</ol>
+<p>If only the worker was reset, the existing kubeconfig still works — only steps 1, 2, 5, and 6 are needed for that node, plus re-applying any DaemonSet pods.</p>
+<blockquote>
+<p><strong>WD Black failure:</strong> Do not use the WD Black (<code>/dev/nvme1n1</code>) for installs or user volumes.
+Install only to the Crucial P3 (<code>/dev/nvme0n1</code>). Storage uses a directory-type volume
+on the Crucial P3's EPHEMERAL partition.</p>
+</blockquote>
+<hr />
+<h2 id="11-troubleshooting"><a class="header" href="#11-troubleshooting">11. Troubleshooting</a></h2>
+<h3 id="amdcomgpu-shows-0-on-karnataka"><a class="header" href="#amdcomgpu-shows-0-on-karnataka"><code>amd.com/gpu</code> shows <code>0</code> on karnataka</a></h3>
+<p>Check the device plugin actually scheduled and started:</p>
+<pre><code class="language-bash">kubectl -n kube-system get pods -l name=amdgpu-device-plugin-ds
+kubectl -n kube-system logs -l name=amdgpu-device-plugin-ds --tail=50
+talosctl -n &lt;karnataka-ip&gt; dmesg | grep -i amdgpu   # confirm driver loaded
+talosctl -n &lt;karnataka-ip&gt; list /dev/dri/           # confirm devices exist
+</code></pre>
+<h3 id="lemonade-pod-stuck-in-containercreating"><a class="header" href="#lemonade-pod-stuck-in-containercreating">Lemonade pod stuck in <code>ContainerCreating</code></a></h3>
+<p>Most often: pulling models from HuggingFace. Check:</p>
+<pre><code class="language-bash">kubectl describe pod -l app=lemonade
+kubectl get pv,pvc                       # confirm PVCs bound
+</code></pre>
+<h3 id="tailscale-ingress-not-reachable"><a class="header" href="#tailscale-ingress-not-reachable">Tailscale Ingress not reachable</a></h3>
+<pre><code class="language-bash">kubectl -n tailscale get pods            # operator + per-Ingress ts-* proxies
+kubectl -n tailscale logs deploy/operator
+tailscale status | grep -i &lt;ingress-name&gt;
+</code></pre>
+<h3 id="talos-node-unresponsive"><a class="header" href="#talos-node-unresponsive">Talos node unresponsive</a></h3>
+<pre><code class="language-bash">talosctl -n &lt;ip&gt; health --wait
+talosctl -n &lt;ip&gt; dmesg --tail
+talosctl -n &lt;ip&gt; reset                   # nuclear: wipes node, requires re-apply
+</code></pre>
+<h3 id="container-runtime-crash-karnataka"><a class="header" href="#container-runtime-crash-karnataka">Container runtime crash (karnataka)</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li><code>kubectl get nodes</code> shows karnataka <code>NotReady</code></li>
+<li><code>kubectl describe node karnataka</code> shows <code>Ready: False</code> with <code>container runtime is down</code></li>
+<li>All pods on karnataka stuck in <code>Terminating</code>/<code>Pending</code></li>
+<li>Ping to karnataka still works (node is up, just CRI is dead)</li>
+</ul>
+<p><strong>Root cause:</strong> Memory pressure from simultaneous large container builds exhausts
+karnataka's 62GB unified memory. The node runs Lemonade (48-56Gi), Argo Workflow image
+builds, Forgejo Actions (podman-in-Docker), KubeVirt, and monitoring — when
+multiple 4GB image builds run concurrently, containerd OOMs and crashes.</p>
+<p><strong>Recovery:</strong></p>
+<pre><code class="language-bash"># Option 1: Graceful reboot via Talos
+talosctl -n &lt;karnataka-ip&gt; reboot
+
+# Option 2: Hard reboot via the NanoKVM (see network/kvm)
+</code></pre>
+<p>After reboot (~2 min), all pods recover automatically. PVC-backed services
+(Forgejo, local-path PVs) survive.</p>
+<p><strong>Prevention:</strong></p>
+<ul>
+<li>Don't run more than one large container build concurrently on karnataka</li>
+<li>Set <code>SKIP_CHUNKAH=1</code> for Forgejo builds (avoids extra 2GB memory spike)</li>
+<li>Consider moving non-GPU workloads to bihar or a third node</li>
+<li>The Forgejo runner has <code>timeout-minutes: 45</code> — builds that exceed this will be killed</li>
+</ul>
+<hr />
+<h2 id="12-hummingbirdbootc-migration-home-only"><a class="header" href="#12-hummingbirdbootc-migration-home-only">12. Hummingbird/bootc migration (home only)</a></h2>
+<h3 id="scope-and-acceptance-status"><a class="header" href="#scope-and-acceptance-status">Scope and acceptance status</a></h3>
+<p>This is a replacement OS and <strong>new K3s cluster</strong> for the two home nodes, not a
+Talos upgrade. Bihar is the Intel server/control plane; Karnataka is the AMD
+worker. <strong>No physical migration has been performed.</strong> The home cluster is still
+powered down/in storage. Nothing here changes the terminated
+<a href="../aws-k8s/cluster.html">AWS Talos cluster's</a> recovery material; Corral
+acceptance uses separate disposable KubeVirt VMs, not Talos node changes.
+Sections 1–11 remain the Talos recovery handbook, not instructions for the new OS.</p>
+<p>Image builds alone do not prove installation. The GitHub Actions acceptance
+workflow builds all three images and offline ISOs, drives the <strong>real
+<code>bootc-installer-tui</code></strong>, boots the installed disks without their ISOs, and
+switches the installed starter to Bihar before activating a separate disposable
+two-node K3s cluster.
+<a href="https://github.com/hanthor/dotfiles/actions/runs/39493512586">Publication run 39493512586</a>
+passed for release source <code>4ec3fa6470d6b02e7eaf1b0eaae03d1db05a31a7</code>: all three offline TUI
+installs, installed-disk UEFI boot, admin login/sudo, Enforcing SELinux,
+unenrolled Tailscale, and a real starter-to-Bihar bootc switch with exact digest,
+reboot, and administrator/hostname/identity/<code>/var</code> persistence checks. Gated K3s
+activation then passed two Ready nodes, cross-node HTTP, cluster DNS, and
+local-path PVC data surviving writer-pod replacement. The reviewed PR also
+<a href="https://github.com/hanthor/dotfiles/actions/runs/39490206821">passed normal repository CI</a>.</p>
+<p>On <strong>2026-10-20</strong>, Playwright drove both installers through the <strong>actual Corral
+noVNC canvases</strong> on disposable KubeVirt VMs. Both reached “Installation
+Complete”; their ISO volumes were then detached before installed-disk boots.
+Real admin-password login/sudo and Enforcing SELinux passed on both. The installed
+cluster passed the same DNS, cross-node HTTP, and PVC pod-replacement scenario
+used by CI. Bihar's Intel <code>kvm_intel</code> module loaded on this Intel Corral host;
+that is not a test of a nested KubeVirt guest or the physical home machines.</p>
+<p>The deployed Corral service reported its cluster unreachable, so acceptance used
+a temporary localhost Corral dashboard against <code>admin@aws-migration</code>, without
+changing the deployed service. All test VMs/disks were isolated in namespace
+<code>home-k8s-acceptance</code>. Configure the disposable node LAN as <code>192.168.0.5/24</code>
+and <code>192.168.0.6/24</code> <strong>before activating K3s</strong>: Corral's provider pod addresses
+overlap this new cluster's <code>10.244.0.0/16</code> pod CIDR. The initial overlapping
+setup reached Ready nodes and working DNS but failed cross-node HTTP; the
+non-overlapping guest LAN passed without changing the images' production
+network configuration. Changing an already-initialized embedded-etcd server's
+IP also requires its membership to be corrected; do not initialize it with the
+provider pod IP in the first place.</p>
+<p>Native Corral media predates publication-only OCI label changes; it is not
+byte-identical to the subsequently rebuilt release. The publication dispatch
+repeats complete KVM acceptance on the exact bytes it publishes. Corral evidence
+is saved under <code>~/.local/share/home-k8s-build/</code> on the acceptance controller:
+<code>corral-{bihar,karnataka}-install-complete.webp</code>,
+<code>corral-{bihar,karnataka}-installed-boot.webp</code>,
+<code>corral-installed-kubernetes.webp</code>, and <code>corral-cluster-proof.txt</code>.</p>
+<p>The optional starter also passed a <strong>2026-10-20</strong> Playwright/noVNC installation
+in namespace <code>home-k8s-starter-acceptance</code>, followed by ISO detachment and an
+installed-disk UEFI boot. Actual admin-password login/sudo, hostname
+<code>starter-smoke</code>, Enforcing SELinux, absent K3s role/configuration, driver/firmware
+payload checks, and the canonical starter bootc reference passed. The real
+installed <code>tailscaled</code> daemon was active and responsive in <strong>NeedsLogin</strong>, with
+no tailnet and root-owned <code>0700</code> state; no VM was enrolled into the fleet.
+The dedicated <code>tailscale0</code> SSH firewall zone was present. All disposable VMs,
+PVCs, namespaces, and temporary Corral/upload services were removed afterward.</p>
+<p>That native starter ISO was built from source
+<code>2f8be86e3f98782f8dc7857e688e274318494f5b</code>, is <strong>2,057,453,568 bytes</strong>, and has SHA256
+<code>1dc796f217e2d4ce6140511bed59399d2e031092299e2fa09e0436bea305ee27</code>.
+Evidence is under <code>~/.local/share/home-k8s-build/unified-starter-native/</code>:
+<code>corral-starter-install-summary.png</code>, <code>corral-starter-install-complete.png</code>,
+<code>corral-starter-admin-sudo.png</code>, <code>corral-starter-installed-tailscale.png</code>, and
+<code>corral-starter-installed-proof.txt</code>. These are native acceptance artifacts,
+not a claim that the later publication rebuild is byte-identical.</p>
+<p>VM acceptance cannot establish GPU, physical NIC, disk health, firmware,
+or nested-virtualization readiness on the real machines. The recorded runner
+was AMD EPYC: Bihar's Intel-only <code>kvm_intel</code> preload fails in that VM, so its
+module-load unit is not evidence of working Intel virtualization. Verify that
+unit and a real KubeVirt guest on physical Bihar before cutover.</p>
+<h3 id="image-contents-and-state"><a class="header" href="#image-contents-and-state">Image contents and state</a></h3>
+<p>The source is <code>server-images/Containerfile</code>, <code>compose.sh</code>, <code>nodes/</code>, and <code>rootfs/</code>.
+All three targets use the digest-pinned Hummingbird Community <code>os-minimal</code> base,
+without a desktop. The Bihar/Karnataka images remain the direct installation
+path for those machines; <code>starter</code> is optional for future x86_64 AMD/Intel nodes.
+Explicit AMD/Intel GPU and CPU, Intel Wi-Fi, Realtek, MediaTek, Atheros, and
+Broadcom firmware subpackages come through the digest-pinned Utah package factory.
+That local repository is authenticated by its OCI digest, <strong>not RPM signatures</strong>.
+The lower-priority Fedora 44 repository checks Fedora RPM signatures and supplies
+missing storage dependencies; it does not replace the Hummingbird kernel.
+The separate live-media build uses Hummingbird's <code>dracut-live</code> and
+<code>systemd-boot-unsigned</code>, with missing dependencies such as fuse, parted, and
+ntfs-3g supplied by signed Fedora RPMs. Those live additions do not modify the
+embedded installed-system OCI payload.
+K3s and its SELinux policy RPM are separately SHA256-pinned.</p>
+<p>The common hardware payload includes:</p>
+<div class="table-wrapper"><table><thead><tr><th>Hardware</th><th>Shipped support</th></tr></thead><tbody>
+<tr><td>Bihar: Intel Core i7-13700K / UHD 770</td><td>Intel microcode, <code>i915</code> and its firmware, <code>kvm_intel</code>; the <code>xe</code> driver/firmware is also available</td></tr>
+<tr><td>Karnataka: Strix Halo / Radeon 8060S (<code>gfx1151</code>)</td><td><code>amdgpu</code>, <code>gc_11_5_1</code> GPU firmware, AMD microcode, <code>kvm_amd</code></td></tr>
+<tr><td>Karnataka: MediaTek MT7925 Wi-Fi</td><td><code>mt7925e</code> plus its Wi-Fi code and patch firmware</td></tr>
+<tr><td>Karnataka: Realtek RTL8126 Ethernet</td><td><code>r8169</code> plus Realtek NIC firmware</td></tr>
+<tr><td>Other common Wi-Fi families</td><td>Intel <code>iwlwifi</code>, Realtek <code>rtw89</code>, Atheros/Qualcomm <code>ath9k</code>/<code>ath10k</code>/<code>ath11k</code>/<code>ath12k</code>, Broadcom <code>brcmfmac</code>, and their selected firmware packages</td></tr>
+</tbody></table>
+</div>
+<p><code>NetworkManager-wifi</code> supplies the actual Wi-Fi backend, with <code>wpa_supplicant</code>
+for authentication. After installed-system login, connect interactively with
+<code>sudo nmcli --ask device wifi connect "your-ssid"</code>; never put Wi-Fi credentials
+in image source or command-line password arguments. Live-session network
+configuration is not copied by the pinned installer. Driver/module/firmware
+presence is checked during builds and starter acceptance, but <strong>physical RF,
+GPU compute, device passthrough, and board-specific compatibility remain untested</strong>.
+This is not an ARM image or a proprietary NVIDIA/CUDA stack.</p>
+<p>K3s is pinned to <strong><code>v1.36.1+k3s1</code></strong>, with embedded containerd, Flannel networking,
+and embedded etcd on Bihar (<code>cluster-init: true</code>). Pod/service CIDRs remain
+<code>10.244.0.0/16</code> and <code>10.96.0.0/12</code>; cluster DNS is <code>10.96.0.10</code>.
+Bihar disables bundled Traefik, ServiceLB, and metrics-server: restore any needed
+equivalents deliberately. This is one control plane, not HA.</p>
+<p>NetworkManager, sshd, firewalld, Tailscale, and iSCSI services are enabled on all
+three images. Bihar enables <code>k3s@server</code>; Karnataka enables <code>k3s@agent</code>, but
+both are gated by <code>/etc/rancher/k3s/activate</code>. The starter selects neither role
+and supplies no hostname, K3s configuration, or cluster endpoint.
+<strong>No activation marker, cluster token, Tailscale auth key, or enrolled identity
+is baked into an image.</strong> Automatic bootc fetch/apply services are masked so a
+reboot of the only control plane is an explicit maintenance decision.
+NFS GSSAPI state directories are initialized privately (<code>0700</code>) through
+tmpfiles before the daemon's sandbox is assembled; CI requires <code>gssproxy</code> to
+start successfully with SELinux enforcing.</p>
+<p>Mutable state includes <code>/etc/rancher/k3s</code>, <code>/var/lib/rancher/k3s</code> (including etcd
+and containerd), user homes under <code>/var/home</code>, and these retained workload paths:</p>
+<div class="table-wrapper"><table><thead><tr><th>Path</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>/var/mnt/storage</code></td><td>Bihar's K3s local-path default and existing host-path data</td></tr>
+<tr><td><code>/var/lib/longhorn</code></td><td>Longhorn persistent storage</td></tr>
+<tr><td><code>/var/lib/lemonade-cache</code></td><td>Lemonade cache, matching the current home PV manifest</td></tr>
+<tr><td><code>/var/lib/lemonade-models</code></td><td>Lemonade models, matching the current home PV manifest</td></tr>
+</tbody></table>
+</div>
+<p>The current <code>talos-k8s/ai/lemonade.yaml</code> uses <code>/var/lib/lemonade-*</code>. The offline
+Talos node may still hold the data under <code>/var/tmp/lemonade-*</code>: back up those
+source directories before wiping and restore into <code>/var/lib/lemonade-*</code> on the
+new node. Creating an empty PV directory does not migrate the models.</p>
+<h3 id="back-up-before-building-a-physical-migration-plan"><a class="header" href="#back-up-before-building-a-physical-migration-plan">Back up before building a physical migration plan</a></h3>
+<p>Before <strong>any disk wipe</strong>, recover the old nodes if necessary and copy application
+backups, PV data, models, manifests, and required secrets <strong>off both machines</strong>.
+Inventory PV-to-node/path mappings, ownership, application restore procedures,
+and Longhorn volumes; verify the backups can be read/restored independently.
+An etcd snapshot is useful for Talos recovery, but <strong>Talos etcd cannot be
+directly restored into K3s</strong>. A matching directory name is not a data migration.</p>
+<p>Keep the old Bitwarden secure notes <code>kubeconfig</code> / <code>talosconfig</code> and their
+<code>~/.kube/config</code> / <code>~/.talos/config</code> files. Also keep the separate AWS
+<code>kubeconfig-aws-migration</code> / <code>talosconfig-aws-migration</code> notes and files unchanged.
+Use a new home kubeconfig below; do not overwrite any of these.</p>
+<p><strong>Karnataka's <code>/dev/nvme1n1</code> (WD Black) is failing: never select it.</strong>
+Only the healthy <code>/dev/nvme0n1</code> is a candidate, <strong>after off-node backups and an
+explicit physical operator choice</strong>. Identify disks by model, serial, size,
+and current contents at the console (<code>lsblk -o NAME,SIZE,MODEL,SERIAL,FSTYPE,MOUNTPOINTS</code>);
+do not assume device enumeration is sufficient. Apply the same backup and
+operator-choice gate to Bihar's intended <code>/dev/nvme0n1</code>.</p>
+<h3 id="build-node-images-and-optional-starter-media"><a class="header" href="#build-node-images-and-optional-starter-media">Build node images and optional starter media</a></h3>
+<p>Run from this repository on a Linux builder with Podman, Go compatible with
+Fisherman's <code>tui/go.mod</code>, Python 3, squashfs-tools (<code>mksquashfs</code>), dosfstools
+(<code>mkfs.fat</code>), mtools (<code>mmd</code>, <code>mcopy</code>), and xorriso available. Local source
+defaults are <code>~/dev/tuna-os/fisherman</code> and <code>~/dev/utah</code>; override with
+<code>FISHERMAN_SRC</code> and <code>UTAH_SRC</code>. For the CI source selection, use Fisherman commit
+<code>014e704be5f7365c4a1ccdef37fcadf97ade792a</code> and Utah commit
+<code>f2736b6b774551cc8971af85cedaa65a272354ee</code>; the Fisherman Go requirement is
+<code>1.26.2</code>. The media builder compiles the real Fisherman backend and TUI from
+these trees, not a substitute installer. Use a clean Fisherman checkout at that
+revision: it includes the target-disk OCI staging fix from
+the merged <a href="https://github.com/tuna-os/fisherman/pull/345">Fisherman PR 345</a>, required for
+offline installation without exhausting the live filesystem.</p>
+<pre><code class="language-bash">just server-images
+# Produces localhost/home-k8s-{starter,bihar,karnataka}:testing.
+mkdir -p artifacts/home-k8s
+export FISHERMAN_SRC="$HOME/dev/tuna-os/fisherman"
+export UTAH_SRC="$HOME/dev/utah"
+# Choose canonical refs in a registry namespace you control.
+export BIHAR_TARGET_REF=ghcr.io/hanthor/home-k8s-bihar:testing
+export KARNATAKA_TARGET_REF=ghcr.io/hanthor/home-k8s-karnataka:testing
+just server-installer bihar "$BIHAR_TARGET_REF" artifacts/home-k8s/bihar-installer.iso
+just server-installer karnataka "$KARNATAKA_TARGET_REF" artifacts/home-k8s/karnataka-installer.iso
+# Optional: a hardware-generic install with no selected cluster role.
+just server-installer starter ghcr.io/hanthor/home-k8s-starter:testing artifacts/home-k8s/starter-installer.iso
+</code></pre>
+<p>The target references above are <strong>day-2 tracking metadata</strong>, not downloads needed
+by the offline installation. Each ISO embeds its matching unchanged OCI payload.
+These local commands and PR/push acceptance do not publish registry images.
+Before <code>bootc upgrade</code>, publish the intended image to its canonical ref and verify
+the digest; building an ISO alone does not make that ref available.</p>
+<p>To build just one profile, use <code>just server-image bihar</code>, <code>just server-image karnataka</code>, or <code>just server-image starter</code>. The canonical recipe disables
+Podman's injected <code>/etc/hostname</code> so image composition can clear the base hostname
+before applying a specialization. The UEFI media keeps its boot files inside
+the FAT ESP rather than duplicating them as loose ISO files; the embedded
+installed-system payload is unchanged by that size reduction.</p>
+<h3 id="publish-accepted-images-and-installation-media"><a class="header" href="#publish-accepted-images-and-installation-media">Publish accepted images and installation media</a></h3>
+<p>Published acceptance release:
+<a href="https://github.com/hanthor/dotfiles/releases/tag/home-k8s-20261021"><strong>home-k8s-20261021</strong></a>.
+These are public <strong>prerelease</strong> artifacts, not proof of physical hardware
+readiness. All three profiles' date tags and <code>testing</code> channels passed anonymous
+GHCR access and match the exact tested payloads and source revision.</p>
+<div class="table-wrapper"><table><thead><tr><th>Profile</th><th>Published image</th><th>Offline installer ISO</th></tr></thead><tbody>
+<tr><td>Bihar</td><td><code>ghcr.io/hanthor/home-k8s-bihar:20261021</code></td><td><a href="https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/bihar-installer.iso">bihar-installer.iso</a></td></tr>
+<tr><td>Karnataka</td><td><code>ghcr.io/hanthor/home-k8s-karnataka:20261021</code></td><td><a href="https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/karnataka-installer.iso">karnataka-installer.iso</a></td></tr>
+<tr><td>Optional starter</td><td><code>ghcr.io/hanthor/home-k8s-starter:20261021</code></td><td><a href="https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/starter-installer.iso">starter-installer.iso</a></td></tr>
+</tbody></table>
+</div>
+<p>Download <a href="https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/SHA256SUMS">SHA256SUMS</a>
+and <a href="https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/provenance.json">provenance.json</a>
+from the same release; the latter records image digests, exact source/upstream
+revisions, and the acceptance run. OCI archives, media contracts, and the
+<a href="https://github.com/hanthor/dotfiles/releases/download/home-k8s-20261021/starter-switch-proof.txt">starter-switch proof</a>
+are also release assets. The publisher treats date tags as write-once; use the
+recorded <code>@sha256:</code> digest when a registry reference must be intrinsically immutable.
+The older <code>20261020</code> release remains available but predates the optional starter
+and completed GPU/Wi-Fi firmware and host Tailscale payload.</p>
+<p>Publication is an explicit <strong>master-only</strong> dispatch, after interactive Corral
+acceptance. It repeats all three real offline TUI installations, the installed
+starter's bootc switch, and the two-node Kubernetes scenario before transferring
+any release artifacts:</p>
+<pre><code class="language-bash">gh workflow run server-images.yml --repo hanthor/dotfiles --ref master \
+  -f publish=true -f version=20261022
+</code></pre>
+<p>Choose an unused, valid <code>YYYYMMDD</code> date; <code>20261020</code> and <code>20261021</code> are already published.
+Ordinary PR/push runs and manual runs
+with <code>publish=false</code> remain read-only. Only the separate publishing job receives
+registry/release write permissions; it pushes the exact accepted OCI archives,
+not rebuilt images. It publishes <code>ghcr.io/hanthor/home-k8s-{starter,bihar,karnataka}</code>
+with immutable date tags and the mutable <code>testing</code> channel, plus the public
+GitHub prerelease <code>home-k8s-YYYYMMDD</code> (not the repository's latest stable release).
+Assets include all three tested ISOs, OCI archives, media contracts, checksums,
+source/upstream revisions, registry digests, explicit acceptance markers, and
+the sanitized starter-switch proof.
+The canonical <code>just server-images</code> build records this repository's Git revision
+in the OCI source/revision labels, rather than inheriting Hummingbird's revision.
+Installed VM disks and credentials are never release assets.</p>
+<p>New GitHub container packages default to <strong>private</strong>, even when linked to a
+public repository. The packages above are already public. For a new package,
+change visibility in its GitHub package settings if necessary. The publisher
+refuses to create the release until anonymous access to both image tags succeeds.
+If this gate fails,
+change visibility and rerun <strong>only the failed publishing job within one day</strong>:
+the accepted artifact transfer has one-day retention. Identical existing date
+tags are reused; different content or an existing release/tag name is rejected.
+Never rebuild over an immutable date tag.</p>
+<h3 id="install-through-the-actual-tui"><a class="header" href="#install-through-the-actual-tui">Install through the actual TUI</a></h3>
+<p>For each node, first meet the backup/disk-selection gate above. Boot its matching
+ISO in <strong>UEFI mode with Secure Boot disabled</strong>. At the live root console run:</p>
+<pre><code class="language-bash">bootc-installer-tui
+</code></pre>
+<ol>
+<li>Skip network configuration to use <strong>DHCP</strong>. The pinned TUI does not serialize
+selected network configuration; do not depend on it applying static addressing.</li>
+<li>Choose <strong>Custom URL</strong> and enter <code>oci:/usr/share/home-k8s/payload</code>.</li>
+<li>Choose the verified intended installation disk. Installation destroys its
+contents; do not choose the failing Karnataka secondary disk.</li>
+<li>Choose <strong>ext4</strong>, and set the hostname to <code>bihar</code> or <code>karnataka</code> as appropriate,
+or a unique hostname for a new starter installation.</li>
+<li>Leave disk encryption disabled for the tested installation path. Encrypted
+installation is not covered by this acceptance run.</li>
+<li>Create an <strong>actual administrative user</strong> with a strong password. Record it
+securely and check login/sudo after installation. Do not rely on root live
+access as an installed-system account.</li>
+<li>Skip SSH-key import: this pinned TUI does not serialize imported keys into
+the installation. Add authorized keys securely after first login instead.</li>
+<li>Review the destructive disk choice, install, shut down/reboot, and <strong>remove
+the ISO</strong> so the next boot is from the installed disk.</li>
+</ol>
+<p>The live ISO is SELinux <strong>permissive only</strong> (<code>enforcing=0</code>, not <code>selinux=0</code>).
+That exception belongs to live assembly, not the target. On the installed node,
+verify <code>getenforce</code> prints <strong><code>Enforcing</code></strong>, <code>sudo -v</code> succeeds for the new user,
+<code>bootc status</code> shows the intended target reference, and the corresponding K3s
+unit is inactive before activation. Stop and resolve any mismatch before joining
+the cluster. Install SSH keys and verify remote access using authenticated,
+trusted connections; never paste private keys or cluster tokens into CI logs.</p>
+<h3 id="optional-starter-and-a-deliberate-image-switch"><a class="header" href="#optional-starter-and-a-deliberate-image-switch">Optional starter and a deliberate image switch</a></h3>
+<p>The starter is not a third cluster node and does not join anything on first boot.
+It installs the same hardware, storage, Tailscale, and K3s tooling, but neither
+K3s instance is enabled and there is no default K3s configuration. Install Bihar
+and Karnataka directly when replacing those machines; the starter is an optional
+base for additional machines or a later switch to another bootc image.</p>
+<p>For example, to adopt Bihar's server profile from an installed starter:</p>
+<pre><code class="language-bash">sudo bootc switch ghcr.io/hanthor/home-k8s-bihar:testing
+sudo systemctl reboot
+</code></pre>
+<p>After reboot, inspect <code>sudo bootc status</code> and verify the <strong>booted</strong> image, not
+merely a staged deployment. The administrator, chosen hostname, and <code>/var</code> state
+survive; a switch does not rename the host or create the K3s activation marker.
+<code>/etc</code> uses a three-way merge, so review existing configuration rather than
+assuming the destination image replaces it.</p>
+<p>The named profiles are <strong>home-machine specializations</strong>, not generic role
+templates: they contain fixed K3s node names, home addresses, and CPU-specific
+module preloads. On additional machines, use an appropriate derived image or
+review those defaults before activation, especially <code>node-name</code>, server address,
+TLS SANs, and virtualization modules. The starter also retains the common
+home-LAN firewall policy; new sites need an explicit network-policy review.</p>
+<h3 id="enroll-host-tailscale-after-installation"><a class="header" href="#enroll-host-tailscale-after-installation">Enroll host Tailscale after installation</a></h3>
+<p>The pinned Utah factory supplies Tailscale <strong>1.98.8</strong>. <code>tailscaled</code> starts
+automatically but remains <strong>NeedsLogin</strong> until the operator enrolls that node.
+On the installed system—not the live ISO—run:</p>
+<pre><code class="language-bash">sudo tailscale up --hostname="$(uname -n)" --advertise-tags=tag:fleet \
+  --accept-dns=false --accept-routes=false
+tailscale status
+</code></pre>
+<p>Complete the displayed login URL using the fleet tailnet account; <code>tag:fleet</code>
+requires the corresponding tag-owner permission. This keeps the existing fleet
+tag convention without importing tailnet routes or replacing the node's DNS,
+which could conflict with the home/Flannel networks. No subnet routes, exit-node
+service, or Tailscale SSH are enabled automatically.</p>
+<p>The dedicated <code>tailscale0</code> firewalld zone allows ordinary SSH only; it does not
+open the Kubernetes API, kubelet, VXLAN, or NodePorts to every tailnet peer.
+Tailnet ACLs and installed SSH authorized keys still govern access. Host Tailscale
+does not replace Flannel or the separate in-cluster Tailscale Operator.</p>
+<p>Node keys and enrollment state live under private, root-owned
+<code>/var/lib/tailscale</code> (<code>0700</code>) and survive bootc updates/switches. Never bake that
+directory into an image or copy it between machines. A clean reinstall needs its
+own enrollment; a live-session identity is not migrated by this installer.
+CI checks the real installed daemon's unauthenticated state and private storage
+with SELinux enforcing; it does <strong>not</strong> enroll disposable VMs into the fleet.</p>
+<h3 id="explicit-activation-and-separate-kubeconfig"><a class="header" href="#explicit-activation-and-separate-kubeconfig">Explicit activation and separate kubeconfig</a></h3>
+<p>Verify router DHCP reservations and actual addresses <strong>before starting K3s</strong>:
+<strong>Bihar <code>192.168.0.5</code>, Karnataka <code>192.168.0.6</code></strong>. The worker configuration and
+server TLS SAN depend on Bihar's address. Make sure the isolated/new home
+cluster cannot conflict with a running old cluster at those addresses.</p>
+<p>On Bihar, as root:</p>
+<pre><code class="language-bash">touch /etc/rancher/k3s/activate
+systemctl start k3s@server
+k3s kubectl get nodes
+</code></pre>
+<p>Wait for the API/server to be healthy. Securely transfer
+<code>/var/lib/rancher/k3s/server/node-token</code> from Bihar to
+<code>/etc/rancher/k3s/token</code> on Karnataka. <strong>Treat this server token as
+cluster-admin-sensitive</strong>, not as a harmless worker password. Use a verified SSH
+connection or other authenticated encrypted channel; do not print it, commit it,
+store it in artifacts, or copy it through chat. On Karnataka ensure the file is
+owned by root and mode <code>0600</code> before activation:</p>
+<pre><code class="language-bash">chown root:root /etc/rancher/k3s/token
+chmod 0600 /etc/rancher/k3s/token
+touch /etc/rancher/k3s/activate
+systemctl start k3s@agent
+</code></pre>
+<p>Securely copy Bihar's <code>/etc/rancher/k3s/k3s.yaml</code> to the workstation as
+<code>~/.kube/config-home-hummingbird</code> (mode <code>0600</code>); change only its loopback API
+endpoint to <code>https://192.168.0.5:6443</code>. Keep this admin credential out of Git and
+logs. Use it explicitly instead of changing the old home or AWS kubeconfigs:</p>
+<pre><code class="language-bash">export KUBECONFIG="$HOME/.kube/config-home-hummingbird"
+kubectl get nodes -o wide
+kubectl wait --for=condition=Ready nodes/bihar nodes/karnataka --timeout=300s
+</code></pre>
+<h3 id="restore-home-workloads-and-validate-before-cutover"><a class="header" href="#restore-home-workloads-and-validate-before-cutover">Restore home workloads and validate before cutover</a></h3>
+<p>Review and apply <strong>only selected home workload manifests</strong> from <code>talos-k8s/</code>.
+Do not recursively apply that whole directory: it also contains AWS manifests.
+Do not apply Talos machine patches, extension/schematic settings, or Talos-only
+bootstrap configuration to K3s. Reconcile storage classes, node labels,
+selectors, host paths, privileged-device access, and security requirements
+against the new cluster before restoring applications.</p>
+<p>Restore data from off-node backups to the intended node/path with correct
+ownership and SELinux labels (use <code>restorecon</code> on restored host paths). Follow
+application-consistent restore procedures rather than blindly copying running
+databases or treating Longhorn's data directory as a complete backup. Validate
+PVC binding, persistence after pod/node restarts, DNS, cross-node traffic,
+ingress, application health, and data integrity before declaring a cutover.</p>
+<p>On real Karnataka hardware, verify <code>amdgpu</code>, <code>/dev/kfd</code>, <code>/dev/dri</code>, the AMD
+device plugin's allocatable GPU, and an actual Lemonade inference workload.
+Verify <code>/dev/kvm</code>, firmware virtualization settings, the correct Intel/AMD KVM
+modules, KubeVirt scheduling, and a real guest boot on the relevant nodes.
+Build-time module checks and virtual acceptance do not establish these facts.</p>
+<p>Use planned maintenance and fresh data/etcd backups for day-2 bootc updates.
+<strong><code>bootc rollback</code> rolls back the OS deployment, not application data, etcd,
+mutable <code>/etc</code> configuration, or PV contents.</strong> A data rollback requires its
+own tested restore plan; retain the Talos recovery material independently.</p>
+<h3 id="disposable-vm-acceptance-github-actions-and-local"><a class="header" href="#disposable-vm-acceptance-github-actions-and-local">Disposable VM acceptance (GitHub Actions and local)</a></h3>
+<p>GitHub Actions workflow <a href="https://github.com/hanthor/dotfiles/actions/workflows/server-images.yml">Home server images</a>
+(<code>server-images.yml</code>) runs for matching pull requests and master pushes.
+Manual dispatch defaults to acceptance only (<code>publish=false</code>); review branches
+cannot publish. Acceptance builds all three images/ISOs, installs each through
+the real TUI, and checks installed-disk boot, admin/sudo, Enforcing SELinux,
+unenrolled Tailscale, and gated K3s. It switches the installed starter to the exact
+new Bihar payload through a loopback-only registry, verifies the staged digest,
+reboots, and checks the <strong>booted</strong> digest plus persistent admin/hostname/identity
+and <code>/var</code> data. The fixture registry, starter disk, and NVRAM are removed before
+the two-node cluster scenario. The VMs use an isolated virtual LAN plus QEMU NAT, not the physical
+home LAN. CI requires KVM and fails if it is unavailable. No fleet deployment
+or physical-disk access occurs, including on a publication dispatch.
+It runs on <code>ubuntu-24.04</code> and uploads <code>*.log</code>, <code>*.json</code>, and <code>*.txt</code> diagnostics
+as <code>home-server-images-diagnostics</code> with seven-day retention, never installed
+disks. Only an explicit master publication retains the exact tested ISOs and
+exports an allowlisted, one-day release-artifact transfer to the publishing job
+described above. Retain any needed diagnostics before they expire.</p>
+<p>For local acceptance, install <code>uv</code>, QEMU x86_64, Skopeo, and OVMF, and use the ISO names
+from the build commands above. These commands create disposable installed
+qcow2 disks and per-node UEFI variable stores in the artifact directory:</p>
+<pre><code class="language-bash">uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm install starter
+uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm install bihar
+uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm install karnataka
+uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm cluster
+</code></pre>
+<p>To exercise a published-image switch on that installed starter, resolve the
+immutable date tag's digest first (the guest needs outbound registry access):</p>
+<pre><code class="language-bash">image=ghcr.io/hanthor/home-k8s-bihar:20261021
+digest=$(skopeo inspect --format '{{.Digest}}' "docker://$image")
+uv run server-images/test-vm.py --artifacts artifacts/home-k8s --accel kvm \
+  switch-starter --image "$image" --expected-digest "$digest"
+</code></pre>
+<p><code>starter-switch-proof.txt</code> records only explicit successful checks and public
+image references/digests, never the administrator password or private state.
+The workflow's fixture instead uses the exact newly built Bihar archive before
+publication, binds its HTTP registry only to <code>127.0.0.1:5000</code>, and scopes its
+temporary insecure-registry setting to <code>10.0.2.2:5000</code> inside the disposable guest.</p>
+<p>On a machine without usable KVM, explicitly replace <code>--accel kvm</code> with
+<code>--accel tcg</code> in <strong>every command</strong>; this is slower emulation, not hardware
+acceleration proof. The harness pins <code>pexpect==4.9.0</code> through its inline <code>uv</code>
+dependency metadata. It drives the actual TUI, powers off, removes the ISO,
+boots the installed UEFI disk, checks login/sudo, Enforcing SELinux, target
+reference, and inactive K3s, then activates both nodes and checks Ready status,
+cross-node traffic, DNS, and PVC behavior. Preserve the generated <code>*.log</code>,
+<code>*.json</code>, and <code>*.txt</code> proof outputs with the CI run. The passing run and physical
+hardware limitations are recorded under “Scope and acceptance status” above.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../servers/home-k8s-images.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../servers/talos-k8s/bihar/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../servers/home-k8s-images.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../servers/talos-k8s/bihar/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
