@@ -2,7 +2,7 @@
 
 Two-node Kubernetes cluster running on Talos Linux, managed from the `talos-k8s/` directory.
 
-> **Powered down and in storage, expected back** — commands below fail until it returns. Matrix, the Hive and the CFP dashboard run on the [AWS Talos cluster](servers/aws-k8s/cluster.md) meanwhile.
+> **Powered down and in storage, expected back** — commands below fail until it returns. Matrix and School, Reef and Hub run on the [OCI Spindle VPS](servers/spindle-vps/README.md); the [AWS Talos cluster](servers/aws-k8s/cluster.md) was terminated on 2026-10-25.
 
 ## Hardware
 

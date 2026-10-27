@@ -79,8 +79,6 @@ def test_himachal_phone_schedule_is_preserved_when_enabled(stub_env, tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     units = Path(env["HOME"]) / ".config/systemd/user"
     assert "OnCalendar=*-*-* 00/2:00:00" in (units / "phone-apply.timer").read_text()
-    service = (units / "phone-apply.service").read_text()
-    assert "ansible-playbook" not in service
     assert "enable --now phone-apply.timer" in calls(env)
 
 

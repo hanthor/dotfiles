@@ -25,7 +25,7 @@ Headless hosts.
 ```yaml
 server:
   hosts:
-    punjab:   # Headless Ubuntu agent box (EC2, us-east-1)
+    punjab:   # EC2 agent box (us-east-1; current instance status unverified)
     vm:       # Local dev VM
     goa:      # Raspberry Pi 5 (ARM)
 ```
@@ -33,10 +33,12 @@ server:
 Server roles: `server_hardening`, plus the service roles.
 
 ### `vps`
-Hetzner VPSes — **both retired** (migrated to the
-[AWS Talos cluster](servers/aws-k8s/cluster.md)). Follow the
+The inventory lists two **retired** Hetzner VPSes, formerly migrated to the
+[AWS Talos cluster](servers/aws-k8s/cluster.md), which was terminated on
+2026-10-25. Restart nothing on these hosts; follow the
 [Matrix cutover runbook](https://github.com/hanthor/dotfiles/blob/master/docs/matrix-cutover-runbook.md)
-before touching either.
+before touching either. Active [spindle](servers/spindle-vps/README.md) is an
+OCI Frankfurt VPS running Matrix and standalone LiveKit; it is not in this inventory.
 
 ```yaml
 vps:
@@ -76,7 +78,7 @@ worker.
 
 **bihar** and **karnataka** are Talos nodes (no SSH) and are managed with
 `talosctl`/`kubectl` only. The home cluster is powered down and in storage,
-expected back. The AWS cluster's nodes are likewise not in the inventory.
+expected back. The terminated AWS cluster's nodes were not in the inventory either.
 
 ## Per-Machine Configuration
 

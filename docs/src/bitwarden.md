@@ -12,17 +12,17 @@ For `just apply-tags` with a secret-bearing tag such as `kube`, `ai` or `omp`, t
 
 ## Remote Apply
 
-`just apply-remote <host>` (and `just apply-remote-tags <host> <tags>`):
+`just apply-remote <host>` resolves a session on the target. `just apply-remote-tags <host> <tags>` does so only for explicitly secret-bearing tags:
 
-1. Runs `scripts/bw-resolve.sh remote <host>`, which unlocks Bitwarden **on the
+1. When resolution is needed, it runs `scripts/bw-resolve.sh remote <host>`, which unlocks Bitwarden **on the
    remote** and prints that host's session token. If the remote CLI is logged
    out it tries `bw login --apikey` with the `bw-api-key` item from your local
    vault; to unlock it pipes the master password (item `James Bitwarden`) over
    stdin, falling back to an interactive `bw unlock` over `ssh -t`.
-2. Sends the remote session through SSH `SendEnv=BW_SESSION`, not in the command line. The target SSH daemon must accept `BW_SESSION`; if it rejects a resolved session, the apply aborts. `apply-remote` also caches it in the remote's `/tmp/bw_session`.
-3. The remote apply validates and syncs the session before invoking native units. If a resolved session is not accepted over SSH, the remote apply aborts.
+2. Sends a resolved remote session through SSH `SendEnv=BW_SESSION`, not in the command line. The target SSH daemon must accept `BW_SESSION`; if it rejects a resolved session, the apply aborts. `apply-remote` also caches it in the remote's `/tmp/bw_session`.
+3. The remote full apply, or a targeted apply with a secret-bearing tag, resolves and syncs a session before invoking native units. Other targeted applies do not prompt for one.
 
-**Caveat:** sessions are host-specific. If remote resolution fails, secret-capable units run with secrets disabled; targeted secret applies return nonzero. Unlock Bitwarden on that host and retry. Each unit determines how to preserve or report existing data; consult its reference.
+**Caveat:** sessions are host-specific. If remote resolution fails, the target apply still attempts its own local session resolution and sync; if that fails, it runs units with secrets disabled, and targeted secret applies return nonzero. Each unit determines how to preserve or report existing data; consult its reference.
 
 ## Vault Items
 
@@ -33,12 +33,12 @@ Common items consumed by units and scripts (the unit sources and their configura
 | `<login>@<machine>` | SSH Key | `ssh-keys` unit — per-machine ed25519 keys |
 | `tailscale-apikey` | Login (password) | `tailscale` unit — join and stale-device API cleanup |
 | `kubeconfig`, `talosconfig` | Secure notes | `kube` unit — home cluster credentials |
-| `kubeconfig-aws-migration`, `talosconfig-aws-migration` | Secure notes | `kube` unit — stored AWS cluster credentials |
+| `kubeconfig-aws-migration`, `talosconfig-aws-migration` | Secure notes | `kube` unit — retained credentials for the terminated AWS cluster |
 | `accounts.firefox.com` | Login + TOTP | `browser-fxa` unit — Firefox Account credentials |
 | `github-token` | Login (password) | `github` unit — PAT for `gh` |
 | `atuin.sh` | Login + custom field `key` | `atuin` unit — history sync |
 | `deepseek-api-key`, `tavily-api-key` | Login (password) | `shell-ai` unit — shell environment |
-| `forgejo`, `meta-api-key`, `kiro-api-key` | Secure notes | `shell-ai` unit — shell environment |
+| `forgejo`, `meta-api-key`, `kiro-api-key` | Secure notes | `shell-ai` unit — shell environment (`forgejo` has an `API Token:` line) |
 | `omp-auth-broker-token` | Login (password) | `omp` unit — broker client token (item configurable) |
 | `forgejo.manatee-basking.ts.net` | Login | `forgejo-registry` unit — Podman registry login |
 | `bw-api-key` | Login | `scripts/bw-resolve.sh` — `bw login --apikey` on a remote |

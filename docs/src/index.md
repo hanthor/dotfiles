@@ -4,13 +4,11 @@ Native-unit dotfiles and infrastructure for a personal fleet. Three distinct con
 
 1. **Workstation config** — shells, packages, browser, SSH, Tailscale, kubeconfig, GNOME, and more
 2. **Home Talos K8s cluster** — manifests for the Bihar + Karnataka cluster
-3. **TunaOS AWS infrastructure** — OpenTofu for the AWS account, its Talos cluster, and hosted fleet services
+3. **Hosted infrastructure** — OCI spindle and AWS account configuration; the AWS Talos cluster is terminated
 
 > **This handbook is public.** It covers architecture, decisions and runbooks.
-> Host-specific addresses and cloud resource identifiers are deliberately left
-> out — they live in the repo's inventory and IaC (`inventory.yml`,
-> `host_vars/`, `aws/`), or come from `just inventory`. Runbooks use
-> placeholders such as `<host>` and `<node-ip>` where you substitute them.
+> Never put secrets in it. Fleet addresses live in inventory or come from
+> `just inventory`; service runbooks may document public endpoints.
 
 ## Quick Start
 
@@ -38,11 +36,11 @@ Fleet hosts, from `inventory.yml`:
 | Machine | Group | Type | Role |
 |---------|-------|------|------|
 | kanpur | desktop | Laptop | Portable workstation |
-| himachal | desktop | Laptop | Portable workstation |
+| himachal | desktop | Laptop | Portable workstation; legacy `hive_ops` timers retired |
 | dilli | desktop | Desktop | Secondary workstation |
 | kerala | desktop | Mobile | postmarketOS ARM device |
 | mumbai | desktop | VM | Debian VM on the phone, `machine_profile: cli-only` |
-| punjab | server | Server | Headless Ubuntu agent box (EC2 `t3.large`, us-east-1) |
+| punjab | server | Server | EC2 agent box in us-east-1 |
 | goa | server | Server | [Raspberry Pi 5](https://www.raspberrypi.com/products/raspberry-pi-5/) ARM server |
 | vm | server | VM | Local dev VM |
 | termux | termux_hosts | Phone | Raw Termux/Android layer |
@@ -54,7 +52,10 @@ Not managed by fleet units (Talos — `talosctl`/`kubectl` only):
 
 - **bihar** (control plane) + **karnataka** (worker, AMD GPU) — the home cluster.
   Powered down and in storage, expected back. See the [cluster handbook](servers/talos-k8s/cluster.md).
-- The [AWS Talos cluster](servers/aws-k8s/cluster.md) — Matrix/ESS, the Hive, CFP dashboard.
+- The [AWS Talos cluster](servers/aws-k8s/cluster.md) was terminated on 2026-10-25; its handbook is historical.
+
+[Spindle](servers/spindle-vps/README.md) is an OCI Frankfurt VPS running Matrix,
+standalone LiveKit, School, Reef and Hub. It is not currently listed in `inventory.yml`.
 
 The `llm` group is dormant (commented out in `inventory.yml`).
 

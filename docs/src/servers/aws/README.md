@@ -1,26 +1,28 @@
 # TunaOS AWS Account
 
-> **TunaOS infrastructure.** This AWS account belongs to the TunaOS project.
-> It hosts the Hive agent fleet, Matrix/ESS and the CFP dashboard, plus punjab,
-> the box they're administered from. James's personal fleet (desktops, goa,
-> the home Talos cluster) lives elsewhere in this handbook.
+> **Cluster terminated 2026-10-25; IaC is not reconciled.** The
+> [AWS Talos cluster](../aws-k8s/cluster.md) is historical. Matrix and
+> standalone LiveKit are deployed on the [OCI spindle VPS](../spindle-vps/README.md).
+> S3 backups and a mirror on himachal-1 were retained; do not assume other
+> AWS resources have been removed or retained without checking the account.
+>
+> **Do not blindly run `just aws-plan` or `just aws-apply`.** `aws/` still
+> describes removed cluster resources. A plan can propose recreating them;
+> applying it can recreate infrastructure and incur costs. Review live state,
+> configuration and every proposed action before any apply.
 
-One AWS account (credits-funded) hosts three unrelated things. Everything
-created by hand has been adopted into **OpenTofu** in
-[`aws/`](https://github.com/hanthor/dotfiles/tree/master/aws); the one exception
-is `runs-on`, which is its own CloudFormation stack.
+This TunaOS account's OpenTofu configuration is in
+[`aws/`](https://github.com/hanthor/dotfiles/tree/master/aws); `runs-on` was
+managed separately by CloudFormation. The table describes the configuration
+and prior deployment, not a verified live resource inventory.
 
-| Region | What | Managed by |
+| Region | Configured or historical resource | Configuration |
 |---|---|---|
-| `eu-north-1` | [AWS Talos cluster](../aws-k8s/cluster.md) — VPC, control plane `m6i.2xlarge` + worker `m6i.xlarge`, Elastic IPs, security groups, pgdata volume | `aws/cluster.tf` |
-| `eu-north-1` | Backups — DLM snapshot policy, the fleet-backups bucket | `aws/backups.tf` |
-| `us-east-1` | [punjab](../punjab/README.md) — `t3.large` agent box, default VPC | `aws/punjab.tf` |
-| `us-east-2` | `runs-on` — self-hosted GitHub Actions runners ([runs-on.com](https://runs-on.com)) | CloudFormation stack `runs-on` |
-| global | A scoped admin IAM user + policies, DLM role, a write-only backup user, punjab's SSM instance role | `aws/iam.tf`, `aws/backups.tf`, `aws/punjab.tf` |
-| both | EBS encryption by default | `aws/account.tf` |
-| global | Budgets (spend alarms) | `aws/budgets.tf` |
-
-Default VPCs in each region are untouched and unmanaged.
+| `eu-north-1` | Terminated Talos cluster — VPC, nodes, Elastic IPs, security groups, pgdata volume | `aws/cluster.tf` |
+| `eu-north-1` | Backup configuration — DLM policy and retained fleet-backups bucket | `aws/backups.tf` |
+| `us-east-1` | [punjab](../punjab/README.md) EC2 agent box; running as of 2026-10-27 | `aws/punjab.tf` |
+| `us-east-2` | `runs-on` GitHub Actions runners; current stack status unverified | CloudFormation stack `runs-on` |
+| global | IAM, backup, account and budget configuration | `aws/iam.tf`, `aws/backups.tf`, `aws/account.tf`, `aws/budgets.tf` |
 
 ## OpenTofu layout
 
@@ -44,72 +46,51 @@ aws/
 - **Variables**: `aws/terraform.tfvars` holds the alert email and the admin
   ingress allowlists. The repo is public, so it is gitignored and stored in the
   Bitwarden secure note **`aws-tofu-tfvars`**.
-- **Talos user_data is not in the config.** Every node ignores `user_data`
-  and `ami`; node config is `talosctl`'s job. `prevent_destroy` is set on both
-  nodes, punjab, the worker EIP (DNS points at it), the pgdata volume and
-  the backup bucket.
+- **Talos user_data is not in the config.** The node resources ignore `user_data`
+  and `ami`; `prevent_destroy` is configured on the nodes, punjab, worker EIP,
+  pgdata volume and backup bucket. It does not prevent creation of resources
+  missing from the account.
 
-## Usage
+## Usage and drift
 
-```bash
-aws login                 # or the scoped admin user's keys; region is per-resource
-just aws-plan             # fetches tfvars from Bitwarden if missing, then plan
-just aws-apply            # interactive apply
-just aws-seed-tfvars      # after editing aws/terraform.tfvars, push it back to BW
-```
-
-A plan against the live account should always read **"No changes"**. If it
-doesn't, someone changed something in the console. Either codify the change
-or revert it. Don't leave drift.
-
-Common edits:
-
-- **Admin IP changed**: edit the admin ingress allowlist variables in tfvars →
-  `just aws-apply` → `just aws-seed-tfvars`. Prune stale entries; the list only
-  ever grows otherwise.
-- **Resize a node**: change `instance_type` in `cluster.tf`. EC2 stops the
-  instance for the resize. The control plane must stay ≥ `m6i.2xlarge` (see the
-  OOM incident in the cluster handbook).
+The former expectation of a no-change plan no longer applies after termination.
+Do not treat drift as a reason to restore resources. Before using `just aws-plan`,
+inspect the account and configuration; review the resulting plan carefully and
+reconcile the intended resource lifecycle before any `just aws-apply`. Planning
+does not itself create resources, but applying proposed creates can restore
+infrastructure and incur charges. `aws/terraform.tfvars` remains sensitive;
+`just aws-seed-tfvars` stores it in Bitwarden after an intentional edit.
 
 ## IAM & access
 
-- **Root** has MFA and no access keys. Use `aws login` as root only for IAM
-  changes, then let the session lapse rather than leaving root credentials
-  cached on a shared box.
-- **A scoped admin user** is the day-to-day identity. It has `ec2:*`, `s3:*`,
-  budgets/CE, `iam:PassRole` to EC2, `dlm:*`, **read-only IAM** (so it can run
-  `just aws-plan`) and SSM Session Manager. It **cannot change IAM**, so
-  applies that touch IAM need root. Keys: Bitwarden `aws-james-admin`.
-- **A write-only backup user**: put/get under `postgres/` in the backup bucket,
-  **no delete**. Key in Bitwarden `postgres-backup-s3` and k8s Secret
-  `postgres/postgres-backup-s3` — created out of band, never in tofu state.
-- **punjab's instance role**: `AmazonSSMManagedInstanceCore` only.
-- No CloudTrail trail, GuardDuty or Route 53 zones exist. DNS is on
-  Cloudflare.
+- **Root** historically had MFA and no access keys. Verify current access
+  configuration before relying on it.
+- **A scoped admin user** was the day-to-day identity, with EC2, S3, budgets,
+  DLM, SSM and read-only IAM access. The historical key item is `aws-james-admin`;
+  verify its current permissions and status before use.
+- **A backup user** was configured for put/get under `postgres/` in the backup
+  bucket, with no delete. Its key was stored in Bitwarden as `postgres-backup-s3`
+  and in the former cluster's `postgres/postgres-backup-s3` Secret, not tofu state.
+- **punjab's configured instance role** has `AmazonSSMManagedInstanceCore`.
+- DNS was managed on Cloudflare. Verify current AWS security and DNS settings
+  before relying on this historical inventory.
 
 ## Backups
 
-- **EBS snapshots (DLM)**: every volume tagged
-  `Backup=fleet-daily`, meaning both Talos root volumes. Daily at 03:30 UTC,
-  keep 7. Weekly on Sunday at 03:45 UTC, keep 4. These are crash-consistent
-  node images, so they cover node loss, including hive-data and synapse
-  media, which have no other backup.
-- **S3 fleet-backups bucket**: the nightly Postgres job uploads each
-  verified dump to `postgres/<date>/` and checks the uploaded size (first
-  upload 2026-09-24: synapse 2.9 GB, mas 852 KB). `postgres/` moves to IA at
-  30 days, Glacier IR at 90, expires at 1 year.
-- **punjab**: its own DLM policy in us-east-1 (DLM is regional), same schedule.
+The S3 fleet-backups bucket was retained, as was a mirror on himachal-1 at
+`~/backups/tunaos-aws-2026-10-25`. Protect these backups and the OpenTofu state;
+do not assume their presence means every former cluster volume or snapshot
+survived. The former cluster uploaded verified Postgres dumps to
+`postgres/<date>/`; configured S3 lifecycle rules moved them to IA after 30
+days, Glacier IR after 90, and expired them after a year. Check live bucket
+settings before relying on that schedule.
+
+The configuration also describes DLM schedules for the former Talos root
+volumes and punjab. Those schedules and the availability of individual snapshots
+are not a current backup inventory.
 
 ## Cost
 
-Credits cover the bill. The budgets, all emailing the tfvars `alert_email`:
-
-| Budget | Limit | Basis |
-|---|---|---|
-| `migration-monthly-spend` | $1400/mo | gross (before credits); alerts at $500/$800/$1400 + forecast |
-| `bedrock-monthly-spend` | $200/mo | gross, Bedrock only |
-| `kiro-monthly-spend` | $500/mo | gross, Kiro only |
-| `tuna-os-account-total` | $120/mo | net; 50/80/90% |
-| `credits-exhausted-alarm` | $5/mo | net; fires at $1, meaning credits ran out |
-
-`runs-on-app-daily-budget` belongs to the runs-on stack.
+The AWS credits were exhausted. Remaining resources can incur charges, and
+recreating cluster infrastructure would add costs. `aws/budgets.tf` describes
+budget alerts; verify current budgets and actual charges in the AWS account.

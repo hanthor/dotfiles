@@ -3,9 +3,9 @@
 > **Status: powered down and in storage (as of 2026-08-27), expected back.**
 > Temporarily offline, *not* decommissioned — keep its configs, Bitwarden notes
 > (`kubeconfig` / `talosconfig`), and `talos-k8s/` manifests. `kubectl` and
-> `just doctor` will fail against it until it returns. Workloads that needed to
-> stay up (Matrix, Hive, CFP dashboard) run on the
-> [AWS Talos cluster](../aws-k8s/cluster.md).
+> `just doctor` will fail against it until it returns. Matrix and the School,
+> Reef and Hub Hives now run on the [OCI Spindle VPS](../spindle-vps/README.md).
+> The [AWS Talos cluster](../aws-k8s/cluster.md) was terminated on 2026-10-25.
 >
 > **When it returns**, before applying anything under `talos-k8s/ai/`:
 > run [`talos-k8s/ai/migrate-pv-path.sh`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/migrate-pv-path.sh)
@@ -553,9 +553,9 @@ After reboot (~2 min), all pods recover automatically. PVC-backed services
 This is a replacement OS and **new K3s cluster** for the two home nodes, not a
 Talos upgrade. Bihar is the Intel server/control plane; Karnataka is the AMD
 worker. **No physical migration has been performed.** The home cluster is still
-powered down/in storage. Nothing here changes the production
-[AWS Talos cluster](../aws-k8s/cluster.md) nodes, workloads, or credentials;
-Corral acceptance uses separate disposable KubeVirt VMs, not Talos node changes.
+powered down/in storage. Nothing here changes the terminated
+[AWS Talos cluster's](../aws-k8s/cluster.md) recovery material; Corral
+acceptance uses separate disposable KubeVirt VMs, not Talos node changes.
 Sections 1–11 remain the Talos recovery handbook, not instructions for the new OS.
 
 Image builds alone do not prove installation. The GitHub Actions acceptance

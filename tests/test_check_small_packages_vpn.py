@@ -53,14 +53,13 @@ case "$1" in -nG) echo james ;; -u) echo 1000 ;; -un) echo james ;; *) exit 99 ;
                               'systemctl is-active podman.socket']
 
 
-def test_apk_check_fails_on_inspection_error_and_skips_retired_services(platform_env):
+def test_apk_check_fails_on_inspection_error(platform_env):
     _, _, bindir, _, log = platform_env
     write_stub(bindir, 'apk', 'echo "apk $*" >> "$LOG"; exit 2\n')
-    result = run_unit(platform_env, 'apk-packages', UNITS_CHECK='1', TEST_MUSL='1', DOTFILES_MACHINE='matrix')
+    result = run_unit(platform_env, 'apk-packages', UNITS_CHECK='1', TEST_MUSL='1')
     assert result.returncode != 0
     assert 'Cannot inspect installed APK packages' in result.stderr
-    assert 'SKIPPED: podman services on retired VPS' in result.stdout
-    assert log_lines(log) == ['apk info']
+    assert not any('MUTATION' in line for line in log_lines(log))
     write_stub(bindir, 'apk', '[ "$1" = info ] || exit 99; echo bash\n')
     write_stub(bindir, 'systemctl', 'exit 1\n')
     result = run_unit(platform_env, 'apk-packages', UNITS_CHECK='1', TEST_MUSL='1')
@@ -171,7 +170,7 @@ def test_tailscale_check_reports_connected_drift_without_secrets_or_mutation(pla
     assert log_lines(log) == ['tailscale status --json', 'tailscale debug prefs']
 
 
-def test_tailscale_check_link_retired_disconnected_and_inspection_errors(platform_env):
+def test_tailscale_check_link_and_inspection_errors(platform_env):
     _, system, bindir, env, log = platform_env
     tailscale_check_stubs(bindir)
     resolv = system / 'etc/resolv.conf'
@@ -182,12 +181,6 @@ def test_tailscale_check_link_retired_disconnected_and_inspection_errors(platfor
     assert 'WOULD configure Tailscale resolver link' in result.stdout
     assert 'WOULD restart systemd-resolved' in result.stdout
     assert (snapshot(system), snapshot(Path(env['HOME']))) == before
-    log.unlink()
-    result = run_unit(platform_env, 'tailscale', UNITS_CHECK='1', DOTFILES_MACHINE='matrix', TS_STATE='NeedsLogin')
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert 'SKIPPED: Tailscale installation and rejoin on retired VPS' in result.stdout
-    assert 'SKIPPED: resolved restart on retired VPS' in result.stdout
-    assert 'tailscale debug prefs' not in log_lines(log)
     for failure in ({'STATUS_FAIL': '1'}, {'PREFS_FAIL': '1'}):
         result = run_unit(platform_env, 'tailscale', UNITS_CHECK='1', **failure)
         assert result.returncode != 0

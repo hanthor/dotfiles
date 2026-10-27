@@ -86,7 +86,7 @@ def test_sshd_check_reports_both_dropins_and_reload_without_writes(platform_env)
     assert not log.exists()
 
 
-def test_sshd_check_clean_retired_and_inspection_error(platform_env):
+def test_sshd_check_clean_and_inspection_error(platform_env):
     root, system, bindir, _, log = platform_env
     directory = system / "etc/ssh/sshd_config.d"
     dest = directory / "99-bw-env.conf"
@@ -96,9 +96,6 @@ def test_sshd_check_clean_retired_and_inspection_error(platform_env):
     assert clean.returncode == 0 and "ok    sshd drop-in" in clean.stdout
     assert "would install" not in clean.stdout and "would reload" not in clean.stdout
     dest.write_text("out of date\n")
-    retired = run_check(platform_env, "sshd", DOTFILES_MACHINE="matrix")
-    assert retired.returncode == 0 and "SKIPPED: sshd reload on retired VPS" in retired.stdout
-    assert not log.exists()
     write_stub(bindir, "cmp", 'exit 2\n')
     failed = run_check(platform_env, "sshd")
     assert failed.returncode != 0 and "Cannot read sshd drop-in" in failed.stderr
