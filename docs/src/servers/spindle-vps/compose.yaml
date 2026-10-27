@@ -73,7 +73,7 @@ services:
     mem_limit: 2g
 
   mas:
-    image: ghcr.io/element-hq/matrix-authentication-service:1.23.0
+    image: ghcr.io/element-hq/matrix-authentication-service:1.28.0
     restart: unless-stopped
     command: ["server", "--no-migrate", "--config", "/config/config.yaml"]
     volumes:
