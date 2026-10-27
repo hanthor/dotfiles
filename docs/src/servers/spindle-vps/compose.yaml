@@ -25,7 +25,7 @@ services:
     mem_limit: 7g
 
   livekit:
-    image: docker.io/livekit/livekit-server:v1.13.5
+    image: docker.io/livekit/livekit-server:v1.13.11
     restart: unless-stopped
     user: "10030:10030"
     command: ["--config", "/etc/livekit/livekit.yaml"]
