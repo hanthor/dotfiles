@@ -2,6 +2,12 @@
 
 These are proposed bootable K3s images, not the current OS or workloads of either machine. Karnataka runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server bound to tailnet address `100.66.158.127`; KubeVirt `v1.9.1`, CDI and Corral are installed. The `corral-vms/punjab` VM is staging, not a migrated replacement for active EC2 Punjab. Bihar's current OS and services are unverified. Image build and installer acceptance are under repair: verify provenance and acceptance before any future installation or switch.
 
+The Utah-based images built in CI, but installer acceptance stopped at its
+2 GiB size guard: the starter ISO was about 5.94 GiB. This build has not
+passed installation or cluster acceptance. The guard protects
+the existing publication workflow and must not simply be removed. See
+[issue #351](https://github.com/hanthor/dotfiles/issues/351).
+
 ## Image Variants
 
 | Variant | Role | CPU/GPU | Image URI | Installer ISO |
@@ -16,7 +22,7 @@ The intended images include the following; existing published tags may contain o
 
 - **Base:** `projectbluefin/utah` (Hummingbird + GNOME 51 desktop + Bluefin theming)
 - **K3s:** Kubernetes v1.36.1 + SELinux policy
-- **Storage:** iSCSI utils, NFS utils, Longhorn tools
+- **Storage:** iSCSI and NFS utilities
 - **Networking:** NetworkManager, Tailscale, iptables-nft
 - **GPU:** AMD firmware + amdgpu kernel driver included by the image build
 - **Filesystems:** ext4, xfs, btrfs (all tools included)
