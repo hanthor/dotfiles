@@ -4,9 +4,10 @@ These are proposed bootable K3s images, not the current OS or workloads of eithe
 
 The Utah-based images built in CI; the starter ISO was about 5.94 GiB.
 Acceptance allows media up to 8 GiB, but the publication workflow still
-rejects release assets of 2 GiB or more. This build has not yet passed
-installation or cluster acceptance. See
-[issue #351](https://github.com/hanthor/dotfiles/issues/351).
+rejects release assets of 2 GiB or more ([issue #351](https://github.com/hanthor/dotfiles/issues/351)).
+In [CI](https://github.com/hanthor/dotfiles/actions/runs/40602288941), the
+starter installer completed, but its installed VM never presented a serial
+login within ten minutes; installation and cluster acceptance did not pass.
 
 ## Image Variants
 
