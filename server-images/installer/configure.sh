@@ -13,6 +13,8 @@ if [ "$(readlink /usr/lib/systemd/system/serial-getty@ttyS0.service || :)" = /de
 fi
 systemctl enable getty@tty1.service serial-getty@ttyS0.service
 mkdir -p /var/roothome
+# The bootc payload clears /var; dracut requires a writable build scratch area.
+install -d -m 1777 /var/tmp
 kernel=$(basename /usr/lib/modules/*)
 dracut --force --reproducible --no-hostonly --add dmsquash-live     --omit 'tpm2-tss pcsc'     --add-drivers 'squashfs overlay loop iso9660 sr_mod cdrom'     "/usr/lib/modules/$kernel/initramfs.img" "$kernel" 2>&1 | tee /tmp/dracut-installer.log
 if grep -q 'dracut\[E\]: FAILED' /tmp/dracut-installer.log; then
