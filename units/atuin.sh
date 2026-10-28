@@ -22,9 +22,7 @@ step "atuin data dir" install -d -m 0700 "$data"
 [ "$UNIT_FAILED" = 0 ] || finish
 
 logged_in() {
-  local out
-  out="$(atuin status 2>&1)" || return 1
-  case "$out" in *"[Sync]"*) return 0 ;; *) return 1 ;; esac
+  atuin status >/dev/null 2>&1
 }
 
 atuin_login() {

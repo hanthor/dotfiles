@@ -135,7 +135,7 @@ def test_no_secrets_keeps_history_without_touching_vault(stub_env):
 
 def test_already_logged_in_never_touches_bitwarden(stub_env):
     bindir, env = stub_env
-    stubs(bindir, "[Sync] ok", status_rc=0)
+    stubs(bindir, "", status_rc=0)
     r, calls = run(env)
     assert r.returncode == 0
     assert "login" not in calls and "bw " not in calls

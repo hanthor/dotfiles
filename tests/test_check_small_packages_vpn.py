@@ -23,7 +23,7 @@ def test_apk_check_reports_packages_services_and_group_without_mutation(platform
     write_stub(bindir, 'apk', '''\
 echo "apk $*" >> "$LOG"
 [ "$1" = info ] && [ "$#" = 1 ] || exit 99
-printf 'chezmoi\nbash\n'
+printf 'chezmoi\nbash\natuin\n'
 ''')
     write_stub(bindir, 'systemctl', '''\
 echo "systemctl $*" >> "$LOG"
@@ -43,6 +43,7 @@ case "$1" in -nG) echo james ;; -u) echo 1000 ;; -un) echo james ;; *) exit 99 ;
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'ok    APK package chezmoi' in result.stdout
     assert 'WOULD install APK package yq-go' in result.stdout
+    assert 'WOULD install APK package atuin-sync' in result.stdout
     assert 'ok    podman enabled and active' in result.stdout
     assert 'WOULD enable and start podman.socket' in result.stdout
     assert 'WOULD add james to podman group' in result.stdout

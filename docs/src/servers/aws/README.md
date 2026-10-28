@@ -84,8 +84,9 @@ guest on Karnataka at `100.103.187.46`, using the verified `ubuntu` account.
 The replacement now owns the Tailscale name **`punjab`**; the old node is
 `punjab-aws-retired`. Authenticated SSH, broker access, the native no-secrets
 apply and monitoring were exercised on the replacement, including reboot
-persistence. Atuin's pre-existing cloud account/key mismatch remains unresolved;
-local history and its key were retained.
+persistence. Atuin's later key/history recovery restored sync on Punjab,
+Karnataka and Kerala under the canonical vault key, with original data retained
+in private recovery archives; see [Atuin](../../roles/shell_atuin.md#historykey-recovery-2026-10-28).
 
 `aws/punjab.tf` retains the original EC2 instance, volume protection, security
 group, key pair and SSM role/profile for recovery. Its desired instance state

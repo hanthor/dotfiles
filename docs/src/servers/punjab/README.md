@@ -42,10 +42,10 @@ secret-dependent setup reports partial/skipped rather than pretending to run.
 
 - omp authenticates through the Spindle broker at `http://100.113.75.88:8765`.
   The obsolete shell override pointing at EC2 was removed by chezmoi adoption.
-- Atuin's local history and key were copied and their history database matched
-  the source at cutover. Cloud sync was already logged out; the local key
-  differs from the Bitwarden item. Neither key nor history was overwritten.
-  Resolve that account/key mismatch before attempting cloud sync.
+- Atuin history was subsequently merged with readable cloud, Kerala and raw
+  shell history under the canonical Bitwarden key. Punjab, Karnataka and Kerala
+  now sync successfully with 23,761 history entries. Prior keys, databases and
+  opaque encrypted records remain backed up; see [Atuin recovery](../../roles/shell_atuin.md#historykey-recovery-2026-10-28).
 - osquery's daemon, local report timer and fleet poll timer run on the VM.
   The temporary staging-hostname baseline is retained privately; a new baseline
   was accepted for the final `punjab` identity. Missing reporters on the reachable
