@@ -5,9 +5,12 @@ These are proposed bootable K3s images, not the current OS or workloads of eithe
 The Utah-based images built in CI; the starter ISO was about 5.94 GiB.
 Acceptance allows media up to 8 GiB, but the publication workflow still
 rejects release assets of 2 GiB or more ([issue #351](https://github.com/hanthor/dotfiles/issues/351)).
-In [CI](https://github.com/hanthor/dotfiles/actions/runs/40602288941), the
+In [CI](https://github.com/hanthor/dotfiles/actions/runs/40605226540), the
 starter installer completed, but its installed VM never presented a serial
 login within ten minutes; installation and cluster acceptance did not pass.
+Utah's installed image retained a masked serial getty even though live media
+unmasked it. The image build now enables a normal authenticated serial getty;
+this change still needs a complete acceptance run before use.
 
 ## Image Variants
 
@@ -28,6 +31,10 @@ The intended images include the following; existing published tags may contain o
 - **GPU:** AMD firmware + amdgpu kernel driver included by the image build
 - **Filesystems:** ext4, xfs, btrfs (all tools included)
 - **Default state:** Multi-user target (text console), GDM masked
+- **Serial recovery:** `serial-getty@ttyS0` uses normal authentication and
+  starts only when the kernel reports a detected UART. Root autologin is
+  restricted to the live installer, not the installed system. Physical serial
+  recovery remains unverified.
 
 ## Obtaining Images
 

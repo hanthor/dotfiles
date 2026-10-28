@@ -7,6 +7,21 @@ from conftest import REPO, write_stub
 
 
 SCRIPT = REPO / "home-k3s" / "firewall.sh"
+POLICY = "k3s-pod-egress"
+EGRESS_RULE = 'rule family="ipv4" source address="10.42.0.0/16" accept'
+KUBELET_RULE = (
+    'rule family="ipv4" source address="10.42.0.0/16" '
+    'destination address="100.66.158.127/32" port port="10250" protocol="tcp" accept'
+)
+
+
+def empty_policy():
+    return {
+        "target": "CONTINUE", "priority": "-1", "disable": "no",
+        "ingress-zones": [], "egress-zones": [], "services": [], "ports": [],
+        "protocols": [], "masquerade": "no", "forward-ports": [],
+        "source-ports": [], "icmp-blocks": [], "rich rules": [],
+    }
 
 
 @pytest.fixture
@@ -24,10 +39,40 @@ s = json.load(open(p))
 args = sys.argv[1:]
 scope = "permanent" if "--permanent" in args else "runtime"
 zone = s[scope]
+policy_name = next((a.split("=", 1)[1] for a in args if a.startswith("--policy=")), None)
 if "--state" in args:
     print("running")
 elif "--get-default-zone" in args:
     print(s["default"])
+elif "--get-policies" in args:
+    print(" ".join(zone["policies"]))
+elif any(a.startswith("--info-policy=") for a in args):
+    name = next(a.split("=", 1)[1] for a in args if a.startswith("--info-policy="))
+    policy = zone["policies"][name]
+    active = bool(policy["ingress-zones"] and policy["egress-zones"])
+    print(name + (" (active)" if active else ""))
+    for key in ("disable", "priority", "target", "ingress-zones", "egress-zones",
+                "services", "ports", "protocols", "masquerade", "forward-ports",
+                "source-ports", "icmp-blocks", "rich rules"):
+        value = policy[key]
+        if key == "rich rules":
+            print("  rich rules: " + ("\n\t" + "\n\t".join(value) if value else ""))
+        else:
+            print("  " + key + ": " + (" ".join(value) if isinstance(value, list) else value))
+elif any(a.startswith("--new-policy=") for a in args):
+    if scope != "permanent":
+        sys.exit(2)
+    op = next(a for a in args if a.startswith("--new-policy="))
+    name = op.split("=", 1)[1]
+    zone["policies"][name] = {
+        "target": "CONTINUE", "priority": "-1", "disable": "no",
+        "ingress-zones": [], "egress-zones": [], "services": [], "ports": [],
+        "protocols": [], "masquerade": "no", "forward-ports": [],
+        "source-ports": [], "icmp-blocks": [], "rich rules": [],
+    }
+    s["changes"].append([scope, op])
+    with open(p, "w") as f:
+        json.dump(s, f)
 elif "--list-interfaces" in args:
     print(" ".join(zone["interfaces"]))
 elif "--list-sources" in args:
@@ -35,21 +80,32 @@ elif "--list-sources" in args:
 else:
     op = next(a for a in args if a.startswith(("--query-", "--add-", "--change-")))
     command, _, value = op.partition("=")
-    key = {"--query-rich-rule": "rule", "--add-rich-rule": "rule",
-           "--query-forward": "forward", "--add-forward": "forward",
-           "--query-interface": "interfaces", "--change-interface": "interfaces"}[command]
-    if command.startswith("--query-"):
-        if os.environ.get("FAIL_QUERY"):
-            sys.exit(2)
-        present = value in zone[key] if key == "interfaces" else zone[key]
-        if key == "rule" and present:
-            present = value == zone[key]
-        sys.exit(0 if present else 1)
-    s["changes"].append([scope, op])
-    if key == "interfaces":
-        zone[key].append(value)
+    if policy_name:
+        policy = zone["policies"][policy_name]
+        key = {"--query-rich-rule": "rich rules", "--add-rich-rule": "rich rules",
+               "--query-ingress-zone": "ingress-zones", "--add-ingress-zone": "ingress-zones",
+               "--query-egress-zone": "egress-zones", "--add-egress-zone": "egress-zones"}[command]
+        if command.startswith("--query-"):
+            if os.environ.get("FAIL_QUERY"):
+                sys.exit(2)
+            sys.exit(0 if value in policy[key] else 1)
+        policy[key].append(value)
     else:
-        zone[key] = value if key == "rule" else True
+        key = {"--query-rich-rule": "rule", "--add-rich-rule": "rule",
+               "--query-forward": "forward", "--add-forward": "forward",
+               "--query-interface": "interfaces", "--change-interface": "interfaces"}[command]
+        if command.startswith("--query-"):
+            if os.environ.get("FAIL_QUERY"):
+                sys.exit(2)
+            present = value in zone[key] if key == "interfaces" else zone[key]
+            if key == "rule" and present:
+                present = value == zone[key]
+            sys.exit(0 if present else 1)
+        if key == "interfaces":
+            zone[key].append(value)
+        else:
+            zone[key] = value if key == "rule" else True
+    s["changes"].append([scope, op])
     with open(p, "w") as f:
         json.dump(s, f)
 PY
@@ -58,8 +114,8 @@ PY
     path = tmp_path / "firewall.json"
     state = {
         "default": "public",
-        "runtime": {"interfaces": [], "sources": [], "forward": False, "rule": ""},
-        "permanent": {"interfaces": [], "sources": [], "forward": False, "rule": ""},
+        "runtime": {"interfaces": [], "sources": [], "forward": False, "rule": "", "policies": {}},
+        "permanent": {"interfaces": [], "sources": [], "forward": False, "rule": "", "policies": {}},
         "changes": [],
     }
     path.write_text(json.dumps(state))
@@ -73,20 +129,38 @@ PY
 
 
 def test_apply_is_scoped_and_idempotent(firewall):
-    _, _, run = firewall
+    path, _, run = firewall
     result, state = run("--apply")
-    assert result.returncode == 0, result.stderr
+    assert result.returncode != 0
+    assert "runtime policy is absent" in result.stderr
+    expected = empty_policy()
+    expected.update({"ingress-zones": ["internal"], "egress-zones": ["public"],
+                     "rich rules": [EGRESS_RULE]})
     for scope in ("runtime", "permanent"):
         zone = state[scope]
         assert zone["interfaces"] == ["cni0"]
         assert zone["sources"] == []
         assert zone["forward"] is True
-    result, second = run("--apply")
-    assert result.returncode == 0, result.stderr
-    assert second == state
+    assert state["permanent"]["policies"] == {POLICY: expected}
+    assert state["runtime"]["policies"] == {}
+    ops = [op for scope, op in state["changes"] if scope == "permanent"]
+    assert ops.index("--add-rich-rule=" + EGRESS_RULE) < ops.index("--add-egress-zone=public")
+    result, unchanged = run("--apply")
+    assert result.returncode != 0
+    assert unchanged == state
+    result, checked = run("--check")
+    assert result.returncode != 0
+    assert "Missing policy k3s-pod-egress (runtime)" in result.stderr
+    assert checked == state
+    # Model firewalld starting from its permanent configuration.
+    state["runtime"]["policies"][POLICY] = expected
+    path.write_text(json.dumps(state))
     result, checked = run("--check")
     assert result.returncode == 0, result.stderr
     assert checked == state
+    result, unchanged = run("--apply")
+    assert result.returncode == 0, result.stderr
+    assert unchanged == state
 
 
 def test_check_reports_missing_without_changes(firewall):
@@ -97,20 +171,20 @@ def test_check_reports_missing_without_changes(firewall):
     assert not state["changes"]
 
 
-
-def test_check_accepts_host_rule_from_real_firewalld(firewall):
+def test_check_accepts_host_rule_and_egress_policy(firewall):
     path, _, run = firewall
     state = json.loads(path.read_text())
+    policy = empty_policy()
+    policy.update({"ingress-zones": ["internal"], "egress-zones": ["public"],
+                   "rich rules": [EGRESS_RULE]})
     for scope in ("runtime", "permanent"):
-        state[scope].update(
-            interfaces=["cni0"], forward=True,
-            rule='rule family="ipv4" source address="10.42.0.0/16" '
-                 'destination address="100.66.158.127/32" port port="10250" protocol="tcp" accept',
-        )
+        state[scope].update(interfaces=["cni0"], forward=True, rule=KUBELET_RULE,
+                            policies={POLICY: policy})
     path.write_text(json.dumps(state))
     result, after = run("--check")
     assert result.returncode == 0, result.stderr
     assert after == state
+
 
 @pytest.mark.parametrize("scope", ["runtime", "permanent"])
 @pytest.mark.parametrize("field,value", [("interfaces", "eth0"), ("sources", "10.42.0.0/16")])
@@ -123,6 +197,40 @@ def test_foreign_interface_or_source_refused_before_any_changes(firewall, scope,
     assert result.returncode != 0
     assert "refusing" in result.stderr
     assert after == state
+
+
+@pytest.mark.parametrize("scope", ["runtime", "permanent"])
+@pytest.mark.parametrize("field,value", [
+    ("target", "ACCEPT"), ("priority", "1000"), ("disable", "yes"),
+    ("ingress-zones", ["internal", "home"]), ("egress-zones", ["ANY"]),
+    ("services", ["ssh"]), ("masquerade", "yes"), ("rich rules", ["rule accept"]),
+])
+def test_foreign_policy_refused_before_any_changes(firewall, scope, field, value):
+    path, _, run = firewall
+    state = json.loads(path.read_text())
+    policy = empty_policy()
+    policy[field] = value
+    state[scope]["policies"][POLICY] = policy
+    path.write_text(json.dumps(state))
+    result, after = run("--apply")
+    assert result.returncode != 0
+    assert "refusing" in result.stderr
+    assert after == state
+
+
+def test_partial_policy_is_completed(firewall):
+    path, _, run = firewall
+    state = json.loads(path.read_text())
+    policy = empty_policy()
+    policy["rich rules"] = [EGRESS_RULE]
+    state["permanent"]["policies"][POLICY] = policy
+    path.write_text(json.dumps(state))
+    result, after = run("--apply")
+    assert result.returncode != 0
+    assert "runtime policy is absent" in result.stderr
+    assert after["permanent"]["policies"][POLICY]["ingress-zones"] == ["internal"]
+    assert after["permanent"]["policies"][POLICY]["egress-zones"] == ["public"]
+    assert after["permanent"]["policies"][POLICY]["rich rules"] == [EGRESS_RULE]
 
 
 def test_internal_default_zone_refused(firewall):

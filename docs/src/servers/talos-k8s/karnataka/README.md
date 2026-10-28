@@ -57,16 +57,132 @@ K3s SELinux until the policy and workload labeling are verified. The default
 local-path volumes are node-local, without snapshot or expansion support;
 deleting a claim deletes its data.
 
-Firewalld assigns `cni0` to the `internal` zone, permitting forwarding within
-that zone. A rich rule permits `10.42.0.0/16` to reach the Tailscale address on
-TCP port 10250 for kubelet metrics. The `internal` zone's default services,
-including SSH, are also reachable from pods; do not attach an untrusted
-interface to that zone. The public LAN interface remains in `public`. Both
-bridge rules are present in the permanent configuration. On Karnataka,
-`sudo bash home-k3s/firewall.sh --check` inspects both runtime and permanent
-state without changes. `--apply` is an explicit repair operation; it does not
-reload firewalld and refuses unrelated interfaces or source bindings in the
-`internal` zone. Keep a recovery path available for any firewall change.
+Firewalld assigns `cni0` to `internal`, permitting forwarding within that
+zone. A rich rule permits `10.42.0.0/16` to reach the Tailscale address on TCP
+10250 for kubelet metrics. The `internal` zone's default services, including
+SSH, are also reachable from pods; do not attach an untrusted interface to that
+zone. The LAN interfaces are in `public`. Both bridge rules were present in
+the permanent configuration when last inspected.
+
+A runtime-only experiment enabling the existing `gateway-lan-to-world` policy
+made pod HTTPS work. That policy accepts all traffic from `internal`, `home`
+and `trusted` to both `public` and `external`, so it was disabled again and
+must not be enabled as the fix. `home-k3s/firewall.sh` instead defines a
+`k3s-pod-egress` policy: `internal` ingress, `public` egress, `CONTINUE`
+target, and one IPv4 accept rule for source `10.42.0.0/16`. K3s supplies pod
+masquerading; the policy does not alter NAT or host INPUT rules. It accepts all
+protocols and ports from that CIDR, not just HTTPS: `public` includes the LAN
+as well as Internet routes, so pods can reach LAN addresses. Source addresses
+can be spoofed; this is not per-pod isolation. IPv6, other pod CIDRs and
+non-`public` egress zones are not covered. Other firewalld/K3s rules may also
+allow traffic; this policy is not a comprehensive egress firewall.
+
+The new policy has **not been applied or verified on Karnataka**. The host
+has no console recovery, and a rollback timer has not been proven there. Do
+not treat the checked-in policy as a persistent fix until the guarded rollout
+below succeeds. `sudo bash home-k3s/firewall.sh --check` inspects both stores
+without changes. `--apply` refuses foreign interface/source bindings and policy
+drift instead of taking over a broader policy. Firewalld 2.5.2 can create a
+policy only in the permanent store, so the first `--apply` stages it there but
+returns nonzero while the policy is absent at runtime. It never reloads
+firewalld. Interrupted creation may leave a partial policy; a later apply can
+finish it. Other policies are not changed.
+
+### Guarded rollout and rollback
+
+First establish console recovery, retain an existing Tailscale SSH session,
+and make sure a second independent SSH session can connect. Do not reload or
+restart firewalld. From a trusted checkout on Karnataka, prove that a root
+systemd transient timer actually fires before relying on one (the probe only
+creates a marker in `/run`):
+
+```bash
+sudo test ! -e /run/k3s-fw-probe
+sudo systemd-run --unit=k3s-fw-probe --on-active=5s /usr/bin/touch /run/k3s-fw-probe
+sleep 10
+sudo test -f /run/k3s-fw-probe
+sudo rm /run/k3s-fw-probe
+```
+
+Inspect `sudo firewall-cmd --list-all-zones` and `sudo firewall-cmd
+--list-all-policies`, then repeat both with `--permanent`. Source bindings
+take precedence over interface bindings; investigate any source overlapping
+the pod CIDR or any other forwarding policy that could change the expected
+scope. The script checks the `internal` bindings and its own policy, not all
+other policies. Stop if the resulting exposure is not understood.
+
+Stop if the marker does not appear. Before scheduling rollback, require the
+policy to be absent in **both** stores and the existing bridge setup already
+complete, so the rollback below reverts every change this apply can make:
+
+```bash
+sudo bash -s <<'CHECK'
+set -euo pipefail
+rule='rule family="ipv4" source address="10.42.0.0/16" destination address="100.66.158.127/32" port port="10250" protocol="tcp" accept'
+firewall-cmd --state >/dev/null
+[[ $(firewall-cmd --get-default-zone) != internal ]]
+for scope in runtime permanent; do
+  opts=(); [[ $scope == runtime ]] || opts=(--permanent)
+  [[ $(firewall-cmd "${opts[@]}" --zone=internal --list-interfaces) == cni0 ]]
+  [[ -z $(firewall-cmd "${opts[@]}" --zone=internal --list-sources) ]]
+  [[ " $(firewall-cmd "${opts[@]}" --get-policies) " != *' k3s-pod-egress '* ]]
+  firewall-cmd --quiet "${opts[@]}" --zone=internal --query-interface=cni0
+  firewall-cmd --quiet "${opts[@]}" --zone=internal --query-forward
+  firewall-cmd --quiet "${opts[@]}" --zone=internal --query-rich-rule="$rule"
+done
+CHECK
+```
+
+If any prerequisite fails, stop and investigate; this rollback is only for a
+new permanent policy, not for changes to the bridge zone. Schedule the
+rollback and confirm the timer is active **before** staging. It deletes only
+the new permanent policy and does not reload firewalld:
+
+```bash
+sudo systemd-run --unit=k3s-egress-rollback --on-active=15m \
+  /usr/bin/firewall-cmd --permanent --delete-policy=k3s-pod-egress
+sudo systemctl is-active --quiet k3s-egress-rollback.timer
+sudo systemctl list-timers k3s-egress-rollback.timer
+```
+
+Stop if the timer is not active. Then run `sudo bash home-k3s/firewall.sh
+--apply`. On first staging, a nonzero result and `Permanent k3s-pod-egress
+staged; runtime policy is absent` are expected; any other error means stop and
+leave the timer armed. Inspect the staged policy and permanent configuration:
+
+```bash
+sudo firewall-cmd --permanent --info-policy=k3s-pod-egress
+sudo firewall-cmd --check-config
+sudo bash home-k3s/firewall.sh --check
+```
+
+The policy must show target `CONTINUE`, priority `-1`, only `internal` ingress,
+only `public` egress, and only the documented IPv4 rich rule; the last command
+must report `Missing policy k3s-pod-egress (runtime)` and exit nonzero. If
+anything else fails, leave the timer armed. Otherwise cancel the timer well
+before it expires with `sudo systemctl stop k3s-egress-rollback.timer` and
+confirm it is inactive. If it fires, inspect `journalctl -u
+k3s-egress-rollback.service` and confirm the policy is absent with `sudo
+firewall-cmd --permanent --get-policies`. If rollback fails, use the console
+to run `sudo firewall-cmd --permanent --delete-policy=k3s-pod-egress`.
+
+The staged policy will only become active when firewalld next starts from its
+permanent configuration. Do not reload or restart it live. Arrange a controlled
+reboot only with console recovery available, then confirm a **new** Tailscale
+SSH connection, run `sudo bash home-k3s/firewall.sh --check`, and test pod DNS
+plus HTTPS, for example with a disposable pod:
+
+```bash
+sudo /var/usrlocal/bin/k3s kubectl --server https://100.66.158.127:6443 \
+  run firewall-egress-probe --rm -i --restart=Never --image=curlimages/curl:8.10.1 \
+  --command -- curl -4 -fsS --max-time 15 -o /dev/null https://example.com/
+```
+
+If the post-boot checks fail, use the console, delete the permanent policy with
+`sudo firewall-cmd --permanent --delete-policy=k3s-pod-egress`, and reboot
+under console supervision to remove it from runtime. Removing a permanent
+policy does not change runtime. Do not use `--runtime-to-permanent`, which
+would overwrite unrelated permanent configuration.
 
 K3s logged `iptables-save` nftables parsing errors during network-policy
 reconciliation. No NetworkPolicy objects were present when checked. Policy
