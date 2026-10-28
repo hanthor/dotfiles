@@ -1,6 +1,6 @@
 # Home Kubernetes Server Images
 
-These are proposed bootable K3s images, not the current OS or workloads of either machine. Karnataka runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server bound to tailnet address `100.66.158.127`; KubeVirt `v1.9.1`, CDI and Corral are installed. The `corral-vms/punjab` VM is staging, not a migrated replacement for active EC2 Punjab. Bihar's current OS and services are unverified. Image build and installer acceptance are under repair: verify provenance and acceptance before any future installation or switch.
+These are proposed bootable K3s images, not the current OS or workloads of either machine. Karnataka runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server bound to tailnet address `100.66.158.127`; KubeVirt `v1.9.1`, CDI and Corral are installed. The `corral-vms/punjab` VM is staging, not a migrated replacement for active EC2 Punjab. Bihar's current OS and services are unverified. Verify image provenance and physical recovery before any future installation or switch.
 
 The Utah-based images built in CI; the starter ISO was about 5.94 GiB.
 Acceptance allows media up to 8 GiB, but the publication workflow still
@@ -11,8 +11,10 @@ login within ten minutes; installation and cluster acceptance did not pass.
 Utah's installed image retained a masked serial getty even though live media
 unmasked it. A subsequent [CI run](https://github.com/hanthor/dotfiles/actions/runs/40622083319)
 blocked the live serial getty while probing `/proc/tty/driver/serial`. The
-image now enables an authenticated serial getty guarded by the kernel's sysfs
-UART type; this change still needs a complete acceptance run before use.
+image now guards the authenticated serial getty using the kernel's sysfs UART
+type. A subsequent [CI run](https://github.com/hanthor/dotfiles/actions/runs/40623765935)
+passed installer acceptance, including authenticated serial login, bootc switch
+and a two-node K3s check. Physical serial recovery remains unverified.
 
 ## Image Variants
 
