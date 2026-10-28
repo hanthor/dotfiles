@@ -18,6 +18,8 @@ against that same host key. The initial home copy completed on 2026-10-28 into
 root-restricted `/srv/punjab-migration/` on the guest; it is not activated as
 its home, service state or Tailscale identity. The source remains running, so
 the copy needs final synchronization and validation before cutover.
+The guest resolved and reached `api.github.com` over HTTPS and connected to
+the Spindle broker's TCP port. These checks do not prove broker authentication.
 
 The staged Kiro Crew 0.10.0 executable and dashboard were exercised in an
 isolated network namespace with a disposable home overlay, cron and tunnels
