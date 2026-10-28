@@ -106,10 +106,11 @@ but is not a guarantee against concurrent Bitwarden CLI races.
 ## I want to onboard a new machine — full sequence
 
 ```bash
-# 1. From an existing fleet machine (with BW unlocked):
+# 1. From an authenticated fleet checkout:
 just onboard <newhost> desktop      # or server / vps
+# Review the registration PR, wait for required checks and approval, and merge it.
 
-# 2. Copy the printed bootstrap command, then on the new machine:
+# 2. After merge, run the printed bootstrap command on the new machine:
 curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh \
   | bash -s -- --name <newhost> --type desktop
 

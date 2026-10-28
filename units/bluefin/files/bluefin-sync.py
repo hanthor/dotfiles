@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+from pathlib import Path
 import subprocess
 import configparser
 import re
@@ -32,6 +33,7 @@ def apply_gschema_override(file_path):
                 # Redirect system background paths to local ones
                 if 'usr/share/backgrounds/bluefin' in val:
                     local_path = os.path.expanduser('~/.local/share/backgrounds/bluefin')
+                    val = val.replace('file:///usr/share/backgrounds/bluefin', Path(local_path).as_uri())
                     val = val.replace('/usr/share/backgrounds/bluefin', local_path)
                     print(f"    Redirected to local path: {val}")
 

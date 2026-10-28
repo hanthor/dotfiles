@@ -1,5 +1,7 @@
 from pathlib import Path
 import shutil
+import shlex
+import subprocess
 
 from conftest import REPO, write_stub
 from unit_helpers import calls, run_unit
@@ -78,7 +80,7 @@ def test_full_chain_host_volume_services_and_idempotence(stub_env):
     assert home(env, ".config/pipewire/pipewire.conf.d/50-speaker-dsp.conf").read_bytes() == asset("speaker-dsp.conf")
     assert home(env, ".config/pipewire/pipewire.conf.d/60-mic-dsp.conf").read_bytes() == asset("mic-rnnoise.conf")
     service = home(env, ".config/systemd/user/mic-dsp-link.service").read_text()
-    assert "set-source-volume $$HW_MIC 75%" in service
+    assert "set-source-volume $$HW_MIC 75%%" in service
     assert "{{" not in service
     assert "systemctl --user enable mic-dsp-link.service" in calls(env)
     assert "systemctl --user start mic-dsp-link.service" in calls(env)
@@ -92,6 +94,50 @@ def test_full_chain_host_volume_services_and_idempotence(stub_env):
     assert " restart " not in after
     assert " start " not in after
     assert " enable " not in after
+
+
+def test_original_ansible_microphone_service_is_migrated(stub_env):
+    env = setup(stub_env)
+    service = home(env, ".config/systemd/user/mic-dsp-link.service")
+    service.parent.mkdir(parents=True)
+    template = (REPO / "units/pipewire-audio/templates/mic-dsp-link.service.j2").read_text()
+    original = template.replace("cut -f 2", 'awk "{print $$2}"').replace("%%", "%")
+    service.write_text(original.replace("{{ mic_hardware_volume_pct | default(100) }}", "75"))
+    home(env, ".mic-active").touch()
+    home(env, ".mic-enabled").touch()
+    result = run_unit("pipewire-audio", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert service.read_text() == template.replace("{{ mic_hardware_volume_pct | default(100) }}", "75")
+    assert "systemctl --user restart mic-dsp-link.service" in calls(env)
+
+
+def test_rendered_microphone_command_routes_named_source(stub_env):
+    env = setup(stub_env)
+    bindir = Path(env["PATH"])
+    for name in ("grep", "cut"):
+        (bindir / name).symlink_to(shutil.which(name))
+    write_stub(bindir, "pactl", '''\
+if [ "$*" = "list short sources" ]; then
+  printf '42\\talsa_input.pci-test.analog-stereo\\tPipeWire\\ts16le 2ch 48000Hz\\tRUNNING\\n'
+else
+  echo "pactl $*" >> "$HOME/mic-calls"
+fi
+''')
+    write_stub(bindir, "pw-link", 'echo "pw-link $*" >> "$HOME/mic-calls"\n')
+    result = run_unit("pipewire-audio", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    service = home(env, ".config/systemd/user/mic-dsp-link.service").read_text()
+    assert "$$HW_MIC 75%%" in service
+    command = service.split("ExecStart=", 1)[1].split("\nRemainAfterExit=", 1)[0].replace("\\\n", "")
+    # Model systemd's literal specifier and dollar escaping before sh executes.
+    args = shlex.split(command.replace("%%", "%").replace("$$", "$"))
+    result = subprocess.run(args, env=env, text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr
+    logged = home(env, "mic-calls").read_text().splitlines()
+    assert "pactl set-source-volume alsa_input.pci-test.analog-stereo 75%" in logged
+    assert "pw-link alsa_input.pci-test.analog-stereo:capture_FL effect_input.rnnoise:input_FL" in logged
+    assert "pw-link alsa_input.pci-test.analog-stereo:capture_FR effect_input.rnnoise:input_FR" in logged
+    assert "pactl set-default-source effect_output.rnnoise" in logged
 
 
 def test_builtin_eq_absent_mic_and_user_owned_data_survive(stub_env):
@@ -136,6 +182,24 @@ def test_mic_search_failure_preserves_config_and_service(stub_env):
     assert "mic-dsp-link.service" not in calls(env)
 
 
+def test_search_failure_defers_relink_after_daemon_restart(stub_env):
+    env = setup(stub_env)
+    assert run_unit("pipewire-audio", env).returncode == 0
+    state = home(env, ".local/state/pipewire-audio")
+    (state / "pipewire").touch()
+    before = calls(env)
+    result = run_unit("pipewire-audio", env, FIND_FAIL="1")
+    assert result.returncode == 1
+    assert "systemctl --user restart pipewire" in calls(env)[len(before):]
+    assert "mic-dsp-link.service" not in calls(env)[len(before):]
+    assert (state / "mic").exists()
+    before = calls(env)
+    result = run_unit("pipewire-audio", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "systemctl --user restart mic-dsp-link.service" in calls(env)[len(before):]
+    assert not (state / "mic").exists()
+
+
 def test_session_failure_retries_pending_restarts(stub_env):
     env = setup(stub_env)
     first = run_unit("pipewire-audio", env, SESSION_FAIL="1")
@@ -147,6 +211,44 @@ def test_session_failure_retries_pending_restarts(stub_env):
     assert "systemctl --user restart pipewire pipewire-pulse.socket" in calls(env)
     assert not home(env, ".local/state/pipewire-audio/pipewire").exists()
     assert not home(env, ".local/state/pipewire-audio/mic").exists()
+
+
+def test_audio_daemon_restarts_relink_managed_microphone_and_retry(stub_env):
+    env = setup(stub_env)
+    assert run_unit("pipewire-audio", env).returncode == 0
+    state = home(env, ".local/state/pipewire-audio")
+    for daemon in ("pipewire", "wireplumber"):
+        (state / daemon).touch()
+        before = calls(env)
+        result = run_unit("pipewire-audio", env, RESTART_FAIL="1")
+        assert result.returncode == 1
+        assert (state / daemon).exists()
+        assert (state / "mic").exists()
+        assert "systemctl --user restart mic-dsp-link.service" not in calls(env)[len(before):]
+        before = calls(env)
+        result = run_unit("pipewire-audio", env)
+        assert result.returncode == 0, result.stdout + result.stderr
+        actions = calls(env)[len(before):]
+        assert f"systemctl --user restart {daemon}" in actions
+        assert "systemctl --user restart mic-dsp-link.service" in actions
+        assert actions.index(f"systemctl --user restart {daemon}") < actions.index("systemctl --user restart mic-dsp-link.service")
+        assert not (state / daemon).exists()
+        assert not (state / "mic").exists()
+
+
+def test_audio_daemon_restart_does_not_run_custom_microphone_service(stub_env):
+    env = setup(stub_env)
+    assert run_unit("pipewire-audio", env).returncode == 0
+    service = home(env, ".config/systemd/user/mic-dsp-link.service")
+    service.write_text("[Service]\nExecStart=/custom/microphone\n")
+    state = home(env, ".local/state/pipewire-audio")
+    (state / "pipewire").touch()
+    before = calls(env)
+    result = run_unit("pipewire-audio", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "systemctl --user restart pipewire" in calls(env)[len(before):]
+    assert "mic-dsp-link.service" not in calls(env)[len(before):]
+    assert not (state / "mic").exists()
 
 
 def test_gates_and_missing_inventory_parser(stub_env):
@@ -185,7 +287,7 @@ def test_changed_volume_restarts_mic_and_invalid_override_fails(stub_env):
     before = calls(env)
     result = run_unit("pipewire-audio", env, MIC_HARDWARE_VOLUME_PCT="50")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "set-source-volume $$HW_MIC 50%" in home(env, ".config/systemd/user/mic-dsp-link.service").read_text()
+    assert "set-source-volume $$HW_MIC 50%%" in home(env, ".config/systemd/user/mic-dsp-link.service").read_text()
     assert "systemctl --user restart mic-dsp-link.service" in calls(env)[len(before):]
     before = calls(env)
     result = run_unit("pipewire-audio", env, MIC_HARDWARE_VOLUME_PCT="101")
@@ -220,12 +322,32 @@ def test_ostree_package_failure_is_reported_but_audio_continues(stub_env):
     assert home(env, ".config/pipewire/pipewire.conf.d/50-speaker-dsp.conf").exists()
 
 
+def test_bootc_never_installs_packages_and_ostree_takes_priority(stub_env):
+    env = setup(stub_env)
+    bindir = Path(env["PATH"])
+    write_stub(bindir, "rpm", 'exit 1\n')
+    write_stub(bindir, "dnf", 'echo "dnf $*" >> "$HOME/calls"\n')
+    write_stub(bindir, "rpm-ostree", 'echo "rpm-ostree $*" >> "$HOME/calls"\n')
+    write_stub(bindir, "bootc", 'exit 0\n')
+    result = run_unit("pipewire-audio", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "bootc DSP prerequisites must be provided by the image" in result.stdout
+    assert "dnf install" not in calls(env)
+    assert "rpm-ostree install" not in calls(env)
+    (bindir / "bootc").unlink()
+    before = calls(env)
+    result = run_unit("pipewire-audio", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "rpm-ostree install --apply-live --idempotent" in calls(env)[len(before):]
+    assert "dnf install" not in calls(env)[len(before):]
+
+
 def test_default_mic_volume_and_gnome_setting(stub_env):
     env = setup(stub_env, "kanpur")
     result = run_unit("pipewire-audio", env, GNOME_VOLUME="false", DBUS_SESSION_BUS_ADDRESS="unix:path=/custom/bus")
     assert result.returncode == 0, result.stdout + result.stderr
     service = home(env, ".config/systemd/user/mic-dsp-link.service").read_text()
-    assert "set-source-volume $$HW_MIC 100%" in service
+    assert "set-source-volume $$HW_MIC 100%%" in service
     assert "gsettings set org.gnome.desktop.sound allow-volume-above-100-percent true" in calls(env)
     assert "gsettings-bus unix:path=/custom/bus" in calls(env)
 
@@ -314,7 +436,7 @@ def test_mic_default_and_group_then_host_precedence(stub_env, tmp_path):
         result = run_unit("pipewire-audio", env, DOTFILES_DIR=str(source), **extra)
         assert result.returncode == 0, result.stdout + result.stderr
         service = home(env, ".config/systemd/user/mic-dsp-link.service").read_text()
-        assert f"set-source-volume $$HW_MIC {expected}%" in service
+        assert f"set-source-volume $$HW_MIC {expected}%%" in service
 
     apply(93)
     (groups / "all.yml").write_text("mic_hardware_volume_pct: 64\n")

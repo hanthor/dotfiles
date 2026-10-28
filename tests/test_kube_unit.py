@@ -103,3 +103,47 @@ def test_profile_skips_without_desktop_lookup(env, tmp_path, profile):
                  DOTFILES_IS_DESKTOP="")
     assert r.returncode == 0 and "SKIPPED" in r.stdout
     assert calls(env) == ""
+
+
+def test_failed_note_read_preserves_existing_config_even_with_stdout(env):
+    cfg = Path(env["HOME"], ".kube/config")
+    cfg.parent.mkdir()
+    cfg.write_text("previous\n")
+    bindir = Path(env["PATH"].split(":")[0])
+    write_stub(bindir, "bw", UNLOCKED_BW % '''
+if [ "$1 $2 $3" = "get notes kubeconfig" ]; then
+  echo partial-private-config
+  exit 1
+fi
+''')
+    result = run_unit("kube", env)
+    assert result.returncode == 0
+    assert cfg.read_text() == "previous\n"
+    assert "set-cluster" not in calls(env)
+    assert "partial-private-config" not in result.stdout + result.stderr
+
+
+def test_failed_cluster_listing_reports_failure_without_pinning_partial_output(env):
+    bindir = Path(env["PATH"].split(":")[0])
+    write_stub(bindir, "kubectl", '''
+echo "kubectl $*" >> "$HOME/calls"
+if [ "$2" = get-clusters ]; then printf 'NAME\\nhome\\n'; exit 1; fi
+exit 0
+''')
+    result = run_unit("kube", env)
+    assert result.returncode != 0 and "cannot list home kubeconfig clusters" in result.stdout
+    assert "set-cluster" not in calls(env)
+    assert Path(env["HOME"], ".kube/config-aws-migration").read_text().strip() == "aws-kube"
+
+
+def test_missing_kubectl_reports_unpinned_config(env, tmp_path):
+    bash_env = tmp_path / "bash-env"
+    bash_env.write_text('''
+command() {
+  if [ "$1" = -v ] && [ "$2" = kubectl ]; then return 1; fi
+  builtin command "$@"
+}
+''')
+    result = run_unit("kube", env, BASH_ENV=str(bash_env))
+    assert result.returncode != 0 and "kubectl missing; tls-server-name not pinned" in result.stdout
+    assert Path(env["HOME"], ".kube/config-aws-migration").read_text().strip() == "aws-kube"

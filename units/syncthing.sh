@@ -2,7 +2,9 @@
 set -uo pipefail
 # shellcheck source=units/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-if [ "${UNITS_CHECK:-0}" = 1 ] && { [ -e "$DOTFILES_DIR/host_vars/$MACHINE.yml" ] || [ -L "$DOTFILES_DIR/host_vars/$MACHINE.yml" ]; } && { [ ! -f "$DOTFILES_DIR/host_vars/$MACHINE.yml" ] || [ ! -r "$DOTFILES_DIR/host_vars/$MACHINE.yml" ]; }; then
+# shellcheck source=units/platform-config.bash
+. "$DOTFILES_DIR/units/platform-config.bash"
+if { [ -e "$DOTFILES_DIR/host_vars/$MACHINE.yml" ] || [ -L "$DOTFILES_DIR/host_vars/$MACHINE.yml" ]; } && { [ ! -f "$DOTFILES_DIR/host_vars/$MACHINE.yml" ] || [ ! -r "$DOTFILES_DIR/host_vars/$MACHINE.yml" ]; }; then
   step "inspect host variables" false
   finish
 fi
@@ -11,25 +13,26 @@ if [ "$MACHINE" = matrix ] || [ "$MACHINE" = telengana ] || [ "$IS_TERMUX" = 1 ]
   note "SKIPPED: syncthing excluded on this host"
   finish
 fi
-if ! command -v yq >/dev/null 2>&1; then
-  step "check VPS membership (yq required)" false
+if platform_group_contains vps; then
+  note "SKIPPED: syncthing excluded on VPS"
   finish
+else
+  rc=$?
+  if [ "$rc" -ne 1 ]; then
+    step "check VPS membership" false
+    finish
+  fi
 fi
-vps=$(MACHINE="$MACHINE" yq '.all.children.vps.hosts | has(strenv(MACHINE))' "$DOTFILES_DIR/inventory.yml") || { step "check VPS membership" false; finish; }
-case "$vps" in
-  true) note "SKIPPED: syncthing excluded on VPS"; finish ;;
-  false) ;;
-  *) step "check VPS membership" false; finish ;;
-esac
 
 # Remote sessions may not inherit the user's systemd bus environment.
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -S "$XDG_RUNTIME_DIR/bus" ]; then
   export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 fi
+binary="${DOTFILES_SYSTEM_ROOT:-}/home/linuxbrew/.linuxbrew/bin/syncthing"
 unit="$HOME/.config/systemd/user/syncthing.service"
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
-  if [ ! -e /home/linuxbrew/.linuxbrew/bin/syncthing ]; then
+  if [ ! -e "$binary" ]; then
     if [ -f "$unit" ]; then
       note "CHANGE: disable and stop syncthing.service (binary missing)"
     else
@@ -47,6 +50,8 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
     step "read syncthing service source" false
   elif [ ! -e "$unit" ] && [ ! -L "$unit" ]; then
     note "CHANGE: install syncthing.service"
+  elif [ -L "$unit" ]; then
+    note "CHANGE: replace syncthing.service symlink"
   elif [ ! -f "$unit" ] || [ ! -r "$unit" ]; then
     step "inspect syncthing service file" false
   else
@@ -76,7 +81,7 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
   esac
   finish
 fi
-if [ ! -e /home/linuxbrew/.linuxbrew/bin/syncthing ]; then
+if [ ! -e "$binary" ]; then
   # A user service can also come from a system-wide user-unit directory.
   if [ -f "$unit" ]; then
     step "stop syncthing without binary" systemctl --user disable --now syncthing.service
@@ -90,19 +95,37 @@ if [ ! -e /home/linuxbrew/.linuxbrew/bin/syncthing ]; then
   fi
   finish
 fi
-changed=0
-[ -f "$unit" ] && cmp -s "$DOTFILES_DIR/units/syncthing/syncthing.service" "$unit" || changed=1
-if install_if_changed "$DOTFILES_DIR/units/syncthing/syncthing.service" "$unit" 0644; then
-  note "ok    syncthing service file"
-else
+install_syncthing_service() {
+  local src="$DOTFILES_DIR/units/syncthing/syncthing.service" dir staged rc
+  [ -f "$src" ] && [ -r "$src" ] || return 1
+  if [ ! -L "$unit" ] && [ -e "$unit" ]; then
+    [ -f "$unit" ] || return 1
+    if cmp -s "$src" "$unit"; then
+      chmod 0644 "$unit"
+      return
+    else
+      rc=$?
+      [ "$rc" = 1 ] || return "$rc"
+    fi
+  fi
+  dir="$(dirname "$unit")"
+  mkdir -p "$dir" || return 1
+  staged="$(mktemp "$dir/.syncthing.service.XXXXXXXX")" || return 1
+  if ! install -m 0644 "$src" "$staged" || ! mv -fT "$staged" "$unit"; then
+    rm -f "$staged"
+    return 1
+  fi
+}
+if ! install_syncthing_service; then
   step "syncthing service file" false
   finish
 fi
-if [ "$changed" = 1 ]; then
-  if ! systemctl --user daemon-reload; then
-    step "reload user systemd" false
-    finish
-  fi
+note "ok    syncthing service file"
+# Reload even when the file is unchanged: a previous reload may have failed
+# after installation, leaving the user manager with a stale unit definition.
+if ! systemctl --user daemon-reload; then
+  step "reload user systemd" false
+  finish
 fi
 step "enable and start syncthing" systemctl --user enable --now syncthing.service
 finish

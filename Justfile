@@ -165,35 +165,27 @@ purge name:
     git diff --cached --quiet || git commit -m "inventory: remove {{ name }}"
     git push
 
-# Register a new machine in inventory and print bootstrap instructions
-
-# Usage: just onboard <name> [desktop|server|vps]
+# Propose a machine registration for review, then print bootstrap instructions.
+# Usage: just onboard <name> [desktop|server|vps|termux_hosts]
 onboard name type="desktop":
     #!/usr/bin/env bash
     set -euo pipefail
-    cd {{ dotfiles_dir }}
-    git pull --ff-only
-
-    python3 scripts/register-machine.py {{ name }} {{ type }} inventory.yml
-
-    if [ ! -f "host_vars/{{ name }}.yml" ]; then
-      echo "---" > "host_vars/{{ name }}.yml"
-    fi
-
-    git add inventory.yml host_vars/{{ name }}.yml
-    git diff --cached --quiet || git commit -m "inventory: add {{ name }} ({{ type }})"
-    git push
-
+    cd {{quote(justfile_directory())}}
+    name={{quote(name)}}
+    type={{quote(type)}}
+    rc=0
+    scripts/onboard-machine.sh "$name" "$type" || rc=$?
+    case "$rc" in 0|3) ;; *) exit "$rc" ;; esac
     echo ""
+    if [ "$rc" -eq 3 ]; then echo "After the PR is reviewed and merged:"; fi
     echo "Bootstrap the new machine by running this on it:"
-    echo ""
-    echo "  curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name {{ name }}"
-    echo ""
-    echo "Or if it's already reachable over Tailscale:"
-    echo "  just add-machine {{ name }}"
-    echo ""
-    echo "First get it on the tailnet by scanning a QR with your phone (run ON it):"
-    echo "  just tailscale-qr {{ name }}"
+    echo "  curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name $name --type $type"
+    echo "Or, if it is reachable over Tailscale: just add-machine $name $type"
+    if [ "$type" = termux_hosts ]; then
+      echo "Join the tailnet using the Android Tailscale app."
+    else
+      echo "First join the tailnet on the machine: just tailscale-qr $name"
+    fi
 
 # Phase-0 bootstrap-of-trust with NO auth key and NO Bitwarden: runs interactive
 # `tailscale up` and renders the login URL as a QR; scan it with your phone and
@@ -379,36 +371,27 @@ push-terminfo host="":
 online:
     @echo "Online fleet hosts: {{ _online_hosts }}"
 
-# Bootstrap a new machine over SSH — registers it in inventory then runs bootstrap.sh
-# Usage: just add-machine kerala             (defaults to desktop)
-#        just add-machine kerala server
+# Register through a reviewed PR, then bootstrap a reachable machine over SSH.
+# Usage: just add-machine <name> [desktop|server|vps|termux_hosts]
 add-machine name type="desktop":
     #!/usr/bin/env bash
     set -euo pipefail
-    cd {{ dotfiles_dir }}
-    git pull --ff-only
-
-    # Register in inventory if not already present
-    if ! grep -q "^    {{ name }}:" inventory.yml 2>/dev/null; then
-      echo "→ Registering {{ name }} ({{ type }}) in inventory..."
-      python3 scripts/register-machine.py {{ name }} {{ type }} inventory.yml
-      if [ ! -f "host_vars/{{ name }}.yml" ]; then
-        echo "---" > "host_vars/{{ name }}.yml"
-      fi
-      git add inventory.yml "host_vars/{{ name }}.yml"
-      git diff --cached --quiet || git commit -m "inventory: add {{ name }} ({{ type }})"
-      git push
-      echo "✓ Inventory updated and pushed."
-    else
-      echo "✓ {{ name }} already in inventory."
+    cd {{quote(justfile_directory())}}
+    name={{quote(name)}}
+    type={{quote(type)}}
+    rc=0
+    scripts/onboard-machine.sh "$name" "$type" || rc=$?
+    if [ "$rc" -eq 3 ]; then
+      echo "Bootstrap not started. Review and merge the PR, then rerun just add-machine $name $type." >&2
+      exit 1
     fi
-
-    # Bootstrap on the remote machine.
-    # -t allocates a PTY so /dev/tty is available for any remaining prompts.
-    echo "→ Bootstrapping {{ name }}..."
-    ssh -t {{ name }} \
-      "curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh \
-       | bash -s -- --name {{ name }} --type {{ type }}"
+    [ "$rc" -eq 0 ] || exit "$rc"
+    echo "Bootstrapping $name over SSH..."
+    remote_env=""
+    if [ "$type" = termux_hosts ]; then
+      remote_env='HOME=/data/data/com.termux/files/home PREFIX=/data/data/com.termux/files/usr TMPDIR=/data/data/com.termux/files/usr/tmp PATH=/data/data/com.termux/files/usr/bin:$PATH'
+    fi
+    ssh -t -- "$name" "$remote_env bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name $name --type $type'"
 
 # Pull latest changes and apply
 update *args:

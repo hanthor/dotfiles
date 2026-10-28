@@ -112,7 +112,13 @@ bus_value = bus.replace('%', '%%').replace('\\', '\\\\').replace('"', '\\"')
 assignment = 'DBUS_SESSION_BUS_ADDRESS=' + bus_value
 if any(c.isspace() or c in '\\"' for c in bus):
     assignment = '"' + assignment + '"'
-for token, value in (("{{ ansible_facts['env']['HOME'] }}", str(home)),
+executable = str(home / '.local/bin/bluefin-wallpaper-rotate.py')
+if any(ord(c) < 32 or ord(c) == 127 for c in executable):
+    raise ValueError('invalid wallpaper executable path')
+executable_value = executable.replace('%', '%%').replace('\\', '\\\\').replace('"', '\\"')
+if any(c.isspace() or c in '\\"' for c in executable):
+    executable_value = '"' + executable_value + '"'
+for token, value in (("{{ ansible_facts['env']['HOME'] }}/.local/bin/bluefin-wallpaper-rotate.py", executable_value),
                      ('Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{{ user_uid_cmd.stdout | trim }}/bus',
                       'Environment=' + assignment)):
     if token not in text:
@@ -125,13 +131,15 @@ compare('wallpaper timer unit', units / 'bluefin-wallpaper-rotate.timer',
 compare('zRAM swappiness', Path('/etc/sysctl.d/99-zram.conf'),
         b'# Optimize zRAM swappiness for compressed RAM swap\nvm.swappiness = 150\n', 0o644)
 wallpaper = home / '.local/share/backgrounds/bluefin' / (datetime.datetime.now().strftime('%m') + '-bluefin.xml')
+if not wallpaper.exists():
+    wallpaper = Path('/usr/share/backgrounds/bluefin') / wallpaper.name
 if wallpaper.exists():
     for key in ('picture-uri', 'picture-uri-dark'):
         result = subprocess.run(['gsettings', 'get', 'org.gnome.desktop.background', key],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, check=True)
         import ast
         current = ast.literal_eval(result.stdout.strip())
-        print(('WOULD rotate ' if current != 'file://' + str(wallpaper) else 'OK ') + key)
+        print(('WOULD rotate ' if current != wallpaper.as_uri() else 'OK ') + key)
 else:
     print('SKIPPED wallpaper rotation: current month wallpaper is absent')
 PY
@@ -197,24 +205,29 @@ ASSETS
         echo "No Bluefin image assets could be extracted" >&2
         rc=1
       else
-        install -d -m 0755 "$HOME/.local/share/backgrounds/bluefin" "$HOME/.local/share/icons/hicolor" "$HOME/.local/share/ublue-os" \
-          && cp -a "$tmp/backgrounds/." "$HOME/.local/share/backgrounds/bluefin/" \
-          && cp -a "$tmp/icons/." "$HOME/.local/share/icons/hicolor/" \
-          && cp -a "$tmp/ublue-os/." "$HOME/.local/share/ublue-os/" \
-          && python3 - "$HOME/.local/share/backgrounds/bluefin" <<'PY' || rc=1
+        python3 - "$tmp/backgrounds" "$HOME/.local/share/backgrounds/bluefin" <<'PY' || rc=1
 import os
 import pathlib
 import sys
+from xml.sax.saxutils import escape
 
 root = pathlib.Path(sys.argv[1])
 old = b'/usr/share/backgrounds/bluefin/'
-new = os.fsencode(str(root) + '/')
+new = os.fsencode(escape(sys.argv[2] + '/', {'"': '&quot;', "'": '&apos;'}))
 for path in root.rglob('*.xml'):
+    if path.is_symlink():
+        continue
     data = path.read_bytes()
     updated = data.replace(old, new)
     if updated != data:
         path.write_bytes(updated)
 PY
+        if [ "$rc" = 0 ]; then
+          install -d -m 0755 "$HOME/.local/share/backgrounds/bluefin" "$HOME/.local/share/icons/hicolor" "$HOME/.local/share/ublue-os" \
+            && cp -a "$tmp/backgrounds/." "$HOME/.local/share/backgrounds/bluefin/" \
+            && cp -a "$tmp/icons/." "$HOME/.local/share/icons/hicolor/" \
+            && cp -a "$tmp/ublue-os/." "$HOME/.local/share/ublue-os/" || rc=1
+        fi
         DBUS_SESSION_BUS_ADDRESS="$bus" python3 "$assets/files/bluefin-sync.py" "$tmp" || rc=1
       fi
     fi
@@ -288,7 +301,13 @@ bus_value = bus.replace('%', '%%').replace('\\', '\\\\').replace('"', '\\"')
 assignment = 'DBUS_SESSION_BUS_ADDRESS=' + bus_value
 if any(c.isspace() or c in '\\"' for c in bus):
     assignment = '"' + assignment + '"'
-for token, value in (("{{ ansible_facts['env']['HOME'] }}", home),
+executable = home + '/.local/bin/bluefin-wallpaper-rotate.py'
+if any(ord(c) < 32 or ord(c) == 127 for c in executable):
+    raise ValueError('invalid wallpaper executable path')
+executable_value = executable.replace('%', '%%').replace('\\', '\\\\').replace('"', '\\"')
+if any(c.isspace() or c in '\\"' for c in executable):
+    executable_value = '"' + executable_value + '"'
+for token, value in (("{{ ansible_facts['env']['HOME'] }}/.local/bin/bluefin-wallpaper-rotate.py", executable_value),
                      ('Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{{ user_uid_cmd.stdout | trim }}/bus',
                       'Environment=' + assignment)):
     if token not in text:

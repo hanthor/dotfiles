@@ -1,7 +1,7 @@
 # omp
 
 **Unit:** `units/omp.sh` (mise task `unit:omp`; see [Units](../units.md))  
-**Tags:** `dotfiles`, `omp` (`just apply-tags omp` runs it after the Ansible pass)  
+**Tags:** `dotfiles`, `omp` (`just apply-tags omp` runs the native unit)  
 **Secrets needed:** No for the install and routing; the auth-broker token comes from Bitwarden when the vault is unlocked  
 **Runs on:** All supported hosts except raw Termux (the unit prints `SKIPPED: omp has no Android build`)
 

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import stat
 import sys
 import tempfile
 
@@ -87,7 +88,20 @@ def install_avatar(source):
         pass
     else:
         group = grp.getgrnam('gdm')
-        GDM_CACHE.mkdir(parents=True, exist_ok=True, mode=0o755)
+        GDM_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+        try:
+            GDM_CACHE.mkdir(mode=0o755)
+        except FileExistsError:
+            if not GDM_CACHE.is_dir():
+                raise
+            # Repair the root-owned 0755 cache created by earlier unit runs,
+            # without changing custom permissions, owners or symlink targets.
+            info = GDM_CACHE.lstat()
+            if (stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and gdm.pw_uid != 0
+                    and stat.S_IMODE(info.st_mode) == 0o755):
+                os.chown(GDM_CACHE, gdm.pw_uid, group.gr_gid)
+        else:
+            os.chown(GDM_CACHE, gdm.pw_uid, group.gr_gid)
         write_file(GDM_CACHE / 'james', data, (gdm.pw_uid, group.gr_gid))
     try:
         account = ACCOUNT.read_text()

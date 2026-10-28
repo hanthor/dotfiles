@@ -301,15 +301,46 @@ def test_unreadable_host_variables_fail_both_checks(stub_env, tmp_path):
     hostvars.unlink()
     hostvars.symlink_to(tmp_path / "missing-host-vars")
     before = snapshot(Path(env["HOME"]))
-    laptop = run_unit("laptop-services", env, DOTFILES_DIR=env["DOTFILES_DIR"], DOTFILES_MACHINE="laptop")
-    system = run_script(program, env)
-    assert laptop.returncode != 0 and system.returncode != 0
-    assert "FAIL  inspect host variables" in laptop.stdout
-    assert "FAIL  inspect host variables" in system.stdout
-    assert not Path(env["CONTROL_LOG"]).exists() and not dropin.exists()
+    for mode in ("1", "0"):
+        mode_env = {**env, "UNITS_CHECK": mode, "CHECK_GUARD": "1" if mode == "1" else "0"}
+        laptop = run_unit("laptop-services", mode_env, DOTFILES_DIR=env["DOTFILES_DIR"], DOTFILES_MACHINE="laptop")
+        system = run_script(program, mode_env)
+        assert laptop.returncode != 0 and system.returncode != 0
+        assert "FAIL  inspect host variables" in laptop.stdout
+        assert "FAIL  inspect host variables" in system.stdout
+        assert not Path(env["CONTROL_LOG"]).exists() and not dropin.exists()
+        assert snapshot(Path(env["HOME"])) == before
+    assert_read_only_calls(env)
+
+
+
+def test_transition_check_reports_old_link_without_removing_it(stub_env, tmp_path):
+    bindir, original_env = stub_env
+    systemctl_stub(bindir)
+    env = check_env(tmp_path, original_env)
+    program, env, _ = setup_system_services(tmp_path, env, "laptop", "is_laptop: true\n", False)
+    units = Path(env["HOME"]) / ".config/systemd/user"
+    link = units / "default.target.wants/dotfiles-update.service"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("../dotfiles-update.service")
+    before = snapshot(Path(env["HOME"]))
+    result = run_unit("laptop-services", env, DOTFILES_DIR=env["DOTFILES_DIR"], DOTFILES_MACHINE="laptop")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "would remove" in result.stdout and "default.target.wants" in result.stdout
     assert snapshot(Path(env["HOME"])) == before
     assert_read_only_calls(env)
 
+    link.unlink()
+    link = units / "graphical-session.target.wants/dotfiles-update.service"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("../dotfiles-update.service")
+    (Path(env["DOTFILES_DIR"]) / "host_vars/laptop.yml").write_text("is_laptop: false\n")
+    before = snapshot(Path(env["HOME"]))
+    result = run_script(program, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "would remove" in result.stdout and "graphical-session.target.wants" in result.stdout
+    assert snapshot(Path(env["HOME"])) == before
+    assert_read_only_calls(env)
 
 def test_service_drift_does_not_disclose_file_contents(stub_env, tmp_path):
     bindir, original_env = stub_env

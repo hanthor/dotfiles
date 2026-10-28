@@ -13,7 +13,7 @@ The shared unit library skips retired `matrix` and `telengana` before unit work.
 
 ## Inventory
 
-- `scripts/register-machine.py <name> [type] [inventory-path]` adds an inventory host and group membership and creates host variables. `just onboard` wraps registration and prints bootstrap instructions.
+- `scripts/register-machine.py <name> [type] [inventory-path]` adds an inventory host and group membership; `--check` verifies existing membership without writing. `just onboard` proposes the change and a host-vars file in an isolated worktree, opens a PR, and prints bootstrap instructions to use after review and merge.
 - `scripts/purge-machine.py <name> [inventory-path]` removes inventory and host variables, not Bitwarden items. `just purge` wraps it.
 - `scripts/online_hosts.py` intersects online Tailscale peers with inventory, excluding VPSes and the local host. `--peers` prints online peer names instead; the SSH mesh unit uses it. Tailscale status failure yields no peers.
 - `scripts/nmap-inventory.sh [CIDR]` scans the LAN and cross-references Tailscale; it requires nmap and network access. `just inventory` provides the usual entrypoint.

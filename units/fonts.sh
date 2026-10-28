@@ -8,6 +8,7 @@ set -uo pipefail
 
 dir="$HOME/.local/share/fonts"
 font="$dir/JetBrainsMono/JetBrainsMonoNerdFont-Regular.ttf"
+pending="$dir/.dotfiles-jetbrainsmono-cache-pending"
 
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
   if { [ -e "$dir" ] || [ -L "$dir" ]; } && [ ! -d "$dir" ]; then
@@ -23,15 +24,17 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
   fi
   if [ "$desktop" = 0 ]; then
     note "SKIPPED: not a desktop; no font install"
-  elif [ -f "$font" ]; then
-    note "ok    JetBrains Mono Nerd Font already installed"
-  else
+  elif [ ! -f "$font" ]; then
     note "CHANGE: download and install JetBrains Mono Nerd Font; refresh font cache"
+  elif [ -e "$pending" ]; then
+    note "CHANGE: retry JetBrains Mono font cache refresh"
+  else
+    note "ok    JetBrains Mono Nerd Font already installed"
   fi
   exit 0
 fi
 
-step "font directory" mkdir -p "$dir"
+step "font directory" sh -c 'mkdir -p "$1" && chmod 0755 "$1"' sh "$dir"
 if platform_desktop; then
   :
 else
@@ -40,20 +43,31 @@ else
   else step "desktop membership" false; fi
   finish
 fi
-if [ -f "$font" ]; then
+if [ ! -f "$font" ]; then
+  install_font() {
+    local tmp rc=0
+    tmp="$(mktemp -d)" || return 1
+    # Extract before touching the destination: a failed unzip must not leave the
+    # Regular font behind as a false success marker on the next apply.
+    curl -fsSL https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip -o "$tmp/font.zip" \
+      && mkdir "$tmp/extracted" \
+      && unzip -oq "$tmp/font.zip" -d "$tmp/extracted" \
+      && [ -f "$tmp/extracted/JetBrainsMonoNerdFont-Regular.ttf" ] \
+      && : > "$pending" \
+      && mkdir -p "$dir/JetBrainsMono" \
+      && chmod 0755 "$dir/JetBrainsMono" \
+      && cp -a "$tmp/extracted/." "$dir/JetBrainsMono/" || rc=1
+    if [ "$rc" != 0 ] && [ -e "$pending" ]; then rm -f "$font"; fi
+    rm -rf "$tmp"
+    return "$rc"
+  }
+  step "install JetBrains Mono Nerd Font" install_font
+else
   note "ok    JetBrains Mono Nerd Font already installed"
-  finish
 fi
 
-install_font() {
-  local tmp rc=0
-  tmp="$(mktemp -d)" || return 1
-  curl -fsSL https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip -o "$tmp/font.zip" \
-    && mkdir -p "$dir/JetBrainsMono" \
-    && unzip -oq "$tmp/font.zip" -d "$dir/JetBrainsMono" || rc=1
-  rm -rf "$tmp"
-  return $rc
-}
-step "install JetBrains Mono Nerd Font" install_font
-soft "font cache" fc-cache -f
+if [ -f "$font" ] && [ -e "$pending" ]; then
+  refresh_font_cache() { fc-cache -f && rm -f "$pending"; }
+  step "font cache" refresh_font_cache
+fi
 finish

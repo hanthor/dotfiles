@@ -94,3 +94,52 @@ case "$*" in *'| tag'*) echo '!!map' ;; *) echo "$MEMBERSHIP" ;; esac
     else:
         assert result.returncode == 0, result.stdout + result.stderr
         assert log.read_text() == ("1\n" if membership == "true" else "0\n")
+
+
+@pytest.mark.parametrize("check", [False, True])
+def test_atuin_scope_targets_only_its_file_without_scripts(stub_env, tmp_path, check):
+    bindir, env = stub_env
+    log = tmp_path / "chezmoi.log"
+    write_stub(bindir, "chezmoi", 'printf "%s\\n" "$@" > "$LOG"\n')
+    env.update(DOTFILES_DIR=str(REPO), DOTFILES_MACHINE="laptop", DOTFILES_IS_DESKTOP="0",
+               DOTFILES_CHEZMOI_SCOPE="atuin", LOG=str(log), UNITS_CHECK="1" if check else "0")
+    result = subprocess.run(["bash", str(REPO / "units/chezmoi.sh")],
+                            env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    args = log.read_text().splitlines()
+    assert ("status" if check else "apply") in args
+    assert "--exclude=scripts" in args and "--parent-dirs" in args
+    assert "--recursive=false" in args
+    assert args[-1] == str(Path(env["HOME"]) / ".config/atuin/config.toml")
+
+
+@pytest.mark.parametrize("check", [False, True])
+def test_unknown_scope_fails_closed(stub_env, tmp_path, check):
+    bindir, env = stub_env
+    log = tmp_path / "chezmoi.log"
+    write_stub(bindir, "chezmoi", 'echo called > "$LOG"\n')
+    env.update(DOTFILES_DIR=str(REPO), DOTFILES_CHEZMOI_SCOPE="other", LOG=str(log),
+               UNITS_CHECK="1" if check else "0")
+    result = subprocess.run(["bash", str(REPO / "units/chezmoi.sh")],
+                            env=env, capture_output=True, text=True)
+    assert result.returncode != 0 and "invalid chezmoi scope" in result.stdout
+    assert not log.exists()
+
+
+@pytest.mark.skipif(shutil.which("chezmoi") is None, reason="chezmoi is not installed")
+def test_atuin_scope_preserves_unrelated_files_on_fresh_home(stub_env):
+    _, env = stub_env
+    home = Path(env["HOME"])
+    bashrc = home / ".bashrc"
+    bashrc.write_text("user settings\n")
+    env.update(DOTFILES_DIR=str(REPO), DOTFILES_MACHINE="laptop", DOTFILES_IS_DESKTOP="0",
+               DOTFILES_CHEZMOI_SCOPE="atuin")
+    result = subprocess.run(["bash", str(REPO / "units/chezmoi.sh")],
+                            env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (home / ".config/atuin/config.toml").read_bytes() == (
+        REPO / "home/dot_config/atuin/config.toml"
+    ).read_bytes()
+    assert bashrc.read_text() == "user settings\n"
+    assert not (home / ".config/nvim").exists()
+    assert not (home / ".config/shell").exists()

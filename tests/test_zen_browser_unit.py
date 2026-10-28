@@ -210,3 +210,13 @@ def test_dock_bus_falls_back_to_inherited_runtime(stub_env):
     result = run_unit("zen-browser", env, XDG_RUNTIME_DIR="/custom/runtime")
     assert result.returncode == 0
     assert "DBUS=unix:path=/custom/runtime/bus RUNTIME=/custom/runtime" in calls(env)
+
+
+def test_empty_gnome_favorites_are_populated(stub_env):
+    env = setup(stub_env)
+    dock = Path(env["HOME"]) / "dock"
+    dock.write_text("@as []\n")
+    result = run_unit("zen-browser", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert dock.read_text().strip() == "['app.zen_browser.zen.desktop']"
+    assert "gsettings set" in calls(env)

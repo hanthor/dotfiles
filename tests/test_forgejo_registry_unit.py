@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from conftest import write_stub
@@ -46,3 +48,35 @@ def test_missing_credential_is_partial_not_a_failure(env):
 def test_locked_vault_is_skipped(env):
     r = run_unit("forgejo-registry", env, STUB_UNLOCK_RC="1")
     assert r.returncode == 0 and "SKIPPED:" in r.stdout
+
+
+@pytest.mark.parametrize("failed", ["username", "password"])
+def test_failed_credential_read_ignores_partial_stdout(env, failed):
+    bindir = Path(env["PATH"].split(":")[0])
+    write_stub(bindir, "bw", UNLOCKED_BW % '''
+if [ "$1" = get ]; then
+  printf 'partial-value\\n'
+  [ "$2" != "$STUB_FAILED_FIELD" ]
+  exit $?
+fi
+''')
+    result = run_unit("forgejo-registry", env, STUB_FAILED_FIELD=failed)
+    assert result.returncode == 0 and "PARTIAL:" in result.stdout
+    assert "--password-stdin" not in calls(env)
+    assert "partial-value" not in result.stdout + result.stderr
+
+
+def test_username_trims_edges_without_removing_internal_whitespace(env):
+    bindir = Path(env["PATH"].split(":")[0])
+    write_stub(bindir, "bw", UNLOCKED_BW % '''
+if [ "$1 $2" = "get username" ]; then printf '  ci user  \\n'; exit 0; fi
+if [ "$1 $2" = "get password" ]; then printf 'token\\n'; exit 0; fi
+''')
+    write_stub(bindir, "podman", '''
+if [ "$2" = --get-login ]; then exit 1; fi
+printf '%s' "$4" > "$HOME/username"
+cat > /dev/null
+''')
+    result = run_unit("forgejo-registry", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert Path(env["HOME"], "username").read_text() == "ci user"

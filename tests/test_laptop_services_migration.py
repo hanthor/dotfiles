@@ -27,6 +27,8 @@ def test_laptop_login_service_and_idempotent_reload(stub_env, tmp_path):
     assert "ExecStartPre=/bin/sleep 90" in update
     assert "WantedBy=graphical-session.target" in update
     assert "apply-nosecrets" in update
+    assert "ExecStart=/usr/bin/env just " in update
+    assert "ExecStart=/usr/bin/env atuin daemon start --force" in (home / ".config/systemd/user/atuin-daemon.service").read_text()
     assert "enable dotfiles-update.service" in calls(env)
     assert "enable --now dotfiles-update.service" not in calls(env)
     assert "enable --now atuin-daemon.service" in calls(env)
@@ -69,6 +71,20 @@ def test_failed_disable_preserves_timer_and_reports_failure(stub_env, tmp_path):
     assert (units / "phone-apply.timer").exists()
     assert (units / "phone-apply.service").exists()
     assert "enable --now system-mitigator.service" in calls(env)
+
+
+def test_failed_old_timer_disable_does_not_enable_login_update(stub_env, tmp_path):
+    bindir, env = stub_env
+    write_stub(bindir, "systemctl", 'echo "$*" >> "$HOME/calls"\n[[ "$*" != *"disable --now dotfiles-update.timer"* ]]\n')
+    repo = laptop_repo(tmp_path, "kanpur", "is_laptop: true\n")
+    units = Path(env["HOME"]) / ".config/systemd/user"
+    units.mkdir(parents=True)
+    (units / "dotfiles-update.timer").write_text("old")
+    result = run_unit("laptop-services", env, DOTFILES_DIR=str(repo), DOTFILES_MACHINE="kanpur")
+    assert result.returncode != 0
+    assert (units / "dotfiles-update.timer").read_text() == "old"
+    assert "enable dotfiles-update.service" not in calls(env)
+    assert "enable --now atuin-daemon.service" in calls(env)
 
 
 def test_himachal_phone_schedule_is_preserved_when_enabled(stub_env, tmp_path):
@@ -122,6 +138,56 @@ def test_phone_push_uses_remote_machine_identity_and_cleans_up(stub_env, tmp_pat
         statuses.append(result.returncode)
     assert statuses == [255, 0]
     assert (tmp_path / "record").read_text().splitlines() == ["mumbai --no-secrets"]
+
+
+def test_missing_phone_timer_source_never_starts_stale_timer(stub_env, tmp_path):
+    bindir, env = stub_env
+    write_stub(bindir, "systemctl", 'echo "$*" >> "$HOME/calls"\n')
+    repo = laptop_repo(tmp_path, "himachal", "is_laptop: true\nphone_apply_enabled: true\n")
+    (repo / "units").unlink()
+    sources = repo / "units/laptop-services"
+    sources.mkdir(parents=True)
+    for name in ("system-mitigator.py", "system-mitigator.service"):
+        (sources / name).symlink_to(REPO / "units/laptop-services" / name)
+    units = Path(env["HOME"]) / ".config/systemd/user"
+    units.mkdir(parents=True)
+    (units / "phone-apply.timer").write_text("old")
+    result = run_unit("laptop-services", env, DOTFILES_DIR=str(repo), DOTFILES_MACHINE="himachal")
+    assert result.returncode != 0
+    assert (units / "phone-apply.timer").read_text() == "old"
+    assert "enable --now phone-apply.timer" not in calls(env)
+    assert "enable --now system-mitigator.service" in calls(env)
+
+
+def test_missing_mitigator_script_never_starts_stale_service(stub_env, tmp_path):
+    bindir, env = stub_env
+    write_stub(bindir, "systemctl", 'echo "$*" >> "$HOME/calls"\n')
+    repo = laptop_repo(tmp_path, "himachal", "is_laptop: true\nphone_apply_enabled: false\n")
+    (repo / "units").unlink()
+    sources = repo / "units/laptop-services"
+    sources.mkdir(parents=True)
+    (sources / "system-mitigator.service").symlink_to(REPO / "units/laptop-services/system-mitigator.service")
+    result = run_unit("laptop-services", env, DOTFILES_DIR=str(repo), DOTFILES_MACHINE="himachal")
+    assert result.returncode != 0
+    assert "enable --now system-mitigator.service" not in calls(env)
+    assert "enable --now atuin-daemon.service" in calls(env)
+
+
+def test_laptop_removes_only_managed_old_default_target_link(stub_env, tmp_path):
+    bindir, env = stub_env
+    write_stub(bindir, "systemctl", 'echo "$*" >> "$HOME/calls"\n')
+    repo = laptop_repo(tmp_path, "kanpur", "is_laptop: true\n")
+    units = Path(env["HOME"]) / ".config/systemd/user"
+    link = units / "default.target.wants/dotfiles-update.service"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("../dotfiles-update.service")
+    result = run_unit("laptop-services", env, DOTFILES_DIR=str(repo), DOTFILES_MACHINE="kanpur")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not link.is_symlink()
+    link.symlink_to("/opt/custom/dotfiles-update.service")
+    result = run_unit("laptop-services", env, DOTFILES_DIR=str(repo), DOTFILES_MACHINE="kanpur")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert link.is_symlink() and link.readlink() == Path("/opt/custom/dotfiles-update.service")
 
 
 def test_retired_vps_is_never_touched(stub_env, tmp_path):

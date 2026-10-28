@@ -27,15 +27,16 @@ tmp=$(mktemp) || { step "create dashboard temporary file" false; finish; }
 trap 'rm -f "$tmp"' EXIT
 unit="$HOME/.config/systemd/user/bst-dashboard.service"
 changed=0
+content_changed=0
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
   if python3 "$DOTFILES_DIR/units/service-templates.py" dashboard "$DOTFILES_DIR/units/bst-dashboard/bst-dashboard.service.j2" "$dashboard_dir" "$image" > "$tmp"; then
     if [ ! -e "$unit" ] && [ ! -L "$unit" ]; then
-      note "would deploy dashboard user service and reload user systemd"
+      note "would deploy dashboard user service, reload user systemd, and start or restart dashboard"
     elif mode=$(stat -c %a "$unit"); then
       cmp -s "$tmp" "$unit"; rc=$?
       case "$rc" in
         0) [ "$mode" = 644 ] && note "ok    dashboard user service" || note "would set dashboard service permissions and reload user systemd" ;;
-        1) note "would deploy dashboard user service and reload user systemd" ;;
+        1) note "would deploy dashboard user service, reload user systemd, and start or restart dashboard" ;;
         *) step "compare dashboard user service" false ;;
       esac
     else step "inspect dashboard user service" false; fi
@@ -57,11 +58,21 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
   finish
 fi
 if python3 "$DOTFILES_DIR/units/service-templates.py" dashboard "$DOTFILES_DIR/units/bst-dashboard/bst-dashboard.service.j2" "$dashboard_dir" "$image" > "$tmp"; then
-  if [ ! -f "$unit" ] || ! cmp -s "$tmp" "$unit" || [ "$(stat -c %a "$unit" 2>/dev/null)" != 644 ]; then changed=1; fi
+  if [ ! -f "$unit" ] || ! cmp -s "$tmp" "$unit"; then content_changed=1; changed=1; fi
+  if [ "$(stat -c %a "$unit" 2>/dev/null)" != 644 ]; then changed=1; fi
   if install_if_changed "$tmp" "$unit" 0644; then
     note "ok    deploy dashboard user service"
     if [ "$changed" = 0 ] || systemctl --user daemon-reload; then
-      step "enable and start dashboard" systemctl --user enable --now bst-dashboard.service
+      if [ "$content_changed" = 1 ]; then
+        if systemctl --user enable bst-dashboard.service; then
+          note "ok    enable dashboard"
+          step "start or restart dashboard" systemctl --user restart bst-dashboard.service
+        else
+          step "enable dashboard" false
+        fi
+      else
+        step "enable and start dashboard" systemctl --user enable --now bst-dashboard.service
+      fi
     else
       step "reload dashboard user systemd" false
     fi

@@ -14,19 +14,25 @@ NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
 def yaml_document(path):
     try:
         text = path.read_text(encoding="utf-8")
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
+    except (OSError, UnicodeError):
+        raise ValueError("inventory file cannot be read") from None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    try:
         result = subprocess.run(["yq", "-o=json", "-I=0", ".", str(path)],
                                 capture_output=True, timeout=30, check=True)
         return json.loads(result.stdout)
-    except FileNotFoundError as error:
-        if error.filename == "yq":
-            raise ValueError("native inventory requires yq for YAML") from None
-        raise ValueError("inventory file cannot be read") from None
-    except (OSError, UnicodeError, ValueError, subprocess.SubprocessError):
-        raise ValueError("inventory YAML could not be parsed") from None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        try:
+            import yaml
+        except ImportError:
+            raise ValueError("native inventory requires yq or Python PyYAML for YAML") from None
+        try:
+            return yaml.safe_load(text)
+        except yaml.YAMLError:
+            raise ValueError("inventory YAML could not be parsed") from None
 
 
 def mapping(value):

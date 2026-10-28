@@ -2,7 +2,7 @@
 set -uo pipefail
 # shellcheck source=units/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-if [ "${UNITS_CHECK:-0}" = 1 ] && [ "$MACHINE" != matrix ] && [ "$MACHINE" != telengana ] && [ "$IS_TERMUX" != 1 ]; then
+if [ "$MACHINE" != matrix ] && [ "$MACHINE" != telengana ] && [ "$IS_TERMUX" != 1 ]; then
   hostvars="$DOTFILES_DIR/host_vars/$MACHINE.yml"
   if [ -e "$hostvars" ] || [ -L "$hostvars" ]; then
     if [ ! -f "$hostvars" ] || [ ! -r "$hostvars" ] || ! cat "$hostvars" >/dev/null 2>&1; then
@@ -116,8 +116,31 @@ remove_unit() {
     changed=1
   fi
 }
+# The old non-laptop service could be enabled on default.target. Remove only
+# its managed link; leaving it would also run the laptop update before login.
+remove_old_update_link() {
+  local link="$unitdir/default.target.wants/dotfiles-update.service" target
+  [ -L "$link" ] || return 0
+  target=$(readlink "$link") || return 1
+  case "$target" in
+    ../dotfiles-update.service|"$unitdir/dotfiles-update.service")
+      if [ "${UNITS_CHECK:-0}" = 1 ]; then note "would remove $link"; else rm -f "$link" || return 1; fi
+      changed=1 ;;
+  esac
+}
+deploy() {
+  local description="$1"; shift
+  if "$@"; then
+    note "ok    $description"
+  else
+    step "$description" false
+    return 1
+  fi
+}
+update_ready=0 atuin_ready=0 mitigator_script_ready=0 mitigator_ready=0 phone_service_ready=0 phone_timer_ready=0
+timer_removed=0
 
-cat > "$tmp/dotfiles-update.service" <<EOF || { [ "${UNITS_CHECK:-0}" != 1 ] || { step "render dotfiles update service" false; finish; }; }
+cat > "$tmp/dotfiles-update.service" <<EOF || { step "render dotfiles update service" false; finish; }
 [Unit]
 Description=Dotfiles auto-update
 After=network-online.target graphical-session.target
@@ -128,10 +151,10 @@ PartOf=graphical-session.target
 Type=oneshot
 # Wait for network to settle and desktop to stabilise before pulling
 ExecStartPre=/bin/sleep $delay
-# Pull latest repo changes, then run ansible locally (no ansible-pull clone overhead).
+# Pull latest repo changes, then run native units locally.
 # Timer cannot unlock Bitwarden non-interactively, so we explicitly skip secrets.
 # SSH key sync happens on manual \`dots-apply\` instead.
-ExecStart=$brew_prefix/bin/just -f $HOME/.local/share/dotfiles/Justfile apply-nosecrets
+ExecStart=/usr/bin/env just -f $HOME/.local/share/dotfiles/Justfile apply-nosecrets
 # Also update podman containers while we're at it
 ExecStartPost=-/usr/bin/podman auto-update --user
 ExecStartPost=-/usr/bin/sudo /usr/bin/podman auto-update
@@ -144,13 +167,13 @@ StandardError=journal
 [Install]
 WantedBy=graphical-session.target
 EOF
-cat > "$tmp/atuin-daemon.service" <<EOF || { [ "${UNITS_CHECK:-0}" != 1 ] || { step "render atuin daemon" false; finish; }; }
+cat > "$tmp/atuin-daemon.service" <<EOF || { step "render atuin daemon" false; finish; }
 [Unit]
 Description=Atuin shell history sync daemon
 After=network.target
 
 [Service]
-ExecStart=$brew_prefix/bin/atuin daemon start --force
+ExecStart=/usr/bin/env atuin daemon start --force
 Environment="PATH=$brew_prefix/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
 Restart=on-failure
 RestartSec=5
@@ -158,22 +181,27 @@ RestartSec=5
 [Install]
 WantedBy=default.target
 EOF
-step "remove obsolete laptop update timer" remove_unit dotfiles-update.timer
+if deploy "remove obsolete laptop update timer" remove_unit dotfiles-update.timer &&
+   deploy "remove obsolete default-target update link" remove_old_update_link; then
+  timer_removed=1
+fi
 if [ "$auto_update" = true ]; then
-  step "deploy dotfiles update service" install_unit "$tmp/dotfiles-update.service" dotfiles-update.service
+  if deploy "deploy dotfiles update service" install_unit "$tmp/dotfiles-update.service" dotfiles-update.service && [ "$timer_removed" = 1 ]; then
+    update_ready=1
+  fi
 else
   step "disable dotfiles update service" remove_unit dotfiles-update.service
 fi
-step "deploy atuin daemon" install_unit "$tmp/atuin-daemon.service" atuin-daemon.service
+deploy "deploy atuin daemon" install_unit "$tmp/atuin-daemon.service" atuin-daemon.service && atuin_ready=1
 if [ "$MACHINE" = himachal ]; then
   if [ "${UNITS_CHECK:-0}" = 1 ]; then
-    step "inspect system mitigator" check_file "$DOTFILES_DIR/units/laptop-services/system-mitigator.py" "$HOME/.local/bin/system-mitigator.py" 755
+    deploy "inspect system mitigator" check_file "$DOTFILES_DIR/units/laptop-services/system-mitigator.py" "$HOME/.local/bin/system-mitigator.py" 755 && mitigator_script_ready=1
   else
-    step "deploy system mitigator" install_if_changed "$DOTFILES_DIR/units/laptop-services/system-mitigator.py" "$HOME/.local/bin/system-mitigator.py" 0755
+    deploy "deploy system mitigator" install_if_changed "$DOTFILES_DIR/units/laptop-services/system-mitigator.py" "$HOME/.local/bin/system-mitigator.py" 0755 && mitigator_script_ready=1
   fi
-  step "deploy system mitigator service" install_unit "$DOTFILES_DIR/units/laptop-services/system-mitigator.service" system-mitigator.service
+  deploy "deploy system mitigator service" install_unit "$DOTFILES_DIR/units/laptop-services/system-mitigator.service" system-mitigator.service && mitigator_ready=1
   if [ "$phone_apply" = true ]; then
-    cat > "$tmp/phone-apply.service" <<EOF || { [ "${UNITS_CHECK:-0}" != 1 ] || { step "render phone apply service" false; finish; }; }
+    cat > "$tmp/phone-apply.service" <<EOF || { step "render phone apply service" false; finish; }
 [Unit]
 Description=Periodic push-apply to phone-hosted machines (termux, mumbai)
 After=network-online.target
@@ -197,8 +225,8 @@ StandardError=journal
 [Install]
 WantedBy=default.target
 EOF
-    step "deploy phone apply service" install_unit "$tmp/phone-apply.service" phone-apply.service
-    step "deploy phone apply timer" install_unit "$DOTFILES_DIR/units/laptop-services/phone-apply.timer" phone-apply.timer
+    deploy "deploy phone apply service" install_unit "$tmp/phone-apply.service" phone-apply.service && phone_service_ready=1
+    deploy "deploy phone apply timer" install_unit "$DOTFILES_DIR/units/laptop-services/phone-apply.timer" phone-apply.timer && phone_timer_ready=1
   else
     step "disable phone apply timer" remove_unit phone-apply.timer
     if [ "${UNITS_CHECK:-0}" = 1 ]; then
@@ -210,13 +238,17 @@ EOF
 fi
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
   [ "$changed" != 1 ] || note "would reload user systemd"
-  if [ "$auto_update" = true ]; then
+  if [ "$update_ready" = 1 ]; then
     step "inspect dotfiles update on login" check_enabled dotfiles-update.service 0
   fi
-  step "inspect atuin daemon" check_enabled atuin-daemon.service 1
+  if [ "$atuin_ready" = 1 ]; then
+    step "inspect atuin daemon" check_enabled atuin-daemon.service 1
+  fi
   if [ "$MACHINE" = himachal ]; then
-    step "inspect system mitigator service" check_enabled system-mitigator.service 1
-    if [ "$phone_apply" = true ]; then
+    if [ "$mitigator_script_ready" = 1 ] && [ "$mitigator_ready" = 1 ]; then
+      step "inspect system mitigator service" check_enabled system-mitigator.service 1
+    fi
+    if [ "$phone_service_ready" = 1 ] && [ "$phone_timer_ready" = 1 ]; then
       step "inspect phone apply timer" check_enabled phone-apply.timer 1
     fi
   fi
@@ -229,13 +261,17 @@ if [ "$changed" = 1 ]; then
   fi
 fi
 # Enabling a login-triggered oneshot must not start an apply during this apply.
-if [ "$auto_update" = true ] && [ -f "$unitdir/dotfiles-update.service" ]; then
+if [ "$update_ready" = 1 ]; then
   step "enable dotfiles update on login" systemctl --user enable dotfiles-update.service
 fi
-[ ! -f "$unitdir/atuin-daemon.service" ] || step "enable and start atuin daemon" systemctl --user enable --now atuin-daemon.service
+if [ "$atuin_ready" = 1 ]; then
+  step "enable and start atuin daemon" systemctl --user enable --now atuin-daemon.service
+fi
 if [ "$MACHINE" = himachal ]; then
-  [ ! -f "$unitdir/system-mitigator.service" ] || step "enable and start system mitigator" systemctl --user enable --now system-mitigator.service
-  if [ "$phone_apply" = true ] && [ -f "$unitdir/phone-apply.timer" ]; then
+  if [ "$mitigator_script_ready" = 1 ] && [ "$mitigator_ready" = 1 ]; then
+    step "enable and start system mitigator" systemctl --user enable --now system-mitigator.service
+  fi
+  if [ "$phone_service_ready" = 1 ] && [ "$phone_timer_ready" = 1 ]; then
     step "enable and start phone apply timer" systemctl --user enable --now phone-apply.timer
   fi
 fi

@@ -4,12 +4,10 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # shellcheck source=units/platform-config.bash
 . "$DOTFILES_DIR/units/platform-config.bash"
-if [ "${UNITS_CHECK:-0}" = 1 ]; then
-  host_file="$DOTFILES_DIR/host_vars/$MACHINE.yml"
-  if [ -e "$host_file" ] && { [ ! -f "$host_file" ] || [ ! -r "$host_file" ]; }; then
-    step 'read sshd host configuration' false
-    finish
-  fi
+host_file="$DOTFILES_DIR/host_vars/$MACHINE.yml"
+if { [ -e "$host_file" ] || [ -L "$host_file" ]; } && { [ ! -f "$host_file" ] || [ ! -r "$host_file" ]; }; then
+  step 'read sshd host configuration' false
+  finish
 fi
 
 root="${DOTFILES_SYSTEM_ROOT:-}"

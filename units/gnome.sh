@@ -178,6 +178,13 @@ except KeyError:
 else:
     gid = grp.getgrnam('gdm').gr_gid
     try:
+        info = avatar.GDM_CACHE.lstat()
+        if (stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and gdm.pw_uid != 0
+                and stat.S_IMODE(info.st_mode) == 0o755):
+            print('WOULD repair GDM cache directory ownership')
+    except FileNotFoundError:
+        print('WOULD create GDM cache directory')
+    try:
         info = (avatar.GDM_CACHE / 'james').stat()
         if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o7777 != 0o644 or (info.st_uid, info.st_gid) != (gdm.pw_uid, gid):
             print('WOULD update GDM avatar metadata')
@@ -214,9 +221,13 @@ def ini(text):
 
 def ptyxis():
     uuid = ast.literal_eval(settings('org.gnome.Ptyxis', 'default-profile-uuid'))
-    current_cmd = ast.literal_eval(settings('org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/' + uuid + '/', 'custom-command'))
+    profile = 'org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/' + uuid + '/'
+    current_cmd = ast.literal_eval(settings(profile, 'custom-command'))
+    custom_enabled = settings(profile, 'use-custom-command')
     font = ast.literal_eval(settings('org.gnome.Ptyxis', 'font-name'))
-    if current_cmd != prefix + '/bin/fish' or font != 'JetBrainsMono Nerd Font 12':
+    system_font = settings('org.gnome.Ptyxis', 'use-system-font')
+    if (current_cmd != prefix + '/bin/fish' or custom_enabled != 'true'
+            or font != 'JetBrainsMono Nerd Font 12' or system_font != 'false'):
         print('WOULD configure Ptyxis profile')
 
 def extension_settings():
@@ -277,18 +288,27 @@ soft "disable touchpad tap-to-click" disable_tap_to_click
 
 
 configure_ptyxis() {
-  local uuid current_cmd current_font
+  local uuid profile current_cmd current_font custom_enabled system_font
   require_session || return 1
   uuid="$(gsettings get org.gnome.Ptyxis default-profile-uuid)" || return 1
   uuid="${uuid//\'/}"
-  current_cmd="$(gsettings get "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${uuid}/" custom-command 2>/dev/null)" || current_cmd=""
-  current_font="$(gsettings get org.gnome.Ptyxis font-name 2>/dev/null)" || current_font=""
+  profile="org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${uuid}/"
+  current_cmd="$(gsettings get "$profile" custom-command)" || return 1
+  custom_enabled="$(gsettings get "$profile" use-custom-command)" || return 1
+  current_font="$(gsettings get org.gnome.Ptyxis font-name)" || return 1
+  system_font="$(gsettings get org.gnome.Ptyxis use-system-font)" || return 1
   current_cmd="${current_cmd//\'/}"; current_font="${current_font//\'/}"
-  if [ "$current_cmd" != "$brew_prefix/bin/fish" ] || [ "$current_font" != 'JetBrainsMono Nerd Font 12' ]; then
-    gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${uuid}/" use-custom-command true &&
-      gsettings set "org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/${uuid}/" custom-command "$brew_prefix/bin/fish" &&
-      gsettings set org.gnome.Ptyxis use-system-font false &&
-      gsettings set org.gnome.Ptyxis font-name 'JetBrainsMono Nerd Font 12'
+  if [ "$custom_enabled" != true ]; then
+    gsettings set "$profile" use-custom-command true || return 1
+  fi
+  if [ "$current_cmd" != "$brew_prefix/bin/fish" ]; then
+    gsettings set "$profile" custom-command "$brew_prefix/bin/fish" || return 1
+  fi
+  if [ "$system_font" != false ]; then
+    gsettings set org.gnome.Ptyxis use-system-font false || return 1
+  fi
+  if [ "$current_font" != 'JetBrainsMono Nerd Font 12' ]; then
+    gsettings set org.gnome.Ptyxis font-name 'JetBrainsMono Nerd Font 12' || return 1
   fi
 }
 if [ "$config_ok" = 1 ]; then soft "Ptyxis profile" configure_ptyxis; fi

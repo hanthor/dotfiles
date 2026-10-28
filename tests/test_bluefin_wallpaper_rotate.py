@@ -1,123 +1,83 @@
-"""Tests for bluefin-wallpaper-rotate.py wallpaper rotation logic."""
-
+"""Behavioral coverage for the installed monthly wallpaper script."""
+import datetime
+import importlib.util
+import subprocess
 import sys
-import os
-from datetime import datetime
 from pathlib import Path
-from unittest import TestCase
-from unittest.mock import patch, MagicMock, call
-import tempfile
+from unittest import mock
 
-# Import the script's logic (we'll create a testable module from it)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../units/bluefin/files"))
+import pytest
+
+from conftest import REPO, write_stub
 
 
-class WallpaperRotationTests(TestCase):
-    """Test cases for bluefin-wallpaper-rotate.py."""
+SCRIPT = REPO / "units/bluefin/files/bluefin-wallpaper-rotate.py"
+spec = importlib.util.spec_from_file_location('bluefin_wallpaper', SCRIPT)
+wallpaper_script = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(wallpaper_script)
 
-    def test_wallpaper_name_format(self):
-        """Verify wallpaper name matches expected format (MM-bluefin.xml)."""
-        with patch("datetime.datetime") as mock_dt:
-            mock_dt.now.return_value = MagicMock(
-                strftime=MagicMock(return_value="03")
-            )
-            # Simulate the wallpaper naming logic
-            month = mock_dt.now().strftime("%m")
-            wallpaper_name = f"{month}-bluefin.xml"
-            self.assertEqual(wallpaper_name, "03-bluefin.xml")
 
-    def test_wallpaper_path_expansion(self):
-        """Test that wallpaper paths are properly expanded."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch.dict(os.environ, {"HOME": tmpdir}):
-                with patch("os.path.expanduser") as mock_expand:
-                    mock_expand.return_value = f"{tmpdir}/.local/share/backgrounds/bluefin/01-bluefin.xml"
-                    expanded = mock_expand(
-                        "~/.local/share/backgrounds/bluefin/01-bluefin.xml"
-                    )
-                    self.assertTrue(expanded.endswith("01-bluefin.xml"))
+@pytest.fixture
+def wallpaper_env(tmp_path, stub_env):
+    bindir, env = stub_env
+    home = tmp_path / 'home & 100%'
+    home.mkdir()
+    env['HOME'] = str(home)
+    write_stub(bindir, 'gsettings', '''\
+printf '%s\\n' "$3 $4" >> "$HOME/calls"
+if [ "${FAIL_KEY:-}" = "$3" ]; then exit 1; fi
+''')
+    return env, home
 
-    def test_wallpaper_existence_check(self):
-        """Test that missing wallpaper is skipped gracefully."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            nonexistent_path = os.path.join(tmpdir, "nonexistent.xml")
-            self.assertFalse(os.path.exists(nonexistent_path))
 
-    def test_wallpaper_file_exists(self):
-        """Test that existing wallpaper file is detected."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            wallpaper_path = os.path.join(tmpdir, "03-bluefin.xml")
-            Path(wallpaper_path).touch()
-            self.assertTrue(os.path.exists(wallpaper_path))
+def run(env, **overrides):
+    return subprocess.run([sys.executable, str(SCRIPT)], env={**env, **overrides},
+                          capture_output=True, text=True)
 
-    @patch("subprocess.run")
-    def test_gsettings_light_variant_call(self, mock_run):
-        """Test that gsettings is called for light variant."""
-        uri = "file:///home/user/.local/share/backgrounds/bluefin/03-bluefin.xml"
-        
-        # Simulate the gsettings call for light variant
-        expected_call = [
-            "gsettings", "set", "org.gnome.desktop.background",
-            "picture-uri", uri
-        ]
-        
-        mock_run(expected_call)
-        mock_run.assert_called_once_with(expected_call)
 
-    @patch("subprocess.run")
-    def test_gsettings_dark_variant_call(self, mock_run):
-        """Test that gsettings is called for dark variant."""
-        uri = "file:///home/user/.local/share/backgrounds/bluefin/03-bluefin.xml"
-        
-        # Simulate the gsettings call for dark variant
-        expected_call = [
-            "gsettings", "set", "org.gnome.desktop.background",
-            "picture-uri-dark", uri
-        ]
-        
-        mock_run(expected_call)
-        mock_run.assert_called_once_with(expected_call)
+def test_missing_wallpaper_skips_without_changing_settings(wallpaper_env, tmp_path, monkeypatch, capsys):
+    _, home = wallpaper_env
+    monkeypatch.setenv('HOME', str(home))
+    monkeypatch.setattr(wallpaper_script, 'SYSTEM_BACKGROUNDS', tmp_path / 'absent')
+    runner = mock.Mock()
+    monkeypatch.setattr(wallpaper_script.subprocess, 'run', runner)
+    assert wallpaper_script.set_wallpaper() == 0
+    assert 'not found, skipping rotation' in capsys.readouterr().out
+    runner.assert_not_called()
 
-    @patch("subprocess.run")
-    def test_both_gsettings_variants_called(self, mock_run):
-        """Test that both light and dark variants are set."""
-        uri = "file:///home/user/.local/share/backgrounds/bluefin/06-bluefin.xml"
-        
-        # Simulate both calls
-        light_call = ["gsettings", "set", "org.gnome.desktop.background", "picture-uri", uri]
-        dark_call = ["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", uri]
-        
-        mock_run(light_call)
-        mock_run(dark_call)
-        
-        self.assertEqual(mock_run.call_count, 2)
-        calls = [call(light_call), call(dark_call)]
-        mock_run.assert_has_calls(calls)
 
-    @patch("datetime.datetime")
-    def test_all_months_generate_valid_names(self, mock_dt_class):
-        """Test that each month generates a valid wallpaper name."""
-        for month_num in range(1, 13):
-            mock_dt = MagicMock()
-            mock_dt.strftime.return_value = f"{month_num:02d}"
-            mock_dt_class.now.return_value = mock_dt
-            
-            month = mock_dt_class.now().strftime("%m")
-            wallpaper_name = f"{month}-bluefin.xml"
-            
-            # Verify format: MM-bluefin.xml
-            self.assertRegex(wallpaper_name, r"^\d{2}-bluefin\.xml$")
-            self.assertIn(month, wallpaper_name)
+def test_system_wallpaper_is_used_when_no_local_copy(wallpaper_env, tmp_path, monkeypatch):
+    _, home = wallpaper_env
+    monkeypatch.setenv('HOME', str(home))
+    system = tmp_path / 'system-backgrounds'
+    system.mkdir()
+    name = datetime.datetime.now().strftime('%m') + '-bluefin.xml'
+    system_wallpaper = system / name
+    system_wallpaper.touch()
+    monkeypatch.setattr(wallpaper_script, 'SYSTEM_BACKGROUNDS', system)
+    runner = mock.Mock(return_value=subprocess.CompletedProcess([], 0))
+    monkeypatch.setattr(wallpaper_script.subprocess, 'run', runner)
 
-    def test_uri_file_prefix(self):
-        """Test that wallpaper URIs are properly prefixed with file://."""
-        local_path = "/home/user/.local/share/backgrounds/bluefin/01-bluefin.xml"
-        uri = f"file://{local_path}"
-        self.assertTrue(uri.startswith("file://"))
-        self.assertIn(local_path, uri)
+    assert wallpaper_script.set_wallpaper() == 0
+    assert [call.args[0][-1] for call in runner.call_args_list] == [system_wallpaper.as_uri()] * 2
+    local = home / '.local/share/backgrounds/bluefin' / name
+    local.parent.mkdir(parents=True)
+    local.touch()
+    runner.reset_mock()
+    assert wallpaper_script.set_wallpaper() == 0
+    assert [call.args[0][-1] for call in runner.call_args_list] == [local.as_uri()] * 2
 
-    @patch("subprocess.run")
-    def test_missing_wallpaper_no_gsettings_call(self, mock_run):
-        """Test that gsettings is not called when wallpaper is missing."""
-        # When wallpaper doesn't exist, no gsettings calls should be made
-        mock_run.assert_not_called()
+
+@pytest.mark.parametrize('failed_key', ['', 'picture-uri', 'picture-uri-dark'])
+def test_rotates_both_variants_and_reports_failures(wallpaper_env, failed_key):
+    env, home = wallpaper_env
+    wallpaper = home / '.local/share/backgrounds/bluefin' / (datetime.datetime.now().strftime('%m') + '-bluefin.xml')
+    wallpaper.parent.mkdir(parents=True)
+    wallpaper.touch()
+    result = run(env, FAIL_KEY=failed_key)
+    assert result.returncode == (1 if failed_key else 0)
+    uri = wallpaper.as_uri()
+    assert '%20' in uri and '%25' in uri
+    assert (home / 'calls').read_text().splitlines() == [
+        f'picture-uri {uri}', f'picture-uri-dark {uri}',
+    ]

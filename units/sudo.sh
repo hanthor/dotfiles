@@ -4,12 +4,10 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # shellcheck source=units/platform-config.bash
 . "$DOTFILES_DIR/units/platform-config.bash"
-if [ "${UNITS_CHECK:-0}" = 1 ]; then
-  host_file="$DOTFILES_DIR/host_vars/$MACHINE.yml"
-  if [ -e "$host_file" ] && { [ ! -f "$host_file" ] || [ ! -r "$host_file" ]; }; then
-    step 'read sudo host configuration' false
-    finish
-  fi
+host_file="$DOTFILES_DIR/host_vars/$MACHINE.yml"
+if { [ -e "$host_file" ] || [ -L "$host_file" ]; } && { [ ! -f "$host_file" ] || [ ! -r "$host_file" ]; }; then
+  step 'read sudo host configuration' false
+  finish
 fi
 
 if [ "$(host_var skip_sudo false)" = true ]; then
@@ -69,12 +67,31 @@ tmp="$(mktemp -d)" || { step 'create sudo staging directory' false; finish; }
 trap 'rm -rf "$tmp"' EXIT
 
 install_sudo_policy() {
-  local candidate="$tmp/sudoers" dest="$dir/zz-$user" state staged
+  local candidate="$tmp/sudoers" dest="$dir/zz-$user" staged rc
   printf '%s ALL=(ALL) NOPASSWD:ALL\n' "$user" > "$candidate" || return 1
   # Always validate before replacing the current rule or deleting older rules.
   platform_root /usr/sbin/visudo -cf "$candidate" >/dev/null || return 1
-  state="$(stat -c '%a:%u:%g' "$dest" 2>/dev/null)" || state=''
-  if [ -L "$dest" ] || ! cmp -s "$candidate" "$dest" || [ "$state" != '440:0:0' ]; then
+  # sudoers directories and 0440 files are commonly unreadable to the user.
+  # Distinguish a real mismatch from a privileged inspection failure.
+  if platform_root bash -s -- "$candidate" "$dest" <<'INSPECT'
+candidate=$1 dest=$2
+if [ -L "$dest" ] || [ ! -e "$dest" ]; then exit 1; fi
+if [ ! -f "$dest" ]; then echo "Cannot replace non-file sudo policy: $dest" >&2; exit 2; fi
+state=$(stat -c '%a:%u:%g' "$dest") || exit 2
+if cmp -s "$candidate" "$dest"; then
+  [ "$state" = '440:0:0' ] && exit 0
+  exit 1
+else
+  rc=$?
+  if [ "$rc" -ne 1 ]; then echo "Cannot read sudo policy: $dest" >&2; exit 2; fi
+  exit 1
+fi
+INSPECT
+  then
+    :
+  else
+    rc=$?
+    [ "$rc" = 1 ] || return "$rc"
     staged="$(platform_root mktemp "$dir/.dotfiles.XXXXXXXX")" || return 1
     if ! platform_root install -m 0440 -o root -g root "$candidate" "$staged" || ! platform_root mv -fT "$staged" "$dest"; then
       platform_root rm -f "$staged"

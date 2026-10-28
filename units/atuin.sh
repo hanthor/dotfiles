@@ -28,13 +28,13 @@ logged_in() {
 }
 
 atuin_login() {
-  local s item u p k version key_path line local_key
+  local s item u p k version key_path line local_key info
   s="$(bw_session)"
   if [ -z "$s" ]; then
     note "PARTIAL: atuin not logged in; vault locked (bw unlock, then just apply-tags atuin)"
     return 0
   fi
-  item="$(BW_SESSION="$s" bw get item atuin.sh 2>/dev/null)"
+  item="$(BW_SESSION="$s" bw get item atuin.sh 2>/dev/null)" || item=""
   u="$(printf '%s' "$item" | jq -r '.login.username // empty' 2>/dev/null)"
   p="$(printf '%s' "$item" | jq -r '.login.password // empty' 2>/dev/null)"
   k="$(printf '%s' "$item" | jq -r '.fields[]? | select(.name=="key") | .value' 2>/dev/null | head -n1)"
@@ -55,9 +55,14 @@ atuin_login() {
 
   # Let Atuin resolve its configured key path, including the newer data layout.
   key_path=""
+  if ! info="$(atuin info 2>/dev/null)"; then
+    note "PARTIAL: cannot determine the Atuin key path; inspect the local data and log in interactively"
+    allow_import=0
+    return 0
+  fi
   while IFS= read -r line; do
     case "$line" in 'key path: '*) key_path="${line#key path: }" ;; esac
-  done <<< "$(atuin info 2>/dev/null)"
+  done <<< "$info"
   if [ -z "$key_path" ]; then
     note "PARTIAL: cannot determine the Atuin key path; inspect the local data and log in interactively"
     allow_import=0
@@ -76,7 +81,10 @@ atuin_login() {
     fi
   fi
   # Keep both the history and any existing key; Atuin writes a missing key.
-  ATUIN_PASSWORD="$p" ATUIN_ENCRYPTION_KEY="$k" atuin login -u "$u" </dev/null || return 1
+  if ! ATUIN_PASSWORD="$p" ATUIN_ENCRYPTION_KEY="$k" atuin login -u "$u" </dev/null; then
+    allow_import=0
+    return 1
+  fi
   soft "atuin sync" atuin sync
 }
 

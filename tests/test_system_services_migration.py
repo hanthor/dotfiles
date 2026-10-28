@@ -49,6 +49,8 @@ def test_nonlaptop_daily_timer_and_user_service_are_idempotent(stub_env, tmp_pat
     assert "WantedBy=default.target" in service
     assert "graphical-session" not in service
     assert "apply-nosecrets" in service
+    assert "ExecStart=/usr/bin/env just " in service
+    assert "ExecStart=/usr/bin/env atuin daemon start --force" in (units / "atuin-daemon.service").read_text()
     assert "OnCalendar=daily" in timer and "RandomizedDelaySec=30min" in timer
     assert "--user enable --now dotfiles-update.timer" in calls(env)
     assert "--user enable --now atuin-daemon.service" in calls(env)
@@ -57,6 +59,23 @@ def test_nonlaptop_daily_timer_and_user_service_are_idempotent(stub_env, tmp_pat
     assert result.returncode == 0, result.stdout + result.stderr
     assert "daemon-reload" not in calls(env)
     assert "restart" not in calls(env)
+
+
+def test_nonlaptop_removes_only_managed_old_graphical_target_link(stub_env, tmp_path):
+    bindir, env = stub_env
+    systemctl_stub(bindir)
+    program, env, _ = setup_system_services(tmp_path, env, "server", "", False)
+    units = Path(env["HOME"]) / ".config/systemd/user"
+    link = units / "graphical-session.target.wants/dotfiles-update.service"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("../dotfiles-update.service")
+    result = run(program, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not link.is_symlink()
+    link.symlink_to("/opt/custom/dotfiles-update.service")
+    result = run(program, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert link.is_symlink() and link.readlink() == Path("/opt/custom/dotfiles-update.service")
 
 
 def test_headless_timer_enables_linger_without_mutating_check_mode(stub_env, tmp_path):

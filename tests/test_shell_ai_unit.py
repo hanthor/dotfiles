@@ -1,10 +1,11 @@
+import shutil
 import subprocess
 
 import pytest
 
 from conftest import REPO, write_stub
 
-NASTY = "pa'ss\"w$ord"
+NASTY = "pa'ss\\word\"$ord"
 
 BW_STUB = """\
 if [ "$1 $2" = "unlock --check" ]; then exit "${STUB_UNLOCK_RC:-0}"; fi
@@ -72,3 +73,60 @@ def test_locked_or_nosecrets_leaves_files_untouched(env, extra):
     assert r.returncode == 0
     assert "SKIPPED:" in r.stdout
     assert sh.read_text() == "previous\n"
+
+
+def test_failed_secret_read_does_not_export_partial_stdout(env):
+    bindir = env["PATH"].split(":")[0]
+    write_stub(bindir, "bw", '''
+if [ "$1 $2" = "unlock --check" ]; then exit 0; fi
+case "$2 $3" in
+  "password deepseek-api-key") echo partial-secret; exit 1 ;;
+  "password tavily-api-key") echo tav456; exit 0 ;;
+esac
+exit 1
+''')
+    result = run(env)
+    assert result.returncode == 0
+    assert "DEEPSEEK_API_KEY" not in (home(env) / ".config/shell/secrets.sh").read_text()
+    assert "partial-secret" not in result.stdout + result.stderr
+
+
+@pytest.mark.skipif(shutil.which("fish") is None, reason="fish not installed")
+def test_fish_secret_round_trips_quotes_and_backslashes(env):
+    result = run(env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    source = str(home(env) / ".config/fish/conf.d/secrets.fish")
+    fish = subprocess.run(["fish", "--no-config", "-c", 'source "$SECRET_FILE"; printf "%s" "$DEEPSEEK_API_KEY"'],
+                          env={**env, "SECRET_FILE": source}, capture_output=True, text=True)
+    assert fish.returncode == 0, fish.stderr
+    assert fish.stdout == NASTY
+
+
+@pytest.mark.skipif(shutil.which("fish") is None or shutil.which("jq") is None,
+                    reason="fish and jq required")
+@pytest.mark.parametrize("mode,expected", [("failed", "stored-kiro"), ("null", "stored-kiro"),
+                                           ("valid", "refreshed-kiro")])
+def test_fish_refresh_keeps_stored_key_when_vault_read_fails(env, tmp_path, mode, expected):
+    result = run(env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    source = home(env) / ".config/fish/conf.d/secrets.fish"
+    text = source.read_text().replace("/tmp/bw_session", "$TEST_BW_SESSION_FILE")
+    source.write_text("set -gx KIRO_API_KEY stored-kiro\n" + text)
+    session = tmp_path / "session"
+    session.write_text("session-value")
+    write_stub(env["PATH"].split(":")[0], "bw", '''
+printf '%s' "$BW_SESSION" > "$HOME/refresh-session"
+printf '%s' "$*" > "$HOME/refresh-args"
+case "$REFRESH_MODE" in
+  failed) echo '{"notes":"bad-partial"}'; exit 1 ;;
+  null) echo '{"notes":null}'; exit 0 ;;
+  valid) echo '{"notes":"refreshed-kiro"}'; exit 0 ;;
+esac
+''')
+    fish = subprocess.run(["fish", "--no-config", "-c", 'source "$SECRET_FILE"; printf "%s" "$KIRO_API_KEY"'],
+                          env={**env, "SECRET_FILE": str(source), "TEST_BW_SESSION_FILE": str(session),
+                               "REFRESH_MODE": mode}, capture_output=True, text=True)
+    assert fish.returncode == 0, fish.stderr
+    assert fish.stdout == expected
+    assert (home(env) / "refresh-session").read_text() == "session-value"
+    assert "session-value" not in (home(env) / "refresh-args").read_text()

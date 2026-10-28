@@ -10,13 +10,14 @@ Browser selection (optional):
   BROWSER_TYPE  - "zen" (default), "firefox", or "firefox-flatpak"
   PROFILE_DIR   - Override profile directory directly (skips auto-detection)
 
-Idempotent: exits 0 without changes if signedInUser.json already exists and is verified.
+Existing account data is never replaced; verified accounts are left signed in.
 """
 
 import sys
 import os
 import json
 import configparser
+import tempfile
 
 BROWSER_BASES = {
     "zen": os.path.expanduser("~/.var/app/app.zen_browser.zen/.zen"),
@@ -86,16 +87,20 @@ def main():
 
     signed_in_path = os.path.join(profile_dir, "signedInUser.json")
 
-    if os.path.exists(signed_in_path):
+    if os.path.lexists(signed_in_path):
+        if os.path.islink(signed_in_path):
+            print("ERROR: Existing account data is a symlink; leaving it untouched", file=sys.stderr)
+            sys.exit(1)
         try:
             with open(signed_in_path) as f:
                 data = json.load(f)
-            if data.get("accountData", {}).get("verified"):
-                existing_email = data["accountData"].get("email", "unknown")
-                print(f"Already signed in as {existing_email} — skipping", file=sys.stderr)
+            if isinstance(data, dict) and isinstance(data.get("accountData"), dict) and data["accountData"].get("verified"):
+                print("Already signed in — skipping", file=sys.stderr)
                 sys.exit(0)
-        except (json.JSONDecodeError, KeyError):
-            pass  # Malformed — overwrite it
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            pass
+        print("ERROR: Existing account data is not verified; leaving it untouched. Sign in manually.", file=sys.stderr)
+        sys.exit(1)
 
     try:
         import fxa.core
@@ -119,16 +124,27 @@ def main():
         token = token.hex()
 
     os.makedirs(profile_dir, exist_ok=True)
-    with open(signed_in_path, "w") as f:
-        json.dump({
-            "version": 1,
-            "accountData": {
-                "email": email,
-                "sessionToken": token,
-                "uid": session.uid,
-                "verified": True,
-            },
-        }, f)
+    # Publish a complete private file only if no browser process has created one
+    # since the check above. Never truncate another account's data.
+    fd, temporary = tempfile.mkstemp(prefix=".signedInUser.", dir=profile_dir)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump({
+                "version": 1,
+                "accountData": {
+                    "email": email,
+                    "sessionToken": token,
+                    "uid": session.uid,
+                    "verified": True,
+                },
+            }, f)
+        try:
+            os.link(temporary, signed_in_path)
+        except FileExistsError:
+            print("ERROR: Account data appeared during sign-in; leaving it untouched", file=sys.stderr)
+            sys.exit(1)
+    finally:
+        os.unlink(temporary)
 
     print(f"Wrote signedInUser.json for {email} — restart the browser to begin syncing")
 

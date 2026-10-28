@@ -186,6 +186,31 @@ def test_inventory_reader_errors_are_not_a_successful_skip(desktop):
     assert log(env) == ""
 
 
+def test_unrecognized_existing_extension_is_preserved(tmp_path, monkeypatch, capsys):
+    import importlib.util
+
+    monkeypatch.setenv('HOME', str(tmp_path))
+    script = REPO / 'units/bluefin/files/install-extensions.py'
+    spec = importlib.util.spec_from_file_location('bluefin_extensions', script)
+    installer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(installer)
+    uuid = 'example@example.com'
+    extension = Path(installer.USER_EXT_DIR) / uuid
+    extension.mkdir()
+    customized = extension / 'extension.js'
+    customized.write_text('custom extension')
+    monkeypatch.setattr(installer.subprocess, 'run',
+                        lambda args, **kwargs: subprocess.CompletedProcess(args, 1))
+
+    def unexpected_download(*args, **kwargs):
+        raise AssertionError('existing extension must not be downloaded over')
+    monkeypatch.setattr(installer.urllib.request, 'urlopen', unexpected_download)
+
+    installer.install_ext(uuid)
+    assert customized.read_text() == 'custom extension'
+    assert 'preserving existing installation' in capsys.readouterr().out
+
+
 def test_gnome_sync_and_system_changes_are_idempotent(desktop):
     env, _ = desktop
     home = Path(env["HOME"])
@@ -218,6 +243,54 @@ def test_gnome_sync_and_system_changes_are_idempotent(desktop):
     assert "install sysctl" not in later
     assert "sysctl -p" not in later
     assert "systemctl --user enable --now bluefin-wallpaper-rotate.timer" in later
+
+def test_branding_preserves_unmanaged_xml_and_escapes_home(desktop, tmp_path):
+    import xml.etree.ElementTree as ET
+
+    env, _ = desktop
+    home = tmp_path / 'home & 100% "user"'
+    home.mkdir()
+    env['HOME'] = str(home)
+    backgrounds = home / '.local/share/backgrounds/bluefin'
+    backgrounds.mkdir(parents=True)
+    custom = backgrounds / 'custom.xml'
+    original = '<file>/usr/share/backgrounds/bluefin/custom.jpg</file>\n'
+    custom.write_text(original)
+
+    result = run(env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert custom.read_text() == original
+    assert ET.parse(backgrounds / '01-bluefin.xml').getroot().text == str(backgrounds / 'a.jpg')
+    service = (home / '.config/systemd/user/bluefin-wallpaper-rotate.service').read_text()
+    executable = str(home / '.local/bin/bluefin-wallpaper-rotate.py')
+    escaped = executable.replace('%', '%%').replace('\\', '\\\\').replace('"', '\\"')
+    assert f'ExecStart="{escaped}"' in service
+
+
+def test_check_mode_matches_escaped_service_and_wallpaper_uri(desktop, tmp_path):
+    import datetime
+
+    env, _ = desktop
+    home = tmp_path / 'home & 100% "user"'
+    home.mkdir()
+    env['HOME'] = str(home)
+    applied = run(env)
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+
+    wallpaper = home / '.local/share/backgrounds/bluefin' / (datetime.datetime.now().strftime('%m') + '-bluefin.xml')
+    wallpaper.touch(exist_ok=True)
+    bindir = Path(env['PATH'].split(':')[0])
+    write_stub(bindir, 'gsettings', '''\
+if [ "$2" = org.gnome.desktop.background ]; then printf "'%s'\\n" "$EXPECTED_URI"; fi
+''')
+    write_stub(bindir, 'systemctl', '''\
+printf 'LoadState=loaded\\nUnitFileState=enabled\\nActiveState=active\\n'
+''')
+    checked = run(env, UNITS_CHECK='1', STUB_BLUEFIN_RC='0', EXPECTED_URI=wallpaper.as_uri())
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert 'OK wallpaper service' in checked.stdout
+    assert 'OK picture-uri\n' in checked.stdout
+    assert 'OK picture-uri-dark\n' in checked.stdout
 
 
 def test_existing_custom_bus_is_used_for_probe_and_service(desktop):

@@ -8,6 +8,35 @@ set -uo pipefail
 GITHUB_HOST_KEY="github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
 pub="$HOME/.ssh/id_ed25519.pub"
 
+# ssh-keygen resolves hashed and multi-host entries, unlike substring matching.
+# Refuse conflicting ed25519 or revoked pinned keys rather than silently trusting both.
+github_host_key_status() {
+  local path="$HOME/.ssh/known_hosts" entries rc host type body rest found=1
+  [ ! -L "$path" ] || { note "FAIL  refusing symlinked $path"; return 2; }
+  [ -e "$path" ] || return 1
+  [ -f "$path" ] || { note "FAIL  cannot inspect $path"; return 2; }
+  entries="$(ssh-keygen -F github.com -f "$path" 2>/dev/null)"; rc=$?
+  [ "$rc" -le 1 ] || { note "FAIL  cannot inspect $path"; return 2; }
+  while read -r host type body rest; do
+    case "$host" in
+      ''|'#'*) continue ;;
+      @cert-authority) continue ;;
+      @revoked)
+        if [ "$body" = ssh-ed25519 ] && [ "${rest%% *}" = "${GITHUB_HOST_KEY##* }" ]; then
+          note "FAIL  pinned GitHub host key is revoked in $path"; return 2
+        fi
+        continue ;;
+    esac
+    [ "$type" = ssh-ed25519 ] || continue
+    if [ "$body" != "${GITHUB_HOST_KEY##* }" ]; then
+      note "FAIL  conflicting GitHub ed25519 host key in $path; inspect it before proceeding"
+      return 2
+    fi
+    found=0
+  done <<< "$entries"
+  return "$found"
+}
+
 if ! command -v gh >/dev/null 2>&1; then
   note "SKIPPED: gh not installed (just packages)"
   exit 0
@@ -23,19 +52,11 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
     elif [ "$mode" != 700 ]; then
       note "would set $dir mode 0700"
     fi
-    if [ ! -e "$path" ]; then
-      note "would add GitHub host key to $path"
-      return 0
-    fi
-    if [ ! -f "$path" ]; then
-      note "FAIL  cannot inspect $path"
-      return 1
-    fi
-    grep -qF "$GITHUB_HOST_KEY" "$path" 2>/dev/null; rc=$?
+    github_host_key_status; rc=$?
     case "$rc" in
       0) note "ok    GitHub host key" ;;
       1) note "would add GitHub host key to $path" ;;
-      *) note "FAIL  cannot inspect $path"; return 1 ;;
+      *) return 1 ;;
     esac
   }
   step "check github known_hosts" check_known_hosts
@@ -50,9 +71,14 @@ fi
 
 
 known_hosts() {
+  local rc
   install -d -m 0700 "$HOME/.ssh" || return 1
-  grep -qF "$GITHUB_HOST_KEY" "$HOME/.ssh/known_hosts" 2>/dev/null && return 0
-  printf '%s\n' "$GITHUB_HOST_KEY" >> "$HOME/.ssh/known_hosts"
+  github_host_key_status; rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    1) printf '%s\n' "$GITHUB_HOST_KEY" >> "$HOME/.ssh/known_hosts" ;;
+    *) return 1 ;;
+  esac
 }
 
 gh_login() {
@@ -63,7 +89,7 @@ gh_login() {
     note "PARTIAL: gh not logged in; vault locked (bw unlock, then just apply-tags github)"
     return 0
   fi
-  tok="$(BW_SESSION="$s" bw get password github-token 2>/dev/null)"
+  tok="$(BW_SESSION="$s" bw get password github-token 2>/dev/null)" || tok=""
   if [ -z "$tok" ]; then
     note "PARTIAL: no 'github-token' item in Bitwarden; add a login item with your PAT as the password"
     return 0

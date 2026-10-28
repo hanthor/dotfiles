@@ -57,13 +57,12 @@ if os.environ.get('UNITS_CHECK') == '1':
 get = subprocess.run(['gsettings', 'get', 'org.gnome.shell', 'favorite-apps'],
                      capture_output=True, text=True, check=True)
 value = get.stdout.strip()
-if os.environ.get('UNITS_CHECK') == '1':
-    if value.startswith('@as '):
-        value = value[4:]
-    if not value:
-        raise ValueError('empty dock state')
-apps = ast.literal_eval(value) if value else []
-if os.environ.get('UNITS_CHECK') == '1' and (not isinstance(apps, list) or not all(isinstance(app, str) for app in apps)):
+if value.startswith('@as '):
+    value = value[4:]
+if not value:
+    raise ValueError('empty dock state')
+apps = ast.literal_eval(value)
+if not isinstance(apps, list) or not all(isinstance(app, str) for app in apps):
     raise ValueError('invalid dock state')
 new = [app for app in apps if app not in {
     'org.mozilla.firefox.desktop', 'org.mozilla.Thunderbird.desktop'}]

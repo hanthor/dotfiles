@@ -2,7 +2,7 @@
 set -uo pipefail
 # shellcheck source=units/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-if [ "${UNITS_CHECK:-0}" = 1 ] && [ "$MACHINE" != matrix ] && [ "$MACHINE" != telengana ] && [ "$IS_TERMUX" != 1 ]; then
+if [ "$MACHINE" != matrix ] && [ "$MACHINE" != telengana ] && [ "$IS_TERMUX" != 1 ]; then
   hostvars="$DOTFILES_DIR/host_vars/$MACHINE.yml"
   if [ -e "$hostvars" ] || [ -L "$hostvars" ]; then
     if [ ! -f "$hostvars" ] || [ ! -r "$hostvars" ] || ! cat "$hostvars" >/dev/null 2>&1; then
@@ -195,6 +195,18 @@ install_unit() {
   if [ ! -f "$dest" ] || ! cmp -s "$src" "$dest"; then changed=1; fi
   install_if_changed "$src" "$dest" 0644
 }
+# A former laptop must not retain login-triggered updates as well as its timer.
+# Only remove the link when it points at the unit managed here.
+remove_old_update_link() {
+  local link="$unitdir/graphical-session.target.wants/dotfiles-update.service" target
+  [ -L "$link" ] || return 0
+  target=$(readlink "$link") || return 1
+  case "$target" in
+    ../dotfiles-update.service|"$unitdir/dotfiles-update.service")
+      if [ "${UNITS_CHECK:-0}" = 1 ]; then note "would remove $link"; else rm -f "$link" || return 1; fi
+      changed=1 ;;
+  esac
+}
 
 # Render the non-laptop branches of the migrated service templates without
 # requiring Jinja on the host.
@@ -241,7 +253,12 @@ else
   step "render and deploy atuin daemon" false
 fi
 if [ "$update_ready" = 1 ] && [ "$timer_ready" = 1 ]; then
-  step "ensure user linger" ensure_timer_linger
+  if ! remove_old_update_link; then
+    step "remove obsolete graphical update link" false
+    update_ready=0
+  else
+    step "ensure user linger" ensure_timer_linger
+  fi
 fi
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
   [ "$changed" != 1 ] || note "would reload user systemd"

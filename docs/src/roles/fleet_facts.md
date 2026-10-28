@@ -81,6 +81,10 @@ Punjab has `osquery_poller_enabled: true`. Its system-level
 hosts' report-refresh window, and two minutes after boot. It runs as `ubuntu`,
 using that account's existing SSH keys, known hosts and noninteractive sudo.
 It does not depend on an interactive SSH agent or copy credentials into Kubernetes.
+The poller's default `PATH` includes the applying user's `~/.local/bin`, the
+configured Homebrew prefix and the apply environment's `PATH`, so tools installed
+outside the standard system directories remain available. `osquery_poller_path`
+overrides that default.
 
 The unit installs a root-managed collector and a minimal inventory under
 `/opt/fleet-osquery` and `/etc/fleet-osquery/inventory.yml`. Only connection and

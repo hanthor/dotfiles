@@ -1,6 +1,10 @@
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 from conftest import REPO, write_stub
 
@@ -110,3 +114,95 @@ def test_missing_default_profile_is_not_created(stub_env):
     assert "default profile does not exist" in result.stdout
     assert not (profile.parent / "missing.default").exists()
     assert not (home / "signin-captured").exists()
+
+
+def test_failed_helper_install_does_not_run_stale_copy(stub_env):
+    env, home, profile = prepare(stub_env)
+    helper = home / ".local/bin/fxa_signin.py"
+    helper.parent.mkdir(parents=True)
+    helper.write_text("old helper")
+    token = profile / "signedInUser.json"
+    token.write_text("existing")
+    write_stub(stub_env[0], "install", 'exit 1\n')
+    result = run(env)
+    assert result.returncode != 0
+    assert "helper installation failed" in result.stdout
+    assert helper.read_text() == "old helper"
+    assert token.read_text() == "existing"
+    assert not (home / "signin-captured").exists()
+    assert not (home / "bw-calls").exists()
+
+
+def test_token_symlink_is_not_followed(stub_env):
+    env, home, profile = prepare(stub_env)
+    target = home / "unrelated"
+    target.write_text("custom data")
+    target.chmod(0o644)
+    (profile / "signedInUser.json").symlink_to(target)
+    result = run(env)
+    assert result.returncode == 0
+    assert "token is a symlink" in result.stdout
+    assert target.read_text() == "custom data"
+    assert target.stat().st_mode & 0o777 == 0o644
+    assert not (home / "signin-captured").exists()
+
+
+@pytest.mark.parametrize("data,expected", [
+    ('{"accountData": {"verified": true}}', 0),
+    ('{"accountData": {"verified": false, "sessionToken": "keep"}}', 1),
+    ('not valid JSON', 1),
+    ('[]', 1),
+])
+def test_signin_helper_preserves_existing_account_data(tmp_path, data, expected):
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    token = profile / "signedInUser.json"
+    token.write_text(data)
+    env = dict(os.environ, PROFILE_DIR=str(profile), FXA_EMAIL="person@example.test",
+               FXA_PASSWORD="test-password", PYTHONPATH=str(tmp_path))
+    result = subprocess.run([sys.executable, str(REPO / "units/browser-fxa/fxa_signin.py")],
+                            env=env, text=True, capture_output=True)
+    assert result.returncode == expected
+    assert token.read_text() == data
+    assert "test-password" not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("race", [False, True])
+def test_signin_helper_publishes_private_token_without_overwriting_race(tmp_path, race):
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    package = tmp_path / "fxa"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "core.py").write_text('''\
+import os
+from pathlib import Path
+
+class Session:
+    token = b"token"
+    uid = "uid"
+
+class Client:
+    def __init__(self, url):
+        pass
+
+    def login(self, email, password):
+        if os.environ.get("CREATE_RACE") == "1":
+            (Path(os.environ["PROFILE_DIR"]) / "signedInUser.json").write_text("browser data")
+        return Session()
+''')
+    env = dict(os.environ, PROFILE_DIR=str(profile), FXA_EMAIL="person@example.test",
+               FXA_PASSWORD="test-password", FXA_TOTP="", PYTHONPATH=str(tmp_path),
+               CREATE_RACE="1" if race else "0")
+    result = subprocess.run([sys.executable, str(REPO / "units/browser-fxa/fxa_signin.py")],
+                            env=env, text=True, capture_output=True)
+    token = profile / "signedInUser.json"
+    if race:
+        assert result.returncode != 0
+        assert token.read_text() == "browser data"
+    else:
+        assert result.returncode == 0, result.stderr
+        assert json.loads(token.read_text())["accountData"]["sessionToken"] == b"token".hex()
+        assert token.stat().st_mode & 0o777 == 0o600
+    assert not list(profile.glob(".signedInUser.*"))
+    assert "test-password" not in result.stdout + result.stderr

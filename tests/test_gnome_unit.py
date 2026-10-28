@@ -10,6 +10,7 @@ import pytest
 
 from conftest import REPO, write_stub
 from unit_helpers import calls, run_unit
+from test_visual_units_check import assert_read_only, inspect, snapshot, visual
 
 
 @pytest.fixture
@@ -40,7 +41,9 @@ echo "gsettings $* bus=${DBUS_SESSION_BUS_ADDRESS:-unset}" >> "$HOME/calls"
 case "$*" in
   'get org.gnome.Ptyxis default-profile-uuid') echo "'test-uuid'" ;;
   *' custom-command') echo "'${STUB_CURRENT_COMMAND:-/old/fish}'" ;;
+  *' use-custom-command') echo "${STUB_CUSTOM_ENABLED:-false}" ;;
   'get org.gnome.Ptyxis font-name') echo "'${STUB_CURRENT_FONT:-old font}'" ;;
+  'get org.gnome.Ptyxis use-system-font') echo "${STUB_SYSTEM_FONT:-true}" ;;
 esac
 exit "${STUB_GSETTINGS_FAIL:-0}"
 ''')
@@ -93,6 +96,34 @@ def test_desktop_uses_canonical_assets_and_live_user_session(env):
     assert extension.stat().st_mtime_ns == mtime
     assert calls(env).count("dconf load /org/gnome/settings-daemon/plugins/media-keys/") == first_keys
     assert calls(env).count("custom-command /custom/brew/bin/fish") == 1
+
+
+@pytest.mark.parametrize("custom,system,expected", [
+    ("false", "false", "use-custom-command true"),
+    ("true", "true", "use-system-font false"),
+])
+def test_ptyxis_repairs_disabled_settings_even_when_values_match(env, custom, system, expected):
+    result = run_unit("gnome", env, STUB_CURRENT_COMMAND="/custom/brew/bin/fish",
+                      STUB_CURRENT_FONT="JetBrainsMono Nerd Font 12",
+                      STUB_CUSTOM_ENABLED=custom, STUB_SYSTEM_FONT=system)
+    assert result.returncode == 0, result.stdout + result.stderr
+    log = calls(env)
+    assert expected in log
+    assert "set org.gnome.Ptyxis font-name" not in log
+    assert "custom-command /custom/brew/bin/fish" not in log
+
+
+@pytest.mark.parametrize("extra", [
+    {"CHECK_CUSTOM_ENABLED": "false"},
+    {"CHECK_SYSTEM_FONT": "true"},
+])
+def test_ptyxis_check_detects_disabled_settings_without_mutation(visual, extra):
+    env, _ = visual
+    before = snapshot(Path(env["HOME"]))
+    result = inspect("gnome", env, **extra)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "WOULD configure Ptyxis profile" in result.stdout
+    assert_read_only(env, before)
 
 
 def test_failed_keybinding_load_is_reported_and_retried(env):
@@ -255,3 +286,66 @@ def test_avatar_without_gdm_creates_user_section(tmp_path, monkeypatch):
     helper.install_avatar(source)
     assert (tmp_path / "users/james").read_text() == "[User]\nIcon=/var/lib/AccountsService/icons/james\n"
     assert not (tmp_path / "gdm").exists()
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_avatar_only_chowns_new_gdm_cache_directory(tmp_path, monkeypatch, existing):
+    helper = load_avatar_helper()
+    icons, users = tmp_path / "icons", tmp_path / "users"
+    icons.mkdir()
+    users.mkdir()
+    cache = tmp_path / "gdm/.cache"
+    if existing:
+        cache.mkdir(parents=True)
+        (cache / "custom").write_text("keep")
+    source = tmp_path / "source.png"
+    source.write_bytes(b"avatar")
+    monkeypatch.setattr(helper, "ICON", icons / "james")
+    monkeypatch.setattr(helper, "ACCOUNT", users / "james")
+    monkeypatch.setattr(helper, "GDM_CACHE", cache)
+    monkeypatch.setattr(helper.pwd, "getpwnam", lambda name: SimpleNamespace(pw_uid=os.getuid()))
+    monkeypatch.setattr(helper.grp, "getgrnam", lambda name: SimpleNamespace(gr_gid=os.getgid()))
+    chown = os.chown
+    chowned = []
+    def record_chown(path, uid, gid):
+        chowned.append(Path(path))
+        chown(path, uid, gid)
+    monkeypatch.setattr(helper.os, "chown", record_chown)
+    helper.install_avatar(source)
+    assert (cache in chowned) is not existing
+    if existing:
+        assert (cache / "custom").read_text() == "keep"
+
+
+@pytest.mark.parametrize("kind,mode,uid,repair", [
+    (stat.S_IFDIR, 0o755, 0, True),
+    (stat.S_IFDIR, 0o700, 0, False),
+    (stat.S_IFDIR, 0o755, 99, False),
+    (stat.S_IFLNK, 0o755, 0, False),
+])
+def test_avatar_repairs_only_legacy_cache_metadata(tmp_path, monkeypatch, kind, mode, uid, repair):
+    helper = load_avatar_helper()
+    icons, users = tmp_path / "icons", tmp_path / "users"
+    icons.mkdir()
+    users.mkdir()
+    cache = tmp_path / "gdm/.cache"
+    cache.mkdir(parents=True)
+    (cache / "custom").write_text("keep")
+    source = tmp_path / "source.png"
+    source.write_bytes(b"avatar")
+    monkeypatch.setattr(helper, "ICON", icons / "james")
+    monkeypatch.setattr(helper, "ACCOUNT", users / "james")
+    monkeypatch.setattr(helper, "GDM_CACHE", cache)
+    monkeypatch.setattr(helper.pwd, "getpwnam", lambda name: SimpleNamespace(pw_uid=42))
+    monkeypatch.setattr(helper.grp, "getgrnam", lambda name: SimpleNamespace(gr_gid=43))
+    original_lstat = Path.lstat
+    def cache_lstat(path):
+        if path == cache:
+            return SimpleNamespace(st_mode=kind | mode, st_uid=uid)
+        return original_lstat(path)
+    monkeypatch.setattr(Path, "lstat", cache_lstat)
+    chowned = []
+    monkeypatch.setattr(helper.os, "chown", lambda path, user, group: chowned.append((Path(path), user, group)))
+    helper.install_avatar(source)
+    assert ((cache, 42, 43) in chowned) is repair
+    assert (cache / "custom").read_text() == "keep"

@@ -14,14 +14,20 @@ if platform_group_contains termux_hosts; then :; else
   if [ "$rc" = 1 ]; then note 'SKIPPED: not in termux_hosts'; else step 'read Termux inventory group' false; fi
   finish
 fi
+if [ "$IS_TERMUX" != 1 ]; then
+  note 'SKIPPED: Termux packages require the Termux environment'
+  finish
+fi
 
 # Role defaults are overridden by group_vars/all and then host_vars, as before.
 # No YAML parser is needed on a freshly bootstrapped phone without overrides.
 load_overrides() {
-  local file key has value
+  local file key has value rc
   for file in "$DOTFILES_DIR/group_vars/all.yml" "$DOTFILES_DIR/host_vars/$MACHINE.yml"; do
-    [ -f "$file" ] || continue
-    if ! grep -Eq '^termux_(pkgs|npm_global|keepalive_period_ms):' "$file"; then continue; fi
+    [ -e "$file" ] || [ -L "$file" ] || continue
+    [ -f "$file" ] && [ -r "$file" ] || { echo 'Cannot read Termux package configuration' >&2; return 1; }
+    grep -Eq '^termux_(pkgs|npm_global|keepalive_period_ms):' "$file"; rc=$?
+    case "$rc" in 0) ;; 1) continue ;; *) echo 'Cannot read Termux package configuration' >&2; return 1 ;; esac
     package_require_yq || return 1
     for key in termux_pkgs termux_npm_global; do
       has="$(yq -r "has(\"$key\")" "$file")" || return 1
@@ -59,15 +65,27 @@ install_packages() {
   return "$rc"
 }
 ensure_sshd() {
-  pgrep -x sshd >/dev/null 2>&1 || sshd
+  local rc
+  pgrep -x sshd >/dev/null 2>&1; rc=$?
+  case "$rc" in 0) return 0 ;; 1) sshd ;; *) echo 'Cannot inspect Termux sshd process' >&2; return 1 ;; esac
+}
+pending_keepalive() {
+  [[ "$1" =~ (^|[^[:alnum:]_])Pending[[:space:]]Job[[:space:]]1([^[:digit:]]|$) ]]
 }
 schedule_keepalive() {
   local pending
-  pending="$(termux-job-scheduler -p 2>/dev/null)" || :
-  case "$pending" in *'Pending Job 1'*) return 0 ;; esac
+  pending="$(termux-job-scheduler -p 2>/dev/null)" || { echo 'Cannot inspect Termux scheduled jobs' >&2; return 1; }
+  pending_keepalive "$pending" && return 0
   termux-job-scheduler --job-id 1 --period-ms "$TERMUX_KEEPALIVE_PERIOD_MS" --persisted true -s "$HOME/.termux/boot/start-sshd"
 }
 
+known_boot_script() {
+  cmp -s "$1" "$DOTFILES_DIR/units/termux-start-sshd" || cmp -s "$1" <(printf '%s\n' \
+    '#!/data/data/com.termux/files/usr/bin/sh' \
+    '# Run at boot via Termux:Boot and periodically via Android'"'"'s JobScheduler.' \
+    '# Termux:Boot and Termux:API are separate companion apps.' \
+    'termux-wake-lock' 'sshd')
+}
 check_termux_packages() {
   local installed pkg line state name found
   installed="$(dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n' 2>/dev/null)" || {
@@ -83,27 +101,28 @@ check_termux_packages() {
   done
 }
 check_termux_boot() {
-  PYTHONDONTWRITEBYTECODE=1 python3 - "$DOTFILES_DIR/units/termux-start-sshd" "$HOME/.termux/boot" <<'PY'
+  local known=0
+  if [ -f "$HOME/.termux/boot/start-sshd" ] && known_boot_script "$HOME/.termux/boot/start-sshd"; then known=1; fi
+  PYTHONDONTWRITEBYTECODE=1 python3 - "$HOME/.termux/boot" "$known" <<'PY'
 import os, stat, sys
-src, directory = sys.argv[1:]
+directory, known = sys.argv[1:]
 dest = os.path.join(directory, 'start-sshd')
 try:
-    with open(src, 'rb') as f:
-        expected = f.read()
     try:
         info = os.stat(directory)
         directory_ok = stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o755
     except FileNotFoundError:
         directory_ok = False
     print(('ok    ' if directory_ok else 'WOULD create or chmod ') + 'Termux boot directory')
+    if os.path.islink(dest) or (os.path.lexists(dest) and not os.path.isfile(dest)):
+        print('Cannot replace non-regular Termux sshd boot script', file=sys.stderr)
+        sys.exit(1)
     try:
         info = os.stat(dest)
-        if stat.S_ISREG(info.st_mode):
-            with open(dest, 'rb') as f:
-                same = f.read() == expected
-            same = same and stat.S_IMODE(info.st_mode) == 0o755
-        else:
-            same = False
+        if known != '1':
+            print('Cannot replace customized Termux sshd boot script', file=sys.stderr)
+            sys.exit(1)
+        same = stat.S_IMODE(info.st_mode) == 0o755
     except FileNotFoundError:
         same = False
     print(('ok    ' if same else 'WOULD install or chmod ') + 'Termux sshd boot script')
@@ -124,10 +143,11 @@ check_termux_sshd() {
 check_termux_keepalive() {
   local pending
   pending="$(termux-job-scheduler -p 2>/dev/null)" || { echo 'Cannot inspect Termux scheduled jobs' >&2; return 1; }
-  case "$pending" in
-    *'Pending Job 1'*) note 'ok    Termux sshd keep-alive job exists (period not checked by apply)' ;;
-    *) note "WOULD schedule Termux sshd keep-alive every $TERMUX_KEEPALIVE_PERIOD_MS ms" ;;
-  esac
+  if pending_keepalive "$pending"; then
+    note 'ok    Termux sshd keep-alive job exists (period not checked by apply)'
+  else
+    note "WOULD schedule Termux sshd keep-alive every $TERMUX_KEEPALIVE_PERIOD_MS ms"
+  fi
 }
 check_termux_overrides() {
   local file rc
@@ -169,7 +189,29 @@ else
   step 'read Termux package configuration' false
 fi
 step 'Termux boot directory' install -d -m 0755 "$HOME/.termux/boot"
-step 'Termux sshd boot script' install_if_changed "$DOTFILES_DIR/units/termux-start-sshd" "$HOME/.termux/boot/start-sshd" 0755
+boot_ready=0
+boot_script="$HOME/.termux/boot/start-sshd"
+if [ -L "$boot_script" ] || { [ -e "$boot_script" ] && [ ! -f "$boot_script" ]; }; then
+  echo 'Cannot replace non-regular Termux sshd boot script' >&2
+  step 'Termux sshd boot script' false
+elif [ -e "$boot_script" ] && ! known_boot_script "$boot_script"; then
+  echo 'Cannot replace customized Termux sshd boot script' >&2
+  step 'Termux sshd boot script' false
+elif [ -e "$boot_script" ]; then
+  if chmod 0755 "$boot_script"; then
+    note 'ok    Termux sshd boot script'
+    boot_ready=1
+  else
+    step 'Termux sshd boot script' false
+  fi
+elif install_if_changed "$DOTFILES_DIR/units/termux-start-sshd" "$boot_script" 0755; then
+  note 'ok    Termux sshd boot script'
+  boot_ready=1
+else
+  step 'Termux sshd boot script' false
+fi
 step 'Termux sshd running' ensure_sshd
-[ "$config_ok" = 0 ] || step 'Termux sshd keep-alive' schedule_keepalive
+if [ "$config_ok" = 1 ] && [ "$boot_ready" = 1 ]; then
+  step 'Termux sshd keep-alive' schedule_keepalive
+fi
 finish

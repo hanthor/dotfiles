@@ -2,6 +2,7 @@ import importlib.util
 import json
 import sys
 import shutil
+import subprocess
 
 import pytest
 
@@ -125,3 +126,49 @@ def test_osquery_gates_inherit_group_settings_and_host_overrides(tmp_path, capsy
     assert native.main(["osquery-settings", str(path), "node"]) == 0
     assert json.loads(capsys.readouterr().out) == {"skip_osquery": False, "osquery_supported": False,
                                                  "osquery_poller_enabled": True, "osquery_version": "5.23.1"}
+
+
+def test_poller_retains_apply_path_for_nonstandard_tool_installations(tmp_path, stub_env):
+    _, env = stub_env
+    custom_bin = tmp_path / "custom-bin"
+    custom_bin.mkdir()
+    tailscale = custom_bin / "tailscale"
+    tailscale.write_text("#!/bin/sh\nprintf 'custom tailscale\\n'\n")
+    tailscale.chmod(0o755)
+    env.update(DOTFILES_MACHINE="workstation", BREW_PREFIX=str(tmp_path / "brew"),
+               PATH=f"{custom_bin}:/usr/bin:/bin")
+    result = subprocess.run(
+        ["bash", "-c", 'source "$1"; osquery_default_poll_path', "bash",
+         str(REPO / "units/osquery.sh")], env=env, capture_output=True, text=True, check=True)
+    pollpath = result.stdout
+    assert pollpath.startswith(f"{env['HOME']}/.local/bin:{env['BREW_PREFIX']}/bin:")
+    tool = subprocess.run(["tailscale"], env={**env, "PATH": pollpath},
+                          capture_output=True, text=True, check=True)
+    assert tool.stdout == "custom tailscale\n"
+
+    renderer_spec = importlib.util.spec_from_file_location(
+        "osquery_poller_renderer_path", REPO / "units/osquery-poller-render.py")
+    renderer = importlib.util.module_from_spec(renderer_spec)
+    renderer_spec.loader.exec_module(renderer)
+    service = renderer.service(REPO / "units/osquery/templates/fleet-osquery-poll.service.j2",
+                               "user", "1000", env["HOME"], pollpath, str(tmp_path / "state"))
+    assert f'Environment="PATH={pollpath}"' in service
+
+
+def test_yaml_fallback_without_yq_preserves_group_precedence_and_sanitizes_errors(tmp_path, monkeypatch):
+    pytest.importorskip("yaml")
+    path = tmp_path / "inventory.yml"
+    path.write_text("all:\n  children:\n    server:\n      vars:\n        ansible_user: group-user\n      hosts:\n        host: {}\n")
+    (tmp_path / "host_vars").mkdir()
+    (tmp_path / "host_vars/host.yml").write_text("ansible_user: host-user\n")
+
+    def missing_yq(*args, **kwargs):
+        raise FileNotFoundError("yq")
+
+    monkeypatch.setattr(native.subprocess, "run", missing_yq)
+    result = native.load_inventory(path)
+    assert result["_meta"]["hostvars"]["host"]["ansible_user"] == "host-user"
+    path.write_text("secret-value: [unclosed\n")
+    with pytest.raises(ValueError) as error:
+        native.load_inventory(path)
+    assert "secret-value" not in str(error.value)

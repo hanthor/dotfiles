@@ -10,7 +10,7 @@ Logs podman in to the private Forgejo container registry.
 ## What it does
 
 1. `SKIPPED:` unless `podman` is installed; no-op when `podman login --get-login <registry>` already succeeds.
-2. With an unlocked vault: `bw get username` / `bw get password` for the item named after the registry, then `podman login <registry> -u <user> --password-stdin`. A missing item prints `PARTIAL:` and is not a failure.
+2. With an unlocked vault: `bw get username` / `bw get password` for the item named after the registry, then `podman login <registry> -u <user> --password-stdin`. The username is trimmed at its edges, preserving internal whitespace. A missing, empty, or failed credential read prints `PARTIAL:` and is not a failure; partial output from a failed read is never used.
 
 ## Configuration
 

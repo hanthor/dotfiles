@@ -36,6 +36,10 @@ load_config() {
       fi
     done
   done
+  brew_tap_inputs=("${core_taps[@]}" "${core_brews[@]}" "${core_tap_brews[@]}")
+  if [ "$PACKAGE_DESKTOP" = 1 ]; then
+    brew_tap_inputs+=("${desktop_taps[@]}" "${desktop_brews[@]}" "${extra_brews[@]}" "${desktop_casks[@]}")
+  fi
 }
 
 fix_owner() {
@@ -119,7 +123,7 @@ deploy_brewfile() {
 
 tap_and_trust() {
   local pkg tap seen=' ' rc=0
-  for pkg in "${core_taps[@]}" "${desktop_taps[@]}" "${core_brews[@]}" "${core_tap_brews[@]}" "${desktop_brews[@]}" "${extra_brews[@]}" "${desktop_casks[@]}"; do
+  for pkg in "${brew_tap_inputs[@]}"; do
     case "$pkg" in
       */*/*) tap="${pkg%/*}" ;;
       */*) tap="$pkg" ;;
@@ -216,7 +220,7 @@ check_brew() {
     for line in $taps; do
       case "$line" in *[!a-zA-Z0-9_./-]*) echo 'Cannot inspect Homebrew taps' >&2; UNIT_FAILED=1; return ;; esac
     done
-    for pkg in "${core_taps[@]}" "${desktop_taps[@]}" "${core_brews[@]}" "${core_tap_brews[@]}" "${desktop_brews[@]}" "${extra_brews[@]}" "${desktop_casks[@]}"; do
+    for pkg in "${brew_tap_inputs[@]}"; do
       case "$pkg" in */*/*) tap="${pkg%/*}" ;; */*) tap="$pkg" ;; *) continue ;; esac
       case "$seen" in *" $tap "*) continue ;; esac
       seen="$seen$tap "

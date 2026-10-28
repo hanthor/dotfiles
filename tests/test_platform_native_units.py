@@ -153,7 +153,7 @@ echo "job $*" >> "$LOG"
     result = run_unit(platform_env, "termux-packages", DOTFILES_MACHINE="phone", TEST_TERMUX="1")
     assert result.returncode == 0, result.stdout + result.stderr
     calls = log_lines(log)
-    assert calls.index("pkg install -y python yq chezmoi") < next(i for i, x in enumerate(calls) if x.startswith("npm "))
+    assert calls.index("pkg install -y python yq chezmoi just") < next(i for i, x in enumerate(calls) if x.startswith("npm "))
     assert "pkg install -y mise" in calls
     assert "npm install -g @earendil-works/pi-coding-agent" in calls
     assert "sshd-start" in calls
@@ -168,6 +168,96 @@ echo "job $*" >> "$LOG"
     result = run_unit(platform_env, "termux-packages", DOTFILES_MACHINE="laptop")
     assert result.returncode == 0 and not log_lines(log)
     assert system.exists()
+
+
+def test_termux_packages_require_both_inventory_and_termux(platform_env):
+    _, _, bindir, _, log = platform_env
+    write_stub(bindir, "pkg", 'echo "pkg $*" >> "$LOG"\n')
+    result = run_unit(platform_env, "termux-packages", DOTFILES_MACHINE="phone")
+    assert result.returncode == 0 and "require the Termux environment" in result.stdout
+    assert not log_lines(log)
+
+
+def test_termux_keepalive_exact_job_id_and_inspection_failures(platform_env):
+    _, _, bindir, env, log = platform_env
+    write_stub(bindir, "pkg", 'exit 0\n')
+    write_stub(bindir, "npm", 'exit 0\n')
+    write_stub(bindir, "pgrep", 'exit "${PGREP_RC:-0}"\n')
+    write_stub(bindir, "sshd", 'echo sshd-start >> "$LOG"\n')
+    write_stub(bindir, "termux-job-scheduler", '''\
+if [ "$1" = -p ]; then
+  [ "${SCHED_FAIL:-0}" = 0 ] || exit 1
+  echo 'Pending Job 10'
+else echo "job $*" >> "$LOG"; fi
+''')
+    result = run_unit(platform_env, "termux-packages", DOTFILES_MACHINE="phone", TEST_TERMUX="1")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert any(line.startswith("job --job-id 1 ") and line.endswith("/.termux/boot/start-sshd") for line in log_lines(log))
+    log.unlink()
+    result = run_unit(platform_env, "termux-packages", DOTFILES_MACHINE="phone", TEST_TERMUX="1", SCHED_FAIL="1", PGREP_RC="2")
+    assert result.returncode != 0
+    assert "Cannot inspect Termux scheduled jobs" in result.stderr
+    assert "Cannot inspect Termux sshd process" in result.stderr
+    assert not log_lines(log)
+
+
+def test_termux_does_not_schedule_stale_boot_script(platform_env):
+    _, _, bindir, env, log = platform_env
+    write_stub(bindir, "pkg", 'exit 0\n')
+    write_stub(bindir, "npm", 'exit 0\n')
+    write_stub(bindir, "pgrep", 'exit 0\n')
+    write_stub(bindir, "termux-job-scheduler", 'echo "job $*" >> "$LOG"\n')
+    directory = Path(env["HOME"]) / ".termux/boot"
+    directory.mkdir(parents=True)
+    (directory / "start-sshd").mkdir()
+    result = run_unit(platform_env, "termux-packages", DOTFILES_MACHINE="phone", TEST_TERMUX="1")
+    assert result.returncode != 0
+    assert not log_lines(log)
+    assert (directory / "start-sshd").is_dir()
+
+
+def test_termux_preserves_custom_boot_and_accepts_prior_native_script(platform_env):
+    _, _, bindir, env, log = platform_env
+    write_stub(bindir, "pkg", 'exit 0\n')
+    write_stub(bindir, "npm", 'exit 0\n')
+    write_stub(bindir, "pgrep", 'exit 0\n')
+    write_stub(bindir, "termux-job-scheduler", 'if [ "$1" != -p ]; then echo scheduled >> "$LOG"; fi\n')
+    script = Path(env["HOME"]) / ".termux/boot/start-sshd"
+    script.parent.mkdir(parents=True)
+    old = ("#!/data/data/com.termux/files/usr/bin/sh\n"
+           "# Run at boot via Termux:Boot and periodically via Android's JobScheduler.\n"
+           "# Termux:Boot and Termux:API are separate companion apps.\n"
+           "termux-wake-lock\nsshd\n")
+    script.write_text(old)
+    script.chmod(0o600)
+    result = run_unit(platform_env, "termux-packages", DOTFILES_MACHINE="phone", TEST_TERMUX="1")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert script.read_text() == old and script.stat().st_mode & 0o777 == 0o755
+    assert log_lines(log) == ["scheduled"]
+    log.unlink()
+    script.write_text("custom script\n")
+    script.chmod(0o600)
+    result = run_unit(platform_env, "termux-packages", DOTFILES_MACHINE="phone", TEST_TERMUX="1")
+    assert result.returncode != 0 and "Cannot replace customized" in result.stderr
+    assert script.read_text() == "custom script\n" and script.stat().st_mode & 0o777 == 0o600
+    assert not log_lines(log)
+
+
+def test_termux_unreadable_overrides_do_not_apply_defaults(platform_env):
+    root, _, bindir, env, log = platform_env
+    (root / "host_vars/phone.yml").symlink_to(root / "missing-overrides.yml")
+    write_stub(bindir, "pkg", 'echo "pkg $*" >> "$LOG"\n')
+    write_stub(bindir, "npm", 'echo "npm $*" >> "$LOG"\n')
+    write_stub(bindir, "pgrep", 'exit 1\n')
+    write_stub(bindir, "sshd", 'echo sshd-start >> "$LOG"\n')
+    write_stub(bindir, "termux-job-scheduler", 'echo "job $*" >> "$LOG"\n')
+    result = run_unit(platform_env, "termux-packages", DOTFILES_MACHINE="phone", TEST_TERMUX="1")
+    assert result.returncode != 0 and "Cannot read Termux package configuration" in result.stderr
+    calls = log_lines(log)
+    assert "pkg install -y python yq chezmoi just" in calls
+    assert not any(line.startswith("npm ") or line.startswith("job ") for line in calls)
+    assert "sshd-start" in calls
+    assert (Path(env["HOME"]) / ".termux/boot/start-sshd").is_file()
 
 
 def test_termux_unavailable_bootstrap_package_does_not_block_ssh(platform_env):
@@ -200,7 +290,7 @@ esac
     result = run_unit(platform_env, "apk-packages", TEST_MUSL="1")
     assert result.returncode == 1 and "exa" in result.stderr
     calls = log_lines(log)
-    assert any("chezmoi yq-go python3 py3-yaml" in line for line in calls)
+    assert any("chezmoi yq-go python3 py3-yaml just" in line for line in calls)
     assert any("--no-upgrade" in line and " bash" in line for line in calls)
     assert "npm install -g @bitwarden/cli" in calls
     assert any("systemctl enable --now podman.socket" in line for line in calls)

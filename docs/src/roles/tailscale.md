@@ -7,3 +7,7 @@ When already connected it sets the hostname, reconciles configured advertised ro
 Host variables include `tailscale_advertise_routes`, `tailscale_accept_dns`, `tailscale_operator`, and `tailscale_domain` (the domain also falls back to `group_vars/all.yml`). The shared unit library skips retired `matrix` and `telengana` before this unit changes anything; nothing on those hosts may be restarted.
 
 Tailnet auditing, hostname release and OAuth credential setup are documented in [Tailnet hygiene](../tailnet.md).
+
+## Resolver recovery
+
+The unit repoints `/etc/resolv.conf` to the resolved stub when resolved is active and restarts resolved if the link changes. It does **not** restart `tailscaled`: doing so can disconnect a remote apply. A running daemon that previously selected another DNS manager may need to be restarted to detect the new layout. Arrange console or other independent access before restarting it, then check `journalctl -u tailscaled` for the selected DNS mode and `resolvectl status` for per-link upstreams. Test both a public name and a MagicDNS name through the system resolver and through `100.100.100.100`; working system lookups alone do not prove Tailscale's forwarder has an upstream. See [Tailscale's Linux DNS guidance](https://tailscale.com/kb/1188/linux-dns) and [upstream issue 19062](https://github.com/tailscale/tailscale/issues/19062).

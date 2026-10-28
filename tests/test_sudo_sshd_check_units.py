@@ -4,6 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from conftest import write_stub
 from test_platform_native_units import platform_env  # noqa: F401
 
@@ -66,6 +68,60 @@ def test_sudo_check_rejects_unreadable_comparison(platform_env):
     result = run_check(platform_env, "sudo")
     assert result.returncode != 0
     assert "Cannot read sudo policy" in result.stderr
+
+
+def test_sudo_apply_uses_privileged_inspection_and_preserves_old_rules_on_error(platform_env):
+    root, system, bindir, env, log = platform_env
+    directory = system / "etc/sudoers.d"
+    dest = directory / "zz-james"
+    dest.write_text("james ALL=(ALL) NOPASSWD:ALL\n")
+    dest.chmod(0o440)
+    write_stub(bindir, "sudo", '''\
+[ "$1" = -n ] || exit 1
+shift
+case "$1" in
+  /usr/sbin/visudo) exit 0 ;;
+  bash) shift; SUDO_INSPECT=1 exec bash "$@" ;;
+  *) echo "$*" >> "$LOG"; exec "$@" ;;
+esac
+''')
+    write_stub(bindir, "stat", '''\
+[ "${SUDO_INSPECT:-0}" = 1 ] || exit 2
+mode=$(/usr/bin/stat -c %a "$3") || exit 1
+echo "$mode:0:0"
+''')
+    write_stub(bindir, "cmp", '''\
+[ "${SUDO_INSPECT:-0}" = 1 ] || exit 2
+[ "${CMP_ERROR:-0}" = 0 ] || exit 2
+exec /usr/bin/cmp "$@"
+''')
+    command = ["bash", str(root / "units/sudo.sh")]
+    clean = subprocess.run(command, env=env, text=True, capture_output=True)
+    assert clean.returncode == 0, clean.stdout + clean.stderr
+    assert not any(line.startswith(("install ", "mv ")) for line in log.read_text().splitlines())
+    old = directory / "99-james"
+    old.write_text("keep this rule\n")
+    failed = subprocess.run(command, env={**env, "CMP_ERROR": "1"}, text=True, capture_output=True)
+    assert failed.returncode != 0 and "Cannot read sudo policy" in failed.stderr
+    assert old.read_text() == "keep this rule\n" and dest.read_text() == "james ALL=(ALL) NOPASSWD:ALL\n"
+
+
+@pytest.mark.parametrize("name", ["sudo", "sshd"])
+@pytest.mark.parametrize("check", [False, True])
+@pytest.mark.parametrize("bad_file", ["directory", "dangling-link"])
+def test_access_units_fail_closed_on_unreadable_host_configuration(platform_env, name, check, bad_file):
+    root, system, _, env, log = platform_env
+    host_file = root / "host_vars/laptop.yml"
+    if bad_file == "directory":
+        host_file.mkdir()
+    else:
+        host_file.symlink_to("missing-host-vars")
+    before = snapshot(system)
+    result = subprocess.run(["bash", str(root / "units" / f"{name}.sh")],
+                            env={**env, "UNITS_CHECK": "1" if check else "0"},
+                            text=True, capture_output=True)
+    assert result.returncode != 0 and f"read {name} host configuration" in result.stdout
+    assert snapshot(system) == before and not log.exists()
 
 
 def test_sshd_check_reports_both_dropins_and_reload_without_writes(platform_env):

@@ -12,7 +12,7 @@ import sys
 scripts_dir = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(scripts_dir))
 
-from inventory_parser import parse_inventory, register_host, purge_host, UnknownGroupError
+from inventory_parser import parse_inventory, register_host, purge_host, UnknownGroupError, host_groups
 
 
 class TestParseInventory(unittest.TestCase):
@@ -135,6 +135,24 @@ class TestRegisterHost(unittest.TestCase):
         self.assertIn("    desktop:\n      hosts:\n        host1:", content)
         # Verify host2 is under laptop
         self.assertIn("    laptop:\n      hosts:\n        host2:", content)
+
+    def test_group_name_is_not_mistaken_for_existing_host(self) -> None:
+        self.assertTrue(register_host("vps", "desktop", str(self.inv_path)))
+        data = yaml.safe_load(self.inv_path.read_text())
+        self.assertIn("vps", data["all"]["hosts"])
+        self.assertIn("vps", data["all"]["children"]["desktop"]["hosts"])
+
+    def test_invalid_name_cannot_mutate_inventory(self) -> None:
+        before = self.inv_path.read_text()
+        with self.assertRaises(ValueError):
+            register_host("../escape", "desktop", str(self.inv_path))
+        self.assertEqual(self.inv_path.read_text(), before)
+
+    def test_group_detection_is_not_limited_to_first_300_characters(self) -> None:
+        hosts = "".join(f"        item{i}: {{}}\n" for i in range(50))
+        text = f"all:\n  hosts:\n    target: {{}}\n  children:\n    server:\n      hosts:\n{hosts}        target: {{}} # entry\n"
+        self.assertEqual(host_groups(text, "target"), {"server"})
+        self.assertEqual(parse_inventory(text)[0], {"target"})
 
 
 class TestPurgeHost(unittest.TestCase):

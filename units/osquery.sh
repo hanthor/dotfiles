@@ -9,8 +9,13 @@ osquery_verify_archive() {
   printf '%s  %s\n' "$expected" "$archive" | "$@" sha256sum -c --status
 }
 
+# Match the role's poller PATH: the user's tools, Homebrew, then the apply PATH.
+osquery_default_poll_path() {
+  printf '%s' "$HOME/.local/bin:${BREW_PREFIX:-/home/linuxbrew/.linuxbrew}/bin:$PATH"
+}
+
 osquery_main() {
-  local vps arch version archive checksum supported poller settings skip_setting supported_setting archives override_path override_state
+  local vps arch version archive checksum supported poller settings skip_setting supported_setting archives override_path override_state pollpath state
   local -a rootcmd=()
   case "$MACHINE" in matrix|telengana) note "SKIPPED: retired VPS"; finish ;; esac
   if [ "$IS_TERMUX" = 1 ] || [ "$IS_MUSL" = 1 ] || [ "$(uname -s)" != Linux ] || [ ! -d /run/systemd/system ]; then
@@ -43,6 +48,10 @@ osquery_main() {
   checksum=$(ARCH="$arch" yq -p=json -r '.[strenv(ARCH)].sha256' <<< "$archives") || { step "read osquery checksum" false; finish; }
   override_path=$(osquery_setting '.osquery_poller_path') || { step "read osquery poller path" false; finish; }
   override_state=$(osquery_setting '.osquery_poller_state_dir') || { step "read osquery poller state" false; finish; }
+  pollpath=$(osquery_default_poll_path)
+  state="$HOME/.local/state/fleet-osquery"
+  if [ "$override_path" != null ]; then pollpath=$override_path; fi
+  if [ "$override_state" != null ]; then state=$override_state; fi
   if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ ! "$archive" =~ ^osquery-[A-Za-z0-9_.-]+\.tar\.gz$ ]] || [[ ! "$checksum" =~ ^[0-9a-f]{64}$ ]]; then
     step "validate osquery release metadata" false; finish
   fi
@@ -56,10 +65,7 @@ osquery_main() {
   done
   if [ "${UNITS_CHECK:-0}" = 1 ]; then
     if ! command -v sha256sum >/dev/null 2>&1; then step "osquery dependency sha256sum" false; finish; fi
-    local pollpath="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/bin:/data/data/com.termux/files/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-    local state="$HOME/.local/state/fleet-osquery" user uid gid
-    if [ "$override_path" != null ]; then pollpath=$override_path; fi
-    if [ "$override_state" != null ]; then state=$override_state; fi
+    local user uid gid
     user=$(id -un) && uid=$(id -u) && gid=$(id -g) || { step "read osquery poller identity" false; finish; }
     step "check osquery monitoring and poller" "${rootcmd[@]}" env PYTHONDONTWRITEBYTECODE=1 python3 \
       "$DOTFILES_DIR/units/osquery-check.py" "$DOTFILES_DIR" "$version" "$archive" "$checksum" \
@@ -124,10 +130,6 @@ osquery_main() {
     "${rootcmd[@]}" systemctl start fleet-osquery-report.timer
   }
   osquery_poller() {
-    local pollpath="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/bin:/data/data/com.termux/files/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-    local state="$HOME/.local/state/fleet-osquery" unit OSQUERY_CHANGED=0
-    if [ "$override_path" != null ]; then pollpath=$override_path; fi
-    if [ "$override_state" != null ]; then state=$override_state; fi
     if [ "$poller" != true ]; then
       if [ -e /etc/systemd/system/fleet-osquery-poll.timer ]; then
         "${rootcmd[@]}" systemctl disable --now fleet-osquery-poll.timer || return 1

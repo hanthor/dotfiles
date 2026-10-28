@@ -89,12 +89,35 @@ as_root() {
   if [ "$(id -u)" = 0 ]; then "$@"; else sudo -n "$@"; fi
 }
 
+# Recognize the original Ansible template as well as the corrected template,
+# varying only the rendered numeric volume; anything else belongs to the user.
+match_mic_service() {
+  local dest="$1" template="$2" pattern='{{ mic_hardware_volume_pct | default(100) }}'
+  local legacy candidate prefix suffix existing volume
+  [[ "$template" == *"$pattern"* ]] || return 2
+  [ -f "$dest" ] && [ ! -L "$dest" ] || return 1
+  existing="$(cat "$dest")" || return 2
+  legacy="${template/'cut -f 2'/'awk "{print $$2}"'}"
+  legacy="${legacy//'%%'/'%'}"
+  for candidate in "$template" "$legacy"; do
+    prefix="${candidate%%"$pattern"*}"; suffix="${candidate#*"$pattern"}"
+    [[ "$existing" == "$prefix"*"$suffix" ]] || continue
+    volume="${existing#"$prefix"}"; volume="${volume%"$suffix"}"
+    [[ "$volume" =~ ^[0-9]+$ ]] && return 0
+  done
+  return 1
+}
+
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
   check_audio_packages() {
     local os_id="" os_like="" pkg result rc manager=0
     if [ -r /etc/os-release ]; then
       os_id="$(. /etc/os-release; printf '%s' "${ID:-}")"
       os_like="$(. /etc/os-release; printf '%s' "${ID_LIKE:-}")"
+    fi
+    if command -v bootc >/dev/null 2>&1; then
+      note "PARTIAL: bootc DSP prerequisites must be provided by the image"
+      return 0
     fi
     if command -v dnf >/dev/null 2>&1 || command -v rpm-ostree >/dev/null 2>&1; then
       manager=1
@@ -200,7 +223,7 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
     fi
   }
   check_audio() {
-    local rnnoise lsp=unknown lv2_plugins speaker dir mic_service template pattern prefix suffix existing volume
+    local rnnoise lsp=unknown lv2_plugins speaker dir mic_service template pattern
     local rc mode dropin old_rule mic_config_custom=1 mic_service_custom=0
     local pipewire_changed=0 wireplumber_changed=0 mic_changed=0 uid properties line load="" active="" enabled=""
     local running installed current app
@@ -239,16 +262,9 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
     pattern='{{ mic_hardware_volume_pct | default(100) }}'
     [[ "$template" == *"$pattern"* ]] || { note "FAIL  invalid microphone link service template"; return 1; }
     if [ -e "$mic_service" ] || [ -L "$mic_service" ]; then
-      if [ -f "$mic_service" ] && [ ! -L "$mic_service" ]; then
-        existing="$(cat "$mic_service")" || { note "FAIL  read microphone link service"; return 1; }
-        prefix="${template%%"$pattern"*}"; suffix="${template#*"$pattern"}"
-        if [[ "$existing" == "$prefix"*"$suffix" ]]; then
-          volume="${existing#"$prefix"}"; volume="${volume%"$suffix"}"
-          [[ "$volume" =~ ^[0-9]+$ ]] || mic_service_custom=1
-        else
-          mic_service_custom=1
-        fi
-      else
+      if match_mic_service "$mic_service" "$template"; then :; else
+        rc=$?
+        [ "$rc" = 1 ] || { note "FAIL  read microphone link service"; return 1; }
         mic_service_custom=1
       fi
       [ "$mic_service_custom" = 0 ] || note "PARTIAL: retained custom microphone link service $mic_service"
@@ -308,7 +324,7 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
       if [ -n "$rnnoise" ]; then
         [ "$enabled" = enabled ] || [ "$enabled" = enabled-runtime ] || note "WOULD enable microphone link service"
         if [ "$active" != active ]; then note "WOULD start microphone link service"
-        elif [ "$mic_changed" = 1 ] || [ -e "$state/mic" ]; then note "WOULD restart microphone link service"; fi
+        elif [ "$mic_changed" = 1 ] || [ "$pipewire_changed" = 1 ] || [ "$wireplumber_changed" = 1 ] || [ -e "$state/mic" ] || [ -e "$state/pipewire" ] || [ -e "$state/wireplumber" ]; then note "WOULD restart microphone link service"; fi
       elif [ "$load" != not-found ]; then
         [ "$active" != active ] || note "WOULD stop microphone link service"
         if [ "$enabled" = enabled ] || [ "$enabled" = enabled-runtime ]; then note "WOULD disable microphone link service"; fi
@@ -341,16 +357,21 @@ install_packages() {
     os_id="$(. /etc/os-release; printf '%s' "${ID:-}")"
     os_like="$(. /etc/os-release; printf '%s' "${ID_LIKE:-}")"
   fi
-  if command -v dnf >/dev/null 2>&1; then
-    supported=1
-    if ! command -v rpm >/dev/null 2>&1 || ! rpm -q lsp-plugins-lv2 noise-suppression-for-voice >/dev/null 2>&1; then
-      as_root dnf install -y lsp-plugins-lv2 noise-suppression-for-voice || return 1
-    fi
+  if command -v bootc >/dev/null 2>&1; then
+    note "PARTIAL: bootc DSP prerequisites must be provided by the image"
+    return 0
   fi
+  # On Atomic systems dnf may also be installed, but only rpm-ostree can
+  # layer packages onto the host. Never run both transactions.
   if command -v rpm-ostree >/dev/null 2>&1; then
     supported=1
     if ! command -v rpm >/dev/null 2>&1 || ! rpm -q lsp-plugins-lv2 noise-suppression-for-voice >/dev/null 2>&1; then
       as_root rpm-ostree install --apply-live --idempotent lsp-plugins-lv2 noise-suppression-for-voice || return 1
+    fi
+  elif command -v dnf >/dev/null 2>&1; then
+    supported=1
+    if ! command -v rpm >/dev/null 2>&1 || ! rpm -q lsp-plugins-lv2 noise-suppression-for-voice >/dev/null 2>&1; then
+      as_root dnf install -y lsp-plugins-lv2 noise-suppression-for-voice || return 1
     fi
   fi
   if [[ " $os_id $os_like " == *" arch "* ]]; then
@@ -360,11 +381,7 @@ install_packages() {
     fi
   fi
   if [ "$supported" = 0 ]; then
-    if command -v bootc >/dev/null 2>&1; then
-      note "PARTIAL: bootc DSP prerequisites must be provided by the image"
-    else
-      note "PARTIAL: no supported DSP package manager; install prerequisites for this distribution"
-    fi
+    note "PARTIAL: no supported DSP package manager; install prerequisites for this distribution"
   fi
 }
 step "DSP prerequisite packages" install_packages
@@ -475,22 +492,14 @@ step "PipeWire LADSPA path" write_dropin
 
 mic_service="$user_systemd/mic-dsp-link.service"
 mic_service_custom=0
+mic_service_owned=0
 managed_mic_service() {
-  local template pattern prefix suffix existing volume
-  [ -f "$mic_service" ] && [ ! -L "$mic_service" ] || return 1
+  local template
   template="$(cat "$assets/templates/mic-dsp-link.service.j2")" || return 2
-  pattern='{{ mic_hardware_volume_pct | default(100) }}'
-  [[ "$template" == *"$pattern"* ]] || return 2
-  prefix="${template%%"$pattern"*}"
-  suffix="${template#*"$pattern"}"
-  existing="$(cat "$mic_service")" || return 2
-  [[ "$existing" == "$prefix"*"$suffix" ]] || return 1
-  volume="${existing#"$prefix"}"
-  volume="${volume%"$suffix"}"
-  [[ "$volume" =~ ^[0-9]+$ ]]
+  match_mic_service "$mic_service" "$template"
 }
 if [ -e "$mic_service" ] || [ -L "$mic_service" ]; then
-  if managed_mic_service; then :; else
+  if managed_mic_service; then mic_service_owned=1; else
     rc=$?
     mic_service_custom=1
     if [ "$rc" = 1 ]; then
@@ -541,6 +550,14 @@ sync_user_services() {
   systemctl --user show-environment >/dev/null || return 1
   if [ -e "$state/pipewire" ] || [ -e "$state/mic" ]; then
     systemctl --user daemon-reload || return 1
+  fi
+  # Restarting either audio daemon destroys the manually created mic links.
+  # Persist the relink before restarting, so failed/interrupted applies retry it.
+  if [ -e "$state/pipewire" ] || [ -e "$state/wireplumber" ]; then
+    if { [ "$rnnoise" != unknown ] && [ -n "$rnnoise" ] && [ "$mic_service_custom" = 0 ]; } ||
+       { [ "$rnnoise" = unknown ] && [ "$mic_service_owned" = 1 ] && [ ! -L "$conf/60-mic-dsp.conf" ] && [ -f "$conf/60-mic-dsp.conf" ] && cmp -s "$conf/60-mic-dsp.conf" "$assets/files/mic-rnnoise.conf"; }; then
+      touch "$state/mic" || return 1
+    fi
   fi
   if [ -e "$state/pipewire" ]; then
     systemctl --user reset-failed pipewire.service pipewire.socket pipewire-pulse.service pipewire-pulse.socket || note "warn: could not reset all PipeWire failed states"

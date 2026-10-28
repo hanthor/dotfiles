@@ -18,9 +18,9 @@ tasks_for_tag() { case "$1" in
   shell) echo "chezmoi fonts atuin shell-ai" ;;
   fonts) echo fonts ;;
   git|neovim|editor) echo chezmoi ;;
-  atuin) echo atuin ;;
+  atuin) echo "chezmoi atuin" ;;
   ai) echo shell-ai ;;
-  secrets) echo "atuin shell-ai ssh-keys github kube forgejo-registry tailscale browser-fxa" ;;
+  secrets) echo "chezmoi atuin shell-ai ssh-keys github kube forgejo-registry tailscale browser-fxa" ;;
   ssh|ssh_keys) echo "ssh-keys ssh-mesh" ;;
   mesh_check) echo ssh-mesh ;;
   github) echo github ;;
@@ -66,18 +66,26 @@ while [ $# -gt 0 ]; do
 done
 
 wanted=" "
+chezmoi_full=0
 if [ -z "$tags" ]; then
+  chezmoi_full=1
   wanted=" $ALL_UNITS "
 else
   IFS=',' read -ra tag_list <<< "$tags"
   for t in "${tag_list[@]}"; do
     mapped=$(tasks_for_tag "$t")
+    case "$t" in dotfiles|shell|git|neovim|editor) chezmoi_full=1 ;; esac
     if [ -z "$mapped" ]; then echo "unknown unit tag: $t" >&2; exit 2; fi
     read -ra mapped_units <<< "$mapped"
     for u in "${mapped_units[@]}"; do wanted="$wanted$u "; done
   done
 fi
 selected() { case "$wanted" in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+if selected chezmoi && [ "$chezmoi_full" = 0 ]; then
+  export DOTFILES_CHEZMOI_SCOPE=atuin
+else
+  unset DOTFILES_CHEZMOI_SCOPE
+fi
 
 cd "$repo" || exit 1
 if [ "${UNITS_CHECK:-0}" = 1 ]; then

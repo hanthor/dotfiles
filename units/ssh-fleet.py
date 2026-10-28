@@ -13,6 +13,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from osquery_native_inventory import group_contains, load_inventory
+
 ROOT = Path(os.environ["DOTFILES_DIR"])
 HOME = Path(os.environ["HOME"])
 SSH = HOME / ".ssh"
@@ -21,6 +24,7 @@ BEGIN = "# BEGIN dotfiles SSH fleet"
 END = "# END dotfiles SSH fleet"
 AK_BEGIN = "# BEGIN dotfiles Bitwarden SSH keys"
 AK_END = "# END dotfiles Bitwarden SSH keys"
+RETIRED = {"matrix", "telengana"}
 CHECK = os.environ.get("UNITS_CHECK") == "1"
 PLANNED = {}
 
@@ -223,13 +227,18 @@ def session_env():
 class Fleet:
     def __init__(self):
         self.vars = yaml_file(ROOT / "group_vars/all.yml")
-        inventory = yaml_file(ROOT / "inventory.yml")["all"]
-        self.hosts = inventory.get("hosts") or {}
-        self.vps = set(((inventory.get("children") or {}).get("vps") or {}).get("hosts") or {})
         host_file = ROOT / "host_vars" / (MACHINE + ".yml")
-        self.host_vars = yaml_file(host_file, allow_empty=True) if host_file.exists() else {}
-        self.login = self.host_vars.get("user_login", self.vars["user_login"])
-        self.email = self.host_vars.get("user_email", self.vars["user_email"])
+        local_vars = yaml_file(host_file, allow_empty=True) if host_file.exists() else {}
+        fields = ("ansible_user", "ansible_port", "tailnet_name", "user_login", "user_email",
+                  "machines", "machine_pubkeys", "ssh_mesh_exclude", "extra_authorized_keys",
+                  "ssh_keys_force_push", "ssh_keys_force_authorized", "machine_profile", "skip_ssh_mesh")
+        inventory = load_inventory(ROOT / "inventory.yml", fields=fields)
+        self.hosts = inventory["_meta"]["hostvars"]
+        self.host_vars = self.hosts.get(MACHINE, local_vars)
+        self.vars.update(self.host_vars)
+        self.vps = {name for name in self.hosts if group_contains(inventory, "vps", name)}
+        self.login = self.vars["user_login"]
+        self.email = self.vars["user_email"]
         self.machines = self.vars["machines"]
         self.env = None
         self.items = None
@@ -346,7 +355,7 @@ class Fleet:
             saved = ssh_data(item).get("publicKey", "")
             if saved and key_parts(saved) == key_parts(pub):
                 return
-            force = os.environ.get("SSH_KEYS_FORCE_PUSH", str(self.host_vars.get("ssh_keys_force_push", "false")))
+            force = os.environ.get("SSH_KEYS_FORCE_PUSH", str(self.host_vars.get("ssh_keys_force_push", self.vars.get("ssh_keys_force_push", "false"))))
             if force.lower() not in ("true", "1", "yes"):
                 print("WARNING: local SSH key differs from Bitwarden; vault left unchanged (set SSH_KEYS_FORCE_PUSH=true for an intentional rotation)")
                 return
@@ -448,7 +457,7 @@ class Fleet:
         old = text(path)
         # Force can remove only entries previously managed in our block; older
         # unmarked entries are indistinguishable from user keys and stay intact.
-        force = os.environ.get("SSH_KEYS_FORCE_AUTHORIZED", str(self.host_vars.get("ssh_keys_force_authorized", "false")))
+        force = os.environ.get("SSH_KEYS_FORCE_AUTHORIZED", str(self.host_vars.get("ssh_keys_force_authorized", self.vars.get("ssh_keys_force_authorized", "false"))))
         before, managed, after, _ = split_block(old, AK_BEGIN, AK_END)
         previous = managed.splitlines()
         if force.lower() not in ("true", "1", "yes"):
@@ -540,7 +549,7 @@ class Fleet:
 
     def known_hosts(self):
         for name in self.machines:
-            if name != MACHINE:
+            if name != MACHINE and name not in RETIRED:
                 try:
                     self.scan(name)
                 except (OSError, ValueError, KeyError, subprocess.SubprocessError, RuntimeError) as exc:
@@ -554,7 +563,7 @@ class Fleet:
         if result.returncode:
             raise RuntimeError("cannot determine online tailnet peers")
         online = set(result.stdout.splitlines())
-        excluded = set(self.vars.get("ssh_mesh_exclude") or []) | self.vps | {MACHINE}
+        excluded = set(self.host_vars.get("ssh_mesh_exclude", self.vars.get("ssh_mesh_exclude")) or []) | self.vps | RETIRED | {MACHINE}
         targets = [name for name in self.machines if name not in excluded
                    and (self.hosts.get(name) or {}).get("tailnet_name", name).lower() in online]
         failed = []
@@ -645,7 +654,7 @@ class CheckFleet(Fleet):
     def known_hosts(self):
         failed = False
         for name in self.machines:
-            if name != MACHINE:
+            if name != MACHINE and name not in RETIRED:
                 try:
                     if not self.scan(name):
                         raise RuntimeError("no usable host key returned")
@@ -674,7 +683,7 @@ class CheckFleet(Fleet):
                 raise ValueError("invalid tailnet peer listing")
             if peer.get("Online"):
                 online.add(((peer.get("DNSName") or "").split(".")[0] or peer.get("HostName") or "").lower())
-        excluded = set(self.vars.get("ssh_mesh_exclude") or []) | self.vps | {MACHINE}
+        excluded = set(self.host_vars.get("ssh_mesh_exclude", self.vars.get("ssh_mesh_exclude")) or []) | self.vps | RETIRED | {MACHINE}
         targets = [name for name in self.machines if name not in excluded
                    and (self.hosts.get(name) or {}).get("tailnet_name", name).lower() in online]
         print("online SSH mesh targets: " + (", ".join(targets) if targets else "none"))

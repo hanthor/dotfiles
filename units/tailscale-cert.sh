@@ -3,33 +3,40 @@ set -uo pipefail
 # shellcheck source=units/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-if [ "$MACHINE" = matrix ] || [ "$MACHINE" = telengana ] || skipped_by_profile skip_tailscale_cert; then
+if [ "$MACHINE" = matrix ] || [ "$MACHINE" = telengana ]; then
   note "SKIPPED: Tailscale certificates excluded on this host"
   finish
 fi
-if ! command -v yq >/dev/null 2>&1; then
-  step "check certificate VPS membership (yq required)" false
-  finish
-fi
-vps=$(MACHINE="$MACHINE" yq '.all.children.vps.hosts | has(strenv(MACHINE))' "$DOTFILES_DIR/inventory.yml") || { step "check certificate VPS membership" false; finish; }
-case "$vps" in
-  true) note "SKIPPED: Tailscale certificates excluded on VPS"; finish ;;
-  false) ;;
-  *) step "check certificate VPS membership" false; finish ;;
+settings=$(python3 "$DOTFILES_DIR/units/proxy-inventory.py" cert "$DOTFILES_DIR/inventory.yml" "$MACHINE") || { step "resolve certificate inventory settings" false; finish; }
+case "${settings%%$'\n'*}" in
+  skip) note "SKIPPED: Tailscale certificates excluded on this host"; finish ;;
+  run) domain=${settings#*$'\n'} ;;
+  *) step "resolve certificate inventory settings" false; finish ;;
 esac
 as_root() { if [ "$EUID" = 0 ]; then "$@"; else sudo -n "$@"; fi; }
-# Host variables override the shared group domain, as in the playbook.
-domain=""
-if [ -f "$DOTFILES_DIR/host_vars/$MACHINE.yml" ]; then
-  domain=$(yq -r '.tailscale_domain // ""' "$DOTFILES_DIR/host_vars/$MACHINE.yml") || { step "read host certificate domain" false; finish; }
-fi
-if [ -z "$domain" ]; then
-  domain=$(yq -r '.tailscale_domain // ""' "$DOTFILES_DIR/group_vars/all.yml") || { step "read certificate domain" false; finish; }
-fi
 if [[ ! "$MACHINE" =~ ^[[:alnum:]_.-]+$ || ! "$domain" =~ ^[[:alnum:]_.-]+$ ]]; then
   step "validate certificate hostname and domain" false
   finish
 fi
+# Do not follow user-supplied symlinks or overwrite special files as root.
+for path in /etc/ssl/tailscale /etc/ssl/tailscale/cert.pem /etc/ssl/tailscale/key.pem; do
+  if as_root test -L "$path"; then step "refuse symlink certificate path $path" false; finish; fi
+done
+if as_root test -e /etc/ssl/tailscale && ! as_root test -d /etc/ssl/tailscale; then
+  step "refuse non-directory certificate path /etc/ssl/tailscale" false
+  finish
+fi
+for path in /etc/ssl/tailscale/cert.pem /etc/ssl/tailscale/key.pem; do
+  if as_root test -e "$path" && ! as_root test -f "$path"; then step "refuse non-regular certificate path $path" false; finish; fi
+done
+cert_identity_ok() {
+  local cert_pub key_pub host_check
+  host_check=$(LC_ALL=C as_root openssl x509 -checkhost "$MACHINE.$domain" -noout -in /etc/ssl/tailscale/cert.pem 2>/dev/null) || return 1
+  [ "$host_check" = "Hostname $MACHINE.$domain does match certificate" ] || return 1
+  cert_pub=$(as_root openssl x509 -pubkey -noout -in /etc/ssl/tailscale/cert.pem 2>/dev/null) || return 1
+  key_pub=$(as_root openssl pkey -pubout -passin pass: -in /etc/ssl/tailscale/key.pem 2>/dev/null) || return 1
+  [ -n "$cert_pub" ] && [ "$cert_pub" = "$key_pub" ]
+}
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
   if [ "$EUID" != 0 ] && ! sudo -n true; then step "noninteractive root access" false; finish; fi
   tmp=$(mktemp -d) || { step "create certificate temporary directory" false; finish; }
@@ -44,8 +51,15 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
     note "would provision Tailscale certificate for $MACHINE.$domain"
   elif ! as_root openssl x509 -noout -in /etc/ssl/tailscale/cert.pem >/dev/null 2>&1; then
     step "inspect Tailscale certificate" false
+  elif ! as_root test -s /etc/ssl/tailscale/key.pem; then
+    renew=1
+    note "would renew Tailscale certificate for $MACHINE.$domain (private key missing or empty)"
   elif as_root openssl x509 -checkend 2592000 -noout -in /etc/ssl/tailscale/cert.pem >/dev/null 2>&1; then
-    note "ok    certificate valid for at least 30 days"
+    if cert_identity_ok; then
+      note "ok    certificate valid for at least 30 days and matches hostname and private key"
+    else
+      step "verify certificate hostname and private key (existing pair preserved)" false
+    fi
   else
     renew=1
     note "would renew Tailscale certificate for $MACHINE.$domain"
@@ -65,17 +79,18 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
   cert_check_mode /etc/ssl/tailscale/cert.pem 644
   cert_check_mode /etc/ssl/tailscale/key.pem 640
   cert_check_file() {
-    local src=$1 dest=$2 mode rc
+    local src=$1 dest=$2 expected=${3:-644} mode rc
     [ -r "$src" ] || { step "read $src" false; return; }
     if ! as_root test -e "$dest" && ! as_root test -L "$dest"; then note "would deploy $dest"; return; fi
     mode=$(as_root stat -c '%a:%u:%g' "$dest") || { step "inspect $dest" false; return; }
     as_root cmp -s "$src" "$dest"; rc=$?
     case "$rc" in
-      0) [ "$mode" = '644:0:0' ] && note "ok    $dest" || note "would set ownership and permissions on $dest" ;;
+      0) [ "$mode" = "$expected:0:0" ] && note "ok    $dest" || note "would set ownership and permissions on $dest" ;;
       1) note "would deploy $dest" ;;
       *) step "compare $dest" false ;;
     esac
   }
+  cert_check_file "$DOTFILES_DIR/units/tailscale-cert/renew.sh" /etc/systemd/system/tailscale-cert-renew.sh 755
   if python3 "$DOTFILES_DIR/units/service-templates.py" cert "$DOTFILES_DIR/units/tailscale-cert/tailscale-cert-renew.service.j2" "$MACHINE" "$domain" > "$tmp/service" && [ -s "$tmp/service" ]; then
     cert_check_file "$tmp/service" /etc/systemd/system/tailscale-cert-renew.service
   else step "render certificate renewal service" false; fi
@@ -93,9 +108,21 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
   fi
   finish
 fi
-step "create Tailscale certificate directory" as_root install -d -m 0755 -o root -g root /etc/ssl/tailscale
-if ! as_root openssl x509 -checkend 2592000 -noout -in /etc/ssl/tailscale/cert.pem >/dev/null 2>&1; then
-  step "provision Tailscale certificate" as_root tailscale cert --cert-file /etc/ssl/tailscale/cert.pem --key-file /etc/ssl/tailscale/key.pem --min-validity 720h "$MACHINE.$domain"
+if ! as_root install -d -m 0755 -o root -g root /etc/ssl/tailscale; then
+  step "create Tailscale certificate directory" false
+  finish
+fi
+if ! as_root test -s /etc/ssl/tailscale/key.pem || ! as_root openssl x509 -checkend 2592000 -noout -in /etc/ssl/tailscale/cert.pem >/dev/null 2>&1; then
+  if ! as_root bash "$DOTFILES_DIR/units/tailscale-cert/renew.sh" /etc/ssl/tailscale "$MACHINE.$domain"; then
+    step "provision Tailscale certificate" false
+    finish
+  fi
+  note "ok    provision Tailscale certificate"
+else
+  if ! cert_identity_ok; then
+    step "verify certificate hostname and private key (existing pair preserved)" false
+    finish
+  fi
 fi
 set_cert_mode() {
   as_root chown root:root "$1" && as_root chmod "$2" "$1"
@@ -106,11 +133,16 @@ step "set private key permissions" set_cert_mode /etc/ssl/tailscale/key.pem 0640
 tmp=$(mktemp -d) || { step "create certificate temporary directory" false; finish; }
 trap 'rm -rf "$tmp"' EXIT
 install_root_file() {
-  local src="$1" dest="$2" mode
+  local src="$1" dest="$2" expected="${3:-644}" mode
   mode=$(as_root stat -c '%a:%u:%g' "$dest" 2>/dev/null || true)
-  if as_root cmp -s "$src" "$dest" && [ "$mode" = '644:0:0' ]; then return 0; fi
-  as_root install -m 0644 -o root -g root "$src" "$dest"
+  if as_root cmp -s "$src" "$dest" && [ "$mode" = "$expected:0:0" ]; then return 0; fi
+  as_root install -m "0$expected" -o root -g root "$src" "$dest"
 }
+if ! install_root_file "$DOTFILES_DIR/units/tailscale-cert/renew.sh" /etc/systemd/system/tailscale-cert-renew.sh 755; then
+  step "deploy certificate renewal helper" false
+  finish
+fi
+note "ok    deploy certificate renewal helper"
 service_ok=0
 timer_ok=0
 if python3 "$DOTFILES_DIR/units/service-templates.py" cert "$DOTFILES_DIR/units/tailscale-cert/tailscale-cert-renew.service.j2" "$MACHINE" "$domain" > "$tmp/tailscale-cert-renew.service" &&

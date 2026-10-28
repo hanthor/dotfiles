@@ -6,6 +6,17 @@ available over Tailscale at `100.66.158.127`. A single-node K3s cluster runs
 KubeVirt, CDI, and Corral. The `corral-vms/punjab` VM is a staging guest; it
 is not the EC2 host and has not received its data or services.
 
+NetworkManager, Tailscale and SSH are enabled at boot. Ethernet is preferred;
+a locally stored Wi-Fi profile autoconnects with a higher route metric. Wi-Fi
+internet and SSH over Tailscale were verified with Ethernet connected; cable
+failure and reboot failover have not been tested. The Tailscale device key
+expires 2027-04-22 and may require reauthentication. Keep a console recovery
+path before testing loss of the wired link.
+
+Host DNS uses the systemd-resolved stub. Public DNS and MagicDNS resolved after
+repair, but Tailscale later reported that its forwarder lacked upstream DNS;
+inspect `tailscale status` if lookups fail. K3s uses a separate pod resolver.
+
 As last checked, the fleet update timer is not installed and user linger is
 disabled. The native-unit changes are under review; do not enable unattended
 updates from the unmerged checkout.

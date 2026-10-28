@@ -68,7 +68,9 @@ case "$*" in
   'get org.gnome.desktop.peripherals.touchpad tap-to-click') echo "${CHECK_TAP_TO_CLICK:-false}" ;;
   'get org.gnome.Ptyxis default-profile-uuid') echo "'profile'" ;;
   'get org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/profile/ custom-command') echo "'/custom/brew/bin/fish'" ;;
+  'get org.gnome.Ptyxis.Profile:/org/gnome/ptyxis/profiles/profile/ use-custom-command') echo "${CHECK_CUSTOM_ENABLED:-true}" ;;
   'get org.gnome.Ptyxis font-name') echo "'JetBrainsMono Nerd Font 12'" ;;
+  'get org.gnome.Ptyxis use-system-font') echo "${CHECK_SYSTEM_FONT:-false}" ;;
   'get org.gnome.shell enabled-extensions') echo '@as []' ;;
   'get org.gnome.shell favorite-apps') if [ -n "${CHECK_DOCK:-}" ]; then echo "$CHECK_DOCK"; else echo "['org.mozilla.firefox.desktop']"; fi ;;
   'get org.gnome.desktop.background picture-uri'|'get org.gnome.desktop.background picture-uri-dark') echo "''" ;;

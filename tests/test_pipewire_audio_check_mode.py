@@ -126,6 +126,49 @@ def test_check_absent_plugin_plans_removal_and_disable(stub_env, tmp_path):
     assert snapshot(Path(env["HOME"])) == before
 
 
+def test_check_plans_original_microphone_service_migration(stub_env, tmp_path):
+    env = prepare_check(stub_env, tmp_path)
+    managed_files(env)
+    service = home(env, ".config/systemd/user/mic-dsp-link.service")
+    original = service.read_text().replace("cut -f 2", 'awk "{print $$2}"').replace("%%", "%")
+    service.write_text(original)
+    before = snapshot(Path(env["HOME"]))
+    result = run_unit("pipewire-audio", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "WOULD install microphone link service" in result.stdout
+    assert "WOULD restart microphone link service" in result.stdout
+    assert snapshot(Path(env["HOME"])) == before
+    assert "unexpected" not in Path(env["CHECK_LOG"]).read_text()
+
+
+@pytest.mark.parametrize("daemon", ["pipewire", "wireplumber"])
+def test_check_daemon_restart_plans_managed_microphone_relink(stub_env, tmp_path, daemon):
+    env = prepare_check(stub_env, tmp_path)
+    managed_files(env)
+    home(env, f".local/state/pipewire-audio/{daemon}").touch()
+    before = snapshot(Path(env["HOME"]))
+    result = run_unit("pipewire-audio", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "WOULD restart microphone link service" in result.stdout
+    assert snapshot(Path(env["HOME"])) == before
+    assert "unexpected" not in Path(env["CHECK_LOG"]).read_text()
+
+
+def test_check_bootc_does_not_plan_package_installation(stub_env, tmp_path):
+    env = prepare_check(stub_env, tmp_path)
+    bindir = Path(env["PATH"])
+    write_stub(bindir, "bootc", 'exit 0\n')
+    write_stub(bindir, "dnf", 'echo "unexpected dnf $*" >> "$CHECK_LOG"; exit 1\n')
+    write_stub(bindir, "rpm", 'echo "unexpected rpm $*" >> "$CHECK_LOG"; exit 1\n')
+    before = snapshot(Path(env["HOME"]))
+    result = run_unit("pipewire-audio", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "bootc DSP prerequisites must be provided by the image" in result.stdout
+    assert "WOULD install DSP package" not in result.stdout
+    assert snapshot(Path(env["HOME"])) == before
+    assert "unexpected" not in Path(env["CHECK_LOG"]).read_text()
+
+
 @pytest.mark.parametrize("error", ["FIND_FAIL", "LV2_FAIL", "SESSION_FAIL", "SERVICE_FAIL", "GSETTINGS_FAIL", "FLATPAK_FAIL"])
 def test_check_inspection_errors_fail_without_mutation(stub_env, tmp_path, error):
     env = prepare_check(stub_env, tmp_path)

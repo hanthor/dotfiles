@@ -25,7 +25,7 @@ def check_system(stub_env, tmp_path):
     (repo / "inventory.yml").write_text(json.dumps({"all": {"children": {
         "server": {"hosts": {"workstation": {}}}, "vps": {"hosts": {}}
     }}}))
-    for name in ("lib.sh", "osquery_native_inventory.py", "server-hardening-file.py",
+    for name in ("lib.sh", "osquery_native_inventory.py", "proxy-inventory.py", "proxy-serve.py", "server-hardening-file.py",
                  "service-templates.py", "kirocrew-sockets.py", "retired-services", "proxy",
                  "tailscale-cert", "bst-dashboard"):
         (units / name).symlink_to(REPO / "units" / name)
@@ -55,6 +55,9 @@ def check_system(stub_env, tmp_path):
                CALLS=str(tmp_path / "calls"))
     write_stub(bindir, "sudo", '[ "$1" = -n ] && shift\nexec "$@"\n')
     write_stub(bindir, "yq", '''
+if [ "$1" = -o=json ] && [ "$2" = -I=0 ]; then
+  exec python3 -c 'import json,sys,yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))' "$4"
+fi
 case "$*" in
   *retired_services_system_units*) ;;
   *retired_services_user_units*) echo grafana.container ;;
@@ -74,7 +77,11 @@ fi
 ''')
     write_stub(bindir, "tailscale", '''
 echo "tailscale $*" >> "$CALLS"
-[ "$1 $2" = "serve status" ] || exit 99
+case "$*" in
+  'status --json') echo '{"Self":{"DNSName":"workstation.example.ts.net."}}' ;;
+  'serve status --json') echo '{}' ;;
+  *) exit 99 ;;
+esac
 ''')
     write_stub(bindir, "loginctl", 'echo "loginctl $*" >> "$CALLS"\n[ "$1" = show-user ] || exit 99\necho no\n')
     write_stub(bindir, "journalctl", '[ "$1" = --disk-usage ] || exit 99\necho 1G\n')
@@ -365,7 +372,7 @@ def test_check_reports_drift_without_mutation(check_system, unit, expected):
     if calls.exists():
         for call in calls.read_text().splitlines():
             assert (call.startswith("systemctl ") and "show" in call or
-                    call == "tailscale serve status" or call.startswith("loginctl show-user "))
+                    call in ("tailscale status --json", "tailscale serve status --json") or call.startswith("loginctl show-user "))
 
 
 @pytest.mark.parametrize("unit", UNITS)

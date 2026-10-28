@@ -110,6 +110,16 @@ def run_unit(name, env):
                           env=env, text=True, capture_output=True)
 
 
+def run_flatpak_with_dangling_store(root, env, tmp_path):
+    store = tmp_path / "flatpak-store"
+    store.symlink_to(tmp_path / "detached-store")
+    (root / "units/lib.sh").symlink_to(REPO / "units/lib.sh")
+    script = root / "units/flatpak-test.sh"
+    script.write_text((REPO / "units/flatpak.sh").read_text().replace("/var/lib/flatpak", str(store)))
+    result = subprocess.run(["bash", str(script)], env=env, text=True, capture_output=True)
+    return result, store
+
+
 def calls(log, name):
     if not log.exists():
         return []
@@ -204,13 +214,17 @@ def test_brew_desktop_lists_taps_blocked_and_no_upgrade(package_env):
 
 def test_brew_host_profile_and_explicit_upgrade(package_env):
     root, env, log = package_env
-    (root / "host_vars/laptop.yml").write_text("is_desktop: false\nextra_brews: [private-extra]\n")
+    (root / "host_vars/laptop.yml").write_text("is_desktop: false\nextra_brews: [private/tap/private-extra]\n")
     env["DOTFILES_UPGRADE"] = "1"
     result = run_unit("homebrew", env)
     assert result.returncode == 0, result.stdout + result.stderr
     content = (Path(env["HOME"]) / "Brewfile").read_text()
     assert "desktop-pkg" not in content and "private-extra" not in content
-    assert ["upgrade"] in [entry["args"] for entry in calls(log, "brew")]
+    args = [entry["args"] for entry in calls(log, "brew")]
+    assert ["upgrade"] in args
+    assert ["tap", "example/core"] in args and ["tap", "coreowner/tap"] in args
+    assert ["tap", "example/desktop"] not in args and ["trust", "example/desktop"] not in args
+    assert ["tap", "private/tap"] not in args
 
 
 def test_brew_blocked_host_package_fails_before_any_brew_action(package_env):
@@ -285,6 +299,46 @@ def test_flatpak_system_scope_batch_fallback_and_wrappers(package_env):
         wrapper = Path(env["HOME"]) / ".local/bin" / name
         assert wrapper.read_text() == '#!/usr/bin/env bash\nexec flatpak run org.chromium.Chromium "$@"\n'
         assert stat.S_IMODE(wrapper.stat().st_mode) == 0o755
+
+
+def test_flatpak_preserves_existing_custom_launchers_and_symlinks(package_env, tmp_path):
+    _, env, _ = package_env
+    bindir = Path(env["HOME"]) / ".local/bin"
+    bindir.mkdir(parents=True)
+    custom = bindir / "google-chrome"
+    custom.write_text("user launcher\n")
+    custom.chmod(0o700)
+    target = tmp_path / "user-target"
+    target.write_text("user target\n")
+    target.chmod(0o600)
+    link = bindir / "google-chrome-stable"
+    link.symlink_to(target)
+    managed = bindir / "chromium-browser"
+    managed.write_text('#!/usr/bin/env bash\nexec flatpak run org.chromium.Chromium "$@"\n')
+    managed.chmod(0o600)
+    result = run_unit("flatpak", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "PRESERVED: existing Chromium launcher google-chrome" in result.stdout
+    assert custom.read_text() == "user launcher\n" and stat.S_IMODE(custom.stat().st_mode) == 0o700
+    assert link.is_symlink() and link.readlink() == target
+    assert target.read_text() == "user target\n" and stat.S_IMODE(target.stat().st_mode) == 0o600
+    assert stat.S_IMODE(managed.stat().st_mode) == 0o755
+    assert (bindir / "chromium").read_text() == managed.read_text()
+
+
+def test_flatpak_preserves_dangling_store_and_continues_user_operations(package_env, tmp_path):
+    root, env, log = package_env
+    (root / "host_vars/laptop.yml").write_text(yaml.safe_dump({
+        "user_flatpaks": [{"remote": "flatpark", "id": "org.example.User"}],
+    }))
+    env["DOTFILES_UPGRADE"] = "1"
+    result, store = run_flatpak_with_dangling_store(root, env, tmp_path)
+    assert result.returncode != 0 and "dangling symlink" in result.stderr
+    assert store.is_symlink() and not store.exists()
+    args = [entry["args"] for entry in calls(log, "flatpak")]
+    assert not any("--system" in call for call in args)
+    assert ["install", "--user", "-y", "flatpark", "org.example.User"] in args
+    assert (Path(env["HOME"]) / ".local/bin/chromium").exists()
 
 
 def test_user_flatpaks_preserve_origins_and_do_not_use_sudo(package_env):

@@ -3,19 +3,15 @@ set -uo pipefail
 # shellcheck source=units/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-if [ "$MACHINE" = matrix ] || [ "$MACHINE" = telengana ] || skipped_by_profile skip_proxy; then
+if [ "$MACHINE" = matrix ] || [ "$MACHINE" = telengana ]; then
   note "SKIPPED: proxy excluded on this host"
   finish
 fi
-if ! command -v yq >/dev/null 2>&1; then
-  step "check proxy VPS membership (yq required)" false
-  finish
-fi
-vps=$(MACHINE="$MACHINE" yq '.all.children.vps.hosts | has(strenv(MACHINE))' "$DOTFILES_DIR/inventory.yml") || { step "check proxy VPS membership" false; finish; }
-case "$vps" in
-  true) note "SKIPPED: proxy excluded on VPS"; finish ;;
-  false) ;;
-  *) step "check proxy VPS membership" false; finish ;;
+settings=$(python3 "$DOTFILES_DIR/units/proxy-inventory.py" proxy "$DOTFILES_DIR/inventory.yml" "$MACHINE") || { step "resolve proxy inventory settings" false; finish; }
+case "${settings%%$'\n'*}" in
+  skip) note "SKIPPED: proxy excluded on this host"; finish ;;
+  run) services=${settings#*$'\n'} ;;
+  *) step "resolve proxy inventory settings" false; finish ;;
 esac
 
 as_root() { if [ "$EUID" = 0 ]; then "$@"; else sudo -n "$@"; fi; }
@@ -30,13 +26,13 @@ install_root_file() {
   changed=1
 }
 render_caddyfile() {
-  local host_file="$DOTFILES_DIR/host_vars/$MACHINE.yml"
-  if [ -f "$host_file" ]; then
-    yq -o=json '.web_services // []' "$host_file" > "$tmp/services.json" || return 1
-  else
-    printf '[]\n' > "$tmp/services.json" || return 1
-  fi
+  printf '%s\n' "$services" > "$tmp/services.json" || return 1
   python3 "$DOTFILES_DIR/units/service-templates.py" proxy "$DOTFILES_DIR/units/proxy/Caddyfile.j2" "$tmp/services.json" > "$tmp/Caddyfile"
+}
+inspect_serve() {
+  as_root tailscale status --json > "$tmp/status.json" || return 1
+  as_root tailscale serve status --json > "$tmp/serve.json" || return 1
+  python3 "$DOTFILES_DIR/units/proxy-serve.py" "$tmp/status.json" "$tmp/serve.json"
 }
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
   if [ "$EUID" != 0 ] && ! sudo -n true; then step "noninteractive root access" false; finish; fi
@@ -75,8 +71,12 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
     [[ "$state" == *'ActiveState=active'* ]] || note "would start Caddy"
     case "$state" in *'UnitFileState=enabled'*|*'UnitFileState=generated'*) ;; *) note "would enable Caddy" ;; esac
   fi
-  if serve=$(as_root tailscale serve status 2>/dev/null); then
-    [[ "$serve" == *127.0.0.1:9000* ]] && note "ok    Tailscale serve target" || note "would point Tailscale serve at Caddy"
+  if serve=$(inspect_serve); then
+    case "$serve" in
+      true) note "ok    Tailscale serve target" ;;
+      false) note "would point Tailscale serve at Caddy" ;;
+      *) step "inspect Tailscale serve status" false ;;
+    esac
   else step "inspect Tailscale serve status" false; fi
   finish
 fi
@@ -122,10 +122,15 @@ else
   step "enable and start Caddy" false
   finish
 fi
-serve=$(as_root tailscale serve status 2>/dev/null || true)
-if [[ "$serve" != *127.0.0.1:9000* ]]; then
+if ! serve=$(inspect_serve); then
+  step "inspect Tailscale serve status" false
+  finish
+fi
+if [ "$serve" = false ]; then
   # --bg replaces the existing default HTTPS handler, including the old
   # direct homepage target; turning 443 off afterward would remove the new one.
   step "point Tailscale serve at Caddy" as_root tailscale serve --bg http://127.0.0.1:9000
+elif [ "$serve" != true ]; then
+  step "inspect Tailscale serve status" false
 fi
 finish

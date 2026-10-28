@@ -92,7 +92,8 @@ def test_check_reports_drift_without_mutation_or_secrets(stub_env, tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     assert "WOULD install Firefox Accounts sign-in script" in result.stdout
     assert "WOULD restrict Firefox Accounts token permissions" in result.stdout
-    assert "WOULD attempt Firefox Accounts sign-in" in result.stdout
+    assert "data exists but is not verified; it will be left untouched" in result.stdout
+    assert "WOULD attempt Firefox Accounts sign-in" not in result.stdout
     assert "private-token" not in result.stdout + result.stderr
     assert "s'ec ret" not in result.stdout + result.stderr
     assert snapshot(home) == before
@@ -160,5 +161,18 @@ def test_check_missing_pyfxa_and_unreadable_token(stub_env, tmp_path):
     before = snapshot(home)
     result = run(env)
     assert result.returncode != 0 and "FAIL  inspect Firefox Accounts token" in result.stdout
+    assert snapshot(home) == before
+    assert not Path(env["CHECK_LOG"]).exists()
+
+
+def test_check_refuses_token_symlink(stub_env, tmp_path):
+    env, home, profile = prepare_check(stub_env, tmp_path)
+    target = home / "account-data"
+    target.write_text("private")
+    target.chmod(0o644)
+    (profile / "signedInUser.json").symlink_to(target)
+    before = snapshot(home)
+    result = run(env)
+    assert result.returncode != 0 and "token is a symlink" in result.stdout
     assert snapshot(home) == before
     assert not Path(env["CHECK_LOG"]).exists()

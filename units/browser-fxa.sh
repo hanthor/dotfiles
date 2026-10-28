@@ -109,7 +109,9 @@ spec.loader.exec_module(module)
 print(module.resolve_profile_dir())
 ' "$src" 2>/dev/null)" || { note "FAIL  inspect Firefox Accounts default profile"; return 1; }
     [ -d "$profile" ] || { note "FAIL  Firefox Accounts default profile does not exist"; return 1; }
-    if [ -e "$profile/signedInUser.json" ]; then
+    if [ -L "$profile/signedInUser.json" ]; then
+      note "FAIL  Firefox Accounts token is a symlink"; return 1
+    elif [ -e "$profile/signedInUser.json" ]; then
       mode="$(stat -Lc %a "$profile/signedInUser.json")" || { note "FAIL  inspect Firefox Accounts token mode"; return 1; }
       [ "$mode" = 600 ] || note "WOULD restrict Firefox Accounts token permissions"
       account_state="$(python3 -B -c '
@@ -117,16 +119,18 @@ import json, sys
 try:
     with open(sys.argv[1]) as f:
         data = json.load(f)
-    print("verified" if data.get("accountData", {}).get("verified") else "unverified")
-except json.JSONDecodeError:
-    print("unverified")
+    account = data.get("accountData") if isinstance(data, dict) else None
+    print("verified" if isinstance(account, dict) and account.get("verified") else "existing")
+except (json.JSONDecodeError, UnicodeDecodeError):
+    print("existing")
 ' "$profile/signedInUser.json" 2>/dev/null)" || { note "FAIL  inspect Firefox Accounts token"; return 1; }
     else
-      account_state=unverified
+      account_state=absent
     fi
     case "$account_state" in
       verified) note "Firefox Accounts profile is verified" ;;
-      unverified) note "WOULD attempt Firefox Accounts sign-in if credentials are available" ;;
+      existing) note "Firefox Accounts data exists but is not verified; it will be left untouched" ;;
+      absent) note "WOULD attempt Firefox Accounts sign-in if credentials are available" ;;
       *) note "FAIL  inspect Firefox Accounts token"; return 1 ;;
     esac
     note "Firefox Accounts credentials were not inspected"
@@ -144,7 +148,16 @@ install_pyfxa() {
 }
 step "Firefox Accounts venv" create_venv
 step "Firefox Accounts PyFxA" install_pyfxa
-step "Firefox Accounts sign-in script" install_if_changed "$DOTFILES_DIR/units/browser-fxa/fxa_signin.py" "$HOME/.local/bin/fxa_signin.py" 0700
+helper_installed=0
+install_helper() {
+  install_if_changed "$DOTFILES_DIR/units/browser-fxa/fxa_signin.py" "$HOME/.local/bin/fxa_signin.py" 0700 || return 1
+  helper_installed=1
+}
+step "Firefox Accounts sign-in script" install_helper
+if [ "$helper_installed" != 1 ]; then
+  note "Firefox Accounts sign-in skipped: helper installation failed"
+  finish
+fi
 
 s="$(bw_session)"
 if [ -z "$s" ]; then
@@ -196,7 +209,10 @@ spec.loader.exec_module(module)
 print(module.resolve_profile_dir())
 ')" || return 1
   [ -d "$profile" ] || { note "Firefox Accounts default profile does not exist"; return 1; }
-  # The upstream script opens existing files in place; protect existing and new tokens.
+  # Never follow a token symlink, including a dangling one.
+  if [ -L "$profile/signedInUser.json" ]; then
+    note "Firefox Accounts token is a symlink; leaving it untouched"; return 1
+  fi
   if [ -e "$profile/signedInUser.json" ]; then chmod 600 "$profile/signedInUser.json" || return 1; fi
   ( umask 077
     FXA_EMAIL="$email" FXA_PASSWORD="$password" FXA_TOTP="$totp" BROWSER_TYPE="$browser" \

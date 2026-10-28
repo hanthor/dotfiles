@@ -72,7 +72,7 @@ step "kube dirs" install -d -m 0700 "$HOME/.kube" "$HOME/.talos"
 # fetch_note ITEM DEST LABEL: write the note to DEST when Bitwarden has it; prints a warning otherwise.
 fetch_note() {
   local item="$1" dest="$2" label="$3" val
-  val="$(BW_SESSION="$s" bw get notes "$item" 2>/dev/null)"
+  val="$(BW_SESSION="$s" bw get notes "$item" 2>/dev/null)" || val=""
   if [ -z "$val" ]; then
     note "warn: $label missing in BW (item $item)"
     return 0
@@ -83,12 +83,17 @@ fetch_note() {
 
 # The home kubeconfig is rewritten from Bitwarden each run, so the TLS pin is re-applied each time.
 pin_tls() {
-  command -v kubectl >/dev/null 2>&1 || { note "warn: kubectl missing; tls-server-name not pinned"; return 0; }
-  local c rc=0
-  while read -r c; do
+  command -v kubectl >/dev/null 2>&1 || { note "FAIL  kubectl missing; tls-server-name not pinned"; return 1; }
+  local c clusters header=1 rc=0
+  if ! clusters="$(KUBECONFIG="$HOME/.kube/config" kubectl config get-clusters 2>/dev/null)"; then
+    note "FAIL  cannot list home kubeconfig clusters; TLS pin not applied"
+    return 1
+  fi
+  while IFS= read -r c; do
+    if [ "$header" = 1 ]; then header=0; continue; fi
     [ -n "$c" ] || continue
     KUBECONFIG="$HOME/.kube/config" kubectl config set-cluster "$c" --tls-server-name="$KUBE_TLS_SERVER_NAME" >/dev/null || rc=1
-  done < <(KUBECONFIG="$HOME/.kube/config" kubectl config get-clusters 2>/dev/null | tail -n +2)
+  done <<< "$clusters"
   return $rc
 }
 

@@ -31,13 +31,15 @@ fi
 
 registry_login() {
   local user pass
-  user="$(BW_SESSION="$s" bw get username "$FORGEJO_REGISTRY" 2>/dev/null)"
-  pass="$(BW_SESSION="$s" bw get password "$FORGEJO_REGISTRY" 2>/dev/null)"
+  user="$(BW_SESSION="$s" bw get username "$FORGEJO_REGISTRY" 2>/dev/null)" || user=""
+  pass="$(BW_SESSION="$s" bw get password "$FORGEJO_REGISTRY" 2>/dev/null)" || pass=""
+  user="${user#"${user%%[![:space:]]*}"}"
+  user="${user%"${user##*[![:space:]]}"}"
   if [ -z "$user" ] || [ -z "$pass" ]; then
     note "PARTIAL: Forgejo credential ($FORGEJO_REGISTRY) not found in Bitwarden — add a login item with that name holding the registry token"
     return 0
   fi
-  printf '%s' "$pass" | podman login "$FORGEJO_REGISTRY" -u "$(printf '%s' "$user" | tr -d '[:space:]')" --password-stdin
+  printf '%s' "$pass" | podman login "$FORGEJO_REGISTRY" -u "$user" --password-stdin
 }
 step "podman login $FORGEJO_REGISTRY" registry_login
 finish

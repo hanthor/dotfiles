@@ -4,11 +4,8 @@ user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james
 brew_prefix: /home/linuxbrew/.linuxbrew
-# Every inventory host reachable over SSH, keyed by inventory name, with the
-# address ssh should use (MagicDNS name unless noted). Port and login user
-# come from inventory.yml (ansible_port / ansible_user) — ssh_config.j2 and
-# ssh_mesh read them from there. Talos nodes (bihar, karnataka) are absent on
-# purpose: Talos has no SSH.
+# SSH aliases are keyed by inventory name; connection users and ports come
+# from inventory.yml. Bihar's current OS is unverified, so it is not added.
 machines:
   punjab:
     hostname: punjab
@@ -17,9 +14,11 @@ machines:
   termux:
     hostname: pixel-9a
   himachal:
-    hostname: himachal
+    hostname: himachal-1
+  karnataka:
+    hostname: karnataka
   kerala:
-    hostname: kerala
+    hostname: kerala-1
   dilli:
     hostname: dilli
   kanpur:
@@ -39,7 +38,7 @@ machines:
     hostname: 127.0.0.1
 
 # Fleet SSH public keys, committed to git (public keys only — safe in a
-# public repo). The ssh_mesh role merges these into authorized_keys on
+# public repo). The ssh-mesh unit merges these into authorized_keys on
 # every apply (incl. the daily no-secrets timer) so the mesh self-heals
 # without Bitwarden. Each machine warns on apply if its own key is
 # missing/stale here.

@@ -39,6 +39,14 @@ def fleet(stub_env, tmp_path):
     (data / "all.yml.json").write_text(json.dumps(variables))
     (data / "inventory.yml.json").write_text(json.dumps(inventory))
     (data / "test-fleet-fedora.yml.json").write_text(json.dumps({"machine_profile": "vm-test"}))
+    root = tmp_path / "repo"
+    (root / "group_vars").mkdir(parents=True)
+    (root / "host_vars").mkdir()
+    (root / "units").symlink_to(REPO / "units")
+    (root / "scripts").symlink_to(REPO / "scripts")
+    (root / "group_vars/all.yml").symlink_to(data / "all.yml.json")
+    (root / "inventory.yml").symlink_to(data / "inventory.yml.json")
+    (root / "host_vars/test-fleet-fedora.yml").symlink_to(data / "test-fleet-fedora.yml.json")
     item = {"id": "item-1", "type": 5, "name": "james@newhost",
             "sshKey": {"privateKey": private, "publicKey": public}}
     (home / "items.json").write_text(json.dumps([item]))
@@ -68,7 +76,7 @@ exit 0
 ''')
     write_stub(bindir, "tailscale", '''printf '%s\\n' '{"Peer":{"one":{"Online":true,"DNSName":"peer-dns.example."},"two":{"Online":true,"DNSName":"retired.example."}}}'
 ''')
-    env.update(DOTFILES_DIR=str(REPO), DOTFILES_MACHINE="newhost", SSH_FIXTURE=str(data),
+    env.update(DOTFILES_DIR=str(root), DOTFILES_MACHINE="newhost", SSH_FIXTURE=str(data),
                BW_SESSION="secret-session", BREW_PREFIX="/nonexistent")
     return {"env": env, "home": home, "data": data, "private": private, "public": public,
             "other_private": other_private, "other_public": other_public, "variables": variables}
@@ -307,6 +315,9 @@ def test_restores_encrypted_vault_identity_without_prompting(fleet, tmp_path, mi
 def test_host_vars_accepts_empty_document_but_rejects_nonmapping(fleet, tmp_path, contents, parsed, valid):
     root = tmp_path / "fleet-root"
     (root / "host_vars").mkdir(parents=True)
+    (root / "group_vars").mkdir()
+    (root / "group_vars/all.yml").symlink_to(fleet["data"] / "all.yml.json")
+    (root / "inventory.yml").symlink_to(fleet["data"] / "inventory.yml.json")
     (root / "host_vars/newhost.yml").write_text(contents)
     (fleet["data"] / "newhost.yml.json").write_text(parsed)
     script = '''
@@ -366,3 +377,100 @@ def test_encrypted_identity_without_public_key_is_not_replaced(fleet):
     assert not public.exists()
     assert not (fleet["home"] / "encoded-item").exists()
     assert before.decode() not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("check", [False, True])
+def test_ssh_host_key_scans_never_contact_retired_vps(fleet, check):
+    variables = fleet["variables"]
+    variables["machines"].pop("retired")
+    variables["machines"].update({"matrix": {"hostname": "matrix.reilly.asia"},
+                                  "telengana": {"hostname": "telengana"}})
+    (fleet["data"] / "all.yml.json").write_text(json.dumps(variables))
+    result = execute(fleet, UNITS_NO_SECRETS="1", UNITS_CHECK="1" if check else "0")
+    assert result.returncode == 0, result.stdout + result.stderr
+    scans = (fleet["home"] / "scans").read_text().splitlines()
+    assert len(scans) == 1 and scans[0].endswith(" peer")
+
+
+@pytest.mark.parametrize("check", [False, True])
+@pytest.mark.parametrize("excluded", [False, True])
+def test_host_specific_mesh_exclusions_override_group_defaults(fleet, tmp_path, check, excluded):
+    root = tmp_path / "host-override"
+    root.mkdir()
+    (root / "units").symlink_to(REPO / "units")
+    (root / "scripts").symlink_to(REPO / "scripts")
+    (root / "group_vars").mkdir()
+    (root / "group_vars/all.yml").symlink_to(fleet["data"] / "all.yml.json")
+    (root / "inventory.yml").symlink_to(fleet["data"] / "inventory.yml.json")
+    (root / "host_vars").mkdir()
+    host_exclude = ["remote"] if excluded else []
+    fleet["variables"]["ssh_mesh_exclude"] = [] if excluded else ["remote"]
+    (fleet["data"] / "all.yml.json").write_text(json.dumps(fleet["variables"]))
+    (root / "host_vars/newhost.yml").write_text(json.dumps({"ssh_mesh_exclude": host_exclude}))
+    (fleet["data"] / "newhost.yml.json").write_text(json.dumps({"ssh_mesh_exclude": host_exclude}))
+    ssh = fleet["home"] / ".ssh"
+    ssh.mkdir()
+    (ssh / "id_ed25519").write_text(fleet["private"])
+    (ssh / "id_ed25519").chmod(0o600)
+    (ssh / "id_ed25519.pub").write_text(fleet["public"] + "\n")
+    result = execute(fleet, "ssh-mesh", DOTFILES_DIR=str(root), UNITS_NO_SECRETS="1",
+                     UNITS_CHECK="1" if check else "0")
+    if excluded:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert not (fleet["home"] / "ssh-calls").exists()
+    elif check:
+        assert result.returncode != 0 and "online SSH mesh targets: remote" in result.stdout
+        assert not (fleet["home"] / "ssh-calls").exists()
+    else:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "alice@peer" in (fleet["home"] / "ssh-calls").read_text()
+
+
+def test_group_force_push_allows_explicit_identity_rotation(fleet):
+    fleet["variables"]["ssh_keys_force_push"] = True
+    (fleet["data"] / "all.yml.json").write_text(json.dumps(fleet["variables"]))
+    ssh = fleet["home"] / ".ssh"
+    ssh.mkdir()
+    (ssh / "id_ed25519").write_text(fleet["other_private"])
+    (ssh / "id_ed25519").chmod(0o600)
+    (ssh / "id_ed25519.pub").write_text(fleet["other_public"] + "\n")
+    result = execute(fleet)
+    assert result.returncode == 0, result.stdout + result.stderr
+    item = json.loads(base64.b64decode((fleet["home"] / "encoded-item").read_bytes()))
+    assert item["sshKey"]["publicKey"].split() == fleet["other_public"].split()[:2]
+
+
+def test_group_force_authorized_removes_only_managed_obsolete_keys(fleet):
+    fleet["variables"]["ssh_keys_force_authorized"] = True
+    (fleet["data"] / "all.yml.json").write_text(json.dumps(fleet["variables"]))
+    ssh = fleet["home"] / ".ssh"
+    ssh.mkdir()
+    (ssh / "authorized_keys").write_text(
+        "# user-managed access\n# BEGIN dotfiles Bitwarden SSH keys\n"
+        + fleet["other_public"] + "\n# END dotfiles Bitwarden SSH keys\n"
+    )
+    result = execute(fleet)
+    assert result.returncode == 0, result.stdout + result.stderr
+    content = (ssh / "authorized_keys").read_text()
+    assert fleet["other_public"] not in content
+    assert "# user-managed access" in content and fleet["public"] in content
+
+
+def test_nested_inventory_group_vars_and_vps_are_respected(fleet):
+    inventory = {"all": {"hosts": {"newhost": {}}, "children": {
+        "fleet": {"vars": {"ansible_port": 2022, "tailnet_name": "peer-dns"},
+                  "children": {"workstations": {"hosts": {"remote": {}}}}},
+        "vps": {"children": {"old_servers": {"hosts": {"retired": {}}}}},
+    }}}
+    (fleet["data"] / "inventory.yml.json").write_text(json.dumps(inventory))
+    root = Path(fleet["env"]["DOTFILES_DIR"])
+    (root / "group_vars/fleet.yml").write_text(json.dumps({"ansible_user": "group-user", "ansible_port": 2222}))
+    (root / "host_vars/remote.yml").write_text(json.dumps({"ansible_user": "host-user"}))
+    result = execute(fleet)
+    assert result.returncode == 0, result.stdout + result.stderr
+    config = (fleet["home"] / ".ssh/config").read_text()
+    assert "Host remote\n  HostName peer\n  Port 2222\n  User host-user\n" in config
+    result = execute(fleet, "ssh-mesh")
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = (fleet["home"] / "ssh-calls").read_text()
+    assert "host-user@peer" in calls and "retired" not in calls

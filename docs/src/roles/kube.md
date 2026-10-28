@@ -14,10 +14,10 @@ With an unlocked vault (a locked vault or `--no-secrets` prints `SKIPPED:` and l
 1. `kube dirs`: `~/.kube/` and `~/.talos/` (0700).
 2. `home kubeconfig`: `bw get notes kubeconfig` → `~/.kube/config` (0600).
 3. `home talosconfig`: `bw get notes talosconfig` → `~/.talos/config` (0600).
-4. `pin tls-server-name`: after writing the home kubeconfig, every cluster in it gets `--tls-server-name=$KUBE_TLS_SERVER_NAME` (`units/kube.conf`, default bihar's LAN address `192.168.0.5`): the home API-server cert lacks the tailnet address in its SANs. If `kubectl` is missing, the unit warns and skips the pin.
+4. `pin tls-server-name`: after writing the home kubeconfig, every cluster in it gets `--tls-server-name=$KUBE_TLS_SERVER_NAME` (`units/kube.conf`, default bihar's LAN address `192.168.0.5`): the home API-server cert lacks the tailnet address in its SANs. If `kubectl` is missing, the unit fails and reports that the pin was not applied.
 5. `aws kubeconfig` / `aws talosconfig`: `kubeconfig-aws-migration` → `~/.kube/config-aws-migration`, `talosconfig-aws-migration` → `~/.talos/config-aws-migration` (0600). These historical files remain separate from the home configs and no longer access the terminated cluster.
 
-A missing or empty note prints `warn:` and leaves its existing file untouched.
+A missing, empty, or failed note read prints `warn:` and leaves its existing file untouched, even if the failed command emitted partial output. If `kubectl config get-clusters` fails after a home config is written, the unit fails instead of silently reporting a successful TLS pin; inspect the config and re-run after fixing `kubectl`.
 
 ## Failure modes
 
@@ -28,6 +28,7 @@ A missing or empty note prints `warn:` and leaves its existing file untouched.
 | Configs deployed but auth fails against a deliberately restored cluster | Cluster PKI may have rotated — local configs are stale | Confirm the intended cluster and configs before re-seeding, then re-apply on consumers |
 | Unit prints `SKIPPED: not a desktop` on a host that should have it | `skip_kube: true` in `host_vars/<host>.yml`, or host not in the `desktop` group | Adjust inventory or host_vars |
 | `FAIL  cannot inspect desktop inventory` | Missing `yq`, unreadable inventory, or malformed desktop hosts | Install `yq` and fix `inventory.yml`; no configs are changed while classification is unknown |
+| `FAIL  cannot list home kubeconfig clusters` | `kubectl` could not read the deployed home config | Inspect the config and local `kubectl` error, then retry; the TLS pin was not applied |
 
 ## Seeding BW
 

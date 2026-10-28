@@ -4,7 +4,7 @@ import sys
 import pytest
 
 from conftest import REPO
-from unit_helpers import run_unit
+from unit_helpers import run_unit as run_common_unit
 
 
 # System files live in a private fake /etc. The scripts under test still execute
@@ -26,7 +26,9 @@ if name == 'yq':
     expression = args[-2]
     import yaml
     with open(args[-1]) as f: data = yaml.safe_load(f)
-    if 'children.vps.hosts' in expression:
+    if expression == '.':
+        print(json.dumps(data))
+    elif 'children.vps.hosts' in expression:
         print(str(os.environ['MACHINE'] in (data['all']['children']['vps']['hosts'] or {})).lower())
     elif 'web_services' in expression:
         print(json.dumps((data or {}).get('web_services') or []))
@@ -36,18 +38,41 @@ if name == 'yq':
     sys.exit(0)
 if name in ('systemctl', 'tailscale', 'loginctl'):
     record()
+    if name == 'systemctl' and args[:1] == ['show']:
+        print('LoadState=loaded\nActiveState=active\nUnitFileState=enabled')
+    if name == 'tailscale' and args[:2] == ['status', '--json']:
+        print(json.dumps({'Self': {'DNSName': 'workstation.example.ts.net.'}}))
     if name == 'tailscale' and args[:2] == ['serve', 'status']:
+        if os.environ.get('FAIL_SERVE'): sys.exit(1)
         state = root / 'serve'
-        if state.exists(): print(state.read_text(), end='')
+        custom = root / 'serve_json'
+        if custom.exists():
+            print(custom.read_text())
+        elif state.exists():
+            print(json.dumps({'TCP': {'443': {'HTTPS': True}}, 'Web': {
+                'workstation.example.ts.net:443': {'Handlers': {'/': {'Proxy': state.read_text()}}}}}))
+        else:
+            print('{}')
     if name == 'tailscale' and args[:2] == ['serve', '--bg']:
         (root / 'serve').write_text(args[2])
+        (root / 'serve_json').unlink(missing_ok=True)
     if name == 'tailscale' and args[:1] == ['cert']:
         pathlib.Path(mapped(args[args.index('--cert-file')+1])).write_text('VALID')
+        if os.environ.get('FAIL_CERT'): sys.exit(1)
         pathlib.Path(mapped(args[args.index('--key-file')+1])).write_text('PRIVATE')
     sys.exit(0)
 if name == 'openssl':
     path = pathlib.Path(mapped(args[args.index('-in') + 1]))
-    sys.exit(0 if path.exists() and path.read_text() == 'VALID' else 1)
+    if not path.exists(): sys.exit(1)
+    if args[0] == 'pkey':
+        print('OTHER PUBLIC' if os.environ.get('BAD_KEY') else 'PUBLIC')
+        sys.exit(0)
+    if path.read_text() != 'VALID': sys.exit(1)
+    if '-checkhost' in args:
+        hostname = args[args.index('-checkhost') + 1]
+        print(f"Hostname {hostname} does {'NOT ' if os.environ.get('BAD_HOST') else ''}match certificate")
+    if '-pubkey' in args: print('PUBLIC')
+    sys.exit(0)
 if name == 'chown': sys.exit(0)
 if name == 'stat':
     try:
@@ -56,7 +81,7 @@ if name == 'stat':
     except FileNotFoundError: sys.exit(1)
     sys.exit(0)
 if name == 'install':
-    if os.environ.get('FAIL_CADDY') and args[-1] == '/etc/caddy/Caddyfile': sys.exit(1)
+    if os.environ.get('FAIL_CADDY') and args[-1].endswith('/etc/caddy/Caddyfile'): sys.exit(1)
     output = []
     i = 0
     while i < len(args):
@@ -86,10 +111,25 @@ def fake_system(stub_env, tmp_path):
     (repo / 'host_vars').mkdir(parents=True)
     (repo / 'group_vars').mkdir()
     (repo / 'group_vars/all.yml').write_text('tailscale_domain: example.ts.net\n')
-    (repo / 'inventory.yml').write_text('all:\n  children:\n    vps:\n      hosts:\n        matrix: {}\n        telengana: {}\n        other-vps: {}\n')
-    (repo / 'units').symlink_to(REPO / 'units')
+    (repo / 'inventory.yml').write_text('all:\n  hosts:\n    workstation: {}\n    vm: {}\n  children:\n    vps:\n      hosts:\n        matrix: {}\n        telengana: {}\n        other-vps: {}\n')
+    units = repo / 'units'
+    units.mkdir()
+    for name in ('lib.sh', 'proxy-inventory.py', 'proxy-serve.py', 'osquery_native_inventory.py', 'service-templates.py',
+                 'proxy', 'tailscale-cert', 'bst-dashboard', 'kirocrew-sockets.py'):
+        (units / name).symlink_to(REPO / 'units' / name)
+    for name in ('proxy', 'tailscale-cert'):
+        script = (REPO / 'units' / f'{name}.sh').read_text()
+        (units / f'{name}.sh').write_text(script.replace('/etc/', str(root / 'etc') + '/'))
     env.update(DOTFILES_DIR=str(repo), DOTFILES_MACHINE='workstation')
     return repo, root, env
+
+
+def run_unit(name, env, **extra):
+    if name not in ('proxy', 'tailscale-cert'):
+        return run_common_unit(name, env, **extra)
+    repo = extra.get('DOTFILES_DIR', env['DOTFILES_DIR'])
+    return subprocess.run(['bash', str(repo + '/units/' + name + '.sh')],
+                          env={**env, **extra}, capture_output=True, text=True)
 
 
 def system_calls(root):
@@ -137,7 +177,8 @@ def test_certificate_renewal_permissions_timer_and_validity(fake_system):
     assert key.read_text() == 'PRIVATE' and key.stat().st_mode & 0o777 == 0o640
     service = (root / 'etc/systemd/system/tailscale-cert-renew.service').read_text()
     timer = (root / 'etc/systemd/system/tailscale-cert-renew.timer').read_text()
-    assert 'workstation.example.ts.net' in service and '--min-validity 720h' in service
+    assert 'workstation.example.ts.net' in service and 'tailscale-cert-renew.sh' in service
+    assert '--min-validity 720h' in (root / 'etc/systemd/system/tailscale-cert-renew.sh').read_text()
     assert 'OnCalendar=weekly' in timer and 'RandomizedDelaySec=1h' in timer and 'Persistent=true' in timer
     assert 'systemctl enable --now tailscale-cert-renew.timer' in system_calls(root)
     (root / 'calls').unlink()

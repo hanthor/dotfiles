@@ -48,9 +48,10 @@ else
   [ "$UNIT_FAILED" = 0 ] || finish
 fi
 
-fix_store() {
+check_store() {
   if [ -L /var/lib/flatpak ] && [ ! -e /var/lib/flatpak ]; then
-    package_as_root rm /var/lib/flatpak && package_as_root mkdir -p /var/lib/flatpak
+    echo 'Flatpak system store is a dangling symlink; restore its target before applying' >&2
+    return 1
   fi
 }
 add_remotes() {
@@ -140,11 +141,22 @@ install_user_apps() {
   return "$rc"
 }
 install_wrappers() {
-  local tmp name rc=0
+  local tmp name path rc=0
   tmp="$(mktemp)" || return 1
   printf '#!/usr/bin/env bash\nexec flatpak run org.chromium.Chromium "$@"\n' > "$tmp" || { rm -f "$tmp"; return 1; }
   for name in google-chrome google-chrome-stable chromium-browser chromium; do
-    install_if_changed "$tmp" "$HOME/.local/bin/$name" 0755 || rc=1
+    path="$HOME/.local/bin/$name"
+    if [ -L "$path" ]; then
+      note "PRESERVED: existing Chromium launcher $name"
+    elif [ -e "$path" ]; then
+      if [ -f "$path" ] && cmp -s "$tmp" "$path"; then
+        chmod 0755 "$path" || rc=1
+      else
+        note "PRESERVED: existing Chromium launcher $name"
+      fi
+    else
+      install_if_changed "$tmp" "$path" 0755 || rc=1
+    fi
   done
   rm -f "$tmp"
   return "$rc"
@@ -180,13 +192,16 @@ check_wrappers() {
   local name path mode rc
   for name in google-chrome google-chrome-stable chromium-browser chromium; do
     path="$HOME/.local/bin/$name"
-    if [ ! -e "$path" ] && [ ! -L "$path" ]; then
+    if [ -L "$path" ]; then
+      note "PRESERVED: existing Chromium launcher $name"
+      continue
+    elif [ ! -e "$path" ]; then
       note "CHANGE: install Chromium wrapper $name"
     elif [ ! -f "$path" ] || [ ! -r "$path" ]; then
-      echo "Cannot inspect Chromium wrapper $name" >&2; UNIT_FAILED=1
+      note "PRESERVED: existing Chromium launcher $name"
     else
       cmp -s "$path" <(printf '#!/usr/bin/env bash\nexec flatpak run org.chromium.Chromium "$@"\n'); rc=$?
-      if [ "$rc" = 1 ]; then note "CHANGE: update Chromium wrapper $name"; fi
+      if [ "$rc" = 1 ]; then note "PRESERVED: existing Chromium launcher $name"; continue; fi
       if [ "$rc" -gt 1 ]; then echo "Cannot compare Chromium wrapper $name" >&2; UNIT_FAILED=1; continue; fi
       mode="$(stat -L -c %a "$path" 2>/dev/null || stat -L -f %Lp "$path" 2>/dev/null)" || {
         echo "Cannot inspect Chromium wrapper permissions: $name" >&2; UNIT_FAILED=1; continue;
@@ -197,12 +212,10 @@ check_wrappers() {
 }
 
 check_flatpak() {
-  local system_remotes system_apps user_remote_names user_installed name url app remote origin
+  local system_remotes system_apps user_remote_names user_installed name url app remote origin system_store_ok=1
   local -A planned_user_origins=()
   check_wrappers
-  if [ -L /var/lib/flatpak ] && [ ! -e /var/lib/flatpak ]; then
-    note 'CHANGE: repair dangling Flatpak system store'
-  fi
+  if ! check_store; then UNIT_FAILED=1; system_store_ok=0; fi
   if ! command -v flatpak >/dev/null 2>&1; then
     echo 'Cannot inspect Flatpak: executable unavailable' >&2; UNIT_FAILED=1; return
   fi
@@ -214,6 +227,7 @@ check_flatpak() {
       echo 'Cannot inspect Flatpak paths hidden by the sandbox' >&2; UNIT_FAILED=1; return ;;
     esac
   done
+  if [ "$system_store_ok" = 1 ]; then
   if check_flatpak_list remotes --system --columns=name; then
     system_remotes="$CHECK_LIST"
     while IFS=$'\t' read -r name url; do
@@ -235,6 +249,9 @@ check_flatpak() {
     done
   else
     echo 'Cannot inspect system Flatpak applications in the read-only sandbox' >&2; UNIT_FAILED=1
+  fi
+  else
+    note 'SKIPPED: system Flatpak inspection (store unavailable)'
   fi
   if ! load_user_config >/dev/null 2>&1; then
     echo 'Cannot inspect user Flatpak configuration' >&2; UNIT_FAILED=1; return
@@ -275,7 +292,9 @@ check_flatpak() {
       echo 'Cannot inspect user Flatpak applications in the read-only sandbox' >&2; UNIT_FAILED=1
     fi
   fi
-  case "${DOTFILES_UPGRADE:-0}" in 1|true) note 'PLANNED: Flatpak system update requested; available updates not inspected offline' ;; esac
+  if [ "$system_store_ok" = 1 ]; then
+    case "${DOTFILES_UPGRADE:-0}" in 1|true) note 'PLANNED: Flatpak system update requested; available updates not inspected offline' ;; esac
+  fi
 }
 
 if [ "${UNITS_CHECK:-0}" = 1 ]; then
@@ -284,15 +303,20 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
 fi
 
 if command -v flatpak >/dev/null 2>&1; then
-  step 'Flatpak system store' fix_store
-  step 'Flatpak remotes' add_remotes
-  if get_installed; then
-    step 'unwanted system Flatpaks' remove_unwanted
-    step 'system Flatpak applications' install_missing
+  if check_store; then
+    note 'ok    Flatpak system store'
+    step 'Flatpak remotes' add_remotes
+    if get_installed; then
+      step 'unwanted system Flatpaks' remove_unwanted
+      step 'system Flatpak applications' install_missing
+    else
+      step 'list system Flatpaks' false
+    fi
+    case "${DOTFILES_UPGRADE:-0}" in 1|true) soft 'Flatpak update' package_as_root flatpak update --system -y ;; esac
   else
-    step 'list system Flatpaks' false
+    step 'Flatpak system store' false
+    note 'SKIPPED: system Flatpak operations (store unavailable)'
   fi
-  case "${DOTFILES_UPGRADE:-0}" in 1|true) soft 'Flatpak update' package_as_root flatpak update --system -y ;; esac
   if load_user_config; then
     [ -z "$user_remotes" ] || step 'user Flatpak remotes' add_user_remotes
     [ -z "$user_apps" ] || step 'user Flatpak applications' install_user_apps

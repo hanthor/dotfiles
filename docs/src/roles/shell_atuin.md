@@ -10,9 +10,11 @@ Configures [Atuin](https://atuin.sh/) shell history and logs it in to sync.
 ## What It Does
 
 1. chezmoi writes `~/.config/atuin/config.toml` from `home/dot_config/atuin/config.toml` — sync to `api.atuin.sh` every 5m, fuzzy search, `filter_mode = "global"` (including the Up-arrow binding)
+   `just apply-tags atuin` and `just apply-tags secrets` apply only this
+   chezmoi file, without unrelated dotfiles or chezmoi scripts.
 2. The `atuin` unit checks `atuin status`; if it shows `[Sync]` the Bitwarden round-trip is skipped
 3. Otherwise, with an unlocked vault, it reads the `atuin.sh` item (username, password, custom field `key` holding the mnemonic). Atuin 18.24 or newer receives the password and key through its environment, not command-line arguments. The unit preserves the data directory and its history; a missing key can be written by Atuin during login. If a key already exists, the unit logs in only when `atuin key` matches the vault mnemonic, then runs a best-effort `atuin sync`.
-4. Imports existing shell history once (`atuin import auto`, sentinel `~/.local/share/atuin/.history_imported`). If the version or existing key requires manual login, the unit also defers importing until that situation is resolved.
+4. Imports existing shell history once (`atuin import auto`, sentinel `~/.local/share/atuin/.history_imported`). If the version, key lookup, existing key, or login attempt requires manual attention, the unit defers importing until that situation is resolved. A failed login also fails the unit.
 
 ## Output lines
 

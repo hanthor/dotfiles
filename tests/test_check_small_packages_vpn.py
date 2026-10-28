@@ -81,7 +81,7 @@ exit "${PGREP_RC:-1}"
 echo "scheduler $*" >> "$LOG"
 [ "$1" = -p ] || exit 99
 [ "${SCHED_FAIL:-0}" = 0 ] || exit 2
-[ "${PENDING:-0}" = 0 ] || echo 'Pending Job 1'
+[ "${PENDING:-0}" = 0 ] || echo "Pending Job ${PENDING}"
 ''')
     for name in ('pkg', 'npm', 'sshd'):
         write_stub(bindir, name, 'echo "MUTATION $0 $*" >> "$LOG"; exit 99\n')
@@ -91,7 +91,7 @@ def test_termux_check_reports_real_drift_without_mutation(platform_env):
     _, system, bindir, env, log = platform_env
     termux_check_stubs(bindir)
     before = snapshot(system), snapshot(Path(env['HOME']))
-    result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone')
+    result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone', TEST_TERMUX='1')
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'ok    Termux package python' in result.stdout
     assert 'ok    Termux package openssh' in result.stdout
@@ -114,16 +114,28 @@ def test_termux_check_detects_existing_boot_and_reports_inspection_failures(plat
     script = directory / 'start-sshd'
     script.write_bytes((root / 'units/termux-start-sshd').read_bytes())
     script.chmod(0o755)
-    result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone', PENDING='1', PGREP_RC='0')
+    result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone', TEST_TERMUX='1', PENDING='1', PGREP_RC='0')
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'ok    Termux boot directory' in result.stdout
     assert 'ok    Termux sshd boot script' in result.stdout
     assert 'ok    Termux sshd running' in result.stdout
     assert 'job exists' in result.stdout
     for failure in ({'DPKG_FAIL': '1'}, {'SCHED_FAIL': '1'}, {'PGREP_RC': '2'}):
-        result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone', **failure)
+        result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone', TEST_TERMUX='1', **failure)
         assert result.returncode != 0
         assert 'Cannot inspect' in result.stderr
+    result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone', TEST_TERMUX='1', PENDING='10')
+    assert result.returncode == 0
+    assert 'WOULD schedule Termux sshd keep-alive' in result.stdout
+    script.unlink()
+    script.symlink_to(directory / 'other-script')
+    result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone', TEST_TERMUX='1')
+    assert result.returncode != 0 and 'Cannot replace non-regular' in result.stderr
+    script.unlink()
+    script.write_text('custom script\n')
+    result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone', TEST_TERMUX='1')
+    assert result.returncode != 0 and 'Cannot replace customized' in result.stderr
+    assert script.read_text() == 'custom script\n'
 
 
 def tailscale_check_stubs(bindir):
@@ -191,7 +203,7 @@ def test_termux_check_rejects_unreadable_overrides_and_skips_non_host(platform_e
     root, _, bindir, _, log = platform_env
     termux_check_stubs(bindir)
     (root / 'host_vars/phone.yml').write_text('termux_pkgs:\n  - custom\n')
-    result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone')
+    result = run_unit(platform_env, 'termux-packages', UNITS_CHECK='1', DOTFILES_MACHINE='phone', TEST_TERMUX='1')
     assert result.returncode != 0
     assert 'yq is required' in result.stderr
     assert not any('MUTATION' in line for line in log_lines(log))

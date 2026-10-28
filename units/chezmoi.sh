@@ -6,6 +6,14 @@ set -uo pipefail
 # shellcheck source=units/package-config.bash
 . "$(dirname "${BASH_SOURCE[0]}")/package-config.bash"
 
+# Tag-only Atuin applies must not overwrite unrelated dotfiles or run hooks.
+scope_args=()
+case "${DOTFILES_CHEZMOI_SCOPE:-}" in
+  '') ;;
+  atuin) scope_args=(--exclude=scripts --parent-dirs --recursive=false "$HOME/.config/atuin/config.toml") ;;
+  *) note "FAIL: invalid chezmoi scope"; exit 1 ;;
+esac
+
 resolve_desktop() {
   local hint="${DOTFILES_IS_DESKTOP:-$(host_var is_desktop)}"
   case "$hint" in
@@ -39,7 +47,7 @@ if [ "${UNITS_CHECK:-0}" = 1 ]; then
   if ! chezmoi --source "$DOTFILES_DIR" \
       --config <(printf '[data]\nmachine = %s\nis_desktop = %s\n' "$machine_json" "$desktop_toml") --config-format toml \
       --persistent-state "${XDG_CONFIG_HOME:-$HOME/.config}/chezmoi/chezmoistate.boltdb" \
-      --dry-run --force --no-tty --no-pager status </dev/null; then
+      --dry-run --force --no-tty --no-pager status "${scope_args[@]}" </dev/null; then
     note "FAIL: chezmoi status inspection failed"
     exit 1
   fi
@@ -66,5 +74,5 @@ if ! resolve_desktop; then
 fi
 export DOTFILES_MACHINE="$MACHINE" DOTFILES_IS_DESKTOP="$desktop"
 
-step "chezmoi apply" chezmoi --source "$DOTFILES_DIR" --keep-going --force --no-tty apply --init
+step "chezmoi apply" chezmoi --source "$DOTFILES_DIR" --keep-going --force --no-tty apply --init "${scope_args[@]}"
 finish

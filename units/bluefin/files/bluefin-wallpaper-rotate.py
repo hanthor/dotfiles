@@ -1,24 +1,32 @@
 #!/usr/bin/env python3
 import datetime
+from pathlib import Path
 import subprocess
-import os
+import sys
+
+SYSTEM_BACKGROUNDS = Path('/usr/share/backgrounds/bluefin')
 
 def set_wallpaper():
     month = datetime.datetime.now().strftime("%m")
     # Bluefin wallpapers are named 01-bluefin.xml, 02-bluefin.xml, etc.
     wallpaper_name = f"{month}-bluefin.xml"
-    local_path = os.path.expanduser(f"~/.local/share/backgrounds/bluefin/{wallpaper_name}")
-    
-    if not os.path.exists(local_path):
-        print(f"Wallpaper {local_path} not found, skipping rotation.")
-        return
+    local_path = Path.home() / '.local/share/backgrounds/bluefin' / wallpaper_name
+    if not local_path.exists():
+        local_path = SYSTEM_BACKGROUNDS / wallpaper_name
 
-    uri = f"file://{local_path}"
+    if not local_path.exists():
+        print(f"Wallpaper {local_path} not found, skipping rotation.")
+        return 0
+
+    uri = local_path.as_uri()
     print(f"Rotating wallpaper to {uri}")
-    
-    # Set both light and dark variants
-    subprocess.run(['gsettings', 'set', 'org.gnome.desktop.background', 'picture-uri', uri])
-    subprocess.run(['gsettings', 'set', 'org.gnome.desktop.background', 'picture-uri-dark', uri])
+
+    # Attempt both variants, but report a failure if either could not be set.
+    failed = False
+    for key in ('picture-uri', 'picture-uri-dark'):
+        result = subprocess.run(['gsettings', 'set', 'org.gnome.desktop.background', key, uri])
+        failed |= result.returncode != 0
+    return int(failed)
 
 if __name__ == "__main__":
-    set_wallpaper()
+    sys.exit(set_wallpaper())

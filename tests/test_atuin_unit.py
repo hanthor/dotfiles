@@ -19,9 +19,9 @@ def stubs(bindir, status_out, status_rc=1, unlock_rc=0, version="18.24.0"):
 case "$1" in
   status) echo '{status_out}'; exit {status_rc} ;;
   --version) echo 'atuin {version}'; exit 0 ;;
-  info) echo "key path: $HOME/.local/share/atuin/key"; exit 0 ;;
+  info) echo "key path: $HOME/.local/share/atuin/key"; exit "${{STUB_INFO_RC:-0}}" ;;
   key) cat "$HOME/.local/share/atuin/key"; exit $? ;;
-  login) [ "$*" = 'login -u U' ] && [ "$ATUIN_PASSWORD" = P ] && [ "$ATUIN_ENCRYPTION_KEY" = K ]; exit $? ;;
+  login) [ "$*" = 'login -u U' ] && [ "$ATUIN_PASSWORD" = P ] && [ "$ATUIN_ENCRYPTION_KEY" = K ] && [ "${{STUB_LOGIN_RC:-0}}" = 0 ]; exit $? ;;
 esac
 exit 0
 """,
@@ -31,7 +31,7 @@ exit 0
         "bw",
         f"""echo "bw $*" >> "$HOME/calls"
 [ "$1 $2" = "unlock --check" ] && exit {unlock_rc}
-[ "$1 $2 $3" = "get item atuin.sh" ] && echo '{ITEM}'
+[ "$1 $2 $3" = "get item atuin.sh" ] && {{ echo '{ITEM}'; exit "${{STUB_ITEM_RC:-0}}"; }}
 exit 0
 """,
     )
@@ -156,3 +156,28 @@ def test_missing_atuin_is_skipped(stub_env):
     r, _ = run(env)
     assert r.returncode == 0
     assert "SKIPPED:" in r.stdout
+
+
+def test_failed_info_does_not_use_partial_key_path_or_import(stub_env):
+    bindir, env = stub_env
+    stubs(bindir, "not logged in")
+    result, calls = run({**env, "STUB_INFO_RC": "1"})
+    assert result.returncode == 0 and "cannot determine the Atuin key path" in result.stdout
+    assert "atuin login" not in calls and "atuin import" not in calls
+
+
+def test_failed_login_does_not_import_history(stub_env):
+    bindir, env = stub_env
+    stubs(bindir, "not logged in")
+    result, calls = run({**env, "STUB_LOGIN_RC": "1"})
+    assert result.returncode != 0 and "FAIL  atuin login" in result.stdout
+    assert "atuin login" in calls and "atuin import" not in calls
+    assert not Path(env["HOME"], ".local/share/atuin/.history_imported").exists()
+
+
+def test_failed_vault_read_does_not_use_partial_credentials(stub_env):
+    bindir, env = stub_env
+    stubs(bindir, "not logged in")
+    result, calls = run({**env, "STUB_ITEM_RC": "1"})
+    assert result.returncode == 0 and "missing or incomplete" in result.stdout
+    assert "atuin login" not in calls

@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from conftest import write_stub
-from test_package_native_units import package_env, run_unit
+from test_package_native_units import package_env, run_flatpak_with_dangling_store, run_unit
 
 
 @pytest.fixture
@@ -180,6 +180,18 @@ def test_homebrew_check_reports_real_plans_and_never_runs_apply(check_env):
     assert all("install" not in cmd and "uninstall" not in cmd and "upgrade" not in cmd for cmd in commands)
 
 
+def test_homebrew_check_skips_desktop_only_taps_for_server(check_env):
+    root, env, log, _ = check_env
+    (root / "host_vars/laptop.yml").write_text("is_desktop: false\nextra_brews: [private/tap/tool]\n")
+    env["BREW_TAPS"] = "example/core"
+    result = run_unit("homebrew", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "tap Homebrew repository coreowner/tap" in result.stdout
+    assert "tap Homebrew repository example/desktop" not in result.stdout
+    assert "tap Homebrew repository private/tap" not in result.stdout
+    assert not log.exists()
+
+
 def test_homebrew_check_missing_brew_and_failed_sandbox(check_env):
     _, env, log, sandbox = check_env
     brew = Path(env["BREW_PREFIX"]) / "bin/brew"
@@ -228,6 +240,40 @@ def test_flatpak_check_matching_system_and_wrappers_are_unchanged(check_env):
     assert "CHANGE:" not in result.stdout
     assert tree_state(Path(env["HOME"])) == before and not log.exists()
 
+
+def test_flatpak_check_preserves_custom_launchers_and_symlinks(check_env, tmp_path):
+    _, env, log, _ = check_env
+    bindir = Path(env["HOME"]) / ".local/bin"
+    bindir.mkdir(parents=True)
+    custom = bindir / "google-chrome"
+    custom.write_text("custom launcher\n")
+    target = tmp_path / "target"
+    target.write_text("target\n")
+    link = bindir / "google-chrome-stable"
+    link.symlink_to(target)
+    before = tree_state(Path(env["HOME"]))
+    result = run_unit("flatpak", env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "PRESERVED: existing Chromium launcher google-chrome" in result.stdout
+    assert "PRESERVED: existing Chromium launcher google-chrome-stable" in result.stdout
+    assert "CHANGE: install Chromium wrapper chromium" in result.stdout
+    assert tree_state(Path(env["HOME"])) == before and not log.exists()
+    assert link.is_symlink() and link.readlink() == target and target.read_text() == "target\n"
+
+
+
+def test_flatpak_check_preserves_dangling_store(check_env, tmp_path):
+    root, env, log, sandbox = check_env
+    (root / "host_vars/laptop.yml").write_text(yaml.safe_dump({
+        "user_flatpaks": [{"remote": "flatpark", "id": "org.example.User"}],
+    }))
+    result, store = run_flatpak_with_dangling_store(root, env, tmp_path)
+    assert result.returncode != 0 and "dangling symlink" in result.stderr
+    assert "SKIPPED: system Flatpak inspection" in result.stdout
+    assert store.is_symlink() and not store.exists() and not log.exists()
+    commands = sandbox_calls(sandbox)
+    assert any("--user" in cmd for cmd in commands)
+    assert not any("--system" in cmd for cmd in commands)
 
 def test_homebrew_check_matching_brewfile_and_bundle(check_env):
     _, env, log, _ = check_env

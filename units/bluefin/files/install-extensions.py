@@ -25,6 +25,13 @@ def install_ext(uuid):
         subprocess.run(['gnome-extensions', 'enable', uuid])
         return
 
+    # An unrecognized extension may be incompatible or waiting for a Shell
+    # restart. Do not overwrite an existing (possibly customized) installation.
+    dest = os.path.join(USER_EXT_DIR, uuid)
+    if os.path.lexists(dest):
+        print(f"Extension {uuid} is not recognized; preserving existing installation at {dest}.")
+        return
+
     print(f"Installing {uuid}...")
     try:
         # Fetch extension metadata to find the latest version

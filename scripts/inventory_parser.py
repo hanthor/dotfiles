@@ -13,6 +13,33 @@ import re
 class UnknownGroupError(ValueError):
     """Raised when a machine type has no matching group in the inventory."""
 
+def validate_host_name(name: str) -> None:
+    """Require a single DNS hostname, safe in inventory, paths and SSH."""
+    if len(name) > 63 or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", name):
+        raise ValueError("machine name must be a lowercase DNS hostname")
+
+
+def host_groups(text: str, host: str):
+    """Return direct children groups containing a host in this inventory layout."""
+    groups, section, group, in_hosts = set(), None, None, False
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        match = re.match(r"([A-Za-z0-9_-]+):(?:\s*(?:\{\})?)?(?:\s*#.*)?$", line.strip())
+        if not match:
+            continue
+        key = match.group(1)
+        if indent == 2:
+            section, group, in_hosts = key, None, False
+        elif section == "children" and indent == 4:
+            group, in_hosts = key, False
+        elif section == "children" and indent == 6:
+            in_hosts = key == "hosts"
+        elif section == "children" and indent == 8 and in_hosts and key == host:
+            groups.add(group)
+    return groups
+
 
 def _read(inv_path: str) -> str:
     with open(inv_path, "r", encoding="utf-8") as f:
@@ -39,7 +66,9 @@ def parse_inventory(text: str):
         if indent == 2:
             section = key
         elif indent == 4 and section == "hosts":
-            all_hosts.add(key)
+            match = re.match(r"([A-Za-z0-9_-]+):(?:\s*(?:\{\})?)?(?:\s*#.*)?$", line.strip())
+            if match:
+                all_hosts.add(match.group(1))
         elif indent == 4 and section == "children":
             group = key
         elif indent == 8 and section == "children" and group == "vps":
@@ -113,14 +142,17 @@ def register_host(name: str, mtype: str = "desktop", inv_path: str = "inventory.
     Returns False (writing nothing) when the host is already present. Raises
     UnknownGroupError, again writing nothing, when `mtype` names no group.
     """
+    validate_host_name(name)
     content = _read(inv_path)
 
-    if f"    {name}:" in content:
+    if name in parse_inventory(content)[0]:
         return False
 
     group_marker = f"    {mtype}:\n      hosts:\n"
     if group_marker not in content:
         raise UnknownGroupError(mtype)
+    if "all:\n  hosts:\n" not in content:
+        raise ValueError("inventory has no supported all.hosts section")
 
     host_entry = f"    {name}:\n      ansible_host: localhost\n      ansible_connection: local\n"
     content = content.replace("all:\n  hosts:\n", f"all:\n  hosts:\n{host_entry}", 1)

@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -124,3 +126,67 @@ def test_failed_key_list_never_registers_even_with_partial_output(env, partial_o
     assert "FAIL  register SSH keys" in r.stdout
     assert "gh api --paginate" in calls(env)
     assert "ssh-key add" not in calls(env)
+
+
+def test_failed_token_read_does_not_log_in_with_partial_output(env):
+    bindir = Path(env["PATH"].split(":")[0])
+    write_stub(bindir, "bw", UNLOCKED_BW % '''
+if [ "$1 $2 $3" = "get password github-token" ]; then
+  echo partial-token
+  exit 1
+fi
+''')
+    result = run_unit("github", env, STUB_AUTHED="1")
+    assert result.returncode == 0 and "no 'github-token'" in result.stdout
+    assert "gh auth login" not in calls(env)
+    assert "partial-token" not in result.stdout + result.stderr
+
+
+def test_unrelated_matching_comment_does_not_count_as_github_key(env):
+    known = Path(env["HOME"], ".ssh/known_hosts")
+    known.write_text("other.example ssh-ed25519 AAAA github.com ssh-ed25519 "
+                     "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n")
+    result = run_unit("github", env, UNITS_NO_SECRETS="1")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "\ngithub.com ssh-ed25519 " in known.read_text()
+
+
+@pytest.mark.parametrize("check", ["0", "1"])
+def test_conflicting_github_host_key_is_not_trusted_or_replaced(env, check):
+    known = Path(env["HOME"], ".ssh/known_hosts")
+    original = "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJm\n"
+    known.write_text(original)
+    result = run_unit("github", env, UNITS_NO_SECRETS="1", UNITS_CHECK=check)
+    assert result.returncode != 0 and "conflicting GitHub" in result.stdout
+    assert known.read_text() == original
+
+
+@pytest.mark.skipif(shutil.which("ssh-keygen") is None, reason="ssh-keygen not installed")
+def test_hashed_existing_github_key_is_not_duplicated(env):
+    known = Path(env["HOME"], ".ssh/known_hosts")
+    known.write_text("github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n")
+    subprocess.run(["ssh-keygen", "-H", "-f", str(known)], check=True, capture_output=True)
+    original = known.read_text()
+    result = run_unit("github", env, UNITS_NO_SECRETS="1")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert known.read_text() == original
+
+
+@pytest.mark.parametrize("check", ["0", "1"])
+def test_revoked_pinned_key_is_not_readded(env, check):
+    known = Path(env["HOME"], ".ssh/known_hosts")
+    original = "@revoked github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n"
+    known.write_text(original)
+    result = run_unit("github", env, UNITS_NO_SECRETS="1", UNITS_CHECK=check)
+    assert result.returncode != 0 and "revoked" in result.stdout
+    assert known.read_text() == original
+
+
+def test_symlinked_known_hosts_is_not_modified(env):
+    known = Path(env["HOME"], ".ssh/known_hosts")
+    target = Path(env["HOME"], "custom-known-hosts")
+    target.write_text("user settings\n")
+    known.symlink_to(target)
+    result = run_unit("github", env, UNITS_NO_SECRETS="1")
+    assert result.returncode != 0 and "symlinked" in result.stdout
+    assert known.is_symlink() and target.read_text() == "user settings\n"

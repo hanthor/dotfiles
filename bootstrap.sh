@@ -5,13 +5,15 @@
 #   curl ... | bash -s -- --name kanpur --type desktop
 #   ./bootstrap.sh --name kanpur --type desktop
 set -euo pipefail
+if [ -d /data/data/com.termux/files/usr ] && { [ -z "${HOME:-}" ] || [ "$HOME" = /data ]; }; then
+  export HOME=/data/data/com.termux/files/home
+fi
 
 REPO_URL="https://github.com/hanthor/dotfiles.git"
 DOTFILES_DIR="$HOME/.local/share/dotfiles"
 MACHINE_FILE="/etc/dotfiles-machine"
 MACHINE_NAME=""
-MACHINE_TYPE=""   # desktop | server | vps
-INVENTORY_MODIFIED=false
+MACHINE_TYPE=""   # desktop | server | vps | termux_hosts
 
 # ── Parse arguments ───────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -21,6 +23,9 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
+
+is_termux() { [ -d /data/data/com.termux/files/usr ]; }
+if is_termux; then export TMPDIR="${TMPDIR:-/data/data/com.termux/files/usr/tmp}"; fi
 
 # ── Detect OS ─────────────────────────────────────────────────────
 detect_os() {
@@ -42,6 +47,7 @@ ensure_python() {
     return
   fi
   echo "Installing Python3..."
+  if is_termux; then pkg install -y python; return $?; fi
   case "$OS" in
     fedora|rhel|centos)    sudo dnf install -y python3 ;;
     debian|ubuntu)         sudo apt-get update && sudo apt-get install -y python3 ;;
@@ -56,6 +62,7 @@ ensure_python() {
 ensure_git() {
   if command -v git &>/dev/null; then return; fi
   echo "Installing git..."
+  if is_termux; then pkg install -y git; return $?; fi
   case "$OS" in
     fedora|rhel|centos)    sudo dnf install -y git ;;
     debian|ubuntu)         sudo apt-get update && sudo apt-get install -y git ;;
@@ -105,9 +112,8 @@ ensure_tailscale() {
 
 # ── Clone dotfiles ────────────────────────────────────────────────
 clone_repo() {
-  if [ -d "$DOTFILES_DIR/.git" ]; then
-    echo "Dotfiles repo exists, pulling latest..."
-    git -C "$DOTFILES_DIR" pull --ff-only
+  if [ -e "$DOTFILES_DIR/.git" ]; then
+    echo "Existing dotfiles checkout left unchanged; update it manually after registration is merged."
   else
     echo "Cloning dotfiles..."
     git clone "$REPO_URL" "$DOTFILES_DIR"
@@ -147,23 +153,22 @@ get_machine_type() {
   # Already set via --type flag
   if [ -n "$MACHINE_TYPE" ]; then return; fi
 
-  # Detect from inventory if machine is already registered
-  if grep -q "^    $MACHINE_NAME:" "$DOTFILES_DIR/inventory.yml" 2>/dev/null; then
-    MACHINE_TYPE=$(python3 - <<PYEOF
+  # Detect an existing host's type without depending on where its group appears.
+  local detected
+  detected=$(python3 - "$DOTFILES_DIR/scripts" "$DOTFILES_DIR/inventory.yml" "$MACHINE_NAME" <<'PYEOF'
 import sys
-name = "$MACHINE_NAME"
-content = open("$DOTFILES_DIR/inventory.yml").read()
-for group in ("desktop", "server", "vps", "llm"):
-    marker = f"    {group}:\n      hosts:"
-    if marker in content:
-        idx = content.index(marker)
-        block = content[idx:idx+300]
-        if f"        {name}:" in block:
-            print(group)
-            sys.exit(0)
-print("desktop")
+sys.path.insert(0, sys.argv[1])
+from inventory_parser import host_groups
+with open(sys.argv[2], encoding='utf-8') as source:
+    groups = host_groups(source.read(), sys.argv[3]) & {'desktop', 'server', 'vps', 'termux_hosts'}
+if len(groups) > 1:
+    print('Machine belongs to multiple type groups; pass --type explicitly.', file=sys.stderr)
+    sys.exit(1)
+print(next(iter(groups), ''))
 PYEOF
-)
+  ) || return 1
+  if [ -n "$detected" ]; then
+    MACHINE_TYPE=$detected
     echo "Detected machine type from inventory: $MACHINE_TYPE"
     return
   fi
@@ -191,36 +196,32 @@ PYEOF
   esac
 }
 
-# ── Register machine in inventory (local) ────────────────────────
+# ── Require reviewed registration before changing the machine ────
 register_in_inventory() {
-  if grep -q "^    $MACHINE_NAME:" "$DOTFILES_DIR/inventory.yml" 2>/dev/null; then
-    echo "Machine already in inventory."
-    return
+  local rc=0 reviewed
+  python3 "$DOTFILES_DIR/scripts/register-machine.py" --check "$MACHINE_NAME" "$MACHINE_TYPE" "$DOTFILES_DIR/inventory.yml" || rc=$?
+  case "$rc" in
+    0) ;;
+    3)
+      echo "Machine is not registered in this checkout. Registration must be reviewed and merged before bootstrap." >&2
+      echo "On an authenticated fleet checkout run: just onboard $MACHINE_NAME $MACHINE_TYPE" >&2
+      echo "After merging, update this checkout and rerun bootstrap." >&2
+      return 1 ;;
+    *) return "$rc" ;;
+  esac
+  git -C "$DOTFILES_DIR" fetch origin '+refs/heads/master:refs/remotes/origin/master' || return $?
+  reviewed=$(mktemp) || return $?
+  if ! git -C "$DOTFILES_DIR" show refs/remotes/origin/master:inventory.yml > "$reviewed"; then
+    rm -f -- "$reviewed"; return 1
   fi
-
-  echo "Adding $MACHINE_NAME to inventory as $MACHINE_TYPE..."
-  python3 - <<PYEOF
-name = "$MACHINE_NAME"
-mtype = "$MACHINE_TYPE"
-path = "$DOTFILES_DIR/inventory.yml"
-content = open(path).read()
-
-host_entry = f"    {name}:\n      ansible_host: localhost\n      ansible_connection: local\n"
-content = content.replace("all:\n  hosts:\n", f"all:\n  hosts:\n{host_entry}", 1)
-
-group_marker = f"    {mtype}:\n      hosts:\n"
-if group_marker in content:
-    content = content.replace(group_marker, f"{group_marker}        {name}:\n", 1)
-
-open(path, "w").write(content)
-PYEOF
-
-  if [ ! -f "$DOTFILES_DIR/host_vars/$MACHINE_NAME.yml" ]; then
-    echo "---" > "$DOTFILES_DIR/host_vars/$MACHINE_NAME.yml"
+  rc=0
+  python3 "$DOTFILES_DIR/scripts/register-machine.py" --check "$MACHINE_NAME" "$MACHINE_TYPE" "$reviewed" || rc=$?
+  rm -f -- "$reviewed"
+  if [ "$rc" -ne 0 ]; then
+    echo "Registration is not present in the requested group on origin/master; review and merge it before bootstrap." >&2
+    return 1
   fi
-
-  INVENTORY_MODIFIED=true
-  echo "✓ Registered in inventory (will be pushed after GitHub auth)."
+  echo "Machine registration is present on origin/master."
 }
 
 write_machine_name() {
@@ -275,7 +276,11 @@ setup_bitwarden() {
   if ! command -v bw &>/dev/null; then
     echo ""
     echo "NOTE: Bitwarden CLI not yet available."
-    echo "      Run 'just apply' after setup to complete secrets."
+    if is_termux; then
+      echo "      Run 'DOTFILES_MACHINE=$MACHINE_NAME BW_SESSION_CACHE=\$PREFIX/tmp/bw_session just apply' after setup."
+    else
+      echo "      Run 'just apply' after setup to complete secrets."
+    fi
     return 1
   fi
 
@@ -284,7 +289,7 @@ setup_bitwarden() {
   if [ -n "${BW_SESSION:-}" ] && ! bw unlock --check >/dev/null 2>&1; then
     unset BW_SESSION
   fi
-  if [ -z "${BW_SESSION:-}" ] && [ -s /tmp/bw_session ]; then
+  if ! is_termux && [ -z "${BW_SESSION:-}" ] && [ -s /tmp/bw_session ]; then
     local cached_session
     cached_session=$(cat /tmp/bw_session)
     if BW_SESSION="$cached_session" bw unlock --check >/dev/null 2>&1; then
@@ -318,6 +323,8 @@ setup_bitwarden() {
     echo "Bitwarden sync failed; secrets setup skipped." >&2
     return 1
   fi
+  # Termux has no writable /tmp; units inherit BW_SESSION for this run.
+  if is_termux; then return 0; fi
   python3 -c '
 import os, tempfile
 path = "/tmp/bw_session"
@@ -342,27 +349,6 @@ run_phase2() {
     scripts/run-units.sh --tags omp,secrets
 }
 
-# ── Push inventory changes (after GitHub auth is set up) ─────────
-push_inventory_changes() {
-  if [ "$INVENTORY_MODIFIED" != "true" ]; then return; fi
-
-  cd "$DOTFILES_DIR" || return $?
-
-  # Switch to SSH remote now that GitHub auth is configured
-  git remote set-url origin git@github.com:hanthor/dotfiles.git || return $?
-
-  git add inventory.yml "host_vars/$MACHINE_NAME.yml" || return $?
-  if git diff --cached --quiet; then
-    return 0  # Nothing to commit (already pushed from another machine)
-  else
-    local diff_rc=$?
-    [ "$diff_rc" -eq 1 ] || return "$diff_rc"
-  fi
-
-  git commit -m "inventory: add $MACHINE_NAME ($MACHINE_TYPE)" || return $?
-  git push || return $?
-  echo "✓ Inventory pushed to GitHub."
-}
 
 # ── Main ──────────────────────────────────────────────────────────
 main() {
@@ -371,16 +357,29 @@ main() {
   echo "╚═══════════════════════════════════════════════╝"
   echo ""
 
-  ensure_python
-  ensure_git
-  clone_repo
-  get_machine_name
-  get_machine_type
-  register_in_inventory
-  write_machine_name
-  set_hostname
-  ensure_sudo
-  ensure_tailscale
+  get_machine_name || return $?
+  case "$MACHINE_NAME" in matrix|telengana) echo "Retired VPSes must not be modified." >&2; return 1 ;; esac
+  if [[ ! "$MACHINE_NAME" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || [ "${#MACHINE_NAME}" -gt 63 ]; then
+    echo "Machine name must be a lowercase DNS hostname." >&2; return 1
+  fi
+  ensure_python || return $?
+  ensure_git || return $?
+  clone_repo || return $?
+  get_machine_type || return $?
+  if is_termux; then
+    [ "$MACHINE_TYPE" = termux_hosts ] || { echo "Termux requires a reviewed termux_hosts identity." >&2; return 1; }
+  elif [ "$MACHINE_TYPE" = termux_hosts ]; then
+    echo "termux_hosts identity requires the Termux environment." >&2; return 1
+  fi
+  register_in_inventory || return $?
+  if is_termux; then
+    echo "Termux: leaving Android hostname, Tailscale and system privileges unchanged."
+  else
+    write_machine_name
+    set_hostname
+    ensure_sudo
+    ensure_tailscale
+  fi
   local rc=0 phase_rc=0
   run_phase1 || rc=$?
 
@@ -388,9 +387,6 @@ main() {
   if setup_bitwarden; then
     run_phase2 || phase_rc=$?
     [ "$rc" -ne 0 ] || rc=$phase_rc
-    if [ "$phase_rc" -eq 0 ]; then
-      push_inventory_changes || { phase_rc=$?; [ "$rc" -ne 0 ] || rc=$phase_rc; }
-    fi
   else
     echo "Bitwarden setup failed; Phase 2 was not run." >&2
     [ "$rc" -ne 0 ] || rc=1
@@ -407,7 +403,11 @@ main() {
   echo ""
   echo "  Start a new login shell to load your configuration."
   echo ""
-  echo "  To re-apply anytime: just apply"
+  if is_termux; then
+    echo "  To re-apply: DOTFILES_MACHINE=$MACHINE_NAME BW_SESSION_CACHE=\$PREFIX/tmp/bw_session just apply"
+  else
+    echo "  To re-apply anytime: just apply"
+  fi
 }
 
 if [[ -z "${BASH_SOURCE[0]:-}" || "${BASH_SOURCE[0]}" == "$0" ]]; then
