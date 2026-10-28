@@ -151,11 +151,17 @@ def register_host(name: str, mtype: str = "desktop", inv_path: str = "inventory.
     group_marker = f"    {mtype}:\n      hosts:\n"
     if group_marker not in content:
         raise UnknownGroupError(mtype)
-    if "all:\n  hosts:\n" not in content:
-        raise ValueError("inventory has no supported all.hosts section")
+    # Allow comments and blank lines between all: and hosts:, but never insert
+    # into another group or accept an ambiguous all.hosts section.
+    host_sections = list(re.finditer(
+        r"^all:[ \t]*(?:\#.*)?\n(?:[ \t]*(?:\#.*)?\n)*  hosts:[ \t]*(?:\#.*)?\n",
+        content, re.MULTILINE))
+    if len(host_sections) != 1:
+        raise ValueError("inventory has no unambiguous supported all.hosts section")
 
     host_entry = f"    {name}:\n      ansible_host: localhost\n      ansible_connection: local\n"
-    content = content.replace("all:\n  hosts:\n", f"all:\n  hosts:\n{host_entry}", 1)
+    offset = host_sections[0].end()
+    content = content[:offset] + host_entry + content[offset:]
     content = content.replace(group_marker, f"{group_marker}        {name}:\n", 1)
 
     _write(inv_path, content)

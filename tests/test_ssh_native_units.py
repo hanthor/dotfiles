@@ -110,8 +110,9 @@ def test_restores_vault_identity_preserves_user_files_and_idempotency(fleet):
     assert fleet["public"] in (ssh / "authorized_keys").read_text()
     assert "other namespaces=" in (ssh / "allowed_signers").read_text()
     known = (ssh / "known_hosts").read_text()
-    assert hashed not in known and "unmanaged " + fleet["public"] in known
-    assert "[peer]:2222 " + " ".join(fleet["other_public"].split()[:2]) in known
+    assert known == f"{hashed} {fleet['public']}\n[peer]:2222,unmanaged {fleet['public']}\n"
+    assert not (home / "scans").exists()
+    assert "out-of-band verification" in result.stdout
     calls = (home / "bw-calls").read_text()
     assert "secret-session" not in calls and "secret-session" not in result.stdout + result.stderr
     assert fleet["private"] not in result.stdout + result.stderr
@@ -186,10 +187,12 @@ def test_mesh_uses_vault_key_merges_git_keys_and_excludes_vps(fleet):
     assert calls.count("alice@peer true") == 2
     assert "-O exit -p 2222 alice@peer" in calls
     assert "retired" not in calls
-    assert "[peer]:2222" in (ssh / "known_hosts").read_text()
+    assert "StrictHostKeyChecking=yes" in calls
+    assert not (ssh / "known_hosts").exists()
+    assert not (home / "scans").exists()
 
 
-def test_mesh_failed_scan_preserves_known_hosts_and_reports_failure(fleet):
+def test_mesh_authentication_failure_preserves_known_hosts_and_reports_failure(fleet):
     ssh = fleet["home"] / ".ssh"
     ssh.mkdir()
     (ssh / "id_ed25519").write_text(fleet["private"])
@@ -197,7 +200,7 @@ def test_mesh_failed_scan_preserves_known_hosts_and_reports_failure(fleet):
     (ssh / "id_ed25519.pub").write_text(fleet["public"] + "\n")
     old = "[peer]:2222 " + fleet["public"] + "\n"
     (ssh / "known_hosts").write_text(old)
-    result = execute(fleet, "ssh-mesh", UNITS_NO_SECRETS="1", SSH_FAIL="1", SCAN_FAIL="1")
+    result = execute(fleet, "ssh-mesh", UNITS_NO_SECRETS="1", SSH_FAIL="1")
     assert result.returncode != 0
     assert "SSH mesh broken to: remote" in result.stdout
     assert (ssh / "known_hosts").read_text() == old
@@ -380,7 +383,7 @@ def test_encrypted_identity_without_public_key_is_not_replaced(fleet):
 
 
 @pytest.mark.parametrize("check", [False, True])
-def test_ssh_host_key_scans_never_contact_retired_vps(fleet, check):
+def test_ssh_unit_never_scans_unverified_host_keys(fleet, check):
     variables = fleet["variables"]
     variables["machines"].pop("retired")
     variables["machines"].update({"matrix": {"hostname": "matrix.reilly.asia"},
@@ -388,8 +391,8 @@ def test_ssh_host_key_scans_never_contact_retired_vps(fleet, check):
     (fleet["data"] / "all.yml.json").write_text(json.dumps(variables))
     result = execute(fleet, UNITS_NO_SECRETS="1", UNITS_CHECK="1" if check else "0")
     assert result.returncode == 0, result.stdout + result.stderr
-    scans = (fleet["home"] / "scans").read_text().splitlines()
-    assert len(scans) == 1 and scans[0].endswith(" peer")
+    assert not (fleet["home"] / "scans").exists()
+    assert "out-of-band verification" in result.stdout
 
 
 @pytest.mark.parametrize("check", [False, True])
@@ -474,3 +477,119 @@ def test_nested_inventory_group_vars_and_vps_are_respected(fleet):
     assert result.returncode == 0, result.stdout + result.stderr
     calls = (fleet["home"] / "ssh-calls").read_text()
     assert "host-user@peer" in calls and "retired" not in calls
+
+
+def test_managed_ssh_config_requires_verified_host_keys(fleet):
+    ssh_client = shutil.which("ssh")
+    if not ssh_client:
+        pytest.skip("OpenSSH client required")
+    result = execute(fleet, UNITS_NO_SECRETS="1")
+    assert result.returncode == 0, result.stdout + result.stderr
+    config = fleet["home"] / ".ssh/config"
+    effective = subprocess.run([ssh_client, "-G", "-F", str(config), "remote"],
+                               text=True, capture_output=True, check=True)
+    assert "stricthostkeychecking true" in effective.stdout.splitlines()
+
+
+def test_committed_key_revocation_preserves_unowned_and_vault_keys(fleet):
+    home = fleet["home"]
+    ssh = home / ".ssh"
+    ssh.mkdir()
+    legacy = fleet["other_public"] + " legacy-user-entry"
+    (ssh / "authorized_keys").write_text(legacy + "\n")
+    first = execute(fleet, "ssh-mesh")
+    assert first.returncode == 0, first.stdout + first.stderr
+    contents = (ssh / "authorized_keys").read_text()
+    assert "# BEGIN dotfiles committed SSH keys" in contents
+    assert fleet["other_public"] + "\n" in contents
+    vault_key = {"id": "remote-1", "name": "james@remote", "sshKey": {"publicKey": fleet["other_public"]}}
+    (home / "items.json").write_text(json.dumps([json.loads((home / "item.json").read_text()), vault_key]))
+    assert execute(fleet).returncode == 0
+    del fleet["variables"]["machine_pubkeys"]["remote"]
+    (fleet["data"] / "all.yml.json").write_text(json.dumps(fleet["variables"]))
+    assert execute(fleet, "ssh-mesh").returncode == 0
+    assert fleet["other_public"] + "\n" in (ssh / "authorized_keys").read_text()
+    assert execute(fleet, "ssh-mesh", SSH_KEYS_FORCE_AUTHORIZED="true").returncode == 0
+    contents = (ssh / "authorized_keys").read_text()
+    git_block = contents.split("# BEGIN dotfiles committed SSH keys\n", 1)[1].split("# END dotfiles committed SSH keys", 1)[0]
+    vault_block = contents.split("# BEGIN dotfiles Bitwarden SSH keys\n", 1)[1].split("# END dotfiles Bitwarden SSH keys", 1)[0]
+    assert fleet["other_public"] not in git_block
+    assert fleet["other_public"] in vault_block and legacy in contents
+    own = json.loads((home / "item.json").read_text())
+    (home / "items.json").write_text(json.dumps([own]))
+    assert execute(fleet, SSH_KEYS_FORCE_AUTHORIZED="true").returncode == 0
+    contents = (ssh / "authorized_keys").read_text()
+    assert legacy in contents
+    vault_block = contents.split("# BEGIN dotfiles Bitwarden SSH keys\n", 1)[1].split("# END dotfiles Bitwarden SSH keys", 1)[0]
+    assert fleet["other_public"] not in vault_block
+
+
+@pytest.mark.parametrize("pinned", [False, True])
+def test_mesh_rejects_unverified_and_changed_host_keys(fleet, tmp_path, pinned):
+    paramiko = pytest.importorskip("paramiko")
+    import socket
+    import threading
+
+    real_ssh = shutil.which("ssh")
+    if not real_ssh:
+        pytest.skip("OpenSSH client required")
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(3)
+    listener.settimeout(20)
+    port = listener.getsockname()[1]
+    attempts = []
+
+    class Server(paramiko.ServerInterface):
+        def check_auth_none(self, username):
+            attempts.append(username)
+            return paramiko.AUTH_FAILED
+
+        def check_auth_publickey(self, username, key):
+            attempts.append(username)
+            return paramiko.AUTH_FAILED
+
+    def serve():
+        for _ in range(2):
+            try:
+                client, _ = listener.accept()
+                transport = paramiko.Transport(client)
+                transport.add_server_key(paramiko.Ed25519Key.from_private_key_file(str(tmp_path / "other")))
+                try:
+                    transport.start_server(server=Server())
+                    transport.accept(5)
+                except (EOFError, OSError, paramiko.SSHException):
+                    pass
+                finally:
+                    transport.close()
+            except OSError:
+                break
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    ssh = fleet["home"] / ".ssh"
+    ssh.mkdir()
+    (ssh / "id_ed25519").write_text(fleet["private"])
+    (ssh / "id_ed25519").chmod(0o600)
+    (ssh / "id_ed25519.pub").write_text(fleet["public"] + "\n")
+    known = ssh / "known_hosts"
+    original = f"[127.0.0.1]:{port} {fleet['public']}\n" if pinned else ""
+    if pinned:
+        known.write_text(original)
+    (ssh / "config").write_text(f"Host *\n  UserKnownHostsFile {known}\n  GlobalKnownHostsFile /dev/null\n")
+    fleet["variables"]["machines"]["remote"]["hostname"] = "127.0.0.1"
+    (fleet["data"] / "all.yml.json").write_text(json.dumps(fleet["variables"]))
+    inventory = json.loads((fleet["data"] / "inventory.yml.json").read_text())
+    inventory["all"]["hosts"]["remote"]["ansible_port"] = port
+    (fleet["data"] / "inventory.yml.json").write_text(json.dumps(inventory))
+    bindir = Path(fleet["env"]["PATH"].split(":", 1)[0])
+    write_stub(bindir, "ssh", 'exec "$REAL_SSH" -F "$HOME/.ssh/config" "$@"\n')
+    try:
+        result = execute(fleet, "ssh-mesh", UNITS_NO_SECRETS="1", REAL_SSH=real_ssh)
+    finally:
+        listener.close()
+        thread.join(timeout=3)
+    assert result.returncode != 0 and "SSH mesh broken to: remote" in result.stdout
+    assert not attempts
+    assert known.read_text() == original if pinned else not known.exists()
+    assert not (fleet["home"] / "scans").exists()

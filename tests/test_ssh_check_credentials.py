@@ -30,7 +30,7 @@ def test_check_plans_local_ssh_drift_without_writes_or_secret_access(fleet, mode
     if mode == "ssh-keys":
         assert "audit events" in result.stdout and "would write" in result.stdout
     else:
-        assert "authentication, retries and host-key refresh" in result.stdout
+        assert "authentication and retries" in result.stdout
 
 
 def test_missing_identity_check_does_not_read_vault_or_create_directory(fleet):

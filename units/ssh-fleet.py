@@ -2,8 +2,6 @@
 """SSH units' shared, locked implementation; fleet data remains in inventory/vars."""
 import base64
 import fcntl
-import hashlib
-import hmac
 import json
 import os
 import re
@@ -24,6 +22,8 @@ BEGIN = "# BEGIN dotfiles SSH fleet"
 END = "# END dotfiles SSH fleet"
 AK_BEGIN = "# BEGIN dotfiles Bitwarden SSH keys"
 AK_END = "# END dotfiles Bitwarden SSH keys"
+GIT_AK_BEGIN = "# BEGIN dotfiles committed SSH keys"
+GIT_AK_END = "# END dotfiles committed SSH keys"
 RETIRED = {"matrix", "telengana"}
 CHECK = os.environ.get("UNITS_CHECK") == "1"
 PLANNED = {}
@@ -400,7 +400,7 @@ class Fleet:
         lines = ["Host *", "  AddKeysToAgent yes", "  IdentityFile ~/.ssh/id_ed25519",
                  "  ServerAliveInterval 30", "  ServerAliveCountMax 3", "  ControlMaster auto",
                  "  ControlPersist 10m", "  ControlPath ~/.ssh/cp/%C", "  HashKnownHosts no",
-                 "  Compression yes", ""]
+                 "  Compression yes", "  StrictHostKeyChecking yes", ""]
         for name, info in self.machines.items():
             host = self.hosts.get(name) or {}
             lines += [f"Host {name}", f"  HostName {info['hostname']}"]
@@ -462,25 +462,29 @@ class Fleet:
         previous = managed.splitlines()
         if force.lower() not in ("true", "1", "yes"):
             keys = previous + keys
-        outside = before + after
-        existing = set(outside.splitlines())
-        unique = list(dict.fromkeys(k.strip() for k in keys if k.strip() and k.strip() not in existing))
+        before_git, _, after_git, _ = split_block(before + after, GIT_AK_BEGIN, GIT_AK_END)
+        unowned = set((before_git + after_git).splitlines())
+        unique = list(dict.fromkeys(k.strip() for k in keys if k.strip() and k.strip() not in unowned))
         atomic(path, replace_block(old, AK_BEGIN, AK_END, unique), 0o600)
 
     def authorize_git(self):
         keys = self.vars.get("machine_pubkeys") or {}
         path = SSH / "authorized_keys"
         old = text(path)
-        before, _, after, _ = split_block(old, AK_BEGIN, AK_END)
-        outside = before + after
-        existing = set(outside.splitlines())
+        before, managed, after, _ = split_block(old, GIT_AK_BEGIN, GIT_AK_END)
         for key in keys.values():
             key_parts(key)
-            if key not in existing:
-                old += ("\n" if old and not old.endswith("\n") else "") + key + "\n"
-                existing.add(key)
-        if keys:
-            atomic(path, old, 0o600)
+        force = os.environ.get("SSH_KEYS_FORCE_AUTHORIZED", str(self.host_vars.get("ssh_keys_force_authorized", self.vars.get("ssh_keys_force_authorized", "false"))))
+        desired = list(keys.values())
+        if force.lower() not in ("true", "1", "yes"):
+            desired = managed.splitlines() + desired
+        # Leave unmarked entries untouched; legacy lines cannot safely be
+        # distinguished from deliberately user-managed access.
+        before_vault, _, after_vault, _ = split_block(before + after, AK_BEGIN, AK_END)
+        unowned = set((before_vault + after_vault).splitlines())
+        unique = list(dict.fromkeys(k.strip() for k in desired if k.strip() and k.strip() not in unowned))
+        if keys or managed:
+            atomic(path, replace_block(old, GIT_AK_BEGIN, GIT_AK_END, unique), 0o600)
         if self.key_ready:
             own = text(SSH / "id_ed25519.pub")
             committed = keys.get(MACHINE, "")
@@ -492,68 +496,10 @@ class Fleet:
         host = self.hosts.get(name) or {}
         return info["hostname"], int(host.get("ansible_port", 22)), host.get("ansible_user", self.login)
 
-    def scan(self, name):
-        host, port, _ = self.host_data(name)
-        kh = host if port == 22 else f"[{host}]:{port}"
-        result = run(["ssh-keyscan", "-t", "ed25519", "-T", "5", "-p", str(port), host], timeout=8)
-        if result.returncode:
-            return False
-        keys = []
-        for line in result.stdout.splitlines():
-            parts = line.split()
-            if len(parts) == 3 and parts[0] == kh:
-                key_parts(" ".join(parts[1:]))
-                keys.append(line)
-        if not keys:
-            return False
-        path = SSH / "known_hosts"
-        if path.is_symlink():
-            raise RuntimeError("refusing to replace symlinked known_hosts")
-        old = text(path)
-        def matches(token):
-            if not token.startswith("|1|"):
-                return token.lower() == kh.lower()
-            try:
-                _, version, salt, digest = token.split("|")
-                if version != "1":
-                    return False
-                actual = hmac.new(base64.b64decode(salt, validate=True), kh.encode(), hashlib.sha1).digest()
-                return hmac.compare_digest(actual, base64.b64decode(digest, validate=True))
-            except ValueError:
-                return False
-
-        kept, current = [], []
-        for line in old.splitlines(keepends=True):
-            parts = line.split(None, 1)
-            if len(parts) != 2 or parts[0].startswith(("#", "@")):
-                kept.append(line)
-                continue
-            names = parts[0].split(",")
-            if not any(matches(token) for token in names):
-                kept.append(line)
-                continue
-            current.append(parts[1].strip())
-            remaining = [token for token in names if not matches(token)]
-            if remaining:
-                kept.append(",".join(remaining) + " " + parts[1])
-        if sorted(current) == sorted(line.split(None, 1)[1] for line in keys):
-            if CHECK:
-                atomic(path, old, 0o644)
-            else:
-                path.chmod(0o644)
-            return True
-        content = "".join(kept)
-        content += ("\n" if content and not content.endswith("\n") else "") + "\n".join(keys) + "\n"
-        atomic(path, content, 0o644)
-        return True
-
     def known_hosts(self):
-        for name in self.machines:
-            if name != MACHINE and name not in RETIRED:
-                try:
-                    self.scan(name)
-                except (OSError, ValueError, KeyError, subprocess.SubprocessError, RuntimeError) as exc:
-                    print(f"warn: cannot refresh host key for {name}: {exc}")
+        # Network keyscan is unauthenticated: neither first-use nor changed
+        # keys can be trusted without out-of-band operator verification.
+        print("PARTIAL: SSH host keys require out-of-band verification; known_hosts left unchanged")
 
     def mesh(self):
         if not self.key_ready:
@@ -571,7 +517,7 @@ class Fleet:
             host, port, user = self.host_data(name)
             target = f"{user}@{host}"
             args = ["ssh", "-o", "BatchMode=yes", "-o", "PasswordAuthentication=no",
-                    "-o", "ControlMaster=no", "-o", "ControlPath=none", "-o", "StrictHostKeyChecking=accept-new",
+                    "-o", "ControlMaster=no", "-o", "ControlPath=none", "-o", "StrictHostKeyChecking=yes",
                     "-o", "ConnectTimeout=8", "-p", str(port), target, "true"]
             try:
                 probe = run(args, timeout=15)
@@ -583,11 +529,6 @@ class Fleet:
                 run(["ssh", "-O", "exit", "-p", str(port), target], timeout=5)
             except subprocess.TimeoutExpired:
                 pass
-            # Never remove the old known-host entry unless a usable scan succeeds.
-            try:
-                self.scan(name)
-            except (OSError, ValueError, KeyError, subprocess.SubprocessError, RuntimeError) as exc:
-                print(f"warn: cannot refresh host key for {name}: {exc}")
             try:
                 if run(args, timeout=15).returncode == 0:
                     continue
@@ -651,18 +592,6 @@ class CheckFleet(Fleet):
             print(f"would set {public} mode 0644")
         self.key_ready = True
 
-    def known_hosts(self):
-        failed = False
-        for name in self.machines:
-            if name != MACHINE and name not in RETIRED:
-                try:
-                    if not self.scan(name):
-                        raise RuntimeError("no usable host key returned")
-                except (OSError, ValueError, KeyError, subprocess.SubprocessError, RuntimeError) as exc:
-                    print(f"FAIL  cannot inspect host key for {name}: {exc}")
-                    failed = True
-        if failed:
-            raise RuntimeError("one or more SSH host keys could not be inspected")
 
     def mesh(self):
         if not self.key_ready:
@@ -688,7 +617,7 @@ class CheckFleet(Fleet):
                    and (self.hosts.get(name) or {}).get("tailnet_name", name).lower() in online]
         print("online SSH mesh targets: " + (", ".join(targets) if targets else "none"))
         if targets:
-            raise RuntimeError("SSH authentication, retries and host-key refresh cannot safely be probed in check mode")
+            raise RuntimeError("SSH authentication and retries cannot safely be probed in check mode")
 
 
 def check_main(mode):

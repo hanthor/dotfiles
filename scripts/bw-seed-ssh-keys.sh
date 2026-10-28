@@ -128,7 +128,7 @@ fetch_keys() {
     public_key=$(cat "${priv_path}.pub")
   else
     # Fetch remotely via SSH
-    local ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o BatchMode=yes)
+    local ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=yes -o BatchMode=yes)
     local remote_cmd='
       priv="$HOME/.ssh/'"$machine"'_id_ed25519"
       [ ! -f "$priv" ] && priv="$HOME/.ssh/id_ed25519"
@@ -143,7 +143,7 @@ fetch_keys() {
 
     local output
     if ! output=$(ssh "${ssh_opts[@]}" "${SSH_USER}@${host}" "$remote_cmd" 2>/dev/null); then
-      echo "  ✗ SSH unreachable — skipping."
+      echo "  ✗ SSH unreachable or host key not trusted — verify the host key before retrying."
       return
     fi
 

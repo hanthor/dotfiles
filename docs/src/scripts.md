@@ -24,7 +24,7 @@ The shared unit library skips retired `matrix` and `telengana` before unit work.
 - `scripts/bw-unlock.sh` resolves a local session and prints the raw token. Avoid exposing token output. Sessions are not guaranteed portable between hosts.
 - `scripts/bw-seed-kube.sh` upserts the `kubeconfig` and `talosconfig` secure notes from local files, then syncs. `KUBECONFIG` and `TALOSCONFIG` can override the default paths. These credentials contain cluster PKI; do not commit them.
 - `scripts/bw-seed-omp-broker.sh` seeds the omp broker token. See the [omp reference](roles/omp.md).
-- `scripts/bw-seed-ssh-keys.sh` is a legacy helper with a hardcoded machine list. It reads private and public keys locally or over SSH, writes SSH-key items and may register GitHub keys, then writes a chezmoi `dot_ssh/authorized_keys` source file. Review its hardcoded hosts and destination before use; it does not use the native fleet unit's vault item naming or managed-block merge. The normal key lifecycle is documented in [ssh_keys](roles/ssh_keys.md).
+- `scripts/bw-seed-ssh-keys.sh` is a legacy helper with a hardcoded machine list. It reads private and public keys locally or over SSH, writes SSH-key items and may register GitHub keys, then writes a chezmoi `dot_ssh/authorized_keys` source file. Remote host keys must already be verified and trusted. Review its hardcoded hosts and destination before use; it does not use the native fleet unit's vault item naming or managed-block merge. The normal key lifecycle is documented in [ssh_keys](roles/ssh_keys.md).
 
 ## Other helpers
 

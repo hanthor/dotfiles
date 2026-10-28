@@ -63,7 +63,7 @@ jobs:
       - uses: extractions/setup-just@v4
 
       - name: pytest
-        run: uvx --with pyyaml pytest -q tests
+        run: uvx --with pyyaml --with paramiko pytest -q tests
 
   osquery-smoke:
     strategy:

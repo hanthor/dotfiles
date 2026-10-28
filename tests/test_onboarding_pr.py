@@ -45,6 +45,7 @@ esac
     termux = subprocess.run(['bash', str(repo / 'scripts/onboard-machine.sh'), 'termux', 'termux_hosts'],
                             env=env, capture_output=True, text=True)
     assert termux.returncode == 0, termux.stdout + termux.stderr
+    assert not (repo / 'scripts/__pycache__').exists()
     new_mobile = subprocess.run(['bash', str(repo / 'scripts/onboard-machine.sh'), 'new-phone', 'termux_hosts'],
                                 env=env, capture_output=True, text=True)
     assert new_mobile.returncode != 0
@@ -54,6 +55,7 @@ esac
     command = ['bash', str(repo / 'scripts/onboard-machine.sh'), 'newhost', 'desktop']
     first = subprocess.run(command, env=env, capture_output=True, text=True)
     assert first.returncode == 3, first.stdout + first.stderr
+    assert not (repo / 'scripts/__pycache__').exists()
     assert git('status', '--porcelain', cwd=repo) == before
     assert (repo / 'inventory.yml').read_bytes() == inventory_before
     assert 'newhost:' not in git('--git-dir', remote, 'show', 'master:inventory.yml')

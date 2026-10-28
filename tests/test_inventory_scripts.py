@@ -287,6 +287,18 @@ class TestInventoryIntegrity(unittest.TestCase):
         content = self.inv_path.read_text()
         self.assertIn("# Production hosts", content)
         self.assertIn("# Development and test environment", content)
+        inventory = yaml.safe_load(content)
+        self.assertIn("prod1", inventory["all"]["hosts"])
+        self.assertEqual(inventory["all"]["hosts"]["newhost"], {
+            "ansible_host": "localhost", "ansible_connection": "local"})
+        self.assertIn("newhost", inventory["all"]["children"]["desktop"]["hosts"])
+
+    def test_registration_rejects_missing_all_hosts_without_writing(self) -> None:
+        content = "all:\n  children:\n    desktop:\n      hosts:\n"
+        self.inv_path.write_text(content)
+        with self.assertRaises(ValueError):
+            register_host("newhost", "desktop", str(self.inv_path))
+        self.assertEqual(self.inv_path.read_text(), content)
 
     def test_purge_preserves_comments(self) -> None:
         """purge_host preserves comments in file."""

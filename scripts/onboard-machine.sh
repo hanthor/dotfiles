@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Propose an inventory-only registration without modifying the caller's checkout.
 set -euo pipefail
+# Validation imports checkout modules; leave the caller's tree untouched.
+export PYTHONDONTWRITEBYTECODE=1
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 name=${1:?machine name required}
 type=${2:-desktop}
