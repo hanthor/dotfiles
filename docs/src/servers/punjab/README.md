@@ -9,6 +9,20 @@ same AWS account as the former [AWS Talos cluster](../aws-k8s/cluster.md),
 but is an ordinary fleet member, not a cluster node. The Talos cluster was
 terminated; Matrix and the Hives now run on the [OCI VPS](../spindle-vps/README.md).
 
+## Migration status
+
+The Karnataka `corral-vms/punjab` VM is a staging guest, not the EC2 host.
+Its host key was verified against its console; Tailscale enrollment under the
+separate name `punjab-migration` requires approval. Data is being copied into
+root-restricted `/srv/punjab-migration/` on the guest, not activated as its
+home, service state or Tailscale identity. The source remains running.
+
+EC2 snapshot `snap-0bc709516bb003e9a` was created on 2026-10-28 while Punjab
+was live; it is crash-consistent, not a verified application-consistent restore.
+Do not stop the source until transfers, final synchronization, recovery and
+service checks are complete. Existing tmux processes cannot move live.
+S3 contains older backups with no offsite copy and remains retained.
+
 ## Hardware
 
 - EC2 `t3.large` (2 vCPU, 8 GiB, unlimited CPU credits), `us-east-1d`
@@ -47,9 +61,9 @@ Ubuntu 24.04 LTS (stock `ubuntu-noble-24.04-amd64-server` AMI), AWS kernel.
   (needs `session-manager-plugin`; the instance ID is in the OpenTofu state).
 - **Cluster**: `kubectl`/`talosctl` work from here with
   `~/.kube/config-aws-migration` / `~/.talos/config-aws-migration`.
-- **AWS CLI**: prefer the scoped admin user; it can plan the whole config
-  (read-only IAM). Log in as root (`aws login`) only for IAM changes, and don't
-  leave a root session lying around on a shared box.
+- **AWS CLI**: the scoped admin user can inspect EC2, S3 and costs, but was
+  denied CloudFormation, ECS, Secrets Manager, API Gateway and SQS inventory.
+  An authorized administrator session is needed to audit those resources.
 
 ## Host hardening
 
