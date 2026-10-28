@@ -4,9 +4,10 @@
 > are unverified. Karnataka runs `projectbluefin/utah:testing` with
 > `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server on its
 > tailnet address `100.66.158.127`. KubeVirt `v1.9.1`, CDI and Corral are
-> installed; `corral-vms/punjab` is a staging VM, not a migrated replacement
-> for active EC2 Punjab. Retain `talos-k8s/`, cluster configs and Bitwarden
-> notes as recovery material, not proof either machine still runs Talos.
+> installed; `corral-vms/punjab` is now the active Punjab replacement at
+> `100.103.187.46`. The former EC2 host is stopped with recovery storage retained.
+> Retain `talos-k8s/`, cluster configs and Bitwarden notes as recovery material,
+> not proof either machine still runs Talos.
 >
 > **Do not run historical reinstall, configuration or workload commands against
 > repurposed nodes.** They can destroy data or change current systems. Kubernetes

@@ -25,7 +25,7 @@ provider "aws" {
   region = "eu-north-1"
 }
 
-# punjab (this repo's AWS-hosted fleet member) lives in us-east-1.
+# The retained EC2 Punjab recovery resources live in us-east-1.
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"

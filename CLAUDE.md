@@ -13,7 +13,7 @@ Three distinct concerns live here:
 
 ### Cluster recovery and current hosts
 
-- **Home:** Karnataka runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` as its default and a single-node K3s `v1.36.5+k3s1` server bound to its tailnet address `100.66.158.127`. KubeVirt `v1.9.1`, CDI and Corral are installed; `corral-vms/punjab` is a staging VM, not a migrated replacement for active EC2 Punjab. Bihar's OS and services are unverified. Retain the former home cluster's `~/.kube/config`, `~/.talos/config`, Bitwarden notes and `talos-k8s/` manifests as recovery material; don't operate historical recovery commands on these machines.
+- **Home:** Karnataka runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` as its default and a single-node K3s `v1.36.5+k3s1` server bound to its tailnet address `100.66.158.127`. KubeVirt `v1.9.1`, CDI and Corral are installed; `corral-vms/punjab` is now the active Punjab replacement, reached as `ubuntu@100.103.187.46` (tailnet name `punjab`). Reboot persistence, broker access and native no-secrets apply passed at cutover. Bihar's OS and services are unverified. Retain the former home cluster's `~/.kube/config`, `~/.talos/config`, Bitwarden notes and `talos-k8s/` manifests as recovery material; don't operate historical recovery commands on these machines.
 - **AWS** (`eu-north-1`, built 2026-08-27) — **terminated 2026-10-25** after credits were exhausted. It previously ran Matrix, the Hives and the CFP dashboard. The S3 bucket `hanthor-fleet-backups-*` and the himachal-1 mirror (`~/backups/tunaos-aws-2026-10-25`) were retained; verify individual AWS resources rather than assuming they are gone. OpenTofu still describes the old cluster and can propose recreating resources.
   Configs retained as recovery material: `~/.kube/config-aws-migration`, `~/.talos/config-aws-migration`.
   Handbook: [`docs/src/servers/aws-k8s/cluster.md`](docs/src/servers/aws-k8s/cluster.md).
@@ -64,10 +64,10 @@ The former Bihar control plane and Karnataka worker ran Talos `v1.13.2`, Kuberne
 
 ## TunaOS AWS account (`aws/`)
 
-- **punjab** (this repo's AWS-hosted fleet host) is an EC2 `t3.large` in `us-east-1`; the former Talos cluster in `eu-north-1` is terminated. `runs-on` (us-east-2) is its own CloudFormation stack — don't import it.
+- **punjab** is now a Karnataka-hosted VM. Its former EC2 `t3.large` in `us-east-1` was stopped on 2026-10-28 and its EIP released; its root volume and recovery snapshots remain. The former Talos cluster in `eu-north-1` is terminated. The separate `runs-on` CloudFormation stack in `us-east-2` reached `DELETE_COMPLETE`; its two S3 buckets and object versions were retained.
 - **Do not blindly apply `aws/`:** its configuration still describes the terminated cluster and may propose recreating paid infrastructure. Inspect live resources and review plans before changes; credits are exhausted.
 - State is in S3 (`hanthor-fleet-backups-*/tofu/aws/`) and contains Talos PKI. `aws/terraform.tfvars` is gitignored and lives in Bitwarden note `aws-tofu-tfvars` (`just aws-tfvars` / `just aws-seed-tfvars`).
-- EC2 punjab remains active and uses Tailscale for access and SSM Session Manager for break-glass. Do not stop it; preserve its data and the S3 backups until a verified replacement and an explicit cleanup decision exist.
+- Do not restart EC2 Punjab or recreate retired runners without an explicit recovery decision. Preserve the retained root volume, snapshots and S3 backups; storage still incurs charges. The root-only cutover receipt on the replacement is `/srv/punjab-migration/aws-cutover-receipt.json`; the successful shutdown service journal records EC2 stopped and EIP released.
 - The former cluster uploaded Postgres dumps to `s3://hanthor-fleet-backups-*/postgres/`; the `postgres-backup-writer` key is in Bitwarden, never in tofu state.
 - `prevent_destroy` in configuration does not prevent creation of resources missing from the account. Never put Talos `user_data` in the config.
 

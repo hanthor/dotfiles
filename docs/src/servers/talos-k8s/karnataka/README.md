@@ -3,8 +3,9 @@
 Karnataka runs `ghcr.io/projectbluefin/utah:testing`, is in the fleet's
 `server` inventory group, and uses `multi-user.target` as its default. SSH is
 available over Tailscale at `100.66.158.127`. A single-node K3s cluster runs
-KubeVirt, CDI, and Corral. The `corral-vms/punjab` VM is a staging guest; it
-is not the EC2 host and has not received its data or services.
+KubeVirt, CDI, and Corral. The `corral-vms/punjab` VM now runs the migrated
+Punjab environment at `100.103.187.46` (tailnet name `punjab`). Its former EC2
+host is stopped; its root volume and recovery snapshots are retained.
 
 NetworkManager, Tailscale and SSH are enabled at boot. Ethernet is preferred;
 a locally stored Wi-Fi profile autoconnects with a higher route metric. Wi-Fi

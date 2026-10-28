@@ -79,18 +79,18 @@ before reuse.
 
 ## AWS recovery and shutdown handoff
 
-The former EC2 instance is `i-085690e02ca98c95a` in `us-east-1`. Its intended
-recovery state is **stopped**, not terminated. The 250 GiB root volume
+The former EC2 instance `i-085690e02ca98c95a` in `us-east-1` reached **stopped**
+at the cutover, not terminated. The 250 GiB root volume
 `vol-09fdb248c28e850ca` and five completed snapshots are retained. Snapshot
 `snap-0bc709516bb003e9a` was taken while EC2 was live: it is crash-consistent,
 not proof of an application-consistent restore.
 
-The shutdown runs from the replacement after its checks, not from a process
-that needs EC2 to stay online. The root-only receipt at
-`/srv/punjab-migration/aws-cutover-receipt.json` records the observed EC2 and
-EIP retirement result; consult it and AWS rather than assuming completion
-from a documentation entry. The EIP allocation to release is
-`eipalloc-00f40f76478a3ea02`.
+The replacement's `punjab-aws-cutover.service` completed successfully at
+2026-10-28 19:27:15 UTC, after observing EC2 stopped and releasing EIP allocation
+`eipalloc-00f40f76478a3ea02`. It then logged out of the AWS CLI. The root-only
+receipt at `/srv/punjab-migration/aws-cutover-receipt.json` preserves that
+result with journal provenance; a later check-only authentication failure is
+retained separately. Consult the receipt and AWS for current resource state.
 
 The `runs-on` stack reached `DELETE_COMPLETE`; its two S3 buckets and all
 observed versions were retained. The fleet-backups S3 bucket remains intact.

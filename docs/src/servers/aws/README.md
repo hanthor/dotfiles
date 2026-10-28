@@ -20,7 +20,7 @@ and prior deployment, not a verified live resource inventory.
 |---|---|---|
 | `eu-north-1` | Terminated Talos cluster — VPC, nodes, Elastic IPs, security groups, pgdata volume | `aws/cluster.tf` |
 | `eu-north-1` | Backup configuration — DLM policy and retained fleet-backups bucket | `aws/backups.tf` |
-| `us-east-1` | Punjab EC2 retirement in progress; root volume and five recovery snapshots retained | `aws/punjab.tf` |
+| `us-east-1` | Punjab EC2 stopped; EIP released; root volume and five recovery snapshots retained | `aws/punjab.tf` |
 | `us-east-2` | `runs-on` stack deleted 2026-10-28; cache/log buckets retained | Former CloudFormation stack `runs-on` |
 | global | IAM, backup, account and budget configuration | `aws/iam.tf`, `aws/backups.tf`, `aws/account.tf`, `aws/budgets.tf` |
 
@@ -94,9 +94,10 @@ dependency are removed, and DLM is disabled. It does **not** manage the
 replacement guest. The replacement retains AWS administration tools and its
 SSH-hardening and no-proxy policies.
 
-The shutdown handoff's root-only receipt on the replacement is
-`/srv/punjab-migration/aws-cutover-receipt.json`; it records observed EC2
-shutdown and EIP release, rather than treating a config edit as proof.
+The replacement's shutdown service completed successfully at 19:27:15 UTC,
+observing EC2 stopped and releasing its EIP before logging out of AWS. Its
+root-only receipt is `/srv/punjab-migration/aws-cutover-receipt.json`, with
+systemd journal provenance retained rather than treating a config edit as proof.
 The former cluster's broader declarations still require separate state/config
 reconciliation: deleted resources declared here can be proposed for recreation.
 `prevent_destroy` does not protect against recreation. Retain S3 backups,

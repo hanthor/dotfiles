@@ -4,7 +4,8 @@
 > Bihar's OS and services are unverified. Karnataka runs `projectbluefin/utah:testing`
 > with `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server bound to
 > tailnet address `100.66.158.127`. KubeVirt `v1.9.1`, CDI and Corral are installed;
-> `corral-vms/punjab` is staging, not a migrated replacement for active EC2 Punjab.
+> `corral-vms/punjab` is now the active Punjab replacement (`100.103.187.46`);
+> its former EC2 host is stopped, with recovery storage retained.
 > On the current server, firewalld puts `cni0` in the internal zone and accepts
 > pod subnet `10.42.0.0/16` to kubelet port `10250` on that tailnet address;
 > internal-zone services, including SSH, are accessible from pods. NetworkPolicy
