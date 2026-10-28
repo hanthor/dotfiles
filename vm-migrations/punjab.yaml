@@ -58,9 +58,15 @@ spec:
             name: punjab-root
         - name: cloudinit
           cloudInitNoCloud:
+            networkData: |
+              version: 2
+              ethernets:
+                enp1s0:
+                  dhcp4: true
+                  dhcp6: false
             userData: |
               #cloud-config
-              hostname: punjab-migration
+              hostname: punjab
               manage_etc_hosts: true
               ssh_pwauth: false
               users:

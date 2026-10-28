@@ -1,8 +1,6 @@
-# punjab — headless agent/dev box, Ansible-managed like any other fleet host
-# (inventory.yml, host_vars/punjab.yml). Stock Ubuntu 24.04, reached over
-# Tailscale at 100.78.73.8. No public inbound by default: break-glass access is
-# SSM Session Manager (`aws ssm start-session --target <id>`), which needs no
-# open port. var.punjab_ssh_ingress can re-open 22 temporarily if SSM is down.
+# Retained EC2 Punjab recovery host. The active fleet host is now the
+# Karnataka VM at 100.103.187.46. The desired recovery state is stopped,
+# retaining its original volume and SSM role but no reserved public IP.
 
 resource "aws_key_pair" "punjab" {
   provider   = aws.us_east_1
@@ -109,16 +107,10 @@ resource "aws_instance" "punjab" {
   }
 }
 
-# Stable public IP: it's allowlisted on the Talos cluster's admin SG so punjab
-# can run talosctl/kubectl against it (an ephemeral IP would change on every
-# stop/start).
-resource "aws_eip" "punjab" {
-  provider = aws.us_east_1
-  domain   = "vpc"
-  instance = aws_instance.punjab.id
-  tags = {
-    Name = "punjab"
-  }
+resource "aws_ec2_instance_state" "punjab_retired" {
+  provider    = aws.us_east_1
+  instance_id = aws_instance.punjab.id
+  state       = "stopped"
 }
 
 # DLM is regional, so punjab (us-east-1) needs its own policy. Same schedule

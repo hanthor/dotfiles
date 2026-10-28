@@ -1,87 +1,91 @@
 # Punjab
 
-> **TunaOS infrastructure.** This runs in the TunaOS AWS account and serves
-> the TunaOS project (Hive, Matrix, CI), not James's personal fleet. See
-> [TunaOS AWS Account & IaC](../aws/README.md).
+Punjab is the headless agent/dev VM on Karnataka. Matrix and the Hives run
+separately on the [OCI spindle VPS](../spindle-vps/README.md).
 
-Headless agent/dev box — the fleet's AWS-hosted Ansible host. It runs in the
-same AWS account as the former [AWS Talos cluster](../aws-k8s/cluster.md),
-but is an ordinary fleet member, not a cluster node. The Talos cluster was
-terminated; Matrix and the Hives now run on the [OCI VPS](../spindle-vps/README.md).
+## Active replacement
 
-## Migration status
+- KubeVirt VM: `corral-vms/punjab`, on Karnataka's local-path storage.
+- Ubuntu 24.04, 4 vCPUs, 12 GiB RAM, 320 GiB virtual root disk.
+- Tailscale: **punjab**, `100.103.187.46`; SSH user **ubuntu**.
+- Connect with `ssh ubuntu@punjab` or `ssh ubuntu@100.103.187.46`.
+- `/etc/dotfiles-machine` is `punjab`. The guest keeps its own SSH host keys,
+  machine ID and Tailscale identity; none were copied from EC2.
+- The old EC2 tailnet node is named `punjab-aws-retired`.
 
-The Karnataka `corral-vms/punjab` VM is a staging guest, not the EC2 host.
-Its host key was verified against its console. The separate Tailscale device
-`punjab-migration` is online at `100.103.187.46`; direct SSH was verified
-against that same host key. The initial home copy completed on 2026-10-28 into
-root-restricted `/srv/punjab-migration/` on the guest; it is not activated as
-its home, service state or Tailscale identity. The source remains running, so
-the copy needs final synchronization and validation before cutover.
-A metadata-based dry run after the initial copy found 577 regular files to
-transfer (about 996 MB) and 485 new filesystem entries. The follow-up sync
-completed successfully. The comparison did not checksum all contents or
-check for deletions, and the live source can still change.
+The manifest is [`vm-migrations/punjab.yaml`](https://github.com/hanthor/dotfiles/blob/master/vm-migrations/punjab.yaml).
+Its cloud-init network data uses DHCPv4 only. The masquerade interface's MTU
+is below IPv6's minimum; requesting DHCPv6 caused a network-online timeout
+on reboot. Full VM startup and a subsequent in-guest reboot were exercised;
+authenticated SSH, broker access and the enabled services returned afterward.
 
-The guest resolved and reached `api.github.com` over HTTPS and connected to
-the Spindle broker's TCP port. These checks do not prove broker authentication.
+Karnataka and its local disk are now a dependency of this host. This is not
+HA storage; losing Karnataka or that disk requires recovery from backups.
 
-Kiro Crew was retired at the owner's request. Its source service is disabled
-and masked; its private recovery data is retained, not activated on the
-replacement. The Kiro CLI and omp integrations are separate and remain.
+## Configuration and services
 
-EC2 snapshot `snap-0bc709516bb003e9a` was created on 2026-10-28 while Punjab
-was live; it is crash-consistent, not a verified application-consistent restore.
-Do not stop the source until transfers, final synchronization, recovery and
-service checks are complete. Existing tmux processes cannot move live.
-S3 contains older backups with no offsite copy and remains retained.
+The canonical checkout is `~/.local/share/dotfiles`, deployed from
+`feat/native-laptop-units` while [PR #348](https://github.com/hanthor/dotfiles/pull/348)
+is under review. Native Bash units run through mise; no Ansible apply is used
+by the replacement's update service. The user timer and Atuin daemon use
+linger so they can run without an SSH login.
+The real `just apply-nosecrets` completed successfully on the replacement;
+secret-dependent setup reports partial/skipped rather than pretending to run.
 
-## Hardware
+- omp authenticates through the Spindle broker at `http://100.113.75.88:8765`.
+  The obsolete shell override pointing at EC2 was removed by chezmoi adoption.
+- Atuin's local history and key were copied and their history database matched
+  the source at cutover. Cloud sync was already logged out; the local key
+  differs from the Bitwarden item. Neither key nor history was overwritten.
+  Resolve that account/key mismatch before attempting cloud sync.
+- osquery's daemon, local report timer and fleet poll timer run on the VM.
+  The temporary staging-hostname baseline is retained privately; a new baseline
+  was accepted for the final `punjab` identity. Missing reporters on the reachable
+  Karnataka and Himachal nodes were provisioned during validation.
+- SSH password/root login is disabled by the native sshd hardening configuration.
+- `skip_proxy: true` remains set; the VM is not a desktop.
 
-- EC2 `t3.large` (2 vCPU, 8 GiB, unlimited CPU credits), `us-east-1d`
-- 250 GB gp3 root volume (unencrypted — predates EBS encryption-by-default;
-  snapshotted daily ×7 / weekly ×4 by DLM)
-- Default VPC, stable Elastic IP
-- IMDSv2 required, hop limit 1; termination protection on
-- Instance role: Session Manager only
-- Tailscale: `punjab` (MagicDNS)
+**Kiro Crew is retired.** Its service is disabled/masked, the launcher and
+fleet integration are removed, and its private recovery data is quarantined.
+Kiro CLI and omp integrations are separate and remain available.
 
-The instance, its security group and key pair are codified in
-[`aws/punjab.tf`](https://github.com/hanthor/dotfiles/blob/master/aws/punjab.tf) —
-see [AWS Account](../aws/README.md).
+## Preserved migration data
 
-## OS
+`/srv/punjab-migration/` is root-only and contains:
 
-Ubuntu 24.04 LTS (stock `ubuntu-noble-24.04-amd64-server` AMI), AWS kernel.
+- `source-system/`: the EC2 system-state recovery copy, not a replacement for
+  the VM's live networking, machine identity or system directories.
+- `guest-original-home/`: the pre-cutover guest home.
+- `kirocrew-retired/`: quarantined application data/runtime files.
+- `terminal-recovery.tgz`: five tmux panes' scrollback, working-directory
+  inventory and the former user crontab. Existing processes cannot move live.
+- `runs-on-retirement/`: private runner stack/configuration/secret recovery
+  material and retention evidence. Never publish these files.
 
-## Role
+The old home copy is now `/home/ubuntu`; Homebrew is `/home/linuxbrew`.
+The old source checkout, including its branch and uncommitted work, is retained
+at `~/.local/share/dotfiles-ec2-recovery`. Its four modified tracked files were
+also copied into the active checkout. Other old temporary worktrees remain
+in the system recovery copy; their original absolute Git paths may need repair
+before reuse.
 
-- Agent host: Claude Code, Kiro, `pi`, run in tmux
-- AWS admin box: `awscli` + `opentofu` (via `extra_brews`) for the
-  [AWS IaC](../aws/README.md)
+## AWS recovery and shutdown handoff
 
-## Access
+The former EC2 instance is `i-085690e02ca98c95a` in `us-east-1`. Its intended
+recovery state is **stopped**, not terminated. The 250 GiB root volume
+`vol-09fdb248c28e850ca` and five completed snapshots are retained. Snapshot
+`snap-0bc709516bb003e9a` was taken while EC2 was live: it is crash-consistent,
+not proof of an application-consistent restore.
 
-- **Normal**: `ssh punjab` over Tailscale.
-- **Break-glass** (Tailscale down): SSM Session Manager, no open port needed:
-  ```bash
-  aws ssm start-session --region us-east-1 --target <instance-id>
-  ```
-  (needs `session-manager-plugin`; the instance ID is in the OpenTofu state).
-- **Cluster**: `kubectl`/`talosctl` work from here with
-  `~/.kube/config-aws-migration` / `~/.talos/config-aws-migration`.
-- **AWS CLI**: the scoped admin user can inspect EC2, S3 and costs, but was
-  denied CloudFormation, ECS, Secrets Manager, API Gateway and SQS inventory.
-  An authorized administrator session is needed to audit those resources.
+The shutdown runs from the replacement after its checks, not from a process
+that needs EC2 to stay online. The root-only receipt at
+`/srv/punjab-migration/aws-cutover-receipt.json` records the observed EC2 and
+EIP retirement result; consult it and AWS rather than assuming completion
+from a documentation entry. The EIP allocation to release is
+`eipalloc-00f40f76478a3ea02`.
 
-## Host hardening
-
-- sshd drop-in (`sshd_harden: true`): no root login, no passwords/kbd-interactive,
-  no X11, `MaxAuthTries 3`.
-- `unattended-upgrades` on (Ubuntu default).
-
-## Ansible notes (`host_vars/punjab.yml`)
-
-- `skip_proxy: true` — no podman on stock Ubuntu, so no Caddy quadlet.
-- Not a desktop: no GNOME/flatpak/browser roles.
-- `syncthing` only runs if its brew binary exists (it currently doesn't).
+The `runs-on` stack reached `DELETE_COMPLETE`; its two S3 buckets and all
+observed versions were retained. The fleet-backups S3 bucket remains intact.
+Both DLM policies are disabled. Storage still incurs charges. The former
+cluster's broader IaC remains historical: follow the warnings in the
+[AWS handbook](../aws/README.md), not a blanket `tofu apply` or `destroy`.

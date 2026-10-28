@@ -47,7 +47,7 @@ aws/
 ├── versions.tf     # provider (eu-north-1 default, us_east_1 alias) + S3 backend
 ├── cluster.tf      # VPC/subnet/IGW/routes, 3 SGs, 2 Talos nodes, EIPs, pgdata
 ├── backups.tf      # DLM role + policy, fleet-backups bucket (+ versioning/SSE/lifecycle)
-├── punjab.tf       # key pair, SG, instance, EIP, SSM role, DLM
+├── punjab.tf       # retained stopped instance, key pair, SG, SSM role, disabled DLM
 ├── account.tf      # EBS encryption by default (both regions)
 ├── iam.tf          # scoped admin user + its policies
 ├── budgets.tf      # 5 budgets, one for_each
@@ -81,26 +81,26 @@ infrastructure and incur charges. `aws/terraform.tfvars` remains sensitive;
 
 The fleet inventory's logical `punjab` host now connects to the replacement
 guest on Karnataka at `100.103.187.46`, using the verified `ubuntu` account.
-Its separate Tailscale name remains **`punjab-migration`** until the service
-cutover and identity rename are confirmed; the inventory's `tailnet_name`
-override keeps fleet discovery aligned with that staging identity. This is
-a connection-target change, not evidence that service migration is complete
-or that the original EC2 instance has stopped.
+The replacement now owns the Tailscale name **`punjab`**; the old node is
+`punjab-aws-retired`. Authenticated SSH, broker access, the native no-secrets
+apply and monitoring were exercised on the replacement, including reboot
+persistence. Atuin's pre-existing cloud account/key mismatch remains unresolved;
+local history and its key were retained.
 
-`aws/punjab.tf` still describes the original EC2 instance at its historical
-Tailscale address `100.78.73.8`, plus its EIP, security group, key pair, SSM
-role/profile and DLM policy. It does **not** manage the replacement guest.
-Those resource declarations and `prevent_destroy` remain unchanged. The
-replacement retains AWS administration tools and its existing SSH-hardening
-and no-proxy policies; moving it off EC2 does not require removing those tools.
+`aws/punjab.tf` retains the original EC2 instance, volume protection, security
+group, key pair and SSM role/profile for recovery. Its desired instance state
+is explicitly stopped, the EIP declaration and former cluster allowlist
+dependency are removed, and DLM is disabled. It does **not** manage the
+replacement guest. The replacement retains AWS administration tools and its
+SSH-hardening and no-proxy policies.
 
-Retirement must reconcile live AWS resources, OpenTofu state and configuration
-separately: deleted resources still declared here can be proposed for recreation,
-while stopped instances can retain billable volumes, EIPs and snapshots.
-`prevent_destroy` is not a stop/retirement mechanism and does not protect against
-recreation. Retain the S3 backups and state; do not use a blanket destroy to
-resolve this drift. Verify actual retirement status before updating the
-historical inventory above.
+The shutdown handoff's root-only receipt on the replacement is
+`/srv/punjab-migration/aws-cutover-receipt.json`; it records observed EC2
+shutdown and EIP release, rather than treating a config edit as proof.
+The former cluster's broader declarations still require separate state/config
+reconciliation: deleted resources declared here can be proposed for recreation.
+`prevent_destroy` does not protect against recreation. Retain S3 backups,
+recovery storage and state; do not use a blanket destroy to resolve that drift.
 
 ## IAM & access
 
