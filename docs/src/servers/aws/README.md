@@ -20,9 +20,25 @@ and prior deployment, not a verified live resource inventory.
 |---|---|---|
 | `eu-north-1` | Terminated Talos cluster — VPC, nodes, Elastic IPs, security groups, pgdata volume | `aws/cluster.tf` |
 | `eu-north-1` | Backup configuration — DLM policy and retained fleet-backups bucket | `aws/backups.tf` |
-| `us-east-1` | [punjab](../punjab/README.md) EC2 agent box; running as of 2026-10-27 | `aws/punjab.tf` |
-| `us-east-2` | `runs-on` GitHub Actions runners; current stack status unverified | CloudFormation stack `runs-on` |
+| `us-east-1` | Punjab EC2 retirement in progress; root volume and five recovery snapshots retained | `aws/punjab.tf` |
+| `us-east-2` | `runs-on` stack deleted 2026-10-28; cache/log buckets retained | Former CloudFormation stack `runs-on` |
 | global | IAM, backup, account and budget configuration | `aws/iam.tf`, `aws/backups.tf`, `aws/account.tf`, `aws/budgets.tf` |
+
+## Verified retirement inventory (2026-10-28)
+
+An administrator inventory covered all 17 enabled regions. Punjab was the only
+remaining EC2 instance; no NAT gateways, load balancers or RDS instances were
+found. The `runs-on` Fargate manager and six Lambda functions were retired with
+its CloudFormation stack; deletion reached `DELETE_COMPLETE`, with no ECS
+clusters or Lambda functions remaining in `us-east-2`.
+
+All three S3 buckets remain. The runner cache and logging buckets retained all
+observed object versions; their lifecycle expiration was disabled. Private
+runner recovery material is root-only on the replacement under
+`/srv/punjab-migration/runs-on-retirement/`. The fleet-backups bucket was not
+modified. Both DLM policies are disabled to freeze the recovery snapshot set;
+the five completed Punjab snapshots remain. Retained storage still incurs
+charges; this is not a zero-bill claim.
 
 ## OpenTofu layout
 
