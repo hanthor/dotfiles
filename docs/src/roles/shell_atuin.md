@@ -56,6 +56,11 @@ original snapshot archive is also at
 Retain these archives: keys recovered from an old/offline host may unlock more
 history later. The original live directory is retained as `live-data-before-switch/`.
 
+Before resuming sync on an old/offline client, back up its databases and key,
+recover any unsynced history into the canonical store, then give that client a
+fresh verified store. Do not let an old cached mixed-key store upload again:
+even a client with the correct account key may carry other hosts' opaque records.
+
 Back up live SQLite databases with SQLite's backup API, not by copying only
 their `.db` files while WAL files exist. Test recovery on copies; `store rebuild
 history` merges rather than clears its target, and `store verify` can print
