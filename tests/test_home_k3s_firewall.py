@@ -1,5 +1,6 @@
 import json
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -249,3 +250,183 @@ def test_query_error_is_not_treated_as_missing(firewall):
     result, state = run("--apply")
     assert result.returncode == 2
     assert not state["changes"]
+
+
+BRIDGE_SCRIPT = REPO / "home-k3s" / "firewall-egress-bridge.sh"
+RULE4 = 'rule priority="-1" family="ipv4" source NOT address="10.42.0.0/16" drop'
+RULE6 = 'rule priority="-1" family="ipv6" source address="::/0" drop'
+
+
+@pytest.fixture
+def bridge(tmp_path, stub_env):
+    bindir, env = stub_env
+    write_stub(bindir, "id", 'echo 0\n')
+    write_stub(bindir, "hostname", 'echo karnataka\n')
+    write_stub(bindir, "systemd-run", 'printf "timer\\n" >> "$BRIDGE_LOG"\ntouch "$TIMER_FILE"\n')
+    write_stub(bindir, "systemctl", r'''case "$1" in
+  is-active) test -f "$TIMER_FILE" ;;
+  stop) rm -f "$TIMER_FILE" ;;
+  *) exit 2 ;;
+esac
+''')
+    write_stub(bindir, "firewall-cmd", r'''exec python3 - "$@" <<'PY'
+import json, os, sys
+p = os.environ["BRIDGE_FIREWALL_STATE"]
+s = json.load(open(p))
+args = sys.argv[1:]
+scope = "permanent" if "--permanent" in args else "runtime"
+policy = s["policy"]
+zone = next((a.split("=", 1)[1] for a in args if a.startswith("--zone=")), "")
+if "--state" in args:
+    print("running")
+elif "--get-default-zone" in args:
+    print(s["default"])
+elif "--get-zones" in args:
+    print("internal public home trusted external")
+elif "--list-interfaces" in args:
+    print(" ".join(s[scope]["interfaces"]))
+elif "--list-sources" in args:
+    print(" ".join(s[scope]["sources"].get(zone, [])))
+elif any(a.startswith("--info-policy=") for a in args):
+    print("gateway-lan-to-world" + (" (disabled)" if policy["disable"] == "yes" else " (active)"))
+    for key in ("disable", "priority", "target", "ingress-zones", "egress-zones",
+                "services", "ports", "protocols", "masquerade", "forward-ports",
+                "source-ports", "icmp-blocks", "rich rules"):
+        value = policy[key]
+        if key == "rich rules":
+            print("  rich rules: " + ("\n\t" + "\n\t".join(value) if value else ""))
+        else:
+            print("  " + key + ": " + (" ".join(value) if isinstance(value, list) else value))
+else:
+    op = next(a for a in args if a.startswith(("--query-", "--add-", "--remove-")))
+    command, _, value = op.partition("=")
+    key = {"--query-disable": "disable", "--add-disable": "disable", "--remove-disable": "disable",
+           "--query-rich-rule": "rich rules", "--add-rich-rule": "rich rules", "--remove-rich-rule": "rich rules",
+           "--query-ingress-zone": "ingress-zones", "--add-ingress-zone": "ingress-zones", "--remove-ingress-zone": "ingress-zones",
+           "--query-egress-zone": "egress-zones", "--add-egress-zone": "egress-zones", "--remove-egress-zone": "egress-zones"}[command]
+    if command.startswith("--query-"):
+        sys.exit(0 if (policy[key] == "yes" if key == "disable" else value in policy[key]) else 1)
+    with open(os.environ["BRIDGE_LOG"], "a") as f:
+        f.write(op + "\n")
+    if os.environ.get("FAIL_OP") == command and not os.path.exists(os.environ["FAIL_ONCE"]):
+        open(os.environ["FAIL_ONCE"], "w").close()
+        sys.exit(2)
+    if key == "disable":
+        policy[key] = "yes" if command == "--add-disable" else "no"
+    elif command.startswith("--add-"):
+        policy[key].append(value)
+    else:
+        policy[key].remove(value)
+    with open(p, "w") as f:
+        json.dump(s, f)
+PY
+''')
+    path = tmp_path / "bridge-firewall.json"
+    policy = empty_policy()
+    policy.update({"target": "ACCEPT", "priority": "1000", "disable": "yes",
+                   "ingress-zones": ["internal", "home", "trusted"],
+                   "egress-zones": ["external", "public"], "services": ["ftp", "tftp"]})
+    path.write_text(json.dumps({
+        "default": "public", "policy": policy,
+        "runtime": {"interfaces": ["cni0"], "sources": {}},
+        "permanent": {"interfaces": ["cni0"], "sources": {}},
+    }))
+    env.update({"BRIDGE_FIREWALL_STATE": str(path), "BRIDGE_LOG": str(tmp_path / "ops"),
+                "TIMER_FILE": str(tmp_path / "timer"), "FAIL_ONCE": str(tmp_path / "failed"),
+                "K3S_BRIDGE_STATE_DIR": str(tmp_path / "managed")})
+
+    def run(mode):
+        result = subprocess.run(["bash", str(BRIDGE_SCRIPT), mode], env=env, text=True, capture_output=True)
+        return result, json.loads(path.read_text())
+
+    return path, env, run
+
+
+def test_bridge_arms_before_changes_and_timer_restores(bridge):
+    path, env, run = bridge
+    original = json.loads(path.read_text())
+    result, state = run("--apply")
+    assert result.returncode == 0, result.stderr
+    policy = state["policy"]
+    assert policy["disable"] == "no"
+    assert policy["ingress-zones"] == ["internal"]
+    assert policy["egress-zones"] == ["public"]
+    assert set(policy["rich rules"]) == {RULE4, RULE6}
+    operations = Path(env["BRIDGE_LOG"]).read_text().splitlines()
+    assert operations[0] == "timer"
+    assert operations.index("--add-rich-rule=" + RULE4) < operations.index("--remove-disable")
+    assert operations.index("--add-rich-rule=" + RULE6) < operations.index("--remove-disable")
+    result, restored = run("--timer-rollback")
+    assert result.returncode == 0, result.stderr
+    assert set(restored["policy"]["ingress-zones"]) == set(original["policy"]["ingress-zones"])
+    assert set(restored["policy"]["egress-zones"]) == set(original["policy"]["egress-zones"])
+    assert restored["policy"]["disable"] == "yes"
+    assert restored["policy"]["rich rules"] == []
+    result, _ = run("--cleanup")
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("scope", ["runtime", "permanent"])
+def test_bridge_refuses_source_bindings_in_other_zones(bridge, scope):
+    path, _, run = bridge
+    state = json.loads(path.read_text())
+    state[scope]["sources"]["public"] = ["10.42.0.0/16"]
+    path.write_text(json.dumps(state))
+    result, unchanged = run("--apply")
+    assert result.returncode != 0
+    assert "source bindings" in result.stderr
+    assert unchanged == state
+
+
+def test_bridge_failure_restores_before_returning(bridge):
+    path, env, run = bridge
+    original = json.loads(path.read_text())
+    env["FAIL_OP"] = "--remove-egress-zone"
+    result, state = run("--apply")
+    assert result.returncode != 0
+    assert state["policy"]["disable"] == "yes"
+    assert set(state["policy"]["ingress-zones"]) == set(original["policy"]["ingress-zones"])
+    assert set(state["policy"]["egress-zones"]) == set(original["policy"]["egress-zones"])
+    assert state["policy"]["rich rules"] == []
+
+
+def test_bridge_commit_keeps_policy_until_cleanup(bridge):
+    _, _, run = bridge
+    result, _ = run("--apply")
+    assert result.returncode == 0, result.stderr
+    result, active = run("--commit")
+    assert result.returncode == 0, result.stderr
+    result, unchanged = run("--timer-rollback")
+    assert result.returncode == 0, result.stderr
+    assert unchanged == active
+    result, restored = run("--cleanup")
+    assert result.returncode == 0, result.stderr
+    assert restored["policy"]["disable"] == "yes"
+    assert restored["policy"]["rich rules"] == []
+
+
+@pytest.mark.parametrize("field,value", [
+    ("target", "CONTINUE"), ("priority", "-1"), ("disable", "no"),
+    ("ingress-zones", ["internal", "home", "trusted", "public"]),
+    ("rich rules", [RULE4]),
+])
+def test_bridge_refuses_policy_drift_without_mutation(bridge, field, value):
+    path, env, run = bridge
+    state = json.loads(path.read_text())
+    state["policy"][field] = value
+    path.write_text(json.dumps(state))
+    result, unchanged = run("--apply")
+    assert result.returncode != 0
+    assert unchanged == state
+    assert not Path(env["TIMER_FILE"]).exists()
+
+
+def test_bridge_never_removes_guards_if_disabling_fails(bridge):
+    _, env, run = bridge
+    result, active = run("--apply")
+    assert result.returncode == 0, result.stderr
+    env["FAIL_OP"] = "--add-disable"
+    result, unchanged = run("--cleanup")
+    assert result.returncode != 0
+    assert unchanged == active
+    assert Path(env["TIMER_FILE"]).exists()

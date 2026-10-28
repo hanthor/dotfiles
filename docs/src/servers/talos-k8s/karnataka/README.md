@@ -88,6 +88,61 @@ returns nonzero while the policy is absent at runtime. It never reloads
 firewalld. Interrupted creation may leave a partial policy; a later apply can
 finish it. Other policies are not changed.
 
+### Optional temporary runtime bridge
+
+`home-k3s/firewall-egress-bridge.sh` is a separate, opt-in bridge until the
+dedicated permanent policy can be activated. It has **not** been run on
+Karnataka. It requires the exact observed disabled `gateway-lan-to-world`
+baseline, `internal` containing only `cni0`, `internal` not being the default,
+and **no source bindings in any zone in either store**. It narrows the runtime
+policy to `internal` → `public`, adds negative-priority drops for non-pod IPv4
+sources and all IPv6, and only then enables it. It does not modify the vendor
+policy's permanent configuration or load the staged dedicated policy.
+
+Unlike the dedicated policy's `CONTINUE` target, the temporary policy's target
+is `ACCEPT`; the drop rules restrict that acceptance to `10.42.0.0/16` IPv4.
+They can also drop traffic that a later policy would otherwise allow, and
+earlier policies or established-connection handling may bypass them. Pod IPs
+can be spoofed, all protocols and LAN destinations in `public` are allowed,
+and this is not per-pod isolation. Inspect all other policies and both stores'
+zone bindings as described below before considering it. A change to source
+bindings or `internal` after activation invalidates the assumptions.
+
+Only with console recovery, a retained Tailscale SSH session, and the systemd
+timer probe below proven successful, run:
+
+```bash
+sudo bash home-k3s/firewall-egress-bridge.sh --apply
+sudo bash home-k3s/firewall-egress-bridge.sh --status
+```
+
+The helper schedules and checks a 15-minute rollback timer before any firewall
+mutation. It uses a root-owned snapshot under `/run/k3s-egress-bridge`; do not
+remove it while the timer is armed. On a command failure it attempts immediate
+rollback, leaving the timer armed to retry. The timer disables the gateway
+policy first, removes only the two bridge rules, restores the original zone
+membership, and checks the disabled baseline. If rollback cannot be verified,
+use console recovery and inspect `journalctl -u
+k3s-egress-bridge-rollback.service`; never reload firewalld to recover SSH.
+
+While the timer remains armed, verify a **new** SSH connection and pod DNS and
+HTTPS with the disposable pod command below. After those checks and before the
+timer expires, an operator may explicitly stop automatic rollback:
+
+```bash
+sudo bash home-k3s/firewall-egress-bridge.sh --commit
+sudo bash home-k3s/firewall-egress-bridge.sh --status
+```
+
+`--commit` verifies the active narrowed policy and bindings before stopping
+the timer; it does not persist the bridge. To revert after committing or after
+the timer fires, run `sudo bash home-k3s/firewall-egress-bridge.sh --cleanup`;
+this restores and verifies the disabled baseline before stopping any timer.
+If the timer has already fired, cleanup removes its managed state. On reboot
+`/run` and this runtime-only bridge disappear; if the dedicated policy was
+staged, it is then loaded from permanent configuration and must be checked
+separately with `firewall.sh --check`.
+
 ### Guarded rollout and rollback
 
 First establish console recovery, retain an existing Tailscale SSH session,
