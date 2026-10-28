@@ -18,6 +18,10 @@ against that same host key. The initial home copy completed on 2026-10-28 into
 root-restricted `/srv/punjab-migration/` on the guest; it is not activated as
 its home, service state or Tailscale identity. The source remains running, so
 the copy needs final synchronization and validation before cutover.
+A metadata-based dry run after the initial copy found 577 regular files to
+transfer (about 996 MB) and 485 new filesystem entries. A follow-up sync is
+running; the comparison did not checksum all contents or check for deletions.
+
 The guest resolved and reached `api.github.com` over HTTPS and connected to
 the Spindle broker's TCP port. These checks do not prove broker authentication.
 
