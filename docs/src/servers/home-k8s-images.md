@@ -9,8 +9,10 @@ In [CI](https://github.com/hanthor/dotfiles/actions/runs/40605226540), the
 starter installer completed, but its installed VM never presented a serial
 login within ten minutes; installation and cluster acceptance did not pass.
 Utah's installed image retained a masked serial getty even though live media
-unmasked it. The image build now enables a normal authenticated serial getty;
-this change still needs a complete acceptance run before use.
+unmasked it. A subsequent [CI run](https://github.com/hanthor/dotfiles/actions/runs/40622083319)
+blocked the live serial getty while probing `/proc/tty/driver/serial`. The
+image now enables an authenticated serial getty guarded by the kernel's sysfs
+UART type; this change still needs a complete acceptance run before use.
 
 ## Image Variants
 

@@ -64,11 +64,10 @@ SSH, are also reachable from pods; do not attach an untrusted interface to that
 zone. The LAN interfaces are in `public`. Both bridge rules were present in
 the permanent configuration when last inspected.
 
-A runtime-only experiment enabling the existing `gateway-lan-to-world` policy
-made pod HTTPS work. That policy accepts all traffic from `internal`, `home`
-and `trusted` to both `public` and `external`, so it was disabled again and
-must not be enabled as the fix. `home-k3s/firewall.sh` instead defines a
-`k3s-pod-egress` policy: `internal` ingress, `public` egress, `CONTINUE`
+The broad `gateway-lan-to-world` baseline accepts traffic from `internal`,
+`home` and `trusted` to both `public` and `external` and must not be enabled
+unchanged. `home-k3s/firewall.sh` defines a dedicated `k3s-pod-egress` policy:
+`internal` ingress, `public` egress, `CONTINUE`
 target, and one IPv4 accept rule for source `10.42.0.0/16`. K3s supplies pod
 masquerading; the policy does not alter NAT or host INPUT rules. It accepts all
 protocols and ports from that CIDR, not just HTTPS: `public` includes the LAN
@@ -77,10 +76,11 @@ can be spoofed; this is not per-pod isolation. IPv6, other pod CIDRs and
 non-`public` egress zones are not covered. Other firewalld/K3s rules may also
 allow traffic; this policy is not a comprehensive egress firewall.
 
-The new policy has **not been applied or verified on Karnataka**. The host
-has no console recovery, and a rollback timer has not been proven there. Do
-not treat the checked-in policy as a persistent fix until the guarded rollout
-below succeeds. `sudo bash home-k3s/firewall.sh --check` inspects both stores
+On 2026-10-28 the dedicated policy was staged in Karnataka's permanent store
+without reloading firewalld. Its first activation on a real firewall restart
+is unverified. In isolated firewalld 2.5.2 namespaces, staging, reload, and
+`--check` succeeded; traffic from `10.42.0.2` forwarded while `10.43.0.2` did
+not. `sudo bash home-k3s/firewall.sh --check` inspects both stores
 without changes. `--apply` refuses foreign interface/source bindings and policy
 drift instead of taking over a broader policy. Firewalld 2.5.2 can create a
 policy only in the permanent store, so the first `--apply` stages it there but
@@ -90,9 +90,12 @@ finish it. Other policies are not changed.
 
 ### Optional temporary runtime bridge
 
-`home-k3s/firewall-egress-bridge.sh` is a separate, opt-in bridge until the
-dedicated permanent policy can be activated. It has **not** been run on
-Karnataka. It requires the exact observed disabled `gateway-lan-to-world`
+`home-k3s/firewall-egress-bridge.sh` provides a separate, opt-in bridge until
+the dedicated permanent policy activates. On 2026-10-28 it was enabled on
+Karnataka with its rollback timer armed; a new SSH session from Himachal and
+pod HTTPS succeeded before the bridge was committed. The timer was stopped on
+commit; its automatic rollback has not been exercised on the live host. The
+bridge requires the exact observed disabled `gateway-lan-to-world`
 baseline, `internal` containing only `cni0`, `internal` not being the default,
 and **no source bindings in any zone in either store**. It narrows the runtime
 policy to `internal` → `public`, adds negative-priority drops for non-pod IPv4

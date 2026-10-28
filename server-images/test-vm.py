@@ -219,6 +219,7 @@ test "$(cat /proc/sys/kernel/hostname)" = starter-smoke
 test ! -e /etc/bootc-installer/live-iso-mode
 test ! -e /usr/bin/bootc-installer-tui
 test ! -e /etc/systemd/system/serial-getty@ttyS0.service.d/installer.conf
+test "$(cat /sys/class/tty/ttyS0/type)" -gt 0
 systemctl is-active serial-getty@ttyS0.service
 ''' + inactive_k3s() + '''bootc status --format json > /run/home-k8s-bootc-status.json
 printf '\\nBOOTC_BEGIN\\n'
@@ -427,6 +428,7 @@ test "$(getenforce)" = Enforcing
 test ! -e /etc/bootc-installer/live-iso-mode
 test ! -e /usr/bin/bootc-installer-tui
 test ! -e /etc/systemd/system/serial-getty@ttyS0.service.d/installer.conf
+test "$(cat /sys/class/tty/ttyS0/type)" -gt 0
 systemctl is-active serial-getty@ttyS0.service
 {inactive_k3s()}
 {role_check}
