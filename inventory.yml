@@ -51,6 +51,7 @@ all:
       ansible_connection: ssh
     himachal:
       ansible_host: 100.79.182.70
+      ansible_user: james
       ansible_connection: ssh
       tailnet_name: himachal-1
     dilli:
