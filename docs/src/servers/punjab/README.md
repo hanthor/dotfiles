@@ -12,12 +12,18 @@ terminated; Matrix and the Hives now run on the [OCI VPS](../spindle-vps/README.
 ## Migration status
 
 The Karnataka `corral-vms/punjab` VM is a staging guest, not the EC2 host.
-Its host key was verified against its console; Tailscale enrollment under the
-separate name `punjab-migration` requires approval. The initial home copy
-completed on 2026-10-28 into root-restricted `/srv/punjab-migration/` on the
-guest; it is not activated as its home, service state or Tailscale identity.
-The source remains running, so the copy needs final synchronization and
-validation before cutover.
+Its host key was verified against its console. The separate Tailscale device
+`punjab-migration` is online at `100.103.187.46`; direct SSH was verified
+against that same host key. The initial home copy completed on 2026-10-28 into
+root-restricted `/srv/punjab-migration/` on the guest; it is not activated as
+its home, service state or Tailscale identity. The source remains running, so
+the copy needs final synchronization and validation before cutover.
+
+The staged Kiro Crew 0.10.0 executable and dashboard were exercised in an
+isolated network namespace with a disposable home overlay, cron and tunnels
+disabled. The gateway reported ready and its loopback dashboard returned HTTP
+200. This is not a test of live credentials, background jobs or migration of
+the running source service.
 
 EC2 snapshot `snap-0bc709516bb003e9a` was created on 2026-10-28 while Punjab
 was live; it is crash-consistent, not a verified application-consistent restore.
