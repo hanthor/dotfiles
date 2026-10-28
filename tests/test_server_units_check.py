@@ -8,7 +8,7 @@ import pytest
 from conftest import REPO, write_stub
 
 
-UNITS = ("server-hardening", "retired-services", "proxy", "tailscale-cert", "bst-dashboard", "kirocrew")
+UNITS = ("server-hardening", "retired-services", "proxy", "tailscale-cert", "bst-dashboard")
 
 
 @pytest.fixture
@@ -20,13 +20,12 @@ def check_system(stub_env, tmp_path):
     units.mkdir(parents=True)
     (repo / "host_vars").mkdir()
     (repo / "group_vars").mkdir()
-    (repo / "host_vars/workstation.yml").write_text("kirocrew_enabled: true\n")
     (repo / "group_vars/all.yml").write_text("tailscale_domain: example.ts.net\n")
     (repo / "inventory.yml").write_text(json.dumps({"all": {"children": {
         "server": {"hosts": {"workstation": {}}}, "vps": {"hosts": {}}
     }}}))
     for name in ("lib.sh", "osquery_native_inventory.py", "proxy-inventory.py", "proxy-serve.py", "server-hardening-file.py",
-                 "service-templates.py", "kirocrew-sockets.py", "retired-services", "proxy",
+                 "service-templates.py", "retired-services", "proxy",
                  "tailscale-cert", "bst-dashboard"):
         (units / name).symlink_to(REPO / "units" / name)
     for name in UNITS:
@@ -36,18 +35,13 @@ def check_system(stub_env, tmp_path):
             text = text.replace(path, str(root / path.lstrip("/")))
         (units / f"{name}.sh").write_text(text)
     for directory in ("etc/systemd", "etc/ssh", "run/systemd/system", "var/home/james/dev/dakota",
-                      "etc/kirocrew", "etc/systemd/system", "usr/lib/systemd"):
+                      "etc/systemd/system", "usr/lib/systemd"):
         (root / directory).mkdir(parents=True, exist_ok=True)
     (root / "etc/systemd/journald.conf").write_text("#SystemMaxUse=1G\n")
     (root / "etc/ssh/sshd_config").write_text("#MaxStartups 10:30:100\n")
     (root / "etc/fstab").write_text("/dev/root / ext4 defaults 0 1\n")
     (root / "usr/lib/systemd/systemd-timesyncd").touch()
-    (root / "etc/systemd/system/kirocrew.service").touch()
-    (root / "etc/kirocrew/kirocrew.env").write_text("DO_NOT_PRINT=this-is-a-secret\n")
-    (root / "etc/kirocrew/kirocrew.env").chmod(0o600)
     home = Path(env["HOME"])
-    (home / ".local/bin").mkdir(parents=True)
-    (home / ".local/bin/kirocrew").touch()
     old = home / ".config/containers/systemd/grafana.container"
     old.parent.mkdir(parents=True)
     old.write_text("retired\n")
@@ -89,7 +83,6 @@ esac
     write_stub(bindir, "swapon", '[ "$1" = --show=NAME ] || exit 99\n[ "${FAIL_SWAPON:-0}" != 1 ] || exit 1\nprintf "%s\\n" "${ACTIVE_SWAP:-}"\n')
     write_stub(bindir, "ufw", '[ "$1" = status ] || exit 99\necho "Status: inactive"\n')
     write_stub(bindir, "pro", '[ "$1" = status ] || exit 99\necho \'{"livepatch": "enabled"}\'\n')
-    write_stub(bindir, "ss", 'printf "%s\\n" "${SOCKETS:-}"\n')
     for command in ("dd", "mkswap", "install", "chown", "chmod"):
         write_stub(bindir, command, 'echo "FORBIDDEN $0 $*" >> "$CALLS"\nexit 99\n')
     return repo, root, env, old
@@ -357,7 +350,6 @@ def test_writable_root_preserves_active_swapfile(check_system, check):
     ("proxy", "would deploy"),
     ("tailscale-cert", "would provision Tailscale certificate"),
     ("bst-dashboard", "would deploy dashboard user service"),
-    ("kirocrew", "would start kirocrew"),
 ])
 def test_check_reports_drift_without_mutation(check_system, unit, expected):
     _, root, env, old = check_system
@@ -365,7 +357,6 @@ def test_check_reports_drift_without_mutation(check_system, unit, expected):
     result = run_check(check_system, unit)
     assert result.returncode == 0, (result.stdout, result.stderr)
     assert expected in result.stdout
-    assert "this-is-a-secret" not in result.stdout + result.stderr
     assert {p: p.read_bytes() for p in root.rglob("*") if p.is_file()} == original
     assert old.read_text() == "retired\n"
     calls = Path(env["CALLS"])
@@ -387,13 +378,6 @@ def test_retired_vps_remain_untouched_in_check(check_system, unit):
     result = run_check(check_system, unit, DOTFILES_MACHINE="matrix")
     assert result.returncode == 0 and "SKIPPED" in result.stdout
     assert not Path(check_system[2]["CALLS"]).exists()
-
-
-def test_kirocrew_rejects_non_loopback_listener(check_system):
-    line = 'LISTEN 0 128 0.0.0.0:8000 0.0.0.0:* users:(("kirocrew",pid=7,fd=5))'
-    result = run_check(check_system, "kirocrew", SOCKETS=line)
-    assert result.returncode != 0
-    assert "listening beyond localhost" in result.stderr
 
 
 def test_hardening_line_check_never_writes(tmp_path):

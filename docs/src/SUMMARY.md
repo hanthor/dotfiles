@@ -96,7 +96,6 @@
 - [proxy (Caddy)](roles/proxy.md)
 - [tailscale_cert](roles/tailscale_cert.md)
 - [bst_dashboard](roles/bst_dashboard.md)
-- [kirocrew](roles/kirocrew.md)
 
 ## Removed / migrated
 

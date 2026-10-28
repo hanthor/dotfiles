@@ -106,8 +106,5 @@ file = "units/tailscale-cert.sh"
 [tasks."unit:bst-dashboard"]
 file = "units/bst-dashboard.sh"
 
-[tasks."unit:kirocrew"]
-file = "units/kirocrew.sh"
-
 [tasks."unit:fleet-facts"]
 file = "units/fleet-facts.sh"

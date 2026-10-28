@@ -26,11 +26,9 @@ check for deletions, and the live source can still change.
 The guest resolved and reached `api.github.com` over HTTPS and connected to
 the Spindle broker's TCP port. These checks do not prove broker authentication.
 
-The staged Kiro Crew 0.10.0 executable and dashboard were exercised in an
-isolated network namespace with a disposable home overlay, cron and tunnels
-disabled. The gateway reported ready and its loopback dashboard returned HTTP
-200. This is not a test of live credentials, background jobs or migration of
-the running source service.
+Kiro Crew was retired at the owner's request. Its source service is disabled
+and masked; its private recovery data is retained, not activated on the
+replacement. The Kiro CLI and omp integrations are separate and remain.
 
 EC2 snapshot `snap-0bc709516bb003e9a` was created on 2026-10-28 while Punjab
 was live; it is crash-consistent, not a verified application-consistent restore.
@@ -59,10 +57,6 @@ Ubuntu 24.04 LTS (stock `ubuntu-noble-24.04-amd64-server` AMI), AWS kernel.
 ## Role
 
 - Agent host: Claude Code, Kiro, `pi`, run in tmux
-- **Kiro Crew gateway** — `kirocrew.service` (system unit, runs as `ubuntu`,
-  binary `~/.local/bin/kirocrew`, env `/etc/kirocrew/kirocrew.env`). Installed
-  with Kiro's own installer; the [`kirocrew`](../../roles/kirocrew.md) role keeps
-  it running, its env file root-only, and its dashboard on localhost.
 - AWS admin box: `awscli` + `opentofu` (via `extra_brews`) for the
   [AWS IaC](../aws/README.md)
 
@@ -85,7 +79,6 @@ Ubuntu 24.04 LTS (stock `ubuntu-noble-24.04-amd64-server` AMI), AWS kernel.
 - sshd drop-in (`sshd_harden: true`): no root login, no passwords/kbd-interactive,
   no X11, `MaxAuthTries 3`.
 - `unattended-upgrades` on (Ubuntu default).
-- Kiro Crew dashboard binds localhost only — the `kirocrew` role asserts it.
 
 ## Ansible notes (`host_vars/punjab.yml`)
 

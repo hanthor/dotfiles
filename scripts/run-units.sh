@@ -3,7 +3,7 @@
 # Usage: scripts/run-units.sh [--no-secrets] [--tags a,b]
 set -uo pipefail
 
-ALL_UNITS="sudo sshd apk-packages termux-packages homebrew flatpak chezmoi fonts omp atuin shell-ai ssh-keys ssh-mesh github kube forgejo-registry tailscale bluefin gnome zen-browser browser-fxa pipewire-audio syncthing hive-ops laptop-services system-services osquery server-hardening retired-services proxy tailscale-cert bst-dashboard kirocrew fleet-facts"
+ALL_UNITS="sudo sshd apk-packages termux-packages homebrew flatpak chezmoi fonts omp atuin shell-ai ssh-keys ssh-mesh github kube forgejo-registry tailscale bluefin gnome zen-browser browser-fxa pipewire-audio syncthing hive-ops laptop-services system-services osquery server-hardening retired-services proxy tailscale-cert bst-dashboard fleet-facts"
 tasks_for_tag() { case "$1" in
   system) echo "sudo sshd apk-packages termux-packages retired-services server-hardening" ;;
   sudo) echo sudo ;;
@@ -33,7 +33,7 @@ tasks_for_tag() { case "$1" in
   gnome) echo gnome ;;
   browser|zen_browser) echo "zen-browser browser-fxa" ;;
   audio|pipewire) echo pipewire-audio ;;
-  services) echo "syncthing laptop-services system-services osquery proxy tailscale-cert bst-dashboard kirocrew" ;;
+  services) echo "syncthing laptop-services system-services osquery proxy tailscale-cert bst-dashboard" ;;
   syncthing) echo syncthing ;;
   systemd) echo "laptop-services system-services" ;;
   osquery) echo osquery ;;
@@ -43,7 +43,6 @@ tasks_for_tag() { case "$1" in
   proxy|caddy) echo proxy ;;
   tailscale_cert) echo tailscale-cert ;;
   bst_dashboard) echo bst-dashboard ;;
-  kirocrew) echo kirocrew ;;
   hive|hive_ops) echo hive-ops ;;
   facts|fleet_facts) echo fleet-facts ;;
 esac; }
@@ -133,7 +132,7 @@ for unit in chezmoi bluefin gnome; do
 done
 zen_ok=1; run_stage zen-browser || { zen_ok=0; rc=1; }
 
-later=(fonts omp atuin shell-ai kube forgejo-registry pipewire-audio syncthing hive-ops laptop-services system-services osquery server-hardening retired-services bst-dashboard kirocrew)
+later=(fonts omp atuin shell-ai kube forgejo-registry pipewire-audio syncthing hive-ops laptop-services system-services osquery server-hardening retired-services bst-dashboard)
 if [ "$zen_ok" = 1 ]; then
   later+=(browser-fxa)
 elif selected browser-fxa; then

@@ -61,6 +61,31 @@ does not itself create resources, but applying proposed creates can restore
 infrastructure and incur charges. `aws/terraform.tfvars` remains sensitive;
 `just aws-seed-tfvars` stores it in Bitwarden after an intentional edit.
 
+### Punjab replacement transition (2026-10-28)
+
+The fleet inventory's logical `punjab` host now connects to the replacement
+guest on Karnataka at `100.103.187.46`, using the verified `ubuntu` account.
+Its separate Tailscale name remains **`punjab-migration`** until the service
+cutover and identity rename are confirmed; the inventory's `tailnet_name`
+override keeps fleet discovery aligned with that staging identity. This is
+a connection-target change, not evidence that service migration is complete
+or that the original EC2 instance has stopped.
+
+`aws/punjab.tf` still describes the original EC2 instance at its historical
+Tailscale address `100.78.73.8`, plus its EIP, security group, key pair, SSM
+role/profile and DLM policy. It does **not** manage the replacement guest.
+Those resource declarations and `prevent_destroy` remain unchanged. The
+replacement retains AWS administration tools and its existing SSH-hardening
+and no-proxy policies; moving it off EC2 does not require removing those tools.
+
+Retirement must reconcile live AWS resources, OpenTofu state and configuration
+separately: deleted resources still declared here can be proposed for recreation,
+while stopped instances can retain billable volumes, EIPs and snapshots.
+`prevent_destroy` is not a stop/retirement mechanism and does not protect against
+recreation. Retain the S3 backups and state; do not use a blanket destroy to
+resolve this drift. Verify actual retirement status before updating the
+historical inventory above.
+
 ## IAM & access
 
 - **Root** historically had MFA and no access keys. Verify current access

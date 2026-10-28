@@ -115,7 +115,7 @@ def fake_system(stub_env, tmp_path):
     units = repo / 'units'
     units.mkdir()
     for name in ('lib.sh', 'proxy-inventory.py', 'proxy-serve.py', 'osquery_native_inventory.py', 'service-templates.py',
-                 'proxy', 'tailscale-cert', 'bst-dashboard', 'kirocrew-sockets.py'):
+                 'proxy', 'tailscale-cert', 'bst-dashboard'):
         (units / name).symlink_to(REPO / 'units' / name)
     for name in ('proxy', 'tailscale-cert'):
         script = (REPO / 'units' / f'{name}.sh').read_text()
@@ -200,7 +200,7 @@ def test_certificate_renews_expired_cert_and_uses_host_domain(fake_system):
     assert 'workstation.override.ts.net' in (root / 'etc/systemd/system/tailscale-cert-renew.service').read_text()
 
 
-@pytest.mark.parametrize('unit', ['proxy', 'tailscale-cert', 'bst-dashboard', 'kirocrew'])
+@pytest.mark.parametrize('unit', ['proxy', 'tailscale-cert', 'bst-dashboard'])
 @pytest.mark.parametrize('machine', ['matrix', 'telengana'])
 def test_retired_vps_are_untouched(fake_system, unit, machine):
     repo, root, env = fake_system
@@ -232,14 +232,6 @@ def test_per_host_exclusion_prevents_service_changes(fake_system, unit, flag):
     assert system_calls(root) == ''
 
 
-def test_enabled_kirocrew_without_binary_does_not_change_service(fake_system):
-    repo, root, env = fake_system
-    (repo / 'host_vars/workstation.yml').write_text('kirocrew_enabled: true\n')
-    result = run_unit('kirocrew', env, DOTFILES_DIR=str(repo))
-    assert result.returncode == 0 and 'binary or system service missing' in result.stdout
-    assert system_calls(root) == ''
-
-
 def test_dashboard_template_uses_correct_project_and_service_scope():
     renderer = REPO / 'units/service-templates.py'
     template = REPO / 'units/bst-dashboard/bst-dashboard.service.j2'
@@ -247,16 +239,3 @@ def test_dashboard_template_uses_correct_project_and_service_scope():
         result = subprocess.run([sys.executable, str(renderer), 'dashboard', str(template), project, image], capture_output=True, text=True, check=True)
         assert f'--log /var/tmp/{image}-build.log --target oci/{image}.bst --project {project}' in result.stdout
         assert 'WantedBy=default.target' in result.stdout and 'Restart=always' in result.stdout
-
-
-@pytest.mark.parametrize('address,allowed', [('127.0.0.1:8000', True), ('[::1]:8000', True), ('0.0.0.0:8000', False), ('[::]:8000', False)])
-def test_kirocrew_listener_exposure(address, allowed):
-    line = f'LISTEN 0 128 {address} 0.0.0.0:* users:(("kirocrew",pid=7,fd=5))\n'
-    result = subprocess.run([sys.executable, str(REPO / 'units/kirocrew-sockets.py')], input=line, capture_output=True, text=True)
-    assert (result.returncode == 0) is allowed
-
-
-def test_kirocrew_checks_local_address_not_loopback_peer():
-    line = 'LISTEN 0 128 0.0.0.0:8000 127.0.0.1:99 users:(("kirocrew",pid=7,fd=5))\n'
-    result = subprocess.run([sys.executable, str(REPO / 'units/kirocrew-sockets.py')], input=line, capture_output=True, text=True)
-    assert result.returncode != 0
