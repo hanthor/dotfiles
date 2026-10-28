@@ -13,9 +13,11 @@ terminated; Matrix and the Hives now run on the [OCI VPS](../spindle-vps/README.
 
 The Karnataka `corral-vms/punjab` VM is a staging guest, not the EC2 host.
 Its host key was verified against its console; Tailscale enrollment under the
-separate name `punjab-migration` requires approval. Data is being copied into
-root-restricted `/srv/punjab-migration/` on the guest, not activated as its
-home, service state or Tailscale identity. The source remains running.
+separate name `punjab-migration` requires approval. The initial home copy
+completed on 2026-10-28 into root-restricted `/srv/punjab-migration/` on the
+guest; it is not activated as its home, service state or Tailscale identity.
+The source remains running, so the copy needs final synchronization and
+validation before cutover.
 
 EC2 snapshot `snap-0bc709516bb003e9a` was created on 2026-10-28 while Punjab
 was live; it is crash-consistent, not a verified application-consistent restore.
