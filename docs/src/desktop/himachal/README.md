@@ -11,6 +11,19 @@ Laptop workstation in the hanthor fleet.
   still specifies `100.73.3.51`; it should not be assumed to identify the
   reachable node without checking.
 
+## Native dotfiles validation
+
+On 2026-10-28, the PR #348 branch was applied with `--no-secrets --tags
+dotfiles` to `himachal-1`. Bash and headless Neovim started, and the omp broker
+status check succeeded. The apply also ran the Neovim plugin sync script.
+Atuin was not logged in; its secret-bearing login was not tested. Unlock the
+local Bitwarden vault and apply the `atuin` tag to configure sync.
+
+A mode-0600 pre-apply backup is at
+`~/backups/dotfiles-pre-native-20261028T041910Z.tgz`. It includes the omp
+configuration and must be treated as secret-bearing. This validation does not
+establish that the full fleet or automatic updates have been migrated.
+
 ## Services
 
 - **Dotfiles updates:** `host_vars/himachal.yml` sets `is_laptop: true` and
