@@ -14,15 +14,18 @@ Laptop workstation in the hanthor fleet.
 ## Native dotfiles validation
 
 On 2026-10-28, the PR #348 branch was applied with `--no-secrets --tags
-dotfiles` to `himachal-1`. Bash and headless Neovim started, and the omp broker
-status check succeeded. The apply also ran the Neovim plugin sync script.
+dotfiles` to `himachal-1`. Bash, Fish and headless Neovim started, the Git
+identity matched, and the omp broker status check succeeded. The apply also ran
+the Neovim plugin sync script. After correcting an overly restrictive apply
+umask, chezmoi reported only its two scheduled scripts.
 Atuin was not logged in; its secret-bearing login was not tested. Unlock the
 local Bitwarden vault and apply the `atuin` tag to configure sync.
 
 A mode-0600 pre-apply backup is at
-`~/backups/dotfiles-pre-native-20261028T041910Z.tgz`. It includes the omp
-configuration and must be treated as secret-bearing. This validation does not
-establish that the full fleet or automatic updates have been migrated.
+`~/backups/dotfiles-pre-native-20261028T041910Z.tgz`. Shell secret files, GitHub
+hosts and the omp broker configuration were excluded; protect the backup as
+potentially sensitive. This validation does not establish that the full fleet
+or automatic updates have been migrated.
 
 ## Services
 
