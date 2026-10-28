@@ -1,30 +1,32 @@
 {
-    "groups": [
-        "server"
+  "schema": 1,
+  "host": "punjab",
+  "updated": "2026-10-28T19:07:10Z",
+  "groups": [
+    "server"
+  ],
+  "os": {
+    "name": "Ubuntu",
+    "version": "24.04",
+    "codename": "noble",
+    "kernel": "6.8.0-147-generic"
+  },
+  "hardware": {
+    "vendor": "KubeVirt",
+    "model": "",
+    "form_factor": "",
+    "arch": "x86_64",
+    "cpu": "AMD EPYC-Turin Processor",
+    "cpu_threads": 4,
+    "gpus": [
+      "Vendor 1234 Device 1111"
     ],
-    "hardware": {
-        "arch": "x86_64",
-        "cpu": "Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz",
-        "cpu_threads": 2,
-        "form_factor": "Other",
-        "gpus": [],
-        "memory_gb": 7.6,
-        "model": "t3.large",
-        "vendor": "Amazon EC2"
-    },
-    "host": "punjab",
-    "last_apply": {
-        "at": "2026-09-24T15:31:47Z",
-        "ok": true
-    },
-    "os": {
-        "codename": "noble",
-        "kernel": "7.0.0-1013-aws",
-        "name": "Ubuntu",
-        "version": "24.04"
-    },
-    "schema": 1,
-    "updated": "2026-09-24T14:50:55Z",
-    "uptime_days": 1.0,
-    "virtualization": "kvm"
+    "memory_gb": 11.7
+  },
+  "virtualization": "kvm",
+  "uptime_days": 0.0,
+  "last_apply": {
+    "at": "2026-10-24T00:22:59Z",
+    "ok": false
+  }
 }
