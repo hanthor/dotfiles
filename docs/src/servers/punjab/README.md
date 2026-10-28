@@ -13,6 +13,14 @@ separately on the [OCI spindle VPS](../spindle-vps/README.md).
   machine ID and Tailscale identity; none were copied from EC2.
 - The old EC2 tailnet node is named `punjab-aws-retired`.
 
+The console-verified ED25519 host-key fingerprint is
+`SHA256:4B/Ho1ZjG9yuA0nugLv0ss5ET2FuOp9iy+FwrfIeto8`.
+Clients that remember EC2's key for `punjab` must verify this replacement key
+before replacing that alias; do not disable strict host-key checking.
+Vault-backed SSH key synchronization and authorized-key installation succeeded.
+Himachal was offline during the final client-to-VM check, so that direction
+was not exercised.
+
 The manifest is [`vm-migrations/punjab.yaml`](https://github.com/hanthor/dotfiles/blob/master/vm-migrations/punjab.yaml).
 Its cloud-init network data uses DHCPv4 only. The masquerade interface's MTU
 is below IPv6's minimum; requesting DHCPv6 caused a network-online timeout
