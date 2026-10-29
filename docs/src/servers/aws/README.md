@@ -40,6 +40,30 @@ modified. Both DLM policies are disabled to freeze the recovery snapshot set;
 the five completed Punjab snapshots remain. Retained storage still incurs
 charges; this is not a zero-bill claim.
 
+## Shutdown re-verification (2026-10-29)
+
+Authenticated live inventory covered all 17 enabled regions in this account.
+The only remaining EC2 instance was Punjab, already stopped. No running
+compute, ECS/EKS clusters, Lambda functions, RDS databases, load balancers,
+NAT gateways or allocated Elastic IPs were found. Auto Scaling groups, open
+Spot requests, Spot Fleets and EC2 Fleets were also empty in every region.
+App Runner and Lightsail endpoint failures were checked against AWS's public
+SSM region-availability registry; those service/region pairs are unsupported.
+No additional stop/delete operation was necessary.
+
+The migrated VM passed authenticated SSH using its recorded host key and a
+fresh omp request explicitly using `anthropic/claude-opus-5-5`, independent of
+AWS/Kiro. The old 250 GiB gp3 root volume, five snapshots and three S3 buckets
+remain intact; both DLM policies remain disabled. Retained storage is billable.
+
+Kiro's live subscription API reports both Enterprise Power and Pro Plus as
+`CANCELLED`, expiring **2026-10-31 23:59:59.999 UTC**. Historical cancellation
+requests used end-of-period removal on October 25. Cost Explorer still shows
+Power charges of about $6.45/day for October 27–29; these do not establish an
+active renewal. [Kiro cancellation documentation](https://kiro.dev/docs/enterprise/subscription-management/)
+explains month-end cancellation and separate SSO-assignment cleanup. Do not
+delete identities or application assignments as a billing workaround.
+
 ## OpenTofu layout
 
 ```
