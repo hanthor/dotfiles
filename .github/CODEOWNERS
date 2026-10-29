@@ -18,7 +18,6 @@
 /roles/pi/files/package.json
 /tools/secret-broker/go.mod
 /tools/secret-broker/go.sum
-/aws/.terraform.lock.hcl
 
 # ── Always owned, even inside carve-outs ────────────────────────────────
 /.github/ @hanthor

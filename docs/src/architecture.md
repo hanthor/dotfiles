@@ -7,7 +7,7 @@
 - `units/*.sh` and their helpers/assets configure the host. `home/` is the chezmoi source for shell, Git, Neovim and Atuin configuration.
 - `inventory.yml`, `group_vars/` and `host_vars/` hold fleet membership and settings. Some connection keys retain their historical `ansible_` names and are read by native tooling.
 - `scripts/` holds operational and Bitwarden helpers. `roles/pi/files/skills/` remains a source of omp skills; not every directory named `roles` is an active Ansible role.
-- `aws/` contains OpenTofu for the TunaOS AWS account; `talos-k8s/` contains home-cluster manifests; `docs/` is the handbook.
+- AWS deployment IaC is archived at [`dcbbfbc`](https://github.com/hanthor/dotfiles/tree/dcbbfbc/aws), not executable in the current checkout; `talos-k8s/` contains historical cluster manifests; `docs/` is the handbook.
 
 ## Applying configuration
 

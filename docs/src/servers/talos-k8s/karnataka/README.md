@@ -6,8 +6,11 @@ available over Tailscale at `100.66.158.127`. A single-node K3s cluster runs
 KubeVirt, CDI, and Corral. The `corral-vms/punjab` VM now runs the migrated
 Punjab environment at `100.103.187.46` (tailnet name `punjab`). This is the
 [active replacement](../../punjab/README.md), not a staging VM or an EC2 host.
-For the former EC2 host's retirement and retained recovery artifacts, consult
-the [AWS account handbook](../../aws/README.md).
+For the former EC2 host's final **2026-10-29** termination and deletion of its
+root volume, AWS snapshots and S3 backups (including OpenTofu state), consult
+the [AWS account handbook and deletion evidence](../../aws/README.md).
+Existing off-AWS migration data and Bitwarden notes were not deleted; they
+are not evidence that the deleted cloud backups remain recoverable.
 
 NetworkManager, Tailscale and SSH are enabled at boot. Ethernet is preferred;
 a locally stored Wi-Fi profile autoconnects with a higher route metric. Wi-Fi

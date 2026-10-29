@@ -1,16 +1,20 @@
 # AWS Talos Cluster (archive)
 
-> **Terminated 2026-10-25.** This is a historical record, not an operating
-> runbook. The fleet-backups S3 bucket and a mirror on himachal-1
-> (`~/backups/tunaos-aws-2026-10-25`) were retained; the current status of
-> individual volumes, snapshots, IPs and other AWS resources is not established
-> here. Matrix and standalone LiveKit are deployed on the
-> [OCI spindle VPS](../spindle-vps/README.md).
+> **Terminated 2026-10-25; final AWS deletion 2026-10-29.** This is a
+> historical record, not an operating runbook. The fleet-backups S3 bucket
+> and himachal-1 mirror (`~/backups/tunaos-aws-2026-10-25`) were retained
+> at the October 25 shutdown. On October 29 all three AWS S3 buckets,
+> including backups and OpenTofu state, were deleted; Punjab was terminated,
+> its root volume was absent and all owned snapshots were deleted.
+> Existing off-AWS migration data was not deleted, but no complete new
+> archive of the deleted cloud history is claimed. Matrix and standalone
+> LiveKit are deployed on the [OCI spindle VPS](../spindle-vps/README.md).
 >
-> **OpenTofu still describes removed cluster resources.** `just aws-plan` may
-> propose recreating them, and `just aws-apply` can recreate infrastructure and
-> incur costs. Review live state and every proposed action before applying; see
-> [AWS account and IaC](../aws/README.md).
+> **AWS deployment paths are retired.** The former OpenTofu root module and
+> manual deployment commands are archived at
+> [`dcbbfbc`](https://github.com/hanthor/dotfiles/tree/dcbbfbc/aws), not available
+> in this checkout. Restoring them can recreate paid infrastructure. See the
+> [AWS account handbook](../aws/README.md) for current account status.
 
 The following describes the former TunaOS two-node Talos Kubernetes cluster in
 AWS `eu-north-1`, built 2026-08-27 to consolidate the two Hetzner VPSes
@@ -154,8 +158,9 @@ See [AWS account costs](../aws/README.md) for the current caution.
 
 - The 50GB Postgres volume was unmounted.
 - Nightly Postgres dumps were copied to S3 and size-verified; DLM snapshot
-  schedules covered the root volumes. Retention of individual snapshots is not
-  established by this historical record.
+  schedules covered the root volumes. This describes historical protection,
+  not retained backups: final AWS deletion on 2026-10-29 removed the S3
+  copies and all owned snapshots.
 - API-server OIDC and finer-grained RBAC were deferred; access used an admin
   client certificate.
 

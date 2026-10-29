@@ -139,7 +139,7 @@ spec:
                   # Off-cluster copy. The local PVC shares a node with the database,
                   # so without this a lost node loses the backups too. The writer
                   # key can put/get under postgres/ only (no delete); the bucket
-                  # tiers and expires them (aws/backups.tf).
+                  # formerly tiered/expired them (aws/backups.tf at Git dcbbfbc).
                   for DB in synapse mas; do
                     OUT="${DEST}/${DB}.dump"
                     KEY="postgres/${STAMP}/${DB}.dump"
@@ -169,8 +169,8 @@ spec:
                     secretKeyRef:
                       name: postgres-superuser
                       key: POSTGRES_PASSWORD
-                # IAM user postgres-backup-writer (aws/backups.tf); key also
-                # in Bitwarden note `postgres-backup-s3`.
+                # Historical IAM user postgres-backup-writer (aws/backups.tf at
+                # Git dcbbfbc); key also in Bitwarden note `postgres-backup-s3`.
                 - name: AWS_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:

@@ -100,12 +100,20 @@ to avoid public-IP hairpin routing; `reilly.asia` remains on the portfolio Worke
 
 ## Caveats
 
-- The MAS dump is from 15:22 UTC. The Spindle store's last write was 15:25 UTC and its archive was
-  taken at 15:33 UTC; the old cluster continued until 17:16 UTC. Writes after the store archive are
-  only in the encrypted cluster-state backup and are not in this VPS store. A real login and joined
-  room read passed against the VPS, but that does not prove the later writes were restored.
-- The AWS cluster is terminated. The S3 and himachal-1 backups are untouched, but stopping the VPS
-  stack is an outage, not a rollback; recovery requires provisioning and restoring from backup.
+- At the October 25 migration, the MAS dump was from 15:22 UTC. The Spindle
+  store's last write was 15:25 UTC and its archive was taken at 15:33 UTC; the
+  old cluster continued until 17:16 UTC. Writes after the store archive were
+  only in the encrypted cluster-state backup, not this VPS store. A real login
+  and joined-room read passed against the VPS, but did not prove those later
+  writes were restored. The cloud copy of that backup was deleted on October 29;
+  availability of those writes in any existing off-AWS copy is not established here.
+- The AWS cluster was terminated on October 25. The S3 backups retained at that
+  shutdown were deleted in the **2026-10-29 final AWS retirement**, along with
+  AWS volumes and owned snapshots; see the [deletion evidence](../aws/README.md).
+  Existing himachal-1 migration data was not deleted, but it is not proof of a
+  complete replacement for the deleted cloud history. Stopping the VPS stack
+  is an outage, not a rollback; recovery requires an independently verified
+  off-AWS backup and a provisioned target.
 - When `tuna-os/spindle` publishes an arm64 release containing #723, switch the image in
   `compose.yaml` and delete the `ops/arm64-perf-723` branch.
 - LiveKit is capped at 2 GiB and 1 OCPU to leave room for Spindle and the Hives on this 2-OCPU host;

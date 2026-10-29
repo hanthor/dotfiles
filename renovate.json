@@ -18,11 +18,6 @@
       "automerge": false
     },
     {
-      "description": "OpenTofu providers (aws/): lockfile bumps are validated + tofu-tested in CI; applying stays manual",
-      "matchManagers": ["terraform"],
-      "groupName": "opentofu providers"
-    },
-    {
       "description": "Cluster images/charts: manifests are applied by hand, so a merge would only drift git from the cluster. Open weekly grouped PRs as a to-do, never auto-merge.",
       "matchFileNames": ["talos-k8s/**"],
       "automerge": false,

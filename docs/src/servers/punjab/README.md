@@ -77,23 +77,29 @@ also copied into the active checkout. Other old temporary worktrees remain
 in the system recovery copy; their original absolute Git paths may need repair
 before reuse.
 
-## AWS recovery and shutdown handoff
+## Final AWS retirement (2026-10-29)
 
-The former EC2 instance `i-085690e02ca98c95a` in `us-east-1` reached **stopped**
-at the cutover, not terminated. The 250 GiB root volume
-`vol-09fdb248c28e850ca` and five completed snapshots are retained. Snapshot
-`snap-0bc709516bb003e9a` was taken while EC2 was live: it is crash-consistent,
-not proof of an application-consistent restore.
+The owner approved deletion after confirming the applications had migrated.
+Former EC2 `i-085690e02ca98c95a` is now **terminated**; root volume
+`vol-09fdb248c28e850ca`, five snapshots and all three AWS S3 buckets/versions
+were deleted. The proposed archive of old Hive/Spindle backups was canceled
+and its new temporary copies removed. Existing local migration data above,
+Atuin archives and live VM data were not deleted.
 
-The replacement's `punjab-aws-cutover.service` completed successfully at
-2026-10-28 19:27:15 UTC, after observing EC2 stopped and releasing EIP allocation
-`eipalloc-00f40f76478a3ea02`. It then logged out of the AWS CLI. The root-only
-receipt at `/srv/punjab-migration/aws-cutover-receipt.json` preserves that
-result with journal provenance; a later check-only authentication failure is
-retained separately. Consult the receipt and AWS for current resource state.
+Final API verification found no nonterminated EC2, EBS volumes, owned snapshots,
+Elastic IPs, nondefault VPCs or DLM policies in any of the 17 enabled regions.
+Karnataka remained `Ready` and `corral-vms/punjab` remained `Running`.
+Private deletion evidence is at
+`~/backups/aws-final-retirement-20261029T015927Z/completion.json`.
+The [AWS handbook](../aws/README.md) records exact resource scope, remaining
+account defaults and final-billing caveats. Deployment recipes/module are
+removed; do not restore archived AWS source as routine configuration drift.
 
-The `runs-on` stack reached `DELETE_COMPLETE`; its two S3 buckets and all
-observed versions were retained. The fleet-backups S3 bucket remains intact.
-Both DLM policies are disabled. Storage still incurs charges. The former
-cluster's broader IaC remains historical: follow the warnings in the
-[AWS handbook](../aws/README.md), not a blanket `tofu apply` or `destroy`.
+### Earlier cutover history
+
+At the October 28 cutover, EC2 was initially stopped and recovery storage was
+retained. `punjab-aws-cutover.service` succeeded at 19:27:15 UTC and released
+EIP `eipalloc-00f40f76478a3ea02` before logging out of AWS. The root-only
+`/srv/punjab-migration/aws-cutover-receipt.json` retains that journal-backed
+history; a later check-only authentication failure is separate. Those records
+must not be read as evidence that the now-deleted instance/storage still exist.

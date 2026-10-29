@@ -1,6 +1,20 @@
-# Backups — AWS Talos cluster
+# Historical backups — AWS Talos cluster
 
-Three layers, because they fail differently and cover different disasters.
+> **Nonoperational historical reference.** This describes the backup design
+> before the AWS cluster's 2026-10-25 shutdown, not current protection.
+> Final deletion on **2026-10-29** removed all three AWS S3 buckets and their
+> versions (including dumps and OpenTofu state), AWS volumes and all owned
+> snapshots; DLM policies were deleted too. The commands below are preserved
+> as historical reference and cannot recover those deleted cloud copies.
+> Existing off-AWS migration data and vault notes were not deleted, but no
+> new complete S3 archive is claimed. See the
+> [final AWS deletion evidence](../../docs/src/servers/aws/README.md).
+> The former deployment module is archived at
+> [`dcbbfbc`](https://github.com/hanthor/dotfiles/tree/dcbbfbc/aws);
+> do not restore it as an active deployment path.
+
+The historical design had three layers, because they failed differently and
+covered different disasters.
 
 | Layer | What | Covers | Does not cover |
 |---|---|---|---|

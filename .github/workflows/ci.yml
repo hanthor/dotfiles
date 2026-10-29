@@ -151,25 +151,6 @@ jobs:
       - name: Validate Justfile
         run: just --justfile Justfile --list
 
-  tofu:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: aws
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: opentofu/setup-opentofu@v2
-
-      - name: fmt
-        run: tofu fmt -check -recursive
-
-      - name: validate
-        run: tofu init -backend=false -input=false && tofu validate
-
-      - name: test (mock provider, no AWS access)
-        run: tests/run.sh
-
   broker:
     runs-on: ubuntu-latest
     defaults:

@@ -8,7 +8,7 @@ those machines unattended. Executable fleet changes require owner review.
 
 | Actor | What it does | Merges by itself? |
 |---|---|---|
-| **Renovate** | minor/patch/digest bumps (pi npm deps, Go, GitHub Actions, OpenTofu providers), weekly lockfile maintenance | yes, once CI is green |
+| **Renovate** | minor/patch/digest bumps (pi npm deps, Go, GitHub Actions), weekly lockfile maintenance | yes, once CI is green |
 | **Renovate** (cluster) | image/chart bumps in `talos-k8s/`, grouped weekly, label `deploy-needed` | **no** — manifests are applied by hand, so a merge would only make git lie about the cluster |
 | **Hive** ([hive.reilly.asia](https://hive.reilly.asia), `hanthor-hive-agent`, ACMM L5) | its agents open PRs labelled `hold`; the Hive itself only merges PRs labelled `lgtm` | only if the PR stays inside the carve-outs below |
 | **You** | review onboarding and other owned changes | admin bypass is available, but onboarding uses a PR |
@@ -17,9 +17,12 @@ those machines unattended. Executable fleet changes require owner review.
 
 Three pieces, and none of them trusts the PR itself:
 
-1. **Branch protection on `master`**: required checks `lint`, `python`,
-   `tests`, `tofu`, `justfile`, `broker`, `deps-guard`, plus **code-owner
-   review**. Admins can bypass, so your own pushes still work.
+1. **Branch protection on `master`**: verified required checks are `lint`,
+   `python`, `tests`, `justfile` and `broker`, plus **code-owner review**.
+   Admins can bypass, so your own pushes still work. On 2026-10-29, only the
+   obsolete AWS `tofu` requirement was removed; the other check/application
+   bindings were preserved. Its configuration is archived at
+   [`dcbbfbc`](https://github.com/hanthor/dotfiles/tree/dcbbfbc/aws).
 2. **[`.github/CODEOWNERS`](https://github.com/hanthor/dotfiles/blob/master/.github/CODEOWNERS)**
    is deny-by-default (`* @hanthor`). The paths carved out are the ones that
    never run on a fleet machine: `docs/`, `*.md`, `tests/`, `talos-k8s/`, pi

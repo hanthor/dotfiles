@@ -1,6 +1,6 @@
 # Home Kubernetes Server Images
 
-These are proposed bootable K3s images, not the current OS or workloads of either machine. Karnataka runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server bound to tailnet address `100.66.158.127`; KubeVirt `v1.9.1`, CDI and Corral are installed. The `corral-vms/punjab` VM is now the active Punjab replacement at `100.103.187.46`; its former EC2 host is stopped with recovery storage retained. Bihar's current OS and services are unverified. Verify image provenance and physical recovery before any future installation or switch.
+These are proposed bootable K3s images, not the current OS or workloads of either machine. Karnataka runs `ghcr.io/projectbluefin/utah:testing` with `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server bound to tailnet address `100.66.158.127`; KubeVirt `v1.9.1`, CDI and Corral are installed. The `corral-vms/punjab` VM is now the active Punjab replacement at `100.103.187.46`. Its former EC2 host was terminated on 2026-10-29, and its root volume, AWS snapshots and S3 backups were deleted; see the [final AWS deletion evidence](aws/README.md). Bihar's current OS and services are unverified. Verify image provenance and physical recovery before any future installation or switch.
 
 The Utah-based images built in CI; the starter ISO was about 5.94 GiB.
 Acceptance allows media up to 8 GiB, but the publication workflow still

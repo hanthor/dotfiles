@@ -1,5 +1,15 @@
 # Matrix/ESS cutover runbook (Hetzner `matrix` → AWS Talos cluster)
 
+> **Nonoperational historical record (2026-08-27).** Present-tense claims and
+> commands below describe that cutover, not current AWS resources or tasks.
+> The AWS Talos cluster was terminated on 2026-10-25; final deletion on
+> **2026-10-29** removed AWS volumes, owned snapshots and all three S3 buckets,
+> including backup history and OpenTofu state. Existing off-AWS migration
+> data and vault notes were not deleted. See the
+> [final AWS deletion evidence](src/servers/aws/README.md) and the
+> [deployment module archived at `dcbbfbc`](https://github.com/hanthor/dotfiles/tree/dcbbfbc/aws).
+> Do not run these historical commands or restart the retired Hetzner hosts.
+
 Status 2026-08-27: **CUTOVER COMPLETE.** Downtime 08:47:27Z → 09:05:55Z (~18.5 min).
 Federation identity preserved (`ed25519:a_qMqD`), Synapse `v1.156.0`, 1371 users, 4.6GB media.
 

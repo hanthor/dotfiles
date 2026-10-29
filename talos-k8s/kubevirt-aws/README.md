@@ -1,5 +1,15 @@
 # KubeVirt on the AWS cluster (tailnet-only corral)
 
+> **Historical AWS deployment only.** The AWS root module and node startup helper
+> have been retired. Their source and original deployment instructions are
+> archived at [`dcbbfbc`](https://github.com/hanthor/dotfiles/tree/dcbbfbc/talos-k8s/kubevirt-aws).
+> Restoring them can recreate paid resources. These retained Kubernetes manifests
+> are recovery reference, not the active Karnataka K3s/KubeVirt configuration.
+> Final AWS deletion on **2026-10-29** removed AWS volumes, owned snapshots and
+> all three S3 buckets, including backups and OpenTofu state. The disk-persistence
+> caveat below describes historical stop/start behavior, not surviving storage.
+> See the [final deletion evidence](../../docs/src/servers/aws/README.md).
+
 A Proxmox-style VM host on the AWS Talos cluster: KubeVirt VMs on a
 dedicated node, managed through corral-web at `https://corral-aws.<tailnet>.ts.net`.
 There is no public ingress; the node has no public services, and corral-web is
@@ -7,10 +17,10 @@ published only through the Tailscale operator.
 
 | Piece | Where |
 |---|---|
-| Node: m7i.2xlarge with nested virtualization, tainted for VMs only | `aws/kubevirt.tf` |
-| Spend kill switch: AWS Budgets stops the node at $1100 gross/month | `aws/kubevirt.tf` |
+| Node: m7i.2xlarge with nested virtualization, tainted for VMs only | Archived `aws/kubevirt.tf` at `dcbbfbc` |
+| Spend kill switch: AWS Budgets stops the node at $1100 gross/month | Archived `aws/kubevirt.tf` at `dcbbfbc` |
 | Idle stop after 30 minutes with no VM pods | `idle-stop.yaml` |
-| Start on demand | `scripts/kubevirt-node up` |
+| Start on demand | Archived `scripts/kubevirt-node` at `dcbbfbc` |
 | KubeVirt/CDI placement (infra on always-on nodes, VMs on the node) | `kubevirt-cr.yaml` |
 | corral-web as `corral-aws` on the tailnet | `kustomization.yaml` |
 
@@ -21,45 +31,11 @@ credits.
 
 ## Bring-up (once)
 
-```bash
-export KUBECONFIG=~/.kube/config-aws-migration TALOSCONFIG=~/.talos/config-aws-migration
-
-# 1. Node (boots Talos in maintenance mode: no user_data, no secrets in state)
-cd aws && tofu plan -out tfplan && tofu apply tfplan && cd ..
-IP=$(cd aws && tofu output -raw kubevirt_public_ip)
-
-# 2. Join it: the existing worker's config + the kubevirt patch. /tmp only, never commit.
-talosctl -n 10.20.1.11 get machineconfig -o jsonpath='{.spec}' > /tmp/worker.yaml
-talosctl machineconfig patch /tmp/worker.yaml --patch @talos-k8s/kubevirt-aws/talos-patch.yaml -o /tmp/kubevirt.yaml
-talosctl apply-config --insecure -e "$IP" -n "$IP" -f /tmp/kubevirt.yaml
-shred -u /tmp/worker.yaml /tmp/kubevirt.yaml
-kubectl wait --for=condition=Ready node -l tunaos.org/kubevirt=true --timeout=15m
-talosctl -n 10.20.1.12 ls /dev | grep kvm          # must list kvm
-
-# 3. KubeVirt + CDI operators, then our placement/config
-kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.8.2/kubevirt-operator.yaml
-kubectl apply -f https://github.com/kubevirt/containerized-data-importer/releases/download/v1.66.1/cdi-operator.yaml
-kubectl apply -f talos-k8s/kubevirt-aws/kubevirt-cr.yaml
-kubectl -n kubevirt wait kv kubevirt --for condition=Available --timeout=15m
-
-# 4. Idle-stop credentials (scoped IAM user from aws/kubevirt.tf), then corral-web + CronJob.
-#    The key already exists: Bitwarden secure note `kubevirt-node-power`
-#    (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / INSTANCE_ID / AWS_DEFAULT_REGION).
-#    Only if it is lost: aws iam create-access-key --user-name kubevirt-node-power
-for ns in kubevirt-aws tailvm; do kubectl create namespace $ns --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n $ns create secret generic node-power \
-  --from-literal=AWS_ACCESS_KEY_ID=... --from-literal=AWS_SECRET_ACCESS_KEY=... \
-  --from-literal=INSTANCE_ID="$(cd aws && tofu output -raw kubevirt_instance_id)"; done
-kubectl kustomize --load-restrictor LoadRestrictionsNone talos-k8s/kubevirt-aws | kubectl apply -f -
-```
-
-## Day to day
-
-```bash
-scripts/kubevirt-node up        # ~2 min; the node stops itself after 30 idle minutes
-corral --context aws-migration list   # or https://corral-aws.<tailnet>.ts.net
-scripts/kubevirt-node down      # stop now
-```
+The original bring-up and daily power-management commands are preserved in the
+[runbook at `dcbbfbc`](https://github.com/hanthor/dotfiles/blob/dcbbfbc/talos-k8s/kubevirt-aws/README.md).
+They depend on the retired AWS root module and startup helper and are not active
+commands in this checkout. Do not apply these historical instructions to the
+[current Karnataka K3s host](../../docs/src/servers/talos-k8s/karnataka/README.md).
 
 ## Caveats
 

@@ -1,5 +1,6 @@
-# Talos machine-config patch for the AWS KubeVirt node (aws/kubevirt.tf).
-# Applied on top of the existing AWS worker's config:
+# Historical Talos patch for the AWS KubeVirt node; not for current K3s hosts.
+# Its aws/kubevirt.tf deployment is archived at Git commit dcbbfbc.
+# Applied on top of the former AWS worker's config:
 #
 #   talosctl -n 10.20.1.11 get machineconfig -o jsonpath='{.spec}' > /tmp/worker.yaml   # never commit
 #   talosctl machineconfig patch /tmp/worker.yaml --patch @talos-patch.yaml -o /tmp/kubevirt.yaml

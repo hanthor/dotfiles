@@ -5,7 +5,9 @@
 > `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server on its
 > tailnet address `100.66.158.127`. KubeVirt `v1.9.1`, CDI and Corral are
 > installed; `corral-vms/punjab` is now the active Punjab replacement at
-> `100.103.187.46`. The former EC2 host is stopped with recovery storage retained.
+> `100.103.187.46`. The former EC2 host was terminated on 2026-10-29;
+> its root volume, AWS snapshots and S3 backups were deleted. See the
+> [final AWS deletion evidence](servers/aws/README.md).
 > Retain `talos-k8s/`, cluster configs and Bitwarden notes as recovery material,
 > not proof either machine still runs Talos.
 >

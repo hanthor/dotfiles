@@ -38,7 +38,7 @@ jobs:
           owned=$({
             printf '%s\n' "$files" \
               | grep -vE '^(docs/|tests/|talos-k8s/|roles/pi/files/skills/)|\.md$' \
-              | grep -vxE 'roles/pi/files/package\.json|tools/secret-broker/go\.(mod|sum)|aws/\.terraform\.lock\.hcl'
+              | grep -vxE 'roles/pi/files/package\.json|tools/secret-broker/go\.(mod|sum)'
             printf '%s\n' "$files" | grep '^\.github/'
           } | sort -u | sed '/^$/d')
           if [ -n "$owned" ]; then

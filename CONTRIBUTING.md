@@ -22,11 +22,10 @@ yamllint -d "{extends: default, rules: {line-length: disable, document-start: di
 find . -name "*.sh" -not -path "./.git/*" -type f -print0 | xargs -0 shellcheck -x -S error
 uvx --with pyyaml pytest -q tests
 just --justfile Justfile --list
-(cd aws && tofu fmt -check -recursive)
 ```
 
 CI also checks JSON validity, compiles tracked Python, runs native osquery smoke jobs,
-`tofu validate` + `aws/tests/run.sh`, and Go checks in `tools/secret-broker/`.
+and Go checks in `tools/secret-broker/`.
 See `.github/workflows/ci.yml` for the current jobs. These instructions do not
 assert that a particular checkout has passed them.
 

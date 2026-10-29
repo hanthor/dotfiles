@@ -29,6 +29,6 @@ The shared unit library skips retired `matrix` and `telengana` before unit work.
 ## Other helpers
 
 - `scripts/sync-brews.sh` compares Homebrew's dumped formulae with `core_brews` and `desktop_brews` in `group_vars/all.yml` and adds missing formulae to `desktop_brews`; review its changes before committing.
-- `scripts/kubevirt-node up|down|status` historically managed an AWS KubeVirt instance and VMs, using `~/.kube/config-aws-migration` by default. The AWS Talos cluster was terminated; do not treat these commands as a home-cluster runbook or use them without checking the current AWS state. The home Talos cluster is separately offline in storage, not decommissioned.
+- The retired AWS `scripts/kubevirt-node` helper is preserved only at [`dcbbfbc`](https://github.com/hanthor/dotfiles/blob/dcbbfbc/scripts/kubevirt-node); its startup/shutdown commands are no longer available. Use the [current Karnataka K3s handbook](servers/talos-k8s/karnataka/README.md) for the independent local KubeVirt host.
 - `scripts/ess-render-values.py` reads sensitive ESS Helm values on stdin and writes transformed values to stdout for the former AWS cluster. It does not retrieve the vault item itself or configure the standalone OCI deployment. Do not write secret-bearing output to a tracked file.
 - `scripts/osquery-fleet.py` collects private fleet monitoring reports; see [fleet facts and osquery](roles/fleet_facts.md).

@@ -1,6 +1,7 @@
-# Stops the AWS KubeVirt node (aws/kubevirt.tf) after IDLE_MINUTES with no
-# workload pods on it (VM launchers, CDI importers; DaemonSets don't
-# count). Start it again with `scripts/kubevirt-node up` from the tailnet.
+# Historical AWS KubeVirt idle-stop manifest; not the active local K3s host.
+# The node's aws/kubevirt.tf and startup helper are archived at Git commit
+# dcbbfbc. This job only stops an existing instance after IDLE_MINUTES with no
+# workload pods (VM launchers, CDI importers; DaemonSets do not count).
 #
 # Credentials: secret kubevirt-aws/node-power holds an access key for IAM
 # user kubevirt-node-power, which can only start/stop/describe this one

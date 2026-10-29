@@ -352,31 +352,14 @@ bw list items --session "$BW_SESSION"
 
 ### `kubevirt-node`
 
-Power the AWS KubeVirt node up or down from the tailnet.
+The AWS node startup/shutdown helper has been removed. Its implementation and
+historical usage are preserved at
+[`dcbbfbc`](https://github.com/hanthor/dotfiles/blob/dcbbfbc/scripts/kubevirt-node);
+these are archived deployment instructions, not commands available in this
+checkout. Restoring them can restart paid EC2 infrastructure.
 
-**Purpose**: Manage the AWS EC2 instance running the KubeVirt migration cluster, which is automatically scaled down after 30 idle minutes or when compute credits are low.
-
-**Usage**:
-```bash
-./scripts/kubevirt-node up      # start and wait for Ready
-./scripts/kubevirt-node down    # stop gracefully
-./scripts/kubevirt-node status  # current state
-```
-
-**Prerequisites**:
-- AWS CLI configured with credentials
-- `kubectl` with access to the AWS migration cluster
-- `KUBECONFIG` pointing to `~/.kube/config-aws-migration` (or set explicitly)
-
-**What it does**:
-- **up**: Starts the EC2 instance and waits for the Kubernetes node to report Ready
-- **down**: Stops the EC2 instance gracefully (VMs on it are shut down first by the cluster)
-- **status**: Prints the current EC2 state (running, stopped, pending, etc.)
-
-**Notes**:
-- The cluster runs an idle-stop CronJob that automatically stops after 30 idle minutes
-- A migration budget controller stops it if credits approach limits
-- Daily workflow: just run `up` in the morning; `down` is automatic
+The independent local KubeVirt host is documented in the
+[Karnataka K3s handbook](src/servers/talos-k8s/karnataka/README.md).
 
 ---
 
@@ -605,8 +588,4 @@ done
 
 **"Bitwarden vault is unauthenticated"**
 - Run `bw login` first, or set `BW_SESSION` if you have an active session
-
-**"no aws-migration-kubevirt instance"**
-- Check AWS region: `kubevirt-node` defaults to `eu-north-1`
-- Set `AWS_DEFAULT_REGION` if your instance is elsewhere
 
