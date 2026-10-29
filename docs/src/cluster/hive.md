@@ -13,12 +13,25 @@ Caddy configuration routes [school.tunaos.org](https://school.tunaos.org) and
 state alone does not establish that the public endpoints or agents are healthy.
 
 The configured images are `ghcr.io/hivecommons/hive:v6-latest` for the two
-spokes and `ghcr.io/hivecommons/hive-hub:v6-latest` for the hub. The Compose
-services bind-mount `/srv/hives/bin/hive` over `/usr/local/bin/hive`, so the
-image tag alone does not describe the running binary. The observed school and
-reef seed configurations use the `omp` backend with
+spokes and `ghcr.io/hivecommons/hive-hub:v6-latest` for the hub, but the image
+tag does not describe the running binary. Since 2026-10-29,
+`/srv/hives/compose.override.yaml` bind-mounts a fork-built binary,
+`/srv/hives/bin/hive-<commit>`, over `/usr/local/bin/hive` in each service.
+The binaries are built for arm64 from the `tuna/v6` branch of
+[tuna-os/hive](https://github.com/tuna-os/hive): upstream `v6` plus the
+features Tuna OS pilots on these hives. The fork's `FORK.md` records which
+commit each service runs and its patches. To check a service, compare
+`docker exec hives-<svc>-1 sha256sum /usr/local/bin/hive` with
+`sha256sum /srv/hives/bin/hive-<commit>`. Rollback is to point the service at
+the previous binary in the override file and run `docker compose up -d <svc>`;
+data snapshots from before the `v5` to `v6` change are in `/srv/hives/backups/`.
+
+The school and reef configurations use the `omp` backend with
 `github-copilot/gpt-6-luna`, not the historical pi/DeepSeek backend below.
-Runtime state and model selection may differ from the seed files.
+Each hive's live configuration is `/srv/hives/<hive>/data/hive.yaml.runtime`,
+which the hive restores over its seed (`<hive>/config/hive.yaml`) on start, so
+stop the service before editing the runtime file. The rollout these hives run
+is tracked in [tuna-os/tunaOS#4072](https://github.com/tuna-os/tunaOS/issues/4072).
 
 The old AWS cluster also had a `hive.reilly.asia` spoke; no hanthor container
 was present in the inspected Spindle Docker inventory. Its current status was
