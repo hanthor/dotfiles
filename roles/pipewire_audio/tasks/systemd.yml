@@ -1,0 +1,55 @@
+---
+# ── LADSPA_PATH for bootc systems ────────────────────────────────────────
+# On immutable systems /usr/lib*/ladspa is read-only. If we need user-space
+# LADSPA plugins, pipewire needs LADSPA_PATH to find them.
+
+- name: Ensure pipewire.service drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/pipewire.service.d"
+    state: directory
+    mode: "0755"
+
+- name: Ensure pipewire LADSPA_PATH includes user ladspa directory
+  ansible.builtin.copy:
+    content: |
+      [Service]
+      Environment=LADSPA_PATH=%h/.ladspa:/usr/lib/x86_64-linux-gnu/ladspa:/usr/lib/ladspa:/usr/lib64/ladspa
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/pipewire.service.d/ladspa-path.conf"
+    mode: "0644"
+  register: ladspa_path_dropin
+  notify: Restart pipewire
+
+- name: Ensure user ladspa directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.ladspa"
+    state: directory
+    mode: "0755"
+
+# ── Mic DSP persistent routing ──────────────────────────────────────────
+# WirePlumber 0.5 doesn't auto-route hardware mic to filter-chain.
+# Systemd oneshot creates the link at login.
+
+- name: Deploy mic DSP link service (routes hardware mic through RNNoise)
+  when: has_rnnoise | bool
+  ansible.builtin.template:
+    src: mic-dsp-link.service.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/mic-dsp-link.service"
+    mode: "0644"
+  notify: Restart mic dsp link
+
+- name: Enable mic DSP link service
+  ansible.builtin.systemd_service:
+    name: mic-dsp-link.service
+    enabled: true
+    state: started
+    scope: user
+    daemon_reload: true
+  when: has_rnnoise | bool
+
+- name: Disable mic DSP link service (RNNoise unavailable)
+  ansible.builtin.systemd_service:
+    name: mic-dsp-link.service
+    enabled: false
+    state: stopped
+    scope: user
+  when: not (has_rnnoise | bool)

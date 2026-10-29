@@ -13,6 +13,21 @@ Replaces Easy Effects with native PipeWire `filter-chain` modules using LSP LV2 
 3. Configures WirePlumber to prefer the DSP nodes as default devices
 4. Cleans up any previous Easy Effects installation (Flatpak, autostart, presets)
 
+## Internal task boundaries
+
+The role keeps one public `pipewire` tag and the `skip_pipewire_audio` gate, but
+the entrypoint delegates to focused task files in this order:
+
+1. `tasks/platform.yml` detects the host platform, installs mutable-system
+   prerequisites, and publishes plugin availability facts.
+2. `tasks/dsp.yml` deploys the speaker and microphone filter-chain configs.
+3. `tasks/systemd.yml` configures the LADSPA path and persistent microphone
+   routing service.
+4. `tasks/cleanup.yml` removes obsolete WirePlumber and Easy Effects state.
+
+The split is organizational only: conditions, handlers, paths, and the role's
+execution order remain unchanged.
+
 ## Output Chain: Speaker DSP
 
 Signal path: **16-band Parametric EQ → Bass Enhancer → Exciter → Limiter** (all LSP LV2).
