@@ -14,6 +14,10 @@ KUBELET_RULE = (
     'rule family="ipv4" source address="10.42.0.0/16" '
     'destination address="100.66.158.127/32" port port="10250" protocol="tcp" accept'
 )
+API_RULE = (
+    'rule family="ipv4" source address="100.64.0.0/10" '
+    'destination address="100.66.158.127/32" port port="6443" protocol="tcp" accept'
+)
 
 
 def empty_policy():
@@ -41,10 +45,14 @@ args = sys.argv[1:]
 scope = "permanent" if "--permanent" in args else "runtime"
 zone = s[scope]
 policy_name = next((a.split("=", 1)[1] for a in args if a.startswith("--policy=")), None)
+if "--zone=public" in args:
+    zone = zone["public"]
 if "--state" in args:
     print("running")
 elif "--get-default-zone" in args:
     print(s["default"])
+elif "--get-zones" in args:
+    print("internal public")
 elif "--get-policies" in args:
     print(" ".join(zone["policies"]))
 elif any(a.startswith("--info-policy=") for a in args):
@@ -105,7 +113,8 @@ else:
         if key == "interfaces":
             zone[key].append(value)
         else:
-            zone[key] = value if key == "rule" else True
+            if not (key == "rule" and "--zone=public" in args and os.environ.get("IGNORE_API_ADD")):
+                zone[key] = value if key == "rule" else True
     s["changes"].append([scope, op])
     with open(p, "w") as f:
         json.dump(s, f)
@@ -119,6 +128,8 @@ PY
         "permanent": {"interfaces": [], "sources": [], "forward": False, "rule": "", "policies": {}},
         "changes": [],
     }
+    for scope in ("runtime", "permanent"):
+        state[scope]["public"] = {"interfaces": [], "sources": [], "rule": ""}
     path.write_text(json.dumps(state))
     env["FIREWALL_STATE"] = str(path)
 
@@ -142,6 +153,8 @@ def test_apply_is_scoped_and_idempotent(firewall):
         assert zone["interfaces"] == ["cni0"]
         assert zone["sources"] == []
         assert zone["forward"] is True
+        assert zone["public"] == {"interfaces": [], "sources": [], "rule": API_RULE}
+        assert zone["rule"] == KUBELET_RULE
     assert state["permanent"]["policies"] == {POLICY: expected}
     assert state["runtime"]["policies"] == {}
     ops = [op for scope, op in state["changes"] if scope == "permanent"]
@@ -172,7 +185,8 @@ def test_check_reports_missing_without_changes(firewall):
     assert not state["changes"]
 
 
-def test_check_accepts_host_rule_and_egress_policy(firewall):
+@pytest.mark.parametrize("tailnet_interfaces", [[], ["tailscale0"]])
+def test_check_accepts_host_rule_and_egress_policy(firewall, tailnet_interfaces):
     path, _, run = firewall
     state = json.loads(path.read_text())
     policy = empty_policy()
@@ -181,6 +195,8 @@ def test_check_accepts_host_rule_and_egress_policy(firewall):
     for scope in ("runtime", "permanent"):
         state[scope].update(interfaces=["cni0"], forward=True, rule=KUBELET_RULE,
                             policies={POLICY: policy})
+        state[scope]["public"]["rule"] = API_RULE
+        state[scope]["public"]["interfaces"] = tailnet_interfaces
     path.write_text(json.dumps(state))
     result, after = run("--check")
     assert result.returncode == 0, result.stderr
@@ -250,6 +266,54 @@ def test_query_error_is_not_treated_as_missing(firewall):
     result, state = run("--apply")
     assert result.returncode == 2
     assert not state["changes"]
+
+
+@pytest.mark.parametrize("scope", ["runtime", "permanent"])
+def test_missing_api_rule_is_reported_without_changes(firewall, scope):
+    path, _, run = firewall
+    run("--apply")
+    state = json.loads(path.read_text())
+    state[scope]["public"]["rule"] = ""
+    path.write_text(json.dumps(state))
+    result, after = run("--check")
+    assert result.returncode != 0
+    assert "6443" in result.stderr
+    assert after == state
+
+
+@pytest.mark.parametrize("scope", ["runtime", "permanent"])
+@pytest.mark.parametrize("drift", ["default", "interface", "source"])
+def test_api_zone_classification_drift_refused_before_changes(firewall, scope, drift):
+    path, _, run = firewall
+    state = json.loads(path.read_text())
+    if drift == "default":
+        state["default"] = "external"
+    elif drift == "interface":
+        state[scope]["interfaces"] = ["tailscale0"]
+    else:
+        state[scope]["public"]["sources"] = ["100.103.187.46/32"]
+    path.write_text(json.dumps(state))
+    result, after = run("--apply")
+    assert result.returncode != 0
+    assert "refusing" in result.stderr
+    assert after == state
+
+
+def test_apply_verifies_api_rule_was_actually_installed(firewall):
+    path, env, run = firewall
+    policy = empty_policy()
+    policy.update({"ingress-zones": ["internal"], "egress-zones": ["public"],
+                   "rich rules": [EGRESS_RULE]})
+    state = json.loads(path.read_text())
+    for scope in ("runtime", "permanent"):
+        state[scope]["policies"][POLICY] = policy
+    path.write_text(json.dumps(state))
+    env["IGNORE_API_ADD"] = "1"
+    result, after = run("--apply")
+    assert result.returncode != 0
+    assert "6443" in result.stderr
+    for scope in ("runtime", "permanent"):
+        assert not after[scope]["public"]["rule"]
 
 
 BRIDGE_SCRIPT = REPO / "home-k3s" / "firewall-egress-bridge.sh"

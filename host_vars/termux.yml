@@ -22,7 +22,6 @@ machine_profile: cli-only
 # No root, no sudo binary, no systemd, no glibc — none of these apply.
 skip_sudo: true
 skip_systemd: true
-skip_kube: true
 skip_flatpak: true
 skip_bluefin: true
 skip_gnome: true

@@ -1,11 +1,13 @@
-# Karnataka
+# Karnataka — Utah and the active K3s cluster
 
 Karnataka runs `ghcr.io/projectbluefin/utah:testing`, is in the fleet's
 `server` inventory group, and uses `multi-user.target` as its default. SSH is
 available over Tailscale at `100.66.158.127`. A single-node K3s cluster runs
 KubeVirt, CDI, and Corral. The `corral-vms/punjab` VM now runs the migrated
-Punjab environment at `100.103.187.46` (tailnet name `punjab`). Its former EC2
-host is stopped; its root volume and recovery snapshots are retained.
+Punjab environment at `100.103.187.46` (tailnet name `punjab`). This is the
+[active replacement](../../punjab/README.md), not a staging VM or an EC2 host.
+For the former EC2 host's retirement and retained recovery artifacts, consult
+the [AWS account handbook](../../aws/README.md).
 
 NetworkManager, Tailscale and SSH are enabled at boot. Ethernet is preferred;
 a locally stored Wi-Fi profile autoconnects with a higher route metric. Wi-Fi
@@ -30,13 +32,136 @@ updates from the unmerged checkout.
 - GPU: AMD integrated
 - LAN: DHCP on the home network
 
+## Current K3s cluster
+
+Read-only inspection on **2026-10-29** found:
+
+| Component | Live state |
+|-----------|------------|
+| API endpoint | `https://100.66.158.127:6443` over Tailscale |
+| Client context | `karnataka-k3s` |
+| Node | `karnataka`, `Ready`, control-plane, internal IP `100.66.158.127`, no external IP |
+| Kubernetes | K3s `v1.36.5+k3s1`, containerd `2.3.4-k3s1.36` |
+| Host image | Bluefin `testing-20261024-9acbde2`, kernel `7.2.11-200.fc44.x86_64` |
+| Core services | CoreDNS, metrics-server and local-path-provisioner; deployments available |
+| Virtualization | KubeVirt `v1.9.1` and CDI `v1.66.1`, both `Deployed` |
+| Corral | `corral/corral-web`, available, ClusterIP service on port 80 |
+| Storage | Default `local-path`, `rancher.io/local-path`, `WaitForFirstConsumer`, reclaim policy `Delete`, no expansion |
+| Persistent claims | Bound `corral-vms/punjab-root` and `karnataka-cdi-readiness/cirros-readiness` |
+| Punjab | `corral-vms/punjab` VM and VMI `Running`, ready on `karnataka`; guest tailnet IP `100.103.187.46` |
+
+All services returned by inspection were ClusterIP services (including one
+headless metrics service); none advertised a LoadBalancer or NodePort.
+The inspected deployments and virt-handler DaemonSet were ready. This is a
+single-node cluster, not an HA control plane: host or local-disk loss affects
+both Kubernetes and Punjab. A bound PVC is not a backup.
+
+The API listener is bound to `100.66.158.127:6443` and loopback, not all host
+interfaces. The kubelet listener is `100.66.158.127:10250`. The serving
+certificate inspected through the host included `100.66.158.127` and
+`karnataka` as subject alternative names, was issued by the K3s server CA,
+and expires 2027-10-27. Clients must use the embedded CA in the vault-backed
+kubeconfig, not `--insecure-skip-tls-verify`. Tailscale routing and access
+policy must permit each client to reach TCP 6443; merely reaching SSH does
+not prove API connectivity. Do not publish the API or Corral on the Internet.
+
+### Fleet client provisioning
+
+The native [`kube` unit](../../../roles/kube.md) provisions the active cluster
+on all active fleet computers, including servers, from the separate Bitwarden
+secure note **`kubeconfig-karnataka-k3s`**. The note's standard notes field
+contains a complete kubeconfig with cluster, user and context named
+`karnataka-k3s`, the endpoint above, and embedded CA/client credentials.
+Treat it as a secret; never print it or commit it.
+
+With a valid Bitwarden session, use the normal fleet entry points:
+
+```bash
+just apply-tags packages,kube
+# From the fleet controller, apply to each active reachable host:
+just apply-remote HOST
+```
+
+The unit writes `~/.kube/config-karnataka-k3s` with mode `0600`, merges into
+`~/.kube/config` without discarding historical contexts, and selects
+`karnataka-k3s` on each apply. The first existing default config is backed up
+once to `~/.kube/config-pre-karnataka-k3s`. An explicitly set `KUBECONFIG`
+environment variable can override the default file; unset it or point to
+the intended config before using these commands.
+
+For production hosts where only client access is required, an operator can
+securely preseed the standalone cache above and install `kubectl`, then run
+the narrower cached-only path instead of applying unrelated fleet units:
+
+```bash
+KUBE_CACHED_ONLY=1 UNITS_NO_SECRETS=1 bash units/kube.sh
+```
+
+This mode merges/selects the cached context without invoking Bitwarden or
+seeding recovery notes. Ordinary `--no-secrets` without this explicit mode
+remains no-write; it does not provision a client.
+
+Keep the historical home Talos `kubeconfig` / `talosconfig` Bitwarden notes
+and their files, and the separate AWS recovery configs. They are not inputs
+for this live cluster and must not be overwritten with K3s credentials.
+The [Talos handbook](../cluster.md) describes historical recovery only;
+its reinstall, reset, bootstrap and workload commands do not apply here.
+The terminated [AWS Talos cluster](../../aws-k8s/cluster.md) is also separate.
+
+### Verified client rollout (2026-10-29)
+
+Punjab, Karnataka, Kerala and Spindle now use `karnataka-k3s` as their default
+context. Each passed a real authenticated `/readyz` request and listed the
+Ready `karnataka` node with normal CA verification. Config files are `0600`;
+the rollout compared existing contexts, clusters and users to confirm they
+were retained. Private pre-rollout copies are under each user's
+`~/.local/state/dotfiles/k3s-rollout-20261029T021854Z/`.
+
+Mumbai, Himachal, Dilli and Kanpur were unreachable during rollout. Termux
+was on the tailnet but its configured SSH port 8022 refused connections.
+Their repository policy/package changes are prepared, but those machines
+have **not** received the live configuration; apply once they are reachable.
+Retired `matrix` and `telengana` were not modified.
+
+### Read-only client smoke commands
+
+After provisioning and while connected to the tailnet, these commands read
+cluster state without creating a pod, changing context or modifying resources:
+
+```bash
+kubectl --context karnataka-k3s get --raw=/readyz
+kubectl --context karnataka-k3s get nodes -o wide
+kubectl --context karnataka-k3s get deployments,daemonsets -A
+kubectl --context karnataka-k3s get services -A
+kubectl --context karnataka-k3s get storageclasses,persistentvolumes
+kubectl --context karnataka-k3s get persistentvolumeclaims -A
+kubectl --context karnataka-k3s get virtualmachines,virtualmachineinstances -n corral-vms
+```
+
+For an isolated check of the cached credentials rather than the merged file,
+add `--kubeconfig "$HOME/.kube/config-karnataka-k3s"` to a command.
+Do not use `kubectl config view --raw`, dump Secret objects, or paste
+credentials into diagnostics. If the API is unavailable, retain SSH and
+inspect `systemctl status k3s` before considering any repair or restart;
+Punjab depends on this server.
+
 ## K3s operation
 
-The host-specific files are in `home-k3s/`. K3s listens on the Tailscale
-address, and its service waits for that address before starting. The service
-loads `br_netfilter` and `overlay` when available. Run `systemctl status k3s`
-and `sudo /var/usrlocal/bin/k3s kubectl --server https://100.66.158.127:6443 get pods -A`
-to inspect it. Reloading the service definition does not restart K3s.
+The host-specific files are in `home-k3s/`. The enabled, active systemd unit
+is `/etc/systemd/system/k3s.service`, with
+`ExecStart=/var/usrlocal/bin/k3s server`. It orders after
+`network-online.target` and `tailscaled.service` and runs
+`/var/usrlocal/libexec/k3s-wait-tailnet` before starting, then attempts to load
+`br_netfilter` and `overlay`. The binary is pinned at
+`/var/usrlocal/bin/k3s`. For read-only inspection on the host:
+
+```bash
+systemctl status k3s
+sudo /var/usrlocal/bin/k3s kubectl --server https://100.66.158.127:6443 get pods -A
+```
+
+Reloading the service definition does not restart K3s. Do not restart it as
+part of client provisioning.
 
 `home-k3s/install-host.sh` reuses the pinned binary and refuses to replace a
 different binary while K3s is active. It does not restart an active service;
@@ -64,6 +189,30 @@ zone. A rich rule permits `10.42.0.0/16` to reach the Tailscale address on TCP
 SSH, are also reachable from pods; do not attach an untrusted interface to that
 zone. The LAN interfaces are in `public`. Both bridge rules were present in
 the permanent configuration when last inspected.
+
+Read-only inspection on 2026-10-29 found `tailscale0` unassigned to a
+firewalld zone, so incoming API connections used default `public`. That zone
+allowed SSH but not TCP 6443; firewalld rejected API connections despite
+Tailscale's earlier input-chain acceptance. `home-k3s/firewall.sh` now manages
+a scoped API rich rule in `public`, in both runtime and permanent stores:
+IPv4 source `100.64.0.0/10`, destination `100.66.158.127/32`, TCP 6443 only.
+This is separate from the pod-egress policy and does not open other host
+services, change zone/interface assignments, reload firewalld or restart K3s.
+Tailscale's existing anti-spoofing input rules reject that source range on
+non-Tailscale interfaces; retain those rules.
+
+The helper refuses changes if the default zone is no longer `public`, if
+`tailscale0` is explicitly assigned elsewhere, or if any zone has source
+bindings in either store (source classification can override interfaces).
+Resolve such drift deliberately rather than opening another zone blindly.
+`--check` requires the API rule in both stores; `--apply` checks it again
+after changes. A successful firewall check is not proof of client API
+connectivity: perform the read-only smoke commands above from each client.
+The API rule was subsequently applied and verified in both stores, restoring
+client API access without a reload. The full helper still returned nonzero
+at the pre-existing absent runtime pod-egress policy described below; it was
+not force-activated. This does not invalidate the separate API rule or the
+authenticated client checks, and is not a claim that the full helper passed.
 
 The broad `gateway-lan-to-world` baseline accepts traffic from `internal`,
 `home` and `trusted` to both `public` and `external` and must not be enabled

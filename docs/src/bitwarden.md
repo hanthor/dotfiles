@@ -32,7 +32,8 @@ Common items consumed by units and scripts (the unit sources and their configura
 |---------------|------|---------|
 | `<login>@<machine>` | SSH Key | `ssh-keys` unit — per-machine ed25519 keys |
 | `tailscale-apikey` | Login (password) | `tailscale` unit — join and stale-device API cleanup |
-| `kubeconfig`, `talosconfig` | Secure notes | `kube` unit — home cluster credentials |
+| `kubeconfig-karnataka-k3s` | Secure note (`notes` field) | `kube` unit — active Karnataka K3s credentials, context `karnataka-k3s`, merged as the fleet default |
+| `kubeconfig`, `talosconfig` | Secure notes | `kube` unit — retained home Talos recovery credentials; never repurpose for K3s |
 | `kubeconfig-aws-migration`, `talosconfig-aws-migration` | Secure notes | `kube` unit — retained credentials for the terminated AWS cluster |
 | `accounts.firefox.com` | Login + TOTP | `browser-fxa` unit — Firefox Account credentials |
 | `github-token` | Login (password) | `github` unit — PAT for `gh` |
@@ -62,9 +63,13 @@ If Bitwarden can't unlock (first run, no BW CLI installed, vault genuinely locke
 ## Seeding New Secrets
 
 ```bash
-# Push kubeconfig + talosconfig (home cluster) to Bitwarden from a machine that has them:
+# Push retained home-only configs to their historical Bitwarden notes:
 just seed-kube
 ```
 
-`seed-kube` only handles the two home-cluster notes; the `*-aws-migration`
-notes are maintained by hand.
+`seed-kube` reads `~/.kube/config-home-talos` and `~/.talos/config`, not the
+merged K3s default `~/.kube/config`. It only handles the two retained home
+Talos notes. The `*-aws-migration` notes remain recovery material maintained
+by hand; the separate `kubeconfig-karnataka-k3s` note is provisioned privately
+from the current K3s server. See the [kube unit](roles/kube.md#bitwarden-contract)
+for its exact format. Do not upload active K3s credentials into historical notes.

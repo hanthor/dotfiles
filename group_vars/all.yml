@@ -88,6 +88,8 @@ core_brews:
   - shfmt
   - unzip
   - yq
+  # kubectl is required on servers and phone VMs as well as desktops.
+  - kubernetes-cli
   # atuin is also in bluefin-cli, but the brew copy keeps non-Bluefin glibc hosts (Ubuntu, Debian) covered
   - atuin
   # bluefin-cli provides: atuin, bat, eza, fd, fzf, starship, carapace, ripgrep, tealdeer, zoxide, colordiff, television, ugrep
@@ -117,7 +119,6 @@ desktop_brews:
   - glab
   - ramalama
   - k9s
-  - kubernetes-cli
   - kubectx
   - krew
   - talosctl

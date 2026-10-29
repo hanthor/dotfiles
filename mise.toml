@@ -27,7 +27,7 @@ description = "github: gh login from Bitwarden and SSH key registration"
 file = "units/github.sh"
 
 [tasks."unit:kube"]
-description = "kube: kubeconfig and talosconfig for the home and AWS clusters from Bitwarden"
+description = "kube: Karnataka K3s fleet default and retained Talos recovery configs from Bitwarden"
 file = "units/kube.sh"
 
 [tasks."unit:forgejo-registry"]

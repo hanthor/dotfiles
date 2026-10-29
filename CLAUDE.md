@@ -47,14 +47,14 @@ just add-machine NAME   # Onboard + bootstrap an already-reachable machine via S
 `just apply*` invokes `scripts/run-units.sh`, which runs `units/` in prerequisite stages via mise, with a sequential fallback. It selects units by the wrapper's tag map and honors each unit's own platform, profile and host-variable gates. See [`docs/src/units.md`](docs/src/units.md).
 
 - Apply recipes resolve and sync Bitwarden; unit helpers use `BW_SESSION` or `/tmp/bw_session` noninteractively, and honor `--no-secrets`.
-- The `kube` unit fetches kubeconfig and talosconfig from Bitwarden on eligible desktops.
+- The `kube` unit provisions the Karnataka K3s default on active Linux/macOS computers, including servers and Termux, while preserving historical Talos recovery configs. Offline clients need a secret-enabled apply when reachable.
 - `ssh-keys` and `ssh-mesh` handle key lifecycle and authorization. `home/` is the chezmoi source for shell, Git, Neovim and Atuin config.
 
 Groups in `inventory.yml`, `skip_*` flags and `machine_profile` influence individual units. See [`docs/src/roles/`](docs/src/roles/) for component references.
 
 ## Kubeconfig + Talos secrets
 
-`~/.kube/config` and `~/.talos/config` contain cluster PKI — they live in **Bitwarden as secure notes** named `kubeconfig` and `talosconfig` (home cluster). The AWS cluster's are `kubeconfig-aws-migration` / `talosconfig-aws-migration`, written to `~/.kube/config-aws-migration` / `~/.talos/config-aws-migration`. Pull all four via `just apply-tags kube`; `just seed-kube` only seeds the two home-cluster notes.
+The active K3s note is **`kubeconfig-karnataka-k3s`**: it seeds `~/.kube/config-karnataka-k3s`, merges into `~/.kube/config`, and selects context `karnataka-k3s` at `https://100.66.158.127:6443`. All configs contain cluster PKI; keep them private. Historical home notes `kubeconfig` / `talosconfig` seed `~/.kube/config-home-talos` / `~/.talos/config`; AWS notes `kubeconfig-aws-migration` / `talosconfig-aws-migration` retain their separate recovery files. `just apply-tags kube` retrieves these notes; `just seed-kube` only seeds the historical home notes from `config-home-talos` and talosconfig, never the merged K3s default. See [`docs/src/roles/kube.md`](docs/src/roles/kube.md).
 
 `talos-k8s/.gitignore` excludes `controlplane.yaml`, `worker.yaml`, and `talosconfig` from git.
 

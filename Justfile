@@ -540,7 +540,7 @@ docs-build:
     fi
     cd {{ dotfiles_dir }}/docs && mdbook build
 
-# Seed Bitwarden with this machine's kubeconfig + talosconfig (so other machines can fetch)
+# Seed retained home Talos notes from config-home-talos + talosconfig (not the merged K3s default)
 seed-kube:
     @{{ dotfiles_dir }}/scripts/bw-seed-kube.sh
 

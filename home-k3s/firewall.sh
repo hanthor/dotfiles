@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Manage cni0 and a source-scoped pod egress policy without reloading firewalld.
+# Manage cni0, pod egress and tailnet API access without reloading firewalld.
 # The internal zone's existing services, including SSH, remain reachable
 # from pods. Public and Tailscale interface assignments are not changed.
 set -euo pipefail
@@ -16,6 +16,8 @@ zone=internal
 rule='rule family="ipv4" source address="10.42.0.0/16" destination address="100.66.158.127/32" port port="10250" protocol="tcp" accept'
 policy=k3s-pod-egress
 egress_rule='rule family="ipv4" source address="10.42.0.0/16" accept'
+api_zone=public
+api_rule='rule family="ipv4" source address="100.64.0.0/10" destination address="100.66.158.127/32" port port="6443" protocol="tcp" accept'
 firewall-cmd --state >/dev/null
 
 # A source binding would classify packets by address even on a public NIC.
@@ -38,6 +40,30 @@ preflight() {
 }
 preflight runtime
 preflight permanent
+
+# The API rule belongs in tailscale0's effective zone. Refuse classification
+# drift rather than adding an ineffective rule or moving interfaces/sources.
+# Source bindings take precedence over interfaces, so inspect every zone.
+api_preflight() {
+  local scope=$1 zones candidate interfaces sources
+  local -a opts=()
+  [ "$scope" = runtime ] || opts=(--permanent)
+  [ "$(firewall-cmd --get-default-zone)" = "$api_zone" ] || {
+    echo "$scope: API access requires the public default zone; refusing" >&2; return 1;
+  }
+  zones=$(firewall-cmd "${opts[@]}" --get-zones)
+  for candidate in $zones; do
+    sources=$(firewall-cmd "${opts[@]}" --zone="$candidate" --list-sources)
+    [ -z "$sources" ] || { echo "$scope: $candidate has source bindings; API classification uncertain; refusing" >&2; return 1; }
+    interfaces=$(firewall-cmd "${opts[@]}" --zone="$candidate" --list-interfaces)
+    if [[ " $interfaces " == *" tailscale0 "* ]] && [ "$candidate" != "$api_zone" ]; then
+      echo "$scope: tailscale0 is in $candidate, not public; refusing" >&2
+      return 1
+    fi
+  done
+}
+api_preflight runtime
+api_preflight permanent
 
 # Refuse to take over an existing policy whose effects extend beyond this
 # script's contract. Partially created policies are safe to finish: their
@@ -94,6 +120,7 @@ check_or_apply() {
   for scope in permanent runtime; do
     opts=()
     [ "$scope" = runtime ] || opts=(--permanent)
+    ensure "--query-rich-rule=$api_rule" "--add-rich-rule=$api_rule" "${opts[@]}" --zone="$api_zone"
     # Install the bounded rule and intra-zone forwarding before binding cni0.
     ensure "--query-rich-rule=$rule" "--add-rich-rule=$rule" "${opts[@]}" --zone="$zone"
     ensure --query-forward --add-forward "${opts[@]}" --zone="$zone"
@@ -142,6 +169,8 @@ if [ "$mode" = --apply ]; then
   [ "$(firewall-cmd --get-default-zone)" != "$zone" ] || { echo 'internal became the default zone' >&2; exit 1; }
   preflight runtime
   preflight permanent
+  api_preflight runtime
+  api_preflight permanent
   policy_preflight runtime
   policy_preflight permanent
   mode=--check
@@ -149,4 +178,4 @@ if [ "$mode" = --apply ]; then
   check_or_apply_policy
 fi
 
-echo 'internal cni0 forwarding, kubelet rule and pod egress policy are present in runtime and permanent configuration'
+echo 'internal cni0 forwarding, kubelet rule, scoped tailnet API rule and pod egress policy are present in runtime and permanent configuration; client connectivity must be checked separately'

@@ -29,7 +29,7 @@
   - [Home Kubernetes Images & ISOs](servers/home-k8s-images.md)
   - [Home Talos Cluster (historical reference)](servers/talos-k8s/cluster.md)
   - [Bihar (current state unverified)](servers/talos-k8s/bihar/README.md)
-  - [Karnataka (Utah)](servers/talos-k8s/karnataka/README.md)
+  - [Karnataka (Utah / active K3s)](servers/talos-k8s/karnataka/README.md)
   - [Goa](servers/goa/README.md)
   - [Spindle VPS (matrix.reilly.asia)](servers/spindle-vps/README.md)
 - [VPS]()
@@ -41,7 +41,7 @@
 - [TunaOS AWS Account & IaC](servers/aws/README.md)
   - [Talos Cluster (terminated; archive)](servers/aws-k8s/cluster.md)
   - [Hive Agent Fleet](cluster/hive.md)
-  - [Punjab (agent box)](servers/punjab/README.md)
+  - [Punjab (active Karnataka VM)](servers/punjab/README.md)
 
 # Roles Reference
 
