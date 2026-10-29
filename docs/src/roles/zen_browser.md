@@ -1,18 +1,12 @@
 # zen_browser
 
+**Unit:** `units/zen-browser.sh`  
 **Tags:** `desktop`, `browser`, `zen_browser`  
 **Secrets needed:** No  
-**Runs on:** Desktop group only
+**Runs on:** desktops, except `skip_zen_browser: true` or `machine_profile: vm-test`.
 
-Configures [Zen Browser](https://zen-browser.app/) (Firefox-based) as the default browser.
+The unit best-effort pins Zen in the GNOME dock, including an initially empty favorites list, removes Firefox and Thunderbird dock entries, and sets browser MIME defaults when the Zen Flatpak data directory exists. A live user session is needed for dock changes.
 
-## What It Does
+If Zen's Flatpak `profiles.ini` is absent, profile and policy steps are skipped. Otherwise it resolves `Profile0` and merges `units/zen-browser/user.js` into a managed block in that profile's `user.js`, retaining unrelated preferences. It merges `units/zen-browser/policies.json` into both the system Flatpak Zen distribution policy and `~/.zen/distribution/policies.json`, preserving unrelated policy keys and list entries. The system policy requires root or non-interactive sudo; malformed or incompatible existing policies fail rather than being discarded.
 
-1. Pins Zen Browser to the GNOME dock
-2. Removes Firefox and Thunderbird from the dock if present
-3. Sets Zen as the default web browser
-
-## Notes
-
-- Zen is installed via Flatpak (`app.zen_browser.zen`)
-- Firefox and Thunderbird are intentionally removed from the dock — Zen replaces both
+Firefox Account setup is handled by the separate [browser-fxa unit](browser_fxa.md), not by this unit. A successful configuration does not verify a browser login.

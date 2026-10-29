@@ -34,24 +34,30 @@ Two paths depending on whether the machine is already reachable.
 ## Path A: Machine Already Online (Tailscale + SSH)
 
 ```bash
-# From any machine with the dotfiles repo:
+# From an authenticated checkout with git and gh:
 just add-machine <name> <type>
 ```
 
-This:
-1. If the machine isn't in `inventory.yml` yet, adds it (`ansible_host: localhost`, `ansible_connection: local`) and puts it in the `<type>` group
-2. Creates an empty `host_vars/<name>.yml` — add per-machine knobs there afterwards
-3. Commits and pushes
-4. SSHes in (`ssh -t <name>`) and runs `bootstrap.sh --name <name> --type <type>` there — the same bootstrap as Path B
+For a new machine this proposes an inventory-only PR from `origin/master` in a
+temporary worktree and stops without connecting to the host. Review the group,
+connection details and `host_vars`, wait for required checks and owner approval,
+and merge the PR. Then rerun `just add-machine <name> <type>`; it verifies the
+registration on `origin/master` and SSHes in to run bootstrap. An already
+registered host skips the PR step. The caller's checkout, index and existing
+branches are not changed. The new machine must already be reachable over SSH.
 
 ## Path B: Fresh Install
 
 ```bash
-# From any machine with the dotfiles repo:
+# From an authenticated checkout with git and gh:
 just onboard <name> <type>
 ```
 
-This prints a bootstrap command to run **on the new machine**:
+Review and merge the registration PR before using the printed command **on the
+new machine**. The registration helper uses a temporary worktree and does not
+pull, switch branches, stage or commit the caller's work. If a registration PR
+already exists, it prints its URL; an existing remote onboarding branch without
+an open PR is left untouched for manual inspection.
 
 ```bash
 # On the new machine:
@@ -59,12 +65,19 @@ curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.s
   | bash -s -- --name <name> --type <type>
 ```
 
-The bootstrap script:
-1. Ensures python, git, uv and Ansible, then clones the dotfiles repo from [GitHub](https://github.com/hanthor/dotfiles)
-2. Registers the machine in `inventory.yml` if needed (prompts for the type when `--type` isn't given)
-3. Writes `/etc/dotfiles-machine` so the playbook can self-identify, sets the hostname, sets up sudo and Tailscale
-4. Runs `site.yml` with `--skip-tags secrets` (installs [Homebrew](https://brew.sh/) and core packages among the rest)
-5. If the Bitwarden CLI is now available and unlocks, runs `site.yml --tags secrets` and pushes any inventory changes
+Bootstrap first ensures Python and git, then verifies that its local inventory
+and the current `origin/master` contain the machine in the requested group
+before changing identity, sudo or Tailscale, or running units. If registration is
+missing, run `just onboard` from an authenticated fleet checkout, review and
+merge the PR, then rerun it.
+An existing checkout is never pulled or overwritten by bootstrap: update it
+yourself after the merge and rerun. A fresh machine clones `master`.
+
+After that gate, Linux bootstrap writes `/etc/dotfiles-machine`, sets hostname,
+sudo and Tailscale, then runs the native no-secrets and secrets phases. Termux
+uses the unprivileged path described below. Bootstrap reports failure if a phase
+or Bitwarden setup fails. Review unit output: skips and partial results are not
+proof that every host component is configured.
 
 ## After Bootstrap Completes
 
@@ -79,36 +92,68 @@ just apply
 ```
 
 **Why this step matters:**
-- Bootstrap runs `site.yml --skip-tags secrets`, which skips Bitwarden integration
-- `just apply` runs the full playbook with secrets, unlocking Bitwarden and completing setup
-- This pull-in step distributes SSH keys across the fleet, registers with GitHub and Tailscale, and sets up daily/on-login automation
+- Bootstrap's first phase disables secrets; the second selects secret-capable units and omp.
+- `just apply` reruns the full native selection with secrets where available.
+- This can distribute SSH keys, register with GitHub and Tailscale, and set up daily/on-login automation on eligible hosts.
 
-Do **not** edit `host_vars/<name>.yml` before the first `just apply` — bootstrap sets sensible defaults, and `just apply` will pull in critical secrets (SSH keys, GitHub tokens, Tailscale auth). Any per-machine customizations can follow once the first apply succeeds; the `skip_*` flags that turn individual roles off are listed in [Architecture → Skip Flags](architecture.md#skip-flags).
+Host-specific gates and overrides belong in `host_vars/<name>.yml`; consult [Architecture](architecture.md#conditional-execution) and the unit implementations when setting them.
 
 The details of what happens during this first apply are covered in the [Post-Onboarding](#post-onboarding) section below.
 
 ## Machine Types
 
-`<type>` is the inventory group to join. `bootstrap.sh` offers `desktop`, `server` and `vps`:
+`<type>` is the inventory group to join. Bootstrap supports these groups:
 
 | Type | Group | Has Desktop? | Notes |
 |------|-------|-------------|-------|
 | `desktop` | desktop | Yes | Laptops are desktops too — set `is_laptop: true` in `host_vars` |
-| `server` | server | No | Gets `server_hardening`; desktop roles skip automatically |
+| `server` | server | No | Gets `server_hardening`; desktop units skip automatically |
 | `vps` | vps | No | Also skips `syncthing`, `proxy`, `tailscale_cert` |
+| `termux_hosts` | termux_hosts | No | Existing reviewed raw Termux identity; Android manages Tailscale |
 
-There is no `laptop` type — a type that doesn't match a group leaves the host in
-no group. `test_fleet` and `termux_hosts` hosts are added to `inventory.yml` by
-hand.
+There is no `laptop` type. Unknown types and invalid hostnames are rejected.
+New `test_fleet` and `termux_hosts` identities require a manually reviewed
+inventory PR; Termux registrations need the correct Android Tailscale name,
+SSH user and port rather than the normal localhost defaults.
+
+## Raw Termux on the phone
+
+The existing inventory alias is `termux` (`termux_hosts`, port 8022 and
+tailnet name `pixel-9a`); `mumbai` is the separate Debian VM and remains a
+desktop. Join the tailnet using the Android Tailscale app. In Termux, install
+the initial commands and run the already-reviewed identity locally:
+
+```bash
+pkg update && pkg install git python curl openssh
+curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh \
+  | bash -s -- --name termux --type termux_hosts
+```
+
+For SSH onboarding, first start `sshd` in Termux and arrange authenticated SSH
+access through the fleet's existing `termux` SSH alias; then run `just
+add-machine termux termux_hosts` from a fleet checkout. Bootstrap checks the
+local and merged inventory, runs `pkg` and the native units without root, and
+does not modify the Android hostname, Tailscale app or `/etc`. Termux:Boot and
+Termux:API companion apps are needed for the boot script and scheduler.
+
+Termux cannot persist `/etc/dotfiles-machine`; the bootstrap phases pass the
+reviewed identity explicitly. For later local applies, use
+`DOTFILES_MACHINE=termux BW_SESSION_CACHE="$PREFIX/tmp/bw_session" just apply`.
+If Bitwarden CLI is unavailable or locked, the no-secrets phase still runs but
+bootstrap reports the secrets phase incomplete; provide a usable CLI session
+and rerun. Bootstrap keeps its Termux session in the process environment rather
+than writing `/tmp/bw_session`; the later apply command above uses a private
+cache under Termux's writable prefix. The phone push timer also supplies the
+identity explicitly.
 
 ## Post-Onboarding
 
-1. The `ssh_keys` role generates a fresh ed25519 key on the new host, then pushes the pub key up to Bitwarden as `james@<hostname>`.
-2. The new host now needs to **trust the rest of the fleet, and the rest of the fleet needs to trust it**. The first apply on the new host downloads every other host's pub key into `~/.ssh/authorized_keys`. The other hosts will pick up the new host's pub key on *their* next full apply (`dots-apply` on each — the timer runs without secrets, so it skips `ssh_keys`).
-3. The `github` role registers the SSH key with GitHub for both auth and commit signing.
-4. The `tailscale` role joins the machine to the [Tailscale](https://tailscale.com/) network using the auth key in BW.
+1. The `ssh-keys` unit restores the host's ed25519 key from Bitwarden, or generates one if a successful unlocked vault listing has no item, and syncs it as `<login>@<machine>`.
+2. The unit merges available vault public keys into `~/.ssh/authorized_keys` without removing user entries. Other hosts pick up a new vault key on their next unlocked apply. The separate `ssh-mesh` unit also merges committed fleet public keys during no-secrets applies.
+3. The `github` unit can register the SSH key with GitHub for authentication and signing.
+4. The `tailscale` unit joins a disconnected eligible machine using its Bitwarden key.
 5. The daily `dotfiles-update.timer` (servers) or on-login service (laptops) runs `just apply-nosecrets` — secrets stay on the manual `dots-apply` cadence because BW can't be unlocked non-interactively.
 
 Run `just doctor` on the new host once it's bootstrapped — it'll tell you whether BW is unlocked, whether the timer is wired up, and the timestamp of the last successful apply.
 
-See [Architecture](architecture.md) for how the playbook runs on each machine and [Secrets with Bitwarden](bitwarden.md) for the details of the BW handshake.
+See [Architecture](architecture.md) for native unit execution and [Secrets with Bitwarden](bitwarden.md) for the BW handshake.

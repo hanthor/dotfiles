@@ -6,8 +6,13 @@ dnf5 -y --enablerepo=fedora-storage --setopt=install_weak_deps=False \
     install dracut-live systemd-boot-unsigned
 # These masks belong to live media only, never to the embedded server payload.
 systemctl mask k3s@server.service k3s@agent.service
+# Keep the physical console and serial console available on live media. The
+# payload already enables a normal serial getty; root autologin is live-only.
+systemctl unmask getty@tty1.service
 systemctl enable getty@tty1.service serial-getty@ttyS0.service
 mkdir -p /var/roothome
+# The bootc payload clears /var; dracut requires a writable build scratch area.
+install -d -m 1777 /var/tmp
 kernel=$(basename /usr/lib/modules/*)
 dracut --force --reproducible --no-hostonly --add dmsquash-live     --omit 'tpm2-tss pcsc'     --add-drivers 'squashfs overlay loop iso9660 sr_mod cdrom'     "/usr/lib/modules/$kernel/initramfs.img" "$kernel" 2>&1 | tee /tmp/dracut-installer.log
 if grep -q 'dracut\[E\]: FAILED' /tmp/dracut-installer.log; then

@@ -140,9 +140,10 @@ talosctl --talosconfig ~/.talos/config-aws-migration \
 ```
 
 The configs were stored in Bitwarden as `kubeconfig-aws-migration` /
-`talosconfig-aws-migration`; the [`kube`](../../roles/kube.md) role still
-fetches them separately from the home cluster's files. They no longer provide
-access to this terminated cluster.
+`talosconfig-aws-migration`; the [`kube`](../../roles/kube.md) unit still
+fetches them into `~/.kube/config-aws-migration` and
+`~/.talos/config-aws-migration` separately from the home cluster's files. They
+no longer provide access to this terminated cluster.
 
 ## Historical cost context
 
@@ -161,4 +162,4 @@ See [AWS account costs](../aws/README.md) for the current caution.
 ## See also
 
 - [Matrix cutover runbook](https://github.com/hanthor/dotfiles/blob/master/docs/matrix-cutover-runbook.md)
-- [`hive_ops` role](../../roles/hive_ops.md)
+- [`hive-ops` unit](../../roles/hive_ops.md)

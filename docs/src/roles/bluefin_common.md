@@ -1,42 +1,10 @@
-# bluefin_common
+# bluefin
 
+**Unit:** `units/bluefin.sh`  
 **Tags:** `desktop`, `bluefin`  
 **Secrets needed:** No  
-**Runs on:** Desktop group only (skipped on Bluefin hosts unless `force_bluefin: true`)
+**Runs on:** desktops, except `skip_bluefin: true` or `machine_profile: vm-test`.
 
-Syncs [Bluefin](https://projectbluefin.io/) branding, fonts, wallpapers, and GNOME extensions from the Project Bluefin OCI image.
+With a GNOME session, on non-Bluefin systems or when `force_bluefin: true`, the unit pulls the amd64 `ghcr.io/projectbluefin/common:latest` image with Podman, extracts available branding into `~/.local/share`, adjusts extracted wallpaper XML paths and runs `units/bluefin/files/bluefin-sync.py`. Other local wallpaper XML files are left untouched. Missing individual image assets are reported as partial. It installs Inter and JetBrains Mono fonts and attempts the Bluefin extension installer; extension installation is best effort, not a guarantee that every extension works in the running GNOME version. An existing user extension that GNOME does not recognize is left in place rather than overwritten.
 
-## What It Does
-
-1. Pulls the `ghcr.io/projectbluefin/common:latest` container image
-2. Extracts Bluefin gsettings/dconf overrides, backgrounds, icons, and logos
-3. Installs branding assets to `~/.local/share/`
-4. Fixes XML background paths to point to home directory
-5. Applies dconf settings via a Python script
-6. Installs Bluefin-standard fonts (Inter, JetBrains Mono)
-7. Installs Bluefin-recommended GNOME extensions
-8. Deploys a wallpaper rotation service and timer
-9. Deploys the `corral` (Go) VM utility
-
-## Fonts
-
-- **[Inter](https://rsms.me/inter/)** — UI font (from [GitHub releases](https://github.com/rsms/inter))
-- **[JetBrains Mono](https://www.jetbrains.com/lp/mono/)** — monospace font for terminals and editors
-
-## Wallpaper Rotation
-
-A systemd timer (`bluefin-wallpaper-rotate.timer`) cycles through Bluefin backgrounds daily. The Python script applies the wallpaper via D-Bus.
-
-## Corral
-
-Deploys **corral**, the Go VM manager
-(CLI + TUI + web). Corral is downloaded from the rolling `binaries` release of
-[hanthor/corral](https://github.com/hanthor/corral) (checksum-verified, so it
-updates whenever CI publishes a new build). It is no longer embedded in this
-repo.
-
-## Notes
-
-- Skips by default on actual Bluefin hosts (they already have this)
-- Set `force_bluefin: true` to apply on Bluefin (e.g., after an image reset)
-- Set `skip_bluefin: true` in `host_vars` to skip entirely
+On eligible desktops, including Bluefin itself, it deploys `units/bluefin/files/bluefin-wallpaper-rotate.py` and user systemd service/timer templates, enables the timer and runs a rotation. Rotation prefers the local monthly wallpaper and falls back to Bluefin's `/usr/share/backgrounds/bluefin` copy. It skips if neither exists, but reports failure if either GNOME background setting cannot be applied. It downloads the current architecture's corral binary and verifies its SHA256 against the release checksum, removes retired tailvm executables and completions, and configures `/etc/sysctl.d/99-zram.conf` with `vm.swappiness = 150`. The sysctl step requires root or non-interactive sudo; wallpaper and GNOME actions need the invoking user's live D-Bus/systemd session. Bluefin hosts skip only the branding, fonts and extension steps unless forced, not the whole unit.

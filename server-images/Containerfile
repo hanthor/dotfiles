@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=ghcr.io/projectbluefin/utah:latest
+ARG BASE_IMAGE=ghcr.io/projectbluefin/utah@sha256:d291c8831ac330547e3f99f4e0b566416f050b7ca14a5c2fdd43c04f47f7d1b7
 ARG PACKAGE_IMAGE=ghcr.io/projectbluefin/utah-packages@sha256:d257e97a0057e37da47995bb142c180e2352960ab13bd44594215616a395b717
 FROM ${PACKAGE_IMAGE} AS packages
 FROM ${BASE_IMAGE} AS common

@@ -4,8 +4,9 @@ all:
     # `tailnet_name`: the host's MagicDNS name when it isn't the inventory
     # name; scripts/online_hosts.py matches online peers by it.
     punjab:
-      ansible_host: 100.78.73.8
-      ansible_user: ubuntu  # stock Ubuntu AMI login; there is no `james` here
+      # Karnataka replacement; the EC2 node is named punjab-aws-retired.
+      ansible_host: 100.103.187.46
+      ansible_user: ubuntu
       ansible_connection: ssh
     # This targets the Debian VM running via Android's Virtualization
     # Framework on the phone (tailnet node name "mumbai"), not the raw
@@ -35,9 +36,11 @@ all:
     vm:
       ansible_host: localhost
       ansible_connection: local
-    # ── Talos K8s cluster (not ansible-managed — talosctl / kubectl only) ──
-    # karnataka:     Talos worker  — AMD Strix Halo APU, 192.168.0.6
-    # bihar:         Talos control-plane — Intel, 192.168.0.5
+    # Bihar's current OS is unverified; its former Talos configuration is retained.
+    karnataka:
+      ansible_host: 100.66.158.127
+      ansible_user: james
+      ansible_connection: ssh
     matrix:
       ansible_host: 100.73.19.81
       ansible_connection: ssh
@@ -46,8 +49,10 @@ all:
       ansible_host: 100.101.234.32
       ansible_connection: ssh
     himachal:
-      ansible_host: 100.73.3.51
+      ansible_host: 100.79.182.70
+      ansible_user: james
       ansible_connection: ssh
+      tailnet_name: himachal-1
     dilli:
       ansible_host: dilli
       ansible_user: james
@@ -73,7 +78,7 @@ all:
         kanpur:
         himachal:
         dilli:
-    # llm group is dormant — karnataka (former LLM host) is now a Talos worker
+    # llm group is dormant.
     # llm:
     #   hosts:
     #     karnataka:
@@ -82,6 +87,7 @@ all:
         punjab:
         vm:
         goa:
+        karnataka:
     test_fleet:
       hosts:
         test-fleet-fedora:

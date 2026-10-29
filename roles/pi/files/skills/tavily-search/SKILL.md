@@ -20,6 +20,6 @@ Returns: title, url, content snippet for each result.
 
 ## API Key
 
-API key: read from `$TAVILY_API_KEY` (provisioned by the `shell_ai` role from Bitwarden item `tavily-api-key`).
+API key: read from `$TAVILY_API_KEY` (provisioned by the `shell-ai` unit from Bitwarden item `tavily-api-key`).
 
 Endpoint: `https://api.tavily.com/search`

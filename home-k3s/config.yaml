@@ -1,0 +1,12 @@
+# Karnataka's existing tailnet address. K3s API and kubelet do not bind the public NIC.
+bind-address: 100.66.158.127
+advertise-address: 100.66.158.127
+node-ip: 100.66.158.127
+flannel-iface: tailscale0
+resolv-conf: /etc/rancher/k3s/resolv.conf
+kubelet-arg:
+  - address=100.66.158.127
+disable:
+  - traefik
+  - servicelb
+write-kubeconfig-mode: "0600"

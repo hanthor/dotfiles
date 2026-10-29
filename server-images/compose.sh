@@ -10,7 +10,7 @@ dnf5 -y --enable-repo=utah-packages --enable-repo=fedora-storage \
     iwlwifi-dvm-firmware iwlwifi-mvm-firmware \
     realtek-firmware mt7xxx-firmware atheros-firmware brcmfmac-firmware \
     NetworkManager-wifi wpa_supplicant tailscale iptables-nft \
-    xfsprogs btrfs-progs
+    xfsprogs btrfs-progs iscsi-initiator-utils nfs-utils
 
 curl --fail --location \
     "https://github.com/k3s-io/k3s/releases/download/${K3S_VERSION}/k3s" -o /usr/bin/k3s
@@ -36,6 +36,13 @@ setsebool -P container_use_devices on
 /usr/bin/k3s --version
 firewall-offline-cmd --check-config
 systemctl enable NetworkManager.service NetworkManager-wait-online.service sshd.service firewalld.service tailscaled.service iscsi-init.service iscsid.service
+# Utah masks this instance in both /etc and /usr. Installed server images need
+# an authenticated serial console for headless recovery, not live autologin.
+systemctl unmask serial-getty@ttyS0.service
+if [ "$(readlink /usr/lib/systemd/system/serial-getty@ttyS0.service || :)" = /dev/null ]; then
+    rm /usr/lib/systemd/system/serial-getty@ttyS0.service
+fi
+systemctl enable serial-getty@ttyS0.service
 # Reboots of the only control plane must be deliberate and preceded by backups.
 systemctl mask bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service
 

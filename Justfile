@@ -1,4 +1,4 @@
-# Dotfiles management with Ansible
+# Fleet configuration with mise, bash units and chezmoi
 # Usage: just <recipe>
 
 dotfiles_dir := env("HOME") / ".local/share/dotfiles"
@@ -8,89 +8,114 @@ export PATH := env("HOME") / ".local/bin" + ":/home/linuxbrew/.linuxbrew/bin:" +
 # Resolve online fleet hosts: intersect tailscale online peers with inventory (excluding vps + self)
 _online_hosts := shell('python3 "$1"', justfile_directory() / "scripts/online_hosts.py")
 
-# Every recipe below runs site.yml against THIS machine over the local
-# connection. The flags are not optional decoration: `-l`/`-e target` pin the
-# play to this host, and the ansible_connection/ansible_host overrides keep
-# Ansible from re-resolving the inventory address and SSHing to itself.
-# Defined once so a change to how the fleet addresses itself is a one-line
-# edit instead of eight.
-_play := "ansible-playbook --connection=local -l " + machine + " -e target=" + machine + " -e ansible_connection=local -e ansible_host=127.0.0.1"
+_secret_tag_pattern := "secrets|ssh|ssh_keys|github|tailscale|kube|forgejo|registry|atuin|ai|omp|desktop|browser|zen_browser|shell|dotfiles"
 
 # Apply all config to this machine (unlocks BW interactively if needed)
 apply *args:
     #!/usr/bin/env bash
-    set -euo pipefail
-    cd {{ dotfiles_dir }}
-    git pull --ff-only
-    ansible-galaxy collection install -r requirements.yml
-
-    BECOME_ARGS=""
-    if ! sudo -n true 2>/dev/null; then
-      echo "Sudo requires a password. Adding --ask-become-pass..."
-      BECOME_ARGS="--ask-become-pass"
-    fi
-
+    set -uo pipefail
+    cd {{ dotfiles_dir }} || exit 1
+    git pull --ff-only || exit $?
+    for arg in {{ args }}; do
+      case "$arg" in --upgrade) export DOTFILES_UPGRADE=1 ;; *) echo "Unknown apply option: $arg" >&2; exit 2 ;; esac
+    done
     SKIP_TAGS=""
-    if bw_env=$(scripts/bw-resolve.sh local); then
-      eval "$bw_env"
+    unit_args=()
+    if bw_env=$(scripts/bw-resolve.sh local) && eval "$bw_env" &&
+       [ -n "${BW_SESSION:-}" ] && bw unlock --check >/dev/null 2>&1 &&
+       timeout 15 bw sync >/dev/null; then
+      :
     else
-      echo "Continuing without secrets (run scripts/bw-unlock.sh manually for details)..."
-      SKIP_TAGS="secrets"
+      echo "Bitwarden unavailable or sync failed; continuing without secrets." >&2
+      unset BW_SESSION
+      SKIP_TAGS=secrets
+      unit_args+=(--no-secrets)
     fi
-    rc=0
-    if [ -n "$SKIP_TAGS" ]; then
-      {{ _play }} site.yml --skip-tags "$SKIP_TAGS" $BECOME_ARGS {{ args }} || rc=$?
-    else
-      {{ _play }} -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }} || rc=$?
-    fi
+    rc=0; scripts/run-units.sh "${unit_args[@]}" || rc=$?
     scripts/record-apply.py "$rc" apply "$SKIP_TAGS"
-    exit $rc
+    exit "$rc"
 
 # Apply only specific tags (e.g. just apply-tags kube,shell)
 apply-tags tags:
     #!/usr/bin/env bash
     set -uo pipefail
-    cd {{ dotfiles_dir }}
+    cd {{ dotfiles_dir }} || exit 1
     rc=0
-    {{ _play }} -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }} || rc=$?
+    unit_args=(--tags "{{ tags }}")
+    needs_secrets=0
+    IFS=',' read -ra tag_list <<< "{{ tags }}"
+    for tag in "${tag_list[@]}"; do
+      case "$tag" in {{ _secret_tag_pattern }}) needs_secrets=1 ;; esac
+    done
+    if [ "$needs_secrets" -eq 1 ]; then
+      if [ -n "${BW_SESSION:-}" ] && ! bw unlock --check >/dev/null 2>&1; then unset BW_SESSION; fi
+      if bw_env=$(scripts/bw-resolve.sh local) && eval "$bw_env" &&
+         [ -n "${BW_SESSION:-}" ] && bw unlock --check >/dev/null 2>&1 &&
+         timeout 15 bw sync >/dev/null; then
+        :
+      else
+        echo "Bitwarden unavailable or sync failed; skipping secrets." >&2
+        unset BW_SESSION
+        unit_args+=(--no-secrets)
+        rc=1
+      fi
+    fi
+    urc=0; scripts/run-units.sh "${unit_args[@]}" || urc=$?
+    [ "$rc" -ne 0 ] || rc=$urc
     scripts/record-apply.py "$rc" apply-tags "{{ tags }}"
-    exit $rc
+    exit "$rc"
 
 # Apply without unlocking Bitwarden — fast path for the daily timer and `dots`
 apply-nosecrets *args:
     #!/usr/bin/env bash
     set -uo pipefail
-    cd {{ dotfiles_dir }}
+    cd {{ dotfiles_dir }} || exit 1
     git pull --ff-only || true
-    rc=0
-    {{ _play }} site.yml --skip-tags secrets {{ args }} || rc=$?
+    for arg in {{ args }}; do
+      case "$arg" in --upgrade) export DOTFILES_UPGRADE=1 ;; *) echo "Unknown apply option: $arg" >&2; exit 2 ;; esac
+    done
+    rc=0; scripts/run-units.sh --no-secrets || rc=$?
     scripts/record-apply.py "$rc" apply-nosecrets secrets
-    exit $rc
+    exit "$rc"
 
 # Apply to a remote machine with specific tags (e.g. just apply-remote-tags bihar kube,shell)
 apply-remote-tags name tags:
     #!/usr/bin/env bash
     set -euo pipefail
-    # A BW session is only valid on the machine that unlocked it, so resolve
-    # one on the remote rather than forwarding ours.
-    REMOTE_BW_SESSION=$({{ dotfiles_dir }}/scripts/bw-resolve.sh remote {{ name }} || true)
-    ssh -t {{ name }} "
+    # Resolve on the target only for explicitly secret-bearing tags.
+    REMOTE_BW_SESSION=""
+    IFS=',' read -ra tag_list <<< "{{ tags }}"
+    for tag in "${tag_list[@]}"; do
+      case "$tag" in
+        {{ _secret_tag_pattern }})
+          REMOTE_BW_SESSION=$({{ dotfiles_dir }}/scripts/bw-resolve.sh remote {{ name }} || true)
+          break ;;
+      esac
+    done
+    EXPECT_SESSION=0; [ -z "$REMOTE_BW_SESSION" ] || EXPECT_SESSION=1
+    BW_SESSION="$REMOTE_BW_SESSION" ssh -o SendEnv=BW_SESSION -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-      export BW_SESSION='${REMOTE_BW_SESSION}'
+      if [ '$EXPECT_SESSION' = 1 ] && [ -z \"\${BW_SESSION:-}\" ]; then
+        echo 'SSH server did not accept BW_SESSION; remote apply aborted.' >&2; exit 1
+      fi
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply-tags {{ tags }}
     "
 
 # Verify (and self-heal) passwordless SSH to all online fleet members
 mesh-check:
-    cd {{ dotfiles_dir }} && {{ _play }} site.yml --tags mesh_check
+    cd {{ dotfiles_dir }} && scripts/run-units.sh --tags mesh_check
 
 # Apply only dotfile configs (shell, git, tmux, etc.)
 dotfiles:
-    cd {{ dotfiles_dir }} && {{ _play }} site.yml --tags dotfiles
+    cd {{ dotfiles_dir }} && scripts/run-units.sh --tags dotfiles
+
+# Run the bash units (units/*.sh) in parallel via mise, e.g. `just units --tags omp`
+units *args:
+    cd {{ dotfiles_dir }} && scripts/run-units.sh {{ args }}
 
 # Apply only packages (Homebrew + Flatpak)
 packages:
-    cd {{ dotfiles_dir }} && {{ _play }} site.yml --tags packages
+    cd {{ dotfiles_dir }} && scripts/run-units.sh --tags packages
 
 # Apply to a remote machine, forwarding your local BW session over SSH
 apply-remote name *args:
@@ -103,10 +128,26 @@ apply-remote name *args:
       echo "Bitwarden unlocked on {{ name }} (session: ${#APPLY_BW_SESSION} chars)"
     fi
     echo "Applying to {{ name }} with forwarded BW session..."
-    ssh -t {{ name }} "
+    EXPECT_SESSION=0; [ -z "$APPLY_BW_SESSION" ] || EXPECT_SESSION=1
+    BW_SESSION="$APPLY_BW_SESSION" ssh -o SendEnv=BW_SESSION -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-      export BW_SESSION='${APPLY_BW_SESSION}'
-      [ -n \"\$BW_SESSION\" ] && (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
+      if [ '$EXPECT_SESSION' = 1 ] && [ -z \"\${BW_SESSION:-}\" ]; then
+        echo 'SSH server did not accept BW_SESSION; remote apply aborted.' >&2; exit 1
+      fi
+      if [ -n \"\${BW_SESSION:-}\" ]; then
+        python3 -c '
+    import os, tempfile
+    path = \"/tmp/bw_session\"
+    fd, temp = tempfile.mkstemp(prefix=\".bw_session.\", dir=\"/tmp\")
+    try:
+        with os.fdopen(fd, \"w\") as f:
+            f.write(os.environ[\"BW_SESSION\"])
+        os.replace(temp, path)
+    finally:
+        if os.path.exists(temp):
+            os.unlink(temp)
+    ' || exit 1
+      fi
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply {{ args }}
     "
     just push-terminfo {{ name }}
@@ -124,35 +165,27 @@ purge name:
     git diff --cached --quiet || git commit -m "inventory: remove {{ name }}"
     git push
 
-# Register a new machine in inventory and print bootstrap instructions
-
-# Usage: just onboard <name> [desktop|server|vps]
+# Propose a machine registration for review, then print bootstrap instructions.
+# Usage: just onboard <name> [desktop|server|vps|termux_hosts]
 onboard name type="desktop":
     #!/usr/bin/env bash
     set -euo pipefail
-    cd {{ dotfiles_dir }}
-    git pull --ff-only
-
-    python3 scripts/register-machine.py {{ name }} {{ type }} inventory.yml
-
-    if [ ! -f "host_vars/{{ name }}.yml" ]; then
-      echo "---" > "host_vars/{{ name }}.yml"
-    fi
-
-    git add inventory.yml host_vars/{{ name }}.yml
-    git diff --cached --quiet || git commit -m "inventory: add {{ name }} ({{ type }})"
-    git push
-
+    cd {{quote(justfile_directory())}}
+    name={{quote(name)}}
+    type={{quote(type)}}
+    rc=0
+    scripts/onboard-machine.sh "$name" "$type" || rc=$?
+    case "$rc" in 0|3) ;; *) exit "$rc" ;; esac
     echo ""
+    if [ "$rc" -eq 3 ]; then echo "After the PR is reviewed and merged:"; fi
     echo "Bootstrap the new machine by running this on it:"
-    echo ""
-    echo "  curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name {{ name }}"
-    echo ""
-    echo "Or if it's already reachable over Tailscale:"
-    echo "  just add-machine {{ name }}"
-    echo ""
-    echo "First get it on the tailnet by scanning a QR with your phone (run ON it):"
-    echo "  just tailscale-qr {{ name }}"
+    echo "  curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name $name --type $type"
+    echo "Or, if it is reachable over Tailscale: just add-machine $name $type"
+    if [ "$type" = termux_hosts ]; then
+      echo "Join the tailnet using the Android Tailscale app."
+    else
+      echo "First join the tailnet on the machine: just tailscale-qr $name"
+    fi
 
 # Phase-0 bootstrap-of-trust with NO auth key and NO Bitwarden: runs interactive
 # `tailscale up` and renders the login URL as a QR; scan it with your phone and
@@ -282,8 +315,15 @@ apply-online-tags tags:
     [ -z "$ONLINE_HOSTS" ] && echo "No remote hosts online." && exit 0
 
     declare -A SESSIONS
-    for host in $ONLINE_HOSTS; do
-      SESSIONS[$host]=$(scripts/bw-resolve.sh remote "$host" || true)
+    IFS=',' read -ra tag_list <<< "{{ tags }}"
+    for tag in "${tag_list[@]}"; do
+      case "$tag" in
+        {{ _secret_tag_pattern }})
+          for host in $ONLINE_HOSTS; do
+            SESSIONS[$host]=$(scripts/bw-resolve.sh remote "$host" || true)
+          done
+          break ;;
+      esac
     done
 
     PIDS=()
@@ -296,7 +336,7 @@ apply-online-tags tags:
       echo "Applying tags '{{ tags }}' to $host (background)..."
       ssh "$host" "
         export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-        export BW_SESSION='${SESSIONS[$host]}'
+        export BW_SESSION='${SESSIONS[$host]:-}'
         cd ~/.local/share/dotfiles && git pull --ff-only && just apply-tags {{ tags }}
       " > "/tmp/apply_${host}.log" 2>&1 &
       PIDS+=("$!:$host")
@@ -331,36 +371,27 @@ push-terminfo host="":
 online:
     @echo "Online fleet hosts: {{ _online_hosts }}"
 
-# Bootstrap a new machine over SSH — registers it in inventory then runs bootstrap.sh
-# Usage: just add-machine kerala             (defaults to desktop)
-#        just add-machine kerala server
+# Register through a reviewed PR, then bootstrap a reachable machine over SSH.
+# Usage: just add-machine <name> [desktop|server|vps|termux_hosts]
 add-machine name type="desktop":
     #!/usr/bin/env bash
     set -euo pipefail
-    cd {{ dotfiles_dir }}
-    git pull --ff-only
-
-    # Register in inventory if not already present
-    if ! grep -q "^    {{ name }}:" inventory.yml 2>/dev/null; then
-      echo "→ Registering {{ name }} ({{ type }}) in inventory..."
-      python3 scripts/register-machine.py {{ name }} {{ type }} inventory.yml
-      if [ ! -f "host_vars/{{ name }}.yml" ]; then
-        echo "---" > "host_vars/{{ name }}.yml"
-      fi
-      git add inventory.yml "host_vars/{{ name }}.yml"
-      git diff --cached --quiet || git commit -m "inventory: add {{ name }} ({{ type }})"
-      git push
-      echo "✓ Inventory updated and pushed."
-    else
-      echo "✓ {{ name }} already in inventory."
+    cd {{quote(justfile_directory())}}
+    name={{quote(name)}}
+    type={{quote(type)}}
+    rc=0
+    scripts/onboard-machine.sh "$name" "$type" || rc=$?
+    if [ "$rc" -eq 3 ]; then
+      echo "Bootstrap not started. Review and merge the PR, then rerun just add-machine $name $type." >&2
+      exit 1
     fi
-
-    # Bootstrap on the remote machine.
-    # -t allocates a PTY so /dev/tty is available for any remaining prompts.
-    echo "→ Bootstrapping {{ name }}..."
-    ssh -t {{ name }} \
-      "curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh \
-       | bash -s -- --name {{ name }} --type {{ type }}"
+    [ "$rc" -eq 0 ] || exit "$rc"
+    echo "Bootstrapping $name over SSH..."
+    remote_env=""
+    if [ "$type" = termux_hosts ]; then
+      remote_env='HOME=/data/data/com.termux/files/home PREFIX=/data/data/com.termux/files/usr TMPDIR=/data/data/com.termux/files/usr/tmp PATH=/data/data/com.termux/files/usr/bin:$PATH'
+    fi
+    ssh -t -- "$name" "$remote_env bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/hanthor/dotfiles/master/bootstrap.sh | bash -s -- --name $name --type $type'"
 
 # Pull latest changes and apply
 update *args:
@@ -368,7 +399,7 @@ update *args:
 
 # Pull latest, apply, and upgrade all packages
 update-all:
-    just update -e upgrade=true
+    just update --upgrade
 
 # Sync current Homebrew state back to dotfiles variables
 sync-brews:
@@ -383,8 +414,8 @@ flatpak-install app:
     set -euo pipefail
     flatpak install --system -y flathub {{ app }}
     cd {{ dotfiles_dir }}
-    yq -i '.system_flatpaks += ["{{ app }}"]' roles/flatpak/vars/main.yml
-    git add roles/flatpak/vars/main.yml
+    yq -i '.system_flatpaks += ["{{ app }}"]' units/flatpak-packages.yml
+    git add units/flatpak-packages.yml
     git commit -m "flatpak: add {{ app }}"
     git push
 
@@ -400,7 +431,7 @@ nvim-update:
 vim *args:
     nvim {{ args }}
 
-# Lint YAML + Ansible playbook (uses tools from Brewfile when available)
+# Lint YAML and check native unit shell syntax
 lint:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -412,17 +443,14 @@ lint:
     else
       echo "yamllint not installed (brew install yamllint) — skipping"
     fi
-    if command -v ansible-lint >/dev/null 2>&1; then
-      echo "→ ansible-lint"
-      ansible-lint site.yml || rc=$?
-    else
-      echo "ansible-lint not installed (uv tool install ansible-lint) — skipping"
-    fi
+    for file in bootstrap.sh scripts/run-units.sh units/*.sh; do
+      bash -n "$file" || rc=$?
+    done
     exit $rc
 
-# Dry-run apply (no changes) — quick way to see what would change
+# Inspect native configuration without applying changes
 check *args:
-    cd {{ dotfiles_dir }} && {{ _play }} site.yml --check --diff {{ args }}
+    cd {{ dotfiles_dir }} && UNITS_CHECK=1 scripts/run-units.sh {{ args }}
 
 # Log omp into all providers (OAuth prompts only for missing ones)
 omp-login:
@@ -443,7 +471,7 @@ doctor:
     echo "→ Machine identity"
     if [ -f /etc/dotfiles-machine ]; then pass "machine: $(cat /etc/dotfiles-machine)"; else warn "/etc/dotfiles-machine missing — run bootstrap"; fi
     echo "→ Core binaries"
-    for bin in brew bw gh tailscale ansible-playbook just; do
+    for bin in brew bw gh tailscale just mise chezmoi yq python3; do
       if command -v "$bin" >/dev/null 2>&1; then pass "$bin"; else warn "$bin missing"; fi
     done
     echo "→ Tailscale"
@@ -512,9 +540,25 @@ docs-build:
     fi
     cd {{ dotfiles_dir }}/docs && mdbook build
 
-# Seed Bitwarden with this machine's kubeconfig + talosconfig (so other machines can fetch)
+# Seed retained home Talos notes from config-home-talos + talosconfig (not the merged K3s default)
 seed-kube:
     @{{ dotfiles_dir }}/scripts/bw-seed-kube.sh
+
+# Seed Bitwarden with the omp auth-broker token via SSH to spindle
+seed-omp-broker:
+    @{{ dotfiles_dir }}/scripts/bw-seed-omp-broker.sh
+
+# Tailnet hygiene (scripts/tailnet.py): audit is read-only; the others dry-run unless `--apply`
+tailnet-audit:
+    @{{ dotfiles_dir }}/scripts/tailnet.py audit
+
+# gc + rename + inventory alignment, e.g. `just tailnet-sync --apply`
+tailnet-sync *args:
+    @{{ dotfiles_dir }}/scripts/tailnet.py sync {{ args }}
+
+# Store the Tailscale OAuth client secret (device gc/rename + join key) in Bitwarden
+seed-tailnet-oauth:
+    @{{ dotfiles_dir }}/scripts/bw-seed-tailnet.sh
 
 # Show all online fleet machines' doctor status in parallel
 doctor-fleet:

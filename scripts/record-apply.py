@@ -3,8 +3,8 @@
 
 Usage: record-apply.py EXIT_CODE [LABEL [SKIP_TAGS]]
 
-Called from each apply* recipe in the Justfile right after the ansible-playbook
-invocation. `just doctor` reads the file to report convergence freshness.
+Called from each apply recipe in the Justfile after running native units.
+`just doctor` reads the file to report convergence freshness.
 """
 import json
 import os

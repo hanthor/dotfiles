@@ -1,55 +1,19 @@
 # ssh_keys
 
-**Tags:** `secrets`, `ssh`, `ssh_keys`
-**Secrets needed:** Yes
-**Runs on:** All machines
+`units/ssh-keys.sh` invokes the locked shared implementation `units/ssh-fleet.py`. It manages the local ed25519 identity, fleet SSH config, known hosts, Git allowed signers, and Bitwarden-backed authorization. Fleet names and login data come from `inventory.yml`, group and host variables. Nested group membership and effective connection variables are resolved by `units/osquery_native_inventory.py`; YAML parsing needs `yq` or Python PyYAML.
 
-Manages per-machine ed25519 SSH keys, distributes the fleet's public keys via `authorized_keys`, and maintains the `allowed_signers` list for git commit verification.
+If the private key is absent, the unit requires an unlocked vault and a successful item listing before restoring the complete `<login>@<machine>` SSH item or generating a new pair when no item exists. It checks restored and local key pairs and refuses conflicting keys. An existing local key is retained; if its public key differs from the vault item, the vault is left unchanged unless `SSH_KEYS_FORCE_PUSH=true` or `ssh_keys_force_push: true` in host or group variables explicitly permits rotation.
 
-**Source of truth is the local disk.** Bitwarden is the durable mirror that lets new/rebuilt machines recover and lets the rest of the fleet stay in sync.
+Passphrase-protected OpenSSH identities are not prompted for. Existing identities and vault restores are retained when the public key matches the encrypted key's public envelope, but the private contents cannot be verified without the passphrase. The envelope is unauthenticated, so the unit will not create or replace a Bitwarden key from that unverified identity, even with forced rotation. A missing, invalid or mismatched public key remains an error.
 
-## What it does
+The unit preserves user entries outside its marked SSH config and `authorized_keys` blocks. Vault public keys and `extra_authorized_keys` are merged into the Bitwarden block; committed keys are managed separately by [ssh_mesh](ssh_mesh.md). Previous managed entries remain by default. `SSH_KEYS_FORCE_AUTHORIZED=true` (or `ssh_keys_force_authorized: true` in host or group variables) permits removing obsolete entries in each managed block when that unit runs; a locked vault or an empty vault key list leaves the Bitwarden block unchanged. Existing signers are retained.
 
-For the local machine's key (`james@<hostname>` in Bitwarden):
+## Host trust
 
-1. **No key on disk** → fetch from BW; if absent there too, `ssh-keygen` a fresh ed25519 pair.
-2. **Local pub key matches BW** → no-op.
-3. **Local pub key differs from BW** → leave the Bitwarden item unchanged and warn by default. An intentional rotation must opt in with `dots-apply -e ssh_keys_force_push=true`; only then is the BW item replaced so every other host sees the current key on its next apply. This gate prevents a key generated while the vault was locked from clobbering the stored key.
+The unit never scans or changes `known_hosts`; a network keyscan cannot authenticate a host. Managed SSH config uses `StrictHostKeyChecking yes`, and mesh probes enforce it explicitly. Before connecting to a new host, obtain its host-key fingerprint over an independent authenticated channel (such as its console), compare it with the candidate key, and add only the verified key to `~/.ssh/known_hosts` under the actual hostname and port (`[host]:port` for a non-default port). If a key changes, do not overwrite the old pin until the change has been independently verified; then replace it explicitly. User-supplied SSH settings can override the managed default.
 
-Then, regardless of whether the local item changed:
+## Revoking access
 
-- Slurps every other `james@<machine>` SSH item from BW in a single `bw list` call.
-- Rewrites `~/.ssh/authorized_keys` with the union of those + `extra_authorized_keys`.
-- Refreshes `~/.ssh/known_hosts` for every fleet host via `ssh-keyscan`, removing stale entries first.
-- Updates `~/.ssh/allowed_signers` with this host's pub key for git commit signing.
+Remove the key from every source that should no longer authorize it, including `machine_pubkeys`, the corresponding Bitwarden SSH item and `extra_authorized_keys`. With an unlocked vault and a nonempty fleet key list, run both SSH units with `SSH_KEYS_FORCE_AUTHORIZED=true`; `just apply-tags ssh_keys` selects both. Inspect `authorized_keys` afterwards: old unmarked entries, including entries written by earlier versions, are deliberately never attributed or deleted automatically. If the verified obsolete key also appears outside the marked blocks, manually remove each such line after confirming it is not independently required. Keep other user-managed lines unchanged.
 
-If `bw_unlocked` is false (vault locked, BW not installed, etc.), every BW-touching step is skipped and `authorized_keys` is **not** rewritten — preserving the existing file rather than wiping it with an empty list.
-
-## Failure modes
-
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `Permission denied (publickey)` from a host that worked yesterday | Local key changed but BW still has the old pub key | For an intentional rotation, run `dots-apply -e ssh_keys_force_push=true` on the source host with BW unlocked, then run `dots-apply` on the failing host. If the mismatch was accidental, restore the Bitwarden key locally instead of forcing it. |
-| Some hosts missing from `authorized_keys` | Those hosts never round-tripped their key to BW | Run `dots-apply` on each missing host once, with BW unlocked. |
-| New ed25519 key generated on a host that should have inherited an existing key | BW item missing/empty for this hostname | Verify the BW entry name matches `james@<hostname>` exactly. |
-
-## How to verify
-
-```bash
-# Check this host's key is in BW
-bw get item "james@$(hostname)" | jq '.sshKey.publicKey' | grep -F "$(awk '{print $2}' ~/.ssh/id_ed25519.pub)"
-
-# Check who can SSH in here
-cat ~/.ssh/authorized_keys
-
-# Test SSH to every fleet host
-for h in $(yq '.all.hosts | keys | join(" ")' inventory.yml); do
-  ssh -o BatchMode=yes -o ConnectTimeout=3 "$h" "echo OK" 2>&1 | head -1
-done
-```
-
-## Notes
-
-- Every machine SSHes to every other machine without password prompts after one round-trip apply.
-- The same key is used for GitHub auth + commit signing (registered by the `github` role).
-- The role tolerates a locked vault and never destructively rewrites `authorized_keys` when BW returned no data.
+`--no-secrets` skips vault access; a missing identity is deferred rather than generated. Config and other independent steps still run. The separate [ssh_mesh](ssh_mesh.md) unit adds committed fleet public keys and checks connectivity.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Seed Bitwarden with kubeconfig + talosconfig from this machine.
+# Seed retained home Talos notes; never seed from the merged active K3s config.
 # Usage: ./scripts/bw-seed-kube.sh
 # Re-run safely — updates existing items in place.
 set -euo pipefail
@@ -12,7 +12,7 @@ if [ -z "${BW_SESSION:-}" ]; then
   export BW_SESSION
 fi
 
-KUBECONFIG_PATH="${KUBECONFIG:-$HOME/.kube/config}"
+KUBECONFIG_PATH="${KUBECONFIG:-$HOME/.kube/config-home-talos}"
 TALOSCONFIG_PATH="${TALOSCONFIG:-$HOME/.talos/config}"
 
 seed() {

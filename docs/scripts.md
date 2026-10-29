@@ -14,13 +14,13 @@ The `scripts/` directory contains utility scripts for inventory management, Bitw
 
 ## Inventory Management
 
-These scripts manage the Ansible inventory and track which machines are available.
+These scripts manage fleet inventory and track which machines are available.
 
 ### `register-machine.py`
 
 Register a new machine in the inventory and create its host variables file.
 
-**Purpose**: Add a new machine to the Ansible inventory, creating the necessary entries in `inventory.yml` and initializing a `host_vars/<name>.yml` file for machine-specific configuration.
+**Purpose**: Add a new machine to `inventory.yml` and initialize a `host_vars/<name>.yml` file for machine-specific configuration.
 
 **Usage**:
 ```bash
@@ -411,13 +411,13 @@ bw get notes <ess-helm-values-id> \
 
 ## Application State Tracking
 
-These scripts record the outcome of Ansible apply runs and check if the system is in a converged state.
+These scripts record native apply outcomes and report their freshness.
 
 ### `record-apply.py`
 
-Record the outcome of an Ansible apply run to `~/.cache/dotfiles/last-apply.json`.
+Record an apply outcome to `~/.cache/dotfiles/last-apply.json`.
 
-**Purpose**: Track whether the most recent `ansible-playbook` run succeeded or failed, and with which configuration tags and skips. Used by `just doctor` to report convergence freshness.
+**Purpose**: Track the native runner's return code and selection label. Used by `just doctor` to report apply freshness; a successful run can still contain skipped or partial units.
 
 **Usage**:
 ```bash
@@ -426,7 +426,7 @@ Record the outcome of an Ansible apply run to `~/.cache/dotfiles/last-apply.json
 ```
 
 **Arguments**:
-- `<exit-code>` — the exit code from the ansible-playbook run (required)
+- `<exit-code>` — the apply's exit code (required)
 - `[label]` — descriptive label (default: none; e.g., `full apply`, `desktop only`)
 - `[skip-tags]` — comma-separated skip-tags used (e.g., `slow,download`)
 
@@ -435,8 +435,8 @@ Record the outcome of an Ansible apply run to `~/.cache/dotfiles/last-apply.json
 # Record a successful apply
 ./scripts/record-apply.py 0 "full apply"
 
-# Record a failed apply with skips
-ansible-playbook main.yml --skip-tags slow; ./scripts/record-apply.py $? "desktop" "slow"
+# Record a failed native apply
+./scripts/record-apply.py 1 "apply-nosecrets" "secrets"
 ```
 
 **Output** (`~/.cache/dotfiles/last-apply.json`):
@@ -500,7 +500,7 @@ or
 
 Sync currently installed Homebrew packages to `group_vars/all.yml`.
 
-**Purpose**: Keep the Ansible group variables in sync with the actual installed packages, so you can track package changes and automate Homebrew reinstalls via Ansible.
+**Purpose**: Keep group variables in sync with installed Homebrew packages for the native Homebrew unit.
 
 **Usage**:
 ```bash

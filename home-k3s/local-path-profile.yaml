@@ -1,0 +1,11 @@
+# CDI has no built-in profile for rancher.io/local-path. This provisioner
+# supports filesystem RWO, not block volumes, RWX, expansion, or snapshots.
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: StorageProfile
+metadata:
+  name: local-path
+spec:
+  claimPropertySets:
+    - accessModes: [ReadWriteOnce]
+      volumeMode: Filesystem
+  cloneStrategy: copy

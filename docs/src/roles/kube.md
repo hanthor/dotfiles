@@ -1,53 +1,82 @@
 # kube
 
-**Tags:** `secrets`, `kube`
-**Secrets needed:** Yes
-**Runs on:** Desktop group only (unless `skip_kube: true`)
+**Unit:** `kube` (`units/kube.sh`; see [Units](../units.md))  
+**Tags:** `secrets`, `kube`  
+**Secrets needed:** Yes  
+**Runs on:** Active Linux and macOS computers, including servers, the phone's Debian VM and Termux. Explicit `skip_kube: true` / `machine_profile: vm-test` exclusions still apply. Retired `matrix` and `telengana` are never modified.
 
-Pulls kube + Talos configs from BW for the home cluster (Bihar + Karnataka — powered down, expected back) and the historical [AWS cluster](../servers/aws-k8s/cluster.md), terminated 2026-10-25. Neither cluster is currently reachable.
+[Karnataka K3s](../servers/talos-k8s/karnataka/README.md#current-k3s-cluster) is the fleet's active default cluster, reached over Tailscale at `https://100.66.158.127:6443`. The former home Talos cluster and terminated AWS cluster remain recovery material, not current workload targets. Their Bitwarden notes and local configs must not be repurposed for K3s.
 
-## What it does
+## Prerequisites and rollout
 
-When `bw_unlocked` is true:
+`kubectl` is a core package: Homebrew `kubernetes-cli` on supported glibc Linux/macOS hosts, `kubectl` through APK on Alpine and through `pkg` on Termux. Termux also installs `@bitwarden/cli` through its existing npm package unit. Desktop inventory membership is not required.
 
-1. Ensures `~/.kube/` and `~/.talos/` exist (mode 0700).
-2. `bw get notes kubeconfig` → writes to `~/.kube/config` (0600). Skipped if BW returns empty.
-3. `bw get notes talosconfig` → writes to `~/.talos/config` (0600). Skipped if BW returns empty.
-4. Pins `tls-server-name` on every cluster in `~/.kube/config` to `kube_tls_server_name` (default: bihar's LAN address) — the home API-server cert lacks the tailnet address in its SANs.
-5. Emits a one-line warning if either home-cluster note is missing in BW.
-6. `bw get notes kubeconfig-aws-migration` → `~/.kube/config-aws-migration` and `bw get notes talosconfig-aws-migration` → `~/.talos/config-aws-migration` (0600, each skipped if empty). These historical AWS files remain separate from the home configs.
+```bash
+# First apply, including missing package prerequisites:
+just apply-tags packages,kube
 
-When the vault is locked the role no-ops cleanly — existing local configs are preserved.
+# Subsequent credential refresh/default-context selection:
+just apply-tags kube
+```
+
+An individual remote may use `just apply-remote HOST` after reviewing the other units it applies. Do not target retired hosts. Offline computers receive the configuration on their next secret-enabled apply; the no-secrets timer cannot distribute credentials.
+
+For a production host where installing Bitwarden/Node or running the full package unit is inappropriate, install only a supported `kubectl` binary and privately provision the standalone note contents as `~/.kube/config-karnataka-k3s` (directory 0700, regular file 0600). Then, from the checkout, explicitly apply only the local cache:
+
+```bash
+KUBE_CACHED_ONLY=1 UNITS_NO_SECRETS=1 bash units/kube.sh
+```
+
+This opt-in never invokes Bitwarden or seeds recovery notes. It validates and merges the local cache, preserves the existing default's contexts and migration backup, and selects `karnataka-k3s`. A missing cache fails without changing the default. It does not refresh credentials; provision renewed cache contents privately when needed. Ordinary no-secrets/timer runs still skip without changing configs.
+
+## Bitwarden contract
+
+Create a distinct **secure note** named `kubeconfig-karnataka-k3s`. Its standard `notes` field must contain a complete standalone kubeconfig:
+
+- Context, cluster and user names are all `karnataka-k3s`; `current-context` is `karnataka-k3s`.
+- The server is `https://100.66.158.127:6443`, not localhost.
+- Embed the cluster CA and client certificate/key, and use normal certificate verification. Do not set `insecure-skip-tls-verify`.
+- Store and transform credentials only in private files or pipes. Never paste the note, client key or raw kubeconfig into logs, chat or this public repository.
+
+The unit reads `bw get notes kubeconfig-karnataka-k3s`; it never edits vault notes. The historical `kubeconfig`, `talosconfig`, `kubeconfig-aws-migration` and `talosconfig-aws-migration` notes retain their existing meanings.
+
+## Apply behavior
+
+Except for the explicit cached-only mode above, a locked vault or `--no-secrets` prints `SKIPPED:` and leaves existing files alone. Otherwise:
+
+1. Require `kubectl`, then create `~/.kube/` and `~/.talos/` with mode 0700.
+2. Seed missing recovery caches only: home `kubeconfig` → `~/.kube/config-home-talos`, `talosconfig` → `~/.talos/config`, and the historical AWS notes → the matching `config-aws-migration` files in those directories. Existing recovery files are preserved, with permissions restricted to 0600. The newly seeded home kubeconfig receives the historical TLS server-name pin from `units/kube.conf` (default `192.168.0.5`), not the K3s kubeconfig.
+3. Fetch K3s into a private temporary directory and select the required `karnataka-k3s` context. A failed or empty fetch may use the last successfully installed `~/.kube/config-karnataka-k3s` cache; without that cache the unit fails without changing the default config.
+4. Merge K3s, the existing `~/.kube/config` and home recovery contexts into a private config, then select `karnataka-k3s`. Existing contexts take precedence over recovery-note contexts; the reserved K3s names take precedence over their older local copies. AWS recovery stays in its existing separate file.
+5. On first migration of an existing default config, preserve its original bytes in `~/.kube/config-pre-karnataka-k3s` (0600). Atomically install the dedicated K3s cache and merged default config, both 0600. Subsequent applies preserve the original backup and restore K3s as the default without deleting historical or custom contexts.
+
+Symlinks and non-regular destination files are rejected instead of overwritten. Merge/context-selection failures leave the existing default untouched. Temporary credential files are private and removed on exit; command output containing kubeconfig data is never logged.
+
+`just check` inspects only local existence and permissions, without reading Bitwarden items or mutating files. It reports that credential/default-context comparison cannot safely be completed offline; it does not claim to have verified cluster access.
+
+## Retained home-note seeding
+
+`just seed-kube` now reads `~/.kube/config-home-talos` and `~/.talos/config`, not the merged default kubeconfig. It only updates the retained home notes; it does not seed K3s or historical AWS notes. For deliberate home-cluster recovery from another private source file, set `KUBECONFIG=/absolute/path/to/home-only-config` explicitly. Never seed the historical home note from the merged K3s default.
 
 ## Failure modes
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `kubectl` returns `Unable to connect to the server` after onboarding | Vault was locked, configs never deployed | Unlock BW, re-run `just apply-tags kube` |
-| Warning: `kubeconfig missing in BW` | Vault was never seeded | Run `just seed-kube` from a host that already has a working config |
-| Configs deployed but auth fails | Cluster PKI rotated — local configs are stale | Re-run `just seed-kube` from a healthy host, then re-apply on consumers |
-| Role skipped silently on a server host that should have it | `skip_kube: true` in `host_vars/<host>.yml`, or host not in `desktop` group | Adjust inventory or host_vars |
+| `kubectl missing; apply packages before kube` | A tag-only invocation omitted package prerequisites | Run `just apply-tags packages,kube` on the intended active client |
+| Karnataka note unavailable and no cached config exists | Note missing, empty, failed read or unavailable to this account | Provision the distinct K3s note, unlock/sync the vault and reapply; do not replace historical notes |
+| K3s config lacks a usable `karnataka-k3s` context | Note uses the unrenamed K3s `default` context or is malformed | Correct the standalone K3s note using the private provisioning workflow |
+| Cannot merge kubeconfigs | An existing config is invalid or references unavailable credential files | Repair the private source config; its default file is left untouched on merge failure |
+| `kubectl` cannot reach Karnataka | Client tailnet routing, server firewall or K3s may be unavailable | Inspect connectivity and the current server; do not run historical Talos recovery commands |
+| `SKIPPED: skip_kube / vm-test` | Explicit host opt-out or test-machine profile | Review the intended host policy; changing desktop membership has no effect |
 
-## Seeding BW
+## Checking active access
 
-```bash
-# From a machine that already has working configs:
-just seed-kube
-```
-
-This packages `~/.kube/config` and `~/.talos/config` into BW notes named `kubeconfig` and `talosconfig`. It does **not** seed the historical `*-aws-migration` notes. After seeding, every desktop's next `dots-apply` (or `just apply-tags kube`) pulls the home configs down.
-
-## How to verify
-
-Both commands below require the home cluster to be powered on; they fail while
-it remains in storage. The former AWS cluster cannot be queried.
+Run these on the intended client after rollout; they do not print credentials:
 
 ```bash
-kubectl get nodes               # home cluster: bihar + karnataka (fails while it's powered down)
-talosctl --talosconfig ~/.talos/config get members
+kubectl config current-context                 # karnataka-k3s
+kubectl --context karnataka-k3s get nodes
+kubectl --context karnataka-k3s get pods -A
 ```
 
-## Notes
-
-- These files contain cluster PKI material; the repo's `.gitignore` excludes the cluster source files, and these caches live in `~/` only — never commit.
-- The role is gated by `is_desktop | bool and not skip_kube`. Servers don't get a kubeconfig — the cluster nodes themselves are Talos and not in the inventory.
+Historical Talos commands require a deliberately restored cluster. Do not interpret retained contexts as evidence that the old cluster is running, and do not apply historical recovery commands to repurposed Karnataka.

@@ -3,10 +3,9 @@
 Publishes each machine's **public** device facts for the live fleet view at
 [reilly.asia/infra](https://reilly.asia/infra/#fleet).
 
-- **Runs on:** every host (opt out with `fleet_facts_publish: false`), last in
-  the play, including the no-secrets daily timer
-- **Tags:** `facts`, `fleet_facts`
-- **Needs:** a logged-in `gh` CLI (skipped quietly otherwise)
+- **Implementation:** `units/fleet-facts.sh` and `units/fleet-facts.py`
+- **Runs on:** registered inventory hosts unless `fleet_facts_publish: false`, including no-secrets applies
+- **Needs:** Python, YAML support via PyYAML or `yq`, and an authenticated `gh` CLI. Missing authentication reports `PARTIAL`.
 
 Each run writes `facts/<host>.json` to the **`fleet-facts`** branch of this
 repo through the GitHub contents API. There's no clone and no merge, and
@@ -14,19 +13,19 @@ repo through the GitHub contents API. There's no clone and no merge, and
 
 | Field | Source |
 |---|---|
-| `os.{name,version,codename,kernel}` | Ansible distribution facts |
+| `os.{name,version,codename,kernel}` | `/etc/os-release` or Android `getprop`, and the running kernel |
 | `hardware.model` | Android `getprop`, else device-tree model (Pi), else DMI product name (placeholders like "System Product Name" dropped) |
-| `hardware.{vendor,form_factor,arch,cpu,cpu_threads,memory_gb}` | Ansible hardware facts |
+| `hardware.{vendor,form_factor,arch,cpu,cpu_threads,memory_gb}` | DMI, platform information, `/proc/cpuinfo` and `/proc/meminfo` |
 | `hardware.gpus` | `lspci -mm` display devices (unnamed virtual adapters dropped) |
-| `virtualization`, `uptime_days`, `last_apply` | Ansible facts, `~/.cache/dotfiles/last-apply.json` |
+| `virtualization`, `uptime_days`, `last_apply` | `systemd-detect-virt`, `/proc/uptime`, `~/.cache/dotfiles/last-apply.json` |
 
 **Never published:** IP/MAC addresses, serial numbers, usernames, anything
 from Bitwarden.
 
 ## Private drift monitoring (`osquery`)
 
-The separate `osquery` role watches changes that must **not** go to the public
-`fleet-facts` branch. It installs checksum-pinned upstream osquery 5.23.1 under
+The separate `units/osquery.sh` unit watches changes that must **not** go to the public
+`fleet-facts` branch. Its assets and defaults live under `units/osquery/`. It installs checksum-pinned upstream osquery 5.23.1 under
 `/opt`, including on immutable desktops: no package layering, writable `/usr`,
 reboot, Fleet server, enrollment token, or new network listener.
 
@@ -34,8 +33,8 @@ reboot, Fleet server, enrollment token, or new network listener.
 and x86_64 or aarch64. Nura/Alpine musl (Kerala) and unrooted Android/Termux are
 unsupported; `osquery_supported: false` records that exclusion. Offline hosts
 install on their next successful normal apply. `skip_osquery: true` skips the
-role; it does not uninstall an already-running daemon. The retired VPS group is
-never modified, and Talos nodes are not Ansible-managed.
+unit; it does not uninstall an already-running daemon. Inventory VPSes and the
+retired VPSes are excluded; Talos nodes are not managed by these units.
 
 ### What's watched
 
@@ -67,7 +66,7 @@ just osquery-fleet --host punjab --host dilli
 just osquery-fleet --json
 ```
 
-The controller uses effective Ansible inventory, Tailscale online status and
+The controller uses native inventory parsing, Tailscale online status and
 existing authenticated SSH plus noninteractive sudo. Host-key verification stays
 enabled. It shows `ok`, `drift`, `offline`, `unsupported`, `excluded`, `stale` or
 `error`; missing/bad reports and failed reads never become `ok`. Reports older
@@ -82,11 +81,15 @@ Punjab has `osquery_poller_enabled: true`. Its system-level
 hosts' report-refresh window, and two minutes after boot. It runs as `ubuntu`,
 using that account's existing SSH keys, known hosts and noninteractive sudo.
 It does not depend on an interactive SSH agent or copy credentials into Kubernetes.
+The poller's default `PATH` includes the applying user's `~/.local/bin`, the
+configured Homebrew prefix and the apply environment's `PATH`, so tools installed
+outside the standard system directories remain available. `osquery_poller_path`
+overrides that default.
 
-The role installs a root-managed collector and a minimal inventory under
+The unit installs a root-managed collector and a minimal inventory under
 `/opt/fleet-osquery` and `/etc/fleet-osquery/inventory.yml`. Only connection and
 exclusion metadata is copied—not the full effective inventory or Bitwarden facts.
-Apply the `osquery` role on Punjab after changing fleet membership or connection
+Apply the `osquery` unit on Punjab after changing fleet membership or connection
 details to refresh this inventory snapshot.
 
 Each poll atomically replaces **one** aggregate:
@@ -107,9 +110,15 @@ process itself cannot run or write, check the service journal and the snapshot's
 collection time—an old file is not current health.
 
 `osquery_poller_enabled` defaults to false on other hosts. Setting it false on a
-previous poller and applying the role stops its timer and in-flight service;
+previous poller and applying the unit stops its timer and in-flight service;
 the last private snapshot remains for inspection. The manual fleet CLI still works
 from other machines and supports `--output PATH` for explicit private snapshots.
+
+CI exercises the real local reporter and poller using a Punjab-only inventory:
+hosted runners are not fleet tailnet members, so this is not a remote discovery
+or fleet-health check. The full inventory's poller snapshot and unavailable
+discovery behavior are covered separately by unit tests. On smoke failure, CI
+prints service journals and sanitized snapshot error reasons, not report contents.
 
 ### Baseline and local investigation
 
@@ -135,13 +144,3 @@ above. **Keep all report output private:** addresses and executable paths are
 sensitive; do not attach raw JSON to public issues or publish it through `fleet_facts`.
 No command lines, process environments, credentials or serial numbers are queried.
 
-Check mode reports platform support only; actual installation and baseline
-collection require a normal apply. CI exercises the actual role and
-`sudo python3 tests/osquery_smoke.py` on x86_64 and aarch64 Ubuntu runners.
-That smoke creates a temporary loopback listener and an enabled, never-started
-unit, checks pending/accepted/removed drift, and compares a synthetic prior kernel
-against the real current kernel. It uses isolated state and removes its fixtures;
-the fleet baseline is untouched.
-The native CI jobs also enable the persistent poller and run
-`tests/osquery_poller_smoke.py`: a real temporary listener must appear in the
-aggregate, disappear after removal, and leave the host baseline unchanged.

@@ -12,7 +12,7 @@ import pytest
 
 from conftest import REPO
 
-SRC = REPO / "roles/bluefin_common/files/bluefin-sync.py"
+SRC = REPO / "units/bluefin/files/bluefin-sync.py"
 spec = importlib.util.spec_from_file_location("bluefin_sync", SRC)
 bluefin_sync = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bluefin_sync)
@@ -109,6 +109,20 @@ class TestApplyGschemaOverride:
             value = args[-1]
             assert "/usr/share/backgrounds/bluefin" not in value
             assert ".local/share/backgrounds/bluefin" in value
+
+    def test_background_uri_encodes_special_characters_in_home(self, tmp_path):
+        home = tmp_path / 'home & 100%'
+        override = tmp_path / 'bg.gschema.override'
+        override.write_text(
+            "[org.gnome.desktop.background]\n"
+            "picture-uri='file:///usr/share/backgrounds/bluefin/foo.webp'\n"
+        )
+        with mock.patch.dict('os.environ', {'HOME': str(home)}), \
+             mock.patch.object(bluefin_sync, 'run_cmd') as mock_run:
+            mock_run.return_value = mock.MagicMock(returncode=0, stderr='')
+            bluefin_sync.apply_gschema_override(str(override))
+        uri = (home / '.local/share/backgrounds/bluefin/foo.webp').as_uri()
+        assert mock_run.call_args[0][0][-1] == f"'{uri}'"
 
     def test_adds_caffeine_to_enabled_extensions_when_missing(self, tmp_path):
         """caffeine@patapon.info is appended when enabled-extensions omits it."""

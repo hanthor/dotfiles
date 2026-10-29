@@ -5,7 +5,7 @@ import pytest
 
 from conftest import REPO, write_stub
 
-SCRIPT = REPO / "roles/hive_ops/files/bin/hive-peak.sh"
+SCRIPT = REPO / "units/hive-ops/bin/hive-peak.sh"
 
 # Fake kubectl: one pod, one unexpired owner session, and a dashboard whose
 # POSTs succeed except for agents listed in $STUB_FAIL. POSTs go to $STUB_LOG.

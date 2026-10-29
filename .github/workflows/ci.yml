@@ -26,26 +26,12 @@ jobs:
 
       - name: Install tools
         run: |
-          pip install yamllint ansible-lint
+          pip install yamllint
           sudo apt-get install -y shellcheck
 
       - name: yamllint
         run: |
           yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, comments-indentation: disable, comments: disable, braces: disable, indentation: disable, commas: disable, empty-lines: disable}}" .
-
-      # ansible-lint would install requirements.yml itself, with no retry;
-      # galaxy.ansible.com intermittently resets connections (#217).
-      - name: Install collections
-        run: |
-          for i in 1 2 3; do
-            ansible-galaxy collection install -r requirements.yml && exit 0
-            echo "galaxy install failed (attempt $i); retrying"
-            sleep $((i * 15))
-          done
-          exit 1
-
-      - name: ansible-lint
-        run: ansible-lint --offline site.yml
 
       - name: shellcheck
         run: |
@@ -74,8 +60,10 @@ jobs:
 
       - uses: astral-sh/setup-uv@v10.3.0
 
+      - uses: extractions/setup-just@v4
+
       - name: pytest
-        run: uvx --with pyyaml pytest -q tests
+        run: uvx --with pyyaml --with paramiko pytest -q tests
 
   osquery-smoke:
     strategy:
@@ -85,15 +73,25 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Ansible
+      - name: Install native inventory dependency
         run: |
-          pip install ansible-core
-          ansible-galaxy collection install -r requirements.yml
+          case "$(uname -m)" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; *) exit 1 ;; esac
+          sudo curl --fail --location --silent --show-error \
+            "https://github.com/mikefarah/yq/releases/download/v4.47.2/yq_linux_$arch" -o /usr/local/bin/yq
+          sudo chmod 755 /usr/local/bin/yq
+
+      # The hosted runner is not on the fleet tailnet. Keep Punjab's real
+      # inventory variables and server membership, but do not claim remote
+      # discovery or remote host health in this local integration smoke.
+      - name: Select local smoke inventory
+        run: |
+          yq -i '.all.hosts |= with_entries(select(.key == "punjab")) |
+            .all.children = {"server": {"hosts": {"punjab": null}}}' inventory.yml
 
       - name: Install actual native osquery and private reporting
-        run: >-
-          ansible-playbook -i "$(hostname)," -c local site.yml --tags osquery
-          --skip-tags secrets -e "target=$(hostname)" -e osquery_poller_enabled=true
+        run: |
+          echo punjab | sudo tee /etc/dotfiles-machine >/dev/null
+          DOTFILES_MACHINE=punjab bash units/osquery.sh
 
       - name: Exercise real socket, enabled unit and baseline transitions
         run: sudo python3 tests/osquery_smoke.py
@@ -103,11 +101,24 @@ jobs:
 
       - name: Verify poller opt-out stops the schedule and service
         run: |
-          ansible-playbook -i "$(hostname)," -c local site.yml --tags osquery \
-            --skip-tags secrets -e "target=$(hostname)" -e osquery_poller_enabled=false
+          yq -i '.osquery_poller_enabled = false' host_vars/punjab.yml
+          DOTFILES_MACHINE=punjab bash units/osquery.sh
           test "$(systemctl show fleet-osquery-poll.timer -p ActiveState --value)" = inactive
           test "$(systemctl show fleet-osquery-poll.timer -p UnitFileState --value)" = disabled
           test "$(systemctl show fleet-osquery-poll.service -p ActiveState --value)" = inactive
+
+      - name: Diagnose osquery smoke failure
+        if: ${{ failure() }}
+        run: |
+          sudo systemctl status fleet-osquery-poll.service fleet-osquery-report.service osqueryd.service --no-pager -l || true
+          sudo journalctl -b --no-pager -u fleet-osquery-poll.service -u fleet-osquery-report.service -u osqueryd.service -n 200 || true
+          if [ -f "$HOME/.local/state/fleet-osquery/latest.json" ]; then
+            echo 'Snapshot error reasons (no report contents):'
+            jq -r '(.error // empty), (.hosts[]? | select(.status == "error" or .status == "stale") | .reason // empty)' \
+              "$HOME/.local/state/fleet-osquery/latest.json" | sort -u || true
+          fi
+          command -v tailscale || echo 'tailscale CLI not found'
+          systemctl is-active tailscaled.service || true
 
   # Renovate may bump pi's npm deps unreviewed (CODEOWNERS carve-out); this
   # makes sure a PR can't *add* or remove one without a human.

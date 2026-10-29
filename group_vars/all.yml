@@ -4,11 +4,8 @@ user_name: James Reilly
 user_email: jreilly1821@gmail.com
 user_login: james
 brew_prefix: /home/linuxbrew/.linuxbrew
-# Every inventory host reachable over SSH, keyed by inventory name, with the
-# address ssh should use (MagicDNS name unless noted). Port and login user
-# come from inventory.yml (ansible_port / ansible_user) — ssh_config.j2 and
-# ssh_mesh read them from there. Talos nodes (bihar, karnataka) are absent on
-# purpose: Talos has no SSH.
+# SSH aliases are keyed by inventory name; connection users and ports come
+# from inventory.yml. Bihar's current OS is unverified, so it is not added.
 machines:
   punjab:
     hostname: punjab
@@ -17,9 +14,11 @@ machines:
   termux:
     hostname: pixel-9a
   himachal:
-    hostname: himachal
+    hostname: himachal-1
+  karnataka:
+    hostname: karnataka
   kerala:
-    hostname: kerala
+    hostname: kerala-1
   dilli:
     hostname: dilli
   kanpur:
@@ -39,7 +38,7 @@ machines:
     hostname: 127.0.0.1
 
 # Fleet SSH public keys, committed to git (public keys only — safe in a
-# public repo). The ssh_mesh role merges these into authorized_keys on
+# public repo). The ssh-mesh unit merges these into authorized_keys on
 # every apply (incl. the daily no-secrets timer) so the mesh self-heals
 # without Bitwarden. Each machine warns on apply if its own key is
 # missing/stale here.
@@ -70,6 +69,7 @@ ssh_mesh_exclude:
 # ── Core packages (all machines) ─────────────────────────────────
 core_brews:
   - bitwarden-cli
+  - bun
   - gh
   - git-lfs
   - node # Bluefin ships node OTB, but non-Bluefin hosts (e.g. mumbai, the phone's Debian VM) don't
@@ -81,11 +81,15 @@ core_brews:
   - tmux
   - direnv
   - just
+  - mise
+  - chezmoi
   - make
   - shellcheck
   - shfmt
   - unzip
   - yq
+  # kubectl is required on servers and phone VMs as well as desktops.
+  - kubernetes-cli
   # atuin is also in bluefin-cli, but the brew copy keeps non-Bluefin glibc hosts (Ubuntu, Debian) covered
   - atuin
   # bluefin-cli provides: atuin, bat, eza, fd, fzf, starship, carapace, ripgrep, tealdeer, zoxide, colordiff, television, ugrep
@@ -100,6 +104,7 @@ brew_blocked:
 core_taps:
   - ublue-os/experimental-tap
 core_tap_brews:
+  - can1357/tap/omp
   - ublue-os/experimental-tap/bluefin-cli
 # ── Desktop-only packages ────────────────────────────────────────
 # Trimmed to essentials — Bluefin already ships gcc, python, node, etc.
@@ -114,7 +119,6 @@ desktop_brews:
   - glab
   - ramalama
   - k9s
-  - kubernetes-cli
   - kubectx
   - krew
   - talosctl
@@ -125,7 +129,6 @@ desktop_brews:
   - ansible
   - block-goose-cli
   - charmbracelet/tap/crush
-  - chezmoi
   - cmake
   - cosign
   - curl
@@ -224,11 +227,6 @@ flatpak_remotes:
 # Bitwarden item name that holds Firefox Accounts credentials + TOTP
 fxa_bw_item: "accounts.firefox.com"
 fxa_bw_username: "jreilly1821@gmail.com"
-# Browsers to sign in to via FxA (skips any not installed on the host)
-fxa_browsers:
-  - zen
-  - firefox
-  - firefox-flatpak
 # ── GNOME Extensions ───────────────────────────────────────────────
 # Canonical list of enabled extensions, synced across fleet desktops.
 # To refresh from a source machine:

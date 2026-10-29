@@ -1,38 +1,13 @@
 # tailscale
 
-**Tags:** `secrets`, `tailscale`
-**Secrets needed:** Yes (only to *join* — once connected, BW is not required)
-**Runs on:** All machines
+`units/tailscale.sh` skips Termux, where Android manages Tailscale. On other hosts it configures the resolved IPv6 stub and Tailscale forwarding/rp_filter sysctls, applies changed sysctls, and manages the resolver link when DNS acceptance is enabled and systemd-resolved is active. When `tailscale_accept_dns: false`, a connected host instead gets static DNS. These system changes require root or noninteractive `sudo -n`.
 
-Installs Tailscale, fetches a reusable auth key from BW, joins the network, configures DNS, and keeps device hostname + advertised routes in sync.
+When already connected it sets the hostname, reconciles configured advertised routes, and configures the desktop operator and systray where applicable. When disconnected it installs Tailscale if needed, then joins via `units/tailscale-connect.py`. The helper reads the `tailscale-apikey` Bitwarden item's login password and passes it as `TS_OAUTH_CLIENT_SECRET` to `scripts/tailnet.py release NAME` before joining. Release removes offline matching names and numbered duplicates, not online devices, this device, or shared-in devices. Cleanup is best effort: failure produces a sanitized warning and joining is still attempted. The same credential is passed to Tailscale through a temporary private file that is removed afterwards, never in argv. An unlocked vault is needed for joining; a locked vault or `--no-secrets` produces `PARTIAL` and leaves the host disconnected.
 
-## What it does
+Host variables include `tailscale_advertise_routes`, `tailscale_accept_dns`, `tailscale_operator`, and `tailscale_domain` (the domain also falls back to `group_vars/all.yml`). The shared unit library skips retired `matrix` and `telengana` before this unit changes anything; nothing on those hosts may be restarted.
 
-1. Configures `systemd-resolved` so MagicDNS works (link `/etc/resolv.conf` to the stub resolver, drop in `DNSStubListenerExtra=::1` for container DNS).
-2. Sets `net.ipv4.conf.{all,default}.rp_filter=2` and IP forwarding on, so exit-node and subnet-router traffic actually routes.
-3. If `tailscale status` reports connected → updates hostname, prefs, operator, systray, then exits the role.
-4. If not connected and the vault is unlocked → fetches `tailscale-apikey` from BW, deletes any stale device with this hostname via the Tailscale API, then `tailscale up --authkey …`.
-5. If not connected and the vault is **locked** → emits a one-line warning and ends the role. Joining without a key would either fail noisily or, worse, succeed with an empty key.
+Tailnet auditing, hostname release and OAuth credential setup are documented in [Tailnet hygiene](../tailnet.md).
 
-## Failure modes
+## Resolver recovery
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| Role aborts with "vault locked" warning, host is not on tailnet | First-time apply on this host without BW unlocked | Unlock BW (`bw unlock --raw | tee /tmp/bw_session > /dev/null`), then `just apply-tags tailscale` |
-| Tailscale connected but MagicDNS names don't resolve | `systemd-resolved` link to `/etc/resolv.conf` was overwritten by NetworkManager / DHCP client | The role re-applies it; just re-run `dots-apply`. To make it sticky, check `network-manager` settings (Bluefin does this correctly out of the box) |
-| Duplicate device entries in admin console after rebuild | API-key device cleanup didn't run (vault locked at the time) | Manually delete in [tailscale admin console](https://login.tailscale.com/admin/machines) or unlock vault and re-apply |
-| Joins but no routes advertised | `tailscale_advertise_routes` not set in `host_vars` | Add it: `tailscale_advertise_routes: "<lan-cidr>"` |
-
-## How to verify
-
-```bash
-tailscale status                # should show all fleet machines as peers
-tailscale ip -4                 # this host's 100.x.x.x
-host bihar.manatee-basking.ts.net   # MagicDNS resolves to a 100.x.x.x
-```
-
-## Notes
-
-- All fleet machines are on the `manatee-basking.ts.net` tailnet.
-- The auth key is reusable — new machines join without re-authentication.
-- The Tailscale API key (`tailscale-apikey` in BW) is the same item used for joining and for device cleanup; rotate by editing the BW item and re-running this role on each host.
+The unit repoints `/etc/resolv.conf` to the resolved stub when resolved is active and restarts resolved if the link changes. It does **not** restart `tailscaled`: doing so can disconnect a remote apply. A running daemon that previously selected another DNS manager may need to be restarted to detect the new layout. Arrange console or other independent access before restarting it, then check `journalctl -u tailscaled` for the selected DNS mode and `resolvectl status` for per-link upstreams. Test both a public name and a MagicDNS name through the system resolver and through `100.100.100.100`; working system lookups alone do not prove Tailscale's forwarder has an upstream. See [Tailscale's Linux DNS guidance](https://tailscale.com/kb/1188/linux-dns) and [upstream issue 19062](https://github.com/tailscale/tailscale/issues/19062).

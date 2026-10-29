@@ -8,21 +8,21 @@
 
 - **Machine** — a physical host, VM, or VPS managed by this repo. Each has an entry in `inventory.yml` and `host_vars/<name>.yml`.
 - **Fleet** — the set of all machines.
-- **Group** — a logical subset of machines (`desktop`, `server`, `vps`, `test_fleet`, `termux_hosts`; `llm` is dormant, commented out). Used by Ansible inventory groups and by `site.yml` `when:` conditionals.
-- **Hostname** — the machine's short name (e.g. `kanpur`, `punjab`). Used as the inventory hostname, Tailscale hostname, and BW item key suffix.
-- **Machine profile** — a proposed replacement for scattered `skip_*` flags. A single typed variable that declares a machine's role (e.g. `headless`, `desktop`, `vm-test`) and derives which components to install.
+- **Group** — a logical subset of machines (`desktop`, `server`, `vps`, `test_fleet`, `termux_hosts`; `llm` is dormant). Native units and scripts read inventory membership for their gates.
+- **Hostname** — the machine's short name (e.g. `kanpur`, `punjab`). Machine selection uses `DOTFILES_MACHINE`, `/etc/dotfiles-machine`, then hostname; it keys host settings and BW item suffixes.
+- **Machine profile** — a host variable used alongside `skip_*` flags; individual units decide how to interpret it, including `vm-test` exclusions.
 
 ## Secrets
 
-- **BW item** — a Bitwarden vault entry (login, secure note, SSH key) consumed by a role. Named items (e.g. `tailscale-apikey`, `atuin.sh`, `accounts.firefox.com`).
-- **BW credential** — a single field extracted from a BW item (password, username, notes, TOTP, SSH key, custom field). Roles fetch these with `ansible.builtin.command: bw get <field> <item>`, gated on `bw_unlocked`.
-- **BW session** — the `BW_SESSION` environment variable that unlocks the vault for the current playbook run. Resolved from env → `/tmp/bw_session` cache → interactive unlock.
+- **BW item** — a Bitwarden vault entry (login, secure note, SSH key) consumed by a unit. Named items include `tailscale-apikey`, `atuin.sh`, and `accounts.firefox.com`.
+- **BW credential** — a field extracted from a BW item (password, username, notes, TOTP, SSH key, custom field). Units perform their own lookups and handle unavailable items.
+- **BW session** — `BW_SESSION` or a cached `/tmp/bw_session` value used by noninteractive unit helpers. Apply recipes may resolve an interactive session; `--no-secrets` suppresses unit vault access.
 
-## Playbook
+## Native configuration
 
-- **Role** — an Ansible role that configures one concern (e.g. `shell_dotfiles`, `tailscale`, `proxy`). The interface is `tasks/main.yml`; the implementation is templates, files, and handlers.
-- **Phase** — a logical grouping of roles in `site.yml` (Phase 1: system + packages, Phase 2: secrets + auth, Phase 3: desktop, Phase 4: services). Phases are documented in comments, not enforced by the playbook.
-- **Tag** — an Ansible tag applied to roles so `just apply-tags <tag>` can target a subset.
+- **Unit** — a Bash entrypoint in `units/` configuring one concern. `scripts/run-units.sh` orders prerequisite stages and runs independent selections via mise or a sequential fallback. A unit can report multiple step failures independently. See `docs/src/units.md`.
+- **Tag** — a selection key mapped to units by `tasks_for_tag` in `scripts/run-units.sh`; unit-specific platform and profile gates still apply.
+- **chezmoi source** — `home/`, containing managed shell, Git, Neovim and Atuin files. Secret files and procedural operations remain in units.
 
 ## Cluster
 
@@ -32,8 +32,8 @@
 
 ## Architecture (from improve-codebase-architecture)
 
-- **Module** — anything with an interface and an implementation (a role, a script, a Just recipe, an Ansible module).
-- **Interface** — everything a caller must know to use the module (task names, variables, tags, error modes, `when:` guards).
+- **Module** — anything with an interface and an implementation (a unit, a script, a Just recipe).
+- **Interface** — everything a caller must know to use the module (commands, variables, tags, error modes and guards).
 - **Depth** — leverage at the interface. A module is **deep** when a lot of behaviour sits behind a small interface.
 - **Seam** — where an interface lives; a place behaviour can be altered without editing in place.
 

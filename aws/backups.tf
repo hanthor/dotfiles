@@ -23,7 +23,7 @@ resource "aws_iam_role_policy_attachment" "dlm" {
 resource "aws_dlm_lifecycle_policy" "fleet_daily" {
   description        = "Fleet node root volumes daily and weekly snapshots"
   execution_role_arn = aws_iam_role.dlm.arn
-  state              = "ENABLED"
+  state              = "DISABLED" # Retired cluster: freeze the retained recovery set.
 
   policy_details {
     resource_types = ["VOLUME"]

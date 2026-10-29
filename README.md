@@ -1,6 +1,6 @@
 # dotfiles
 
-Ansible-managed dotfiles for every machine I own. One command to go from a fresh install to a fully configured system. No central server — each machine manages itself locally, secrets stay in Bitwarden, and everything stays in sync automatically.
+Fleet dotfiles and host configuration managed locally by native Bash units, mise and chezmoi. Secrets are fetched from Bitwarden at runtime. Units have platform, profile and privilege gates; a successful apply does not imply every optional component ran.
 
 **Overview, live status and architecture: [reilly.asia/infra](https://reilly.asia/infra/)** · handbook: [reilly.asia/infra/handbook](https://reilly.asia/infra/handbook/)
 
@@ -24,18 +24,18 @@ dots              # quick pull + apply without secrets
 | **GitHub** | Auth + signing keys registered automatically |
 | **GNOME** | Keyboard shortcuts, Ptyxis terminal config |
 | **Syncthing** | Systemd user service for file sync |
-| **Auto-update** | Systemd timer pulls and applies changes daily |
+| **Auto-update** | User systemd timer or laptop login service applies non-secret configuration |
 
 ---
 
 ## Day-to-day commands
 
 ```bash
-just apply             # Pull latest + full apply (prompts for BW unlock)
-just apply-nosecrets   # Pull latest + apply without Bitwarden (fast)
-just dotfiles          # Only shell/git/tmux configs
-just packages          # Only Homebrew + Flatpak
-just check             # Dry run — see what would change
+just apply             # Pull latest + apply (attempts BW unlock)
+just apply-nosecrets   # Pull latest + apply without Bitwarden
+just dotfiles          # Run the dotfiles unit selection
+just packages          # Run the package unit selection
+just check             # Request native inspection; coverage is being integrated
 just edit-host         # Edit this machine's host_vars
 ```
 
@@ -55,29 +55,32 @@ From `inventory.yml`:
 | Name | Group | What |
 |------|-------|------|
 | kanpur | desktop | Laptop (Bluefin) |
-| himachal | desktop | Laptop — also drives the Hive (`hive_ops`) |
+| himachal | desktop | Laptop |
 | dilli | desktop | Secondary workstation (Bluefin) |
 | kerala | desktop | postmarketOS ARM device (musl, `apk`) |
 | mumbai | desktop | Debian VM on the phone (Android Virtualization Framework), `cli-only` |
 | punjab | server | EC2 agent box (us-east-1) |
 | goa | server | Raspberry Pi 5 (applies locally) |
 | vm | server | Local dev VM |
-| termux | termux_hosts | Raw Termux layer on the phone — `termux_packages` only |
+| termux | termux_hosts | Raw Termux layer on the phone (platform-specific unit gates apply) |
 | test-fleet-fedora, test-fleet-node2 | test_fleet | KubeVirt test VMs (`machine_profile: vm-test`) |
 | matrix, telengana | vps | **Retired** Hetzner VPSes, powered on for burn-in — restart nothing on them |
 
-The home Talos cluster, **bihar** + **karnataka**, is not Ansible-managed: it is
-powered down and in storage, expected back. The AWS Talos cluster was terminated
-on 2026-10-25. [Spindle](docs/src/servers/spindle-vps/README.md), an OCI VPS in
-Frankfurt running Matrix, standalone LiveKit and the School, Reef and Hub Hives,
-is not listed in this inventory.
-The `llm` group is dormant (commented out in `inventory.yml`).
+**Bihar** was recently online but is currently unreachable; its OS and services
+are unverified. **Karnataka** runs `projectbluefin/utah:testing` with
+`multi-user.target` as its default and is listed in the server inventory.
+The home Talos manifests, configs and Bitwarden notes are historical recovery
+material, not evidence of their current state. The AWS Talos cluster was
+terminated on 2026-10-25.
+[Spindle](docs/src/servers/spindle-vps/README.md), an OCI VPS in Frankfurt running
+Matrix, standalone LiveKit and the School, Reef and Hub Hives, is not listed in
+this inventory. The `llm` group is dormant (commented out in `inventory.yml`).
 
 ---
 
 ## Security
 
-Repo is public — no secrets in git, ever. All secrets are fetched from Bitwarden at runtime. `just apply-remote` unlocks Bitwarden on the target (via `scripts/bw-resolve.sh remote`) and exports that session inline over `ssh -t`, so you drive every host from one terminal.
+Repo is public — no secrets in git, ever. Units fetch secrets from Bitwarden at runtime; `--no-secrets` suppresses unit vault access. `just apply-remote` resolves a session on the target and forwards it over SSH using `SendEnv=BW_SESSION`, which the target must accept. Retired `matrix` and `telengana` must not be restarted; the shared unit library skips both before unit work.
 
 ---
 
@@ -85,9 +88,9 @@ Repo is public — no secrets in git, ever. All secrets are fetched from Bitward
 
 Full handbook lives in [`docs/`](docs/) and is published at [reilly.asia/infra/handbook](https://reilly.asia/infra/handbook/) — run `just docs` to serve it locally.
 
-- [Talos cluster handbook](docs/src/servers/talos-k8s/cluster.md) — Bihar + Karnataka (home, offline), Lemonade, KubeVirt
+- [Home Talos cluster history](docs/src/servers/talos-k8s/cluster.md) — historical configuration and recovery reference
 - [Spindle VPS](docs/src/servers/spindle-vps/README.md) — Matrix, LiveKit and Hives on OCI
 - [TunaOS AWS cluster handbook](docs/src/servers/aws-k8s/cluster.md) — archived cluster history
 - [Adding a new machine](docs/src/onboarding.md)
-- [Roles reference](docs/src/roles/)
+- [Units and runner](docs/src/units.md) and [component reference](docs/src/roles/)
 - [Bitwarden vault setup](docs/src/bitwarden.md)

@@ -1,23 +1,9 @@
 # server_hardening
 
-**Tags:** `system`, `hardening`, `security`  
-**Secrets needed:** No  
-**Runs on:** `server` and `vps` groups (`site.yml` gates on group membership)
+`units/server-hardening.sh` runs for inventory `server` or `vps` members, but explicitly skips retired `matrix` and `telengana`. It requires `yq`, Python, `findmnt`, and root or noninteractive `sudo -n`; it uses no vault secrets. `units/server-hardening-file.py` performs the managed line edits.
 
-Applies reliability and light security hardening for long-running server hosts.
+The unit sets journald's maximum size to 500 MiB, restarts journald on change and vacuums old journals. It edits `/etc/systemd/journald.conf` when present; otherwise it manages `/etc/systemd/journald.conf.d/90-dotfiles-server-hardening.conf`, preserving the vendor config and other drop-ins. Check mode reports the pending drop-in without creating it. A symlinked or invalid managed drop-in, or an unusable drop-in directory, is reported as a failure rather than overwritten.
 
-## What It Does
+On writable roots it creates a 2 GiB `/swapfile` if absent, sets root ownership and mode 0600, formats and enables the newly created file, and adds an fstab entry. An existing inactive regular file must already have a swap signature (`blkid`); it is enabled without reformatting. The unit refuses symlinks, non-regular files, and unrecognized existing contents instead of changing or formatting them. A partially created file after an interrupted creation requires manual inspection and recovery. On read-only roots it preserves existing active swap (including zram) without changing `/swapfile` or fstab; if no swap is active, it reports failure. Apply and check modes both report failures when root mount options or the required active-swap status cannot be inspected, and continue the other hardening steps.
 
-- **journald:** sets `SystemMaxUse=500M` and vacuums journals to that size
-- **swap:** creates a 2G `/swapfile` if missing, sets 0600, runs `mkswap` + `swapon` only when it isn't already active, adds it to `/etc/fstab`
-- **NTP:** enables and starts `systemd-timesyncd`
-- **SSH rate limits:** `MaxStartups 3:50:10`, `MaxSessions 10`, `ClientAliveCountMax 3` in `sshd_config` (reloads sshd)
-- **UFW:** turns logging on if UFW is already active (doesn't enable UFW or add rules)
-- **Livepatch:** runs `pro enable livepatch` if Ubuntu Pro is attached (best-effort)
-- **Reboot check:** prints a warning if `/var/run/reboot-required` exists
-
-## Notes
-
-- Does **not** install fail2ban, change SSH auth/cipher settings, set sysctls, or configure automatic updates
-- No `skip_` flag — to keep a host out, take it out of `server`/`vps`
-- The retired VPSes (`matrix`, `telengana`) are still in `vps`; don't apply to them (see the cutover runbook) — this role reloads sshd and restarts journald
+It enables systemd-timesyncd only when present and chrony is not active. It prepends a marked global SSH block for `MaxStartups`, `MaxSessions`, and `ClientAliveCountMax`, ahead of any `Include`, existing directives, or `Match` sections, so OpenSSH's first-value-wins rules do not silently defeat these limits. Other configuration, including per-`Match` overrides, is preserved; a malformed managed block is reported rather than overwritten. SSH reload remains best-effort on change. It enables UFW logging only when UFW is already active, attempts Ubuntu Pro livepatch when its status indicates it is needed, and reports a pending reboot. It does not configure firewall rules or install fail2ban.

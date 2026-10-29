@@ -1,0 +1,35 @@
+# Shared aliases — sourced by bash and zsh
+# NOTE: bluefin-cli init handles: eza/ll/ls, bat/cat, ugrep/grep,
+#       zoxide/cd, starship, atuin, fzf — do NOT duplicate those here
+#
+# Most of this file is generated from home/.chezmoidata.yaml,
+# the single source shared with the fish aliases template. To add/change
+# a plain alias, edit that file, not this one — it'll show up in both
+# shells. Only shell-specific-syntax aliases are hand-written below.
+{{- range $group := .alias_groups }}
+{{- $guarded := hasKey $group "guard" }}
+{{- if $guarded }}
+if command -v {{ $group.guard }} &>/dev/null; then
+{{- end }}
+{{- range $a := $group.aliases }}
+{{ if $guarded }}  {{ end }}alias {{ $a.name }}='{{ $a.cmd }}'
+{{- end }}
+{{- if $guarded }}
+fi
+{{- end }}
+{{- end }}
+# ── Shell-specific aliases (syntax differs from fish; not in the shared source) ──
+alias -- -='cd -'
+alias dots='cd ~/.local/share/dotfiles && just apply-nosecrets'
+alias dots-apply='cd ~/.local/share/dotfiles && git pull --ff-only && just apply'
+alias dots-edit='cd ~/.local/share/dotfiles && ${EDITOR:-nvim} .'
+alias reload='exec $SHELL -l'
+alias path='tr ":" "\n" <<< "$PATH"'
+alias myip='curl -s ifconfig.me && echo'
+alias please='sudo $(fc -ln -1)'
+{{- if .is_desktop }}
+alias open='xdg-open'
+{{- end }}
+
+# ── Local secrets (not committed to git) ──────────────────────────
+[ -f ~/.config/shell/secrets.sh ] && source ~/.config/shell/secrets.sh

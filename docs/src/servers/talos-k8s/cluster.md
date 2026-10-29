@@ -1,29 +1,40 @@
-# Cluster Handbook — Talos Linux on Bihar + Karnataka
+# Historical Cluster Handbook — Talos Linux on Bihar + Karnataka
 
-> **Status: powered down and in storage (as of 2026-08-27), expected back.**
-> Temporarily offline, *not* decommissioned — keep its configs, Bitwarden notes
-> (`kubeconfig` / `talosconfig`), and `talos-k8s/` manifests. `kubectl` and
-> `just doctor` will fail against it until it returns. Matrix and the School,
-> Reef and Hub Hives now run on the [OCI Spindle VPS](../spindle-vps/README.md).
+> **Historical architecture and recovery reference, not a current deployment.**
+> Bihar's OS and services are unverified. Karnataka runs `projectbluefin/utah:testing`
+> with `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server bound to
+> tailnet address `100.66.158.127`. KubeVirt `v1.9.1`, CDI and Corral are installed;
+> `corral-vms/punjab` is now the active Punjab replacement (`100.103.187.46`).
+> See [current Karnataka K3s operation and client access](karnataka/README.md#current-k3s-cluster)
+> instead of using this handbook for the live cluster. Its client context is
+> `karnataka-k3s`, provisioned from the separate Bitwarden note
+> `kubeconfig-karnataka-k3s`; the former Talos credentials are recovery-only.
+> On the current server, firewalld puts `cni0` in the internal zone and accepts
+> pod subnet `10.42.0.0/16` to kubelet port `10250` on that tailnet address;
+> internal-zone services, including SSH, are accessible from pods. NetworkPolicy
+> enforcement is unverified. Utah is enforcing SELinux, but `k3s-selinux` is
+> absent and K3s container SELinux is disabled.
+>
+> **Do not run the reinstall, reset, bootstrap, configuration, migration, or
+> workload commands below against repurposed nodes.** They can wipe disks or
+> alter systems. They are historical examples for a separately planned recovery,
+> after identifying the target and safeguarding data. Kubernetes service URLs
+> below are historical, not running service endpoints.
+>
+> Preserve `talos-k8s/`, the home `kubeconfig` / `talosconfig` files and
+> Bitwarden notes, and the separate AWS recovery material. Matrix and the School,
+> Reef and Hub Hives are documented on the [OCI Spindle VPS](../spindle-vps/README.md).
 > The [AWS Talos cluster](../aws-k8s/cluster.md) was terminated on 2026-10-25.
 >
-> **When it returns**, before applying anything under `talos-k8s/ai/`:
-> run [`talos-k8s/ai/migrate-pv-path.sh`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/migrate-pv-path.sh)
-> first. `lemonade.yaml` already points its PVs at `/var/lib/…`, but the models
-> are still under `/var/tmp/…` on karnataka. Applying the manifest first
-> orphans them (#29). Then follow the prerequisites in
-> [`talos-k8s/ai/README.md`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/README.md)
-> for the backup job and run `lemonade-warmup.sh` (#26, #27).
->
-> **Home Hummingbird migration: prepared, not deployed.** The build/install and
-> activation procedure is in [section 12](#12-hummingbirdbootc-migration-home-only).
-> The home machines remain offline/in storage; the Talos recovery instructions
-> below and all existing home/AWS credentials remain valid recovery material.
+> For a deliberate future Talos recovery, inspect and back up the actual PV data
+> before applying `talos-k8s/ai/lemonade.yaml`: the manifest uses `/var/lib/…`,
+> while the old data was recorded under `/var/tmp/…`. See
+> [`migrate-pv-path.sh`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/migrate-pv-path.sh)
+> and the [AI prerequisites](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/ai/README.md);
+> neither the location nor survival of those models is verified now.
 
-
-> **Two-node [Talos Linux](https://www.talos.dev/) [Kubernetes](https://kubernetes.io/) cluster.**
-> AMD Strix Halo GPU acceleration · [Lemonade](https://lemonade-sdk.github.io/) · [KubeVirt](https://kubevirt.io/) · [Tailscale](https://tailscale.com/) ingress.
-> Everything you need to bring this cluster back from zero.
+The following describes the former two-node Talos/Kubernetes cluster, its AMD
+GPU workloads, and its recovery procedures as historical reference.
 
 ## Table of contents
 
@@ -71,10 +82,10 @@
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on each node and persists. Reboots survive.
+The former cluster was **not diskless** — Talos installed onto `/dev/nvme0n1` on each node and persisted across reboots. This does not establish current disk contents.
 
-**Source of truth for manifests:** [`talos-k8s/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s) in this repo.
-**Source of truth for secrets** (`talosconfig`, `controlplane.yaml`, `worker.yaml`, `kubeconfig`): Bitwarden, fetched onto your workstation by the `kube` role.
+**Retained manifests:** [`talos-k8s/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s) in this repo.
+**Retained secrets** (`talosconfig`, `controlplane.yaml`, `worker.yaml`, `kubeconfig`): Bitwarden, fetched onto workstations by the `kube` unit. Preserve them as recovery material.
 
 ---
 
@@ -108,16 +119,16 @@ The cluster is **not diskless** — Talos installs itself onto `/dev/nvme0n1` on
 
 DHCP/DNS are served by the home router, which hands out fixed addresses from its address-reservation table — see [Gateway](../../network/gateway/README.md). Older revisions of this page said dnsmasq on bihar; that predates Talos, which can't run it on the host.
 
-| Host        | Address  | Role                       |
+| Host        | Address  | Former role                |
 |-------------|----------|----------------------------|
 | bihar       | reserved | K8s control plane, home services |
 | karnataka   | reserved | K8s worker, LLM host |
 | goa         | reserved | Raspberry Pi, fleet control |
 | kvm         | reserved | NanoKVM (plugged into karnataka) |
 
-The commands below use `<bihar-ip>` / `<karnataka-ip>` for the nodes' LAN
-addresses. Run `just inventory` to rescan with nmap and get the current values
-(they are also the endpoints in the talosconfig).
+The historical commands use `<bihar-ip>` / `<karnataka-ip>` for the nodes' LAN
+addresses. The retained talosconfig endpoints and router reservations are not
+evidence that a Talos API is present at those addresses now.
 
 ### Internet — data-capped
 
@@ -130,9 +141,9 @@ until the next billing cycle.
 
 ### Tailscale — `manatee-basking.ts.net`
 
-Cluster ingress goes through the [Tailscale Operator](https://tailscale.com/kb/1236/kubernetes-operator). Services with an `Ingress` resource targeting `tailscale` ingressClassName get a `<name>.manatee-basking.ts.net` URL automatically.
+The former cluster used the [Tailscale Operator](https://tailscale.com/kb/1236/kubernetes-operator) for ingress. The following URLs are historical, not running Kubernetes services.
 
-| Service             | URL |
+| Former service      | Historical URL |
 |---------------------|-----|
 | Cluster homepage    | `https://home.manatee-basking.ts.net` |
 | Lemonade (AI)       | `https://lemonade.manatee-basking.ts.net/v1` |
@@ -159,14 +170,14 @@ Cluster ingress goes through the [Tailscale Operator](https://tailscale.com/kb/1
 
 Talos ships with an immutable root filesystem, so kernel modules cannot be added at runtime. The AMD GPU driver and the Longhorn iSCSI tooling are **baked into the boot image** via the [Talos Image Factory](https://factory.talos.dev).
 
-**Schematic ID (current, 2026-06-11):** `3a33ec6dfc8cfd61d2a3db3caf97894f31e913952d71ce3c3fbbe565a3f08339`
+**Historical schematic ID (2026-06-11):** `3a33ec6dfc8cfd61d2a3db3caf97894f31e913952d71ce3c3fbbe565a3f08339`
 
 **Extensions baked in:**
 - `siderolabs/amdgpu` — AMD GPU kernel driver
 - `siderolabs/iscsi-tools` — iscsid, for Longhorn block storage
 - `siderolabs/util-linux-tools` — fstrim/nsenter, for Longhorn
 
-Both nodes run this schematic. Earlier schematics were `e5912b95…` (amdgpu
+Both nodes formerly used this schematic. Earlier schematics were `e5912b95…` (amdgpu
 only) and, in older docs, `b6ab12e…`. Storage details: [`talos-k8s/longhorn/`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/longhorn/README.md).
 
 ```yaml
@@ -180,11 +191,12 @@ After install, the node exposes `/dev/dri/card0`, `/dev/dri/renderD128`, and `/d
 
 > **Talos version note:** Pinned to `v1.13.2`. `v1.13.3` had multi-arch registry pull errors on AMD64 at the time of writing.
 
-### User volume for /var/mnt/storage
+### Historical user volume for /var/mnt/storage
 
-nvme0n1 is the **Crucial P3** (healthy, boot disk). The WD Black failed with I/O errors
-and was replaced as the boot disk. Forgejo / local-path PVCs use a `directory`-type
-user volume on the Crucial P3's EPHEMERAL partition:
+At the time, nvme0n1 was the **Crucial P3** (boot disk). The WD Black had failed
+with I/O errors and was replaced as the boot disk. Forgejo / local-path PVCs used
+a `directory`-type user volume on the Crucial P3's EPHEMERAL partition. Current
+disk health and contents are not established by this record:
 
 ```bash
 # Apply the user volume config (idempotent):
@@ -204,6 +216,8 @@ The mount is automatically propagated into the kubelet namespace.
 ---
 
 ## 5. Cluster bootstrap
+
+> **Historical example:** do not apply these configs or bootstrap repurposed nodes.
 
 Configs are generated once with `talosctl gen config`, edited, and applied to each node. The generated files contain **cluster PKI secrets** (machine token, bootstrap token, shared secret) and are **not committed** — they live in Bitwarden.
 
@@ -272,6 +286,8 @@ resources:
 
 ## 7. Production workloads
 
+The following workloads and addresses describe the former cluster, not currently running services.
+
 All manifests live in [`talos-k8s/`](https://github.com/hanthor/dotfiles/tree/master/talos-k8s), organized by purpose:
 
 ```
@@ -309,13 +325,13 @@ Key env overrides (RDNA 3.5 needs special handling):
 | `HSA_XNACK` | `1` | Enables unified memory |
 | `HSA_FORCE_FINE_GRAIN_PCIE` | `1` | Fine-grained VM access |
 
-**Access:**
+**Former access:**
 - LAN: `http://<karnataka-ip>:31305/v1` (NodePort)
 - Tailscale: `https://lemonade.manatee-basking.ts.net/v1`
 
-Model weights cached on `karnataka:/var/tmp/lemonade-cache` (HuggingFace) and `/var/tmp/lemonade-models` (llama models) via local-storage PersistentVolumes.
+Model weights were cached under `karnataka:/var/tmp/lemonade-cache` (HuggingFace) and `/var/tmp/lemonade-models` (llama models) via local-storage PersistentVolumes; their current state is unverified.
 
-**Web UI:** Point a browser at `http://<karnataka-ip>:31305` for the built-in control panel to download models, configure endpoints, and test chat/vision/image generation.
+The former web UI was at `http://<karnataka-ip>:31305`; this is not a running-service claim.
 
 ### KubeVirt v1.8.2
 
@@ -336,9 +352,9 @@ Manifest: deployed from upstream bundle. Also see [`talos-k8s/infrastructure/`](
 kubectl apply -f https://raw.githubusercontent.com/kubevirt-manager/kubevirt-manager/main/kubernetes/bundled.yaml
 ```
 
-Reachable at `https://kubevirt-manager.manatee-basking.ts.net` via the Tailscale ingress (manifest in cluster — not in this repo since it's a stock bundle).
+Formerly reachable at `https://kubevirt-manager.manatee-basking.ts.net` via Tailscale ingress (stock bundle, not in this repo). This URL is historical.
 
-Port-forward as fallback:
+Former port-forward fallback:
 
 ```bash
 kubectl port-forward svc/kubevirt-manager 8080:8080 -n kubevirt-manager
@@ -399,9 +415,11 @@ The operator namespace is `tailscale`. Auth keys are configured during operator 
 
 ## 9. Day-to-day operations
 
+These commands are retained for a deliberately restored Talos cluster; they do not establish that one exists now. Do not reboot or change repurposed machines.
+
 ### From your workstation
 
-The `kube` role syncs `~/.kube/config` and `~/.talos/config` from Bitwarden, so on any desktop:
+The `kube` unit syncs the retained `~/.kube/config` and `~/.talos/config` from Bitwarden. Historical examples:
 
 ```bash
 kubectl get pods -A
@@ -432,7 +450,12 @@ talosctl -n <bihar-ip> reboot           # graceful reboot
 
 ## 10. Reinstall procedure
 
-If a node is wiped or replaced:
+> **Destructive historical procedure: do not run against repurposed nodes.**
+> Reinstalling or bootstrapping can destroy existing systems and data. Only use
+> as reference for a separately planned recovery after confirming the target,
+> disk identity, and independently restorable backups.
+
+The former procedure for a wiped or replaced node was:
 
 1. **Boot Talos ISO** on the node (or PXE if you set that up separately). Default Talos boots into maintenance mode and accepts an apply-config.
 2. **Apply config**:
@@ -470,9 +493,9 @@ If a node is wiped or replaced:
 
 If only the worker was reset, the existing kubeconfig still works — only steps 1, 2, 5, and 6 are needed for that node, plus re-applying any DaemonSet pods.
 
-> **WD Black failure:** Do not use the WD Black (`/dev/nvme1n1`) for installs or user volumes.
-> Install only to the Crucial P3 (`/dev/nvme0n1`). Storage uses a directory-type volume
-> on the Crucial P3's EPHEMERAL partition.
+> **Historical WD Black failure:** The former procedure excluded `/dev/nvme1n1`
+> and selected the Crucial P3 (`/dev/nvme0n1`). Do not treat this as a current
+> disk selection: verify identity, health, contents and backups before any recovery.
 
 ---
 
@@ -522,10 +545,10 @@ talosctl -n <ip> reset                   # nuclear: wipes node, requires re-appl
 - All pods on karnataka stuck in `Terminating`/`Pending`
 - Ping to karnataka still works (node is up, just CRI is dead)
 
-**Root cause:** Memory pressure from simultaneous large container builds exhausts
-karnataka's 62GB unified memory. The node runs Lemonade (48-56Gi), Argo Workflow image
+**Historical root cause:** Memory pressure from simultaneous large container builds exhausted
+karnataka's 62GB unified memory. The former Talos node ran Lemonade (48-56Gi), Argo Workflow image
 builds, Forgejo Actions (podman-in-Docker), KubeVirt, and monitoring — when
-multiple 4GB image builds run concurrently, containerd OOMs and crashes.
+multiple 4GB image builds ran concurrently, containerd OOMed and crashed.
 
 **Recovery:**
 ```bash
@@ -550,13 +573,13 @@ After reboot (~2 min), all pods recover automatically. PVC-backed services
 
 ### Scope and acceptance status
 
-This is a replacement OS and **new K3s cluster** for the two home nodes, not a
-Talos upgrade. Bihar is the Intel server/control plane; Karnataka is the AMD
-worker. **No physical migration has been performed.** The home cluster is still
-powered down/in storage. Nothing here changes the terminated
-[AWS Talos cluster's](../aws-k8s/cluster.md) recovery material; Corral
-acceptance uses separate disposable KubeVirt VMs, not Talos node changes.
-Sections 1–11 remain the Talos recovery handbook, not instructions for the new OS.
+This section records a proposed replacement OS and **new two-node K3s cluster**,
+not a Talos upgrade or instructions for the current single-node K3s server on
+Utah. Bihar's present OS and services are unverified. Do not install, switch,
+activate, or configure these images on Karnataka or other existing hosts. The
+procedures below and sections 1–11 are retained for historical context and recovery
+planning only. The terminated [AWS Talos cluster's](../aws-k8s/cluster.md)
+recovery material remains separate.
 
 Image builds alone do not prove installation. The GitHub Actions acceptance
 workflow builds all three images and offline ISOs, drives the **real
@@ -628,9 +651,11 @@ unit and a real KubeVirt guest on physical Bihar before cutover.
 ### Image contents and state
 
 The source is `server-images/Containerfile`, `compose.sh`, `nodes/`, and `rootfs/`.
-All three targets use the digest-pinned Hummingbird Community `os-minimal` base,
-without a desktop. The Bihar/Karnataka images remain the direct installation
-path for those machines; `starter` is optional for future x86_64 AMD/Intel nodes.
+The earlier targets used a digest-pinned Hummingbird Community `os-minimal`
+base without a desktop. The proposed targets now use Utah; see the
+[current image guide](../home-k8s-images.md). Bihar/Karnataka images were
+proposed as direct installation paths; `starter` was optional for future
+x86_64 AMD/Intel nodes. These are not current deployment instructions.
 Explicit AMD/Intel GPU and CPU, Intel Wi-Fi, Realtek, MediaTek, Atheros, and
 Broadcom firmware subpackages come through the digest-pinned Utah package factory.
 That local repository is authenticated by its OCI digest, **not RPM signatures**.
@@ -688,10 +713,10 @@ and containerd), user homes under `/var/home`, and these retained workload paths
 | `/var/lib/lemonade-cache` | Lemonade cache, matching the current home PV manifest |
 | `/var/lib/lemonade-models` | Lemonade models, matching the current home PV manifest |
 
-The current `talos-k8s/ai/lemonade.yaml` uses `/var/lib/lemonade-*`. The offline
-Talos node may still hold the data under `/var/tmp/lemonade-*`: back up those
-source directories before wiping and restore into `/var/lib/lemonade-*` on the
-new node. Creating an empty PV directory does not migrate the models.
+The retained `talos-k8s/ai/lemonade.yaml` uses `/var/lib/lemonade-*`. The former
+Talos node was recorded with data under `/var/tmp/lemonade-*`; its present
+contents are unverified. Before any recovery, inspect and back up source data
+independently. Creating an empty PV directory does not migrate models.
 
 ### Back up before building a physical migration plan
 
@@ -707,12 +732,13 @@ Keep the old Bitwarden secure notes `kubeconfig` / `talosconfig` and their
 `kubeconfig-aws-migration` / `talosconfig-aws-migration` notes and files unchanged.
 Use a new home kubeconfig below; do not overwrite any of these.
 
-**Karnataka's `/dev/nvme1n1` (WD Black) is failing: never select it.**
-Only the healthy `/dev/nvme0n1` is a candidate, **after off-node backups and an
-explicit physical operator choice**. Identify disks by model, serial, size,
-and current contents at the console (`lsblk -o NAME,SIZE,MODEL,SERIAL,FSTYPE,MOUNTPOINTS`);
-do not assume device enumeration is sufficient. Apply the same backup and
-operator-choice gate to Bihar's intended `/dev/nvme0n1`.
+**Karnataka's `/dev/nvme1n1` (WD Black) was reported failing: never select it
+without an independent assessment.** The former plan named `/dev/nvme0n1` as a
+candidate, not as permission to overwrite the current Utah/K3s server. Any future
+disk choice requires off-node backups and an explicit physical operator decision.
+Identify disks by model, serial, size, and current contents at the console
+(`lsblk -o NAME,SIZE,MODEL,SERIAL,FSTYPE,MOUNTPOINTS`); do not assume device
+enumeration or historical health. Apply the same gate to Bihar.
 
 ### Build node images and optional starter media
 

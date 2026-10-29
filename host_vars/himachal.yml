@@ -3,11 +3,25 @@ is_laptop: true
 dotfiles_update_delay_seconds: 90
 # Keep login responsive; run `just apply-nosecrets` manually when desired.
 dotfiles_auto_update: false
-# Phone pushes launch two Ansible runs and are better done on demand.
+# Phone pushes are better done on demand.
 phone_apply_enabled: false
 web_services: []
 mic_hardware_volume_pct: 75
 
 # The old Kubernetes Hive timers target the terminated AWS cluster, not the
-# OCI Compose deployment. Keep them disabled; the role removes known old timers.
+# OCI Compose deployment. Keep them disabled; the unit removes known old timers.
 hive_ops_enabled: false
+
+# User-scoped FlatPark apps; Flathub supplies their runtimes.
+user_flatpak_remotes:
+  - name: flatpark
+    url: https://dl.flatpark.org/flatpark.flatpakrepo
+  - name: flathub
+    url: https://dl.flathub.org/repo/flathub.flatpakrepo
+user_flatpaks:
+  - remote: flatpark
+    id: org.tunaos.blueshell
+  - remote: flatpark
+    id: org.tunaos.tavern
+  - remote: flatpark
+    id: org.tunaos.compass

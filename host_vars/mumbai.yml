@@ -2,7 +2,6 @@ is_laptop: false
 machine_profile: cli-only
 
 # Skip everything heavy — phone VM, keep it lightweight
-skip_kube: true
 skip_flatpak: true
 skip_bluefin: true
 skip_gnome: true

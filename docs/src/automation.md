@@ -1,9 +1,8 @@
 # Self-improving repo: bots, agents and guardrails
 
-This repo is edited by bots, and every fleet machine pulls `master` daily and
-applies it **with sudo**. A bad merge therefore reaches every machine within
-24h. The automation below is set up so that routine improvements land without
-you, and anything that executes on the fleet still waits for you.
+This repo is edited by bots. Machines with the fleet update timer enabled pull
+`master` and apply configuration with sudo. A bad merge can therefore reach
+those machines unattended. Executable fleet changes require owner review.
 
 ## Who changes what
 
@@ -12,7 +11,7 @@ you, and anything that executes on the fleet still waits for you.
 | **Renovate** | minor/patch/digest bumps (pi npm deps, Go, GitHub Actions, OpenTofu providers), weekly lockfile maintenance | yes, once CI is green |
 | **Renovate** (cluster) | image/chart bumps in `talos-k8s/`, grouped weekly, label `deploy-needed` | **no** — manifests are applied by hand, so a merge would only make git lie about the cluster |
 | **Hive** ([hive.reilly.asia](https://hive.reilly.asia), `hanthor-hive-agent`, ACMM L5) | its agents open PRs labelled `hold`; the Hive itself only merges PRs labelled `lgtm` | only if the PR stays inside the carve-outs below |
-| **You** | direct pushes, `just onboard`, etc. | admin bypass — unaffected |
+| **You** | review onboarding and other owned changes | admin bypass is available, but onboarding uses a PR |
 
 ## The gate
 
@@ -33,7 +32,7 @@ Three pieces, and none of them trusts the PR itself:
 
 `deps-guard` lets Renovate change **versions** in `roles/pi/files/package.json`
 but fails if a PR adds or removes a dependency. The manifest is tracked by
-repository automation; the `omp` role copies `roles/pi/files/skills/` and
+repository automation; the `omp` unit copies `roles/pi/files/skills/` and
 installs OMP plugins separately. It does not run `npm install` from this
 manifest on fleet machines.
 

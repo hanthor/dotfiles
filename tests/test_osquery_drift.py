@@ -15,7 +15,7 @@ import pytest
 from conftest import REPO
 
 
-SCRIPT = REPO / "roles" / "osquery" / "files" / "fleet-osquery.py"
+SCRIPT = REPO / "units" / "osquery" / "files" / "fleet-osquery.py"
 
 
 @pytest.fixture

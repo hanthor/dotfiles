@@ -10,6 +10,8 @@ REPO = Path(__file__).resolve().parent.parent
 def write_stub(bindir, name, body):
     """Drop an executable bash stub `name` into bindir."""
     p = Path(bindir) / name
+    if p.is_symlink():
+        p.unlink()
     p.write_text("#!/usr/bin/env bash\n" + body)
     p.chmod(p.stat().st_mode | stat.S_IXUSR)
     return p

@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew Tailscale TLS certificate
+After=tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=/etc/systemd/system/tailscale-cert-renew.sh /etc/ssl/tailscale {{ inventory_hostname }}.{{ tailscale_domain }}

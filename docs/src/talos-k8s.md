@@ -1,17 +1,29 @@
-# Talos Kubernetes Cluster
+# Historical Talos Kubernetes Cluster
 
-Two-node Kubernetes cluster running on Talos Linux, managed from the `talos-k8s/` directory.
+> **Historical reference, not a current deployment.** Bihar's OS and services
+> are unverified. Karnataka runs `projectbluefin/utah:testing` with
+> `multi-user.target` and a single-node K3s `v1.36.5+k3s1` server on its
+> tailnet address `100.66.158.127`. KubeVirt `v1.9.1`, CDI and Corral are
+> installed; `corral-vms/punjab` is now the active Punjab replacement at
+> `100.103.187.46`. The former EC2 host is stopped with recovery storage retained.
+> Retain `talos-k8s/`, cluster configs and Bitwarden notes as recovery material,
+> not proof either machine still runs Talos.
+>
+> **Do not run historical reinstall, configuration or workload commands against
+> repurposed nodes.** They can destroy data or change current systems. Kubernetes
+> service URLs in the handbook are historical, not running endpoints.
 
-> **Powered down and in storage, expected back** — commands below fail until it returns. Matrix and School, Reef and Hub run on the [OCI Spindle VPS](servers/spindle-vps/README.md); the [AWS Talos cluster](servers/aws-k8s/cluster.md) was terminated on 2026-10-25.
+The former two-node Talos Linux cluster was managed from `talos-k8s/`. The
+[AWS Talos cluster](servers/aws-k8s/cluster.md) was terminated on 2026-10-25.
 
-## Hardware
+## Historical hardware roles
 
 | Node | Role | Hardware |
 |------|------|----------|
 | bihar | Control plane | Intel (bare metal) |
 | karnataka | Worker | AMD Strix Halo APU (GPU-enabled) |
 
-## Software Stack
+## Historical software stack
 
 | Component | Version | Notes |
 |-----------|---------|-------|
@@ -39,11 +51,11 @@ talos-k8s/
 └── testing-lab/     ci/cd test infra
 ```
 
-## Running Workloads
+## Former workloads
 
 ### Lemonade
 
-[Lemonade](https://lemonade-sdk.github.io/) — AMD-optimized local AI runtime providing omni-modal endpoints (chat, vision, image gen, speech, transcription) on karnataka's integrated AMD GPU (`amdgpu` driver baked into the Talos image via [Image Factory](https://www.talos.dev/latest/talos-guides/install/boot-assets/)).
+[Lemonade](https://lemonade-sdk.github.io/) was an AMD-optimized local AI runtime providing omni-modal endpoints (chat, vision, image gen, speech, transcription) on karnataka's integrated AMD GPU (`amdgpu` driver baked into the Talos image via [Image Factory](https://www.talos.dev/latest/talos-guides/install/boot-assets/)). Its current operation is not established by this historical manifest.
 
 Manifest: `talos-k8s/ai/lemonade.yaml`
 
@@ -51,20 +63,22 @@ Manifest: `talos-k8s/ai/lemonade.yaml`
 
 See the [cluster handbook](servers/talos-k8s/cluster.md) for the full list — Forgejo, Hive, Authentik, n8n, AppFlowy Cloud, Grafana, Corral, and more.
 
-## Cluster Access
+## Historical cluster access
+
+These commands apply only to a deliberately restored cluster; the retained configs do not prove a cluster is reachable.
 
 ```bash
 # kubectl (from kubeconfig in Bitwarden)
 kubectl get nodes
 
-# Talos CLI (LAN addresses; off-LAN they're reachable via bihar's subnet route)
+# Talos CLI (former LAN endpoints; routing is not established now)
 talosctl -n <bihar-ip> version       # bihar
 talosctl -n <karnataka-ip> version   # karnataka
 ```
 
 ## Image Factory
 
-Karnataka uses a custom Talos image from Image Factory that includes the `siderolabs/amdgpu` system extension for GPU passthrough to containers.
+Karnataka's former Talos installation used a custom Image Factory image including the `siderolabs/amdgpu` system extension for GPU passthrough to containers.
 
 ## Handbook
 

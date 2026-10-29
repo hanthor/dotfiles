@@ -1,35 +1,12 @@
 # homebrew
 
+**Unit:** `units/homebrew.sh`  
 **Tags:** `packages`, `homebrew`  
 **Secrets needed:** No  
-**Runs on:** All glibc machines (skipped on musl/Alpine)
+**Runs on:** glibc hosts; skips Termux and musl.
 
-Installs and manages [Homebrew](https://brew.sh/) packages on Linux.
+The native unit installs and manages Homebrew. It defaults to `/home/linuxbrew/.linuxbrew` (`BREW_PREFIX` overrides the prefix), bootstraps Mike Farah `yq`, and reads package lists from `group_vars/all.yml` and host configuration through `units/package-config.bash`. Package units validate the `yq` implementation and can select the Homebrew binary when an incompatible `yq` precedes it on `PATH`.
 
-## What It Does
+It generates `~/Brewfile` with core packages and, on desktops, desktop taps, packages, extras and casks; VS Code extensions are included on Darwin. It taps and attempts to trust repositories referenced by the applicable core or desktop lists, runs `brew bundle install --no-upgrade`, and uninstalls `brew_blocked` formulae. Desktop-only taps are not added on non-desktop hosts. If Brewfile deployment fails, bundle is skipped rather than using a stale file, but independent steps continue. A blocked package in an install list is a configuration error. `DOTFILES_UPGRADE=1` or `true` additionally requests a best-effort `brew upgrade`; installing Python `packaging` is also best effort.
 
-1. Installs Homebrew to `/home/linuxbrew/.linuxbrew` if missing
-2. Generates a `Brewfile` from `group_vars/all.yml` package lists
-3. Runs `brew bundle` to install/update all packages
-4. Ensures Python `packaging` module is available (required by Ansible's systemd module)
-
-## Package Categories
-
-| Variable | Where Defined | Scope |
-|----------|--------------|-------|
-| `core_brews` | `group_vars/all.yml` | All machines |
-| `core_tap_brews` | `group_vars/all.yml` | All machines (tapped) |
-| `desktop_brews` | `group_vars/all.yml` | Desktop group only |
-
-## Key Packages
-
-- **Shells:** fish, zsh, bash-preexec
-- **CLI tools:** neovim, tmux, direnv, just, make, ripgrep, fzf, eza, bat, fd, zoxide
-- **Bluefin extras:** atuin, starship, carapace, tealdeer (via `bluefin-cli`)
-- **Dev tools:** go, kubernetes-cli, helm, k9s, podman-compose, ansible, uv
-- **AI/ML:** ollama, ramalama, openai-whisper, pi-coding-agent
-
-## Notes
-
-- Homebrew on Linux installs to `/home/linuxbrew/.linuxbrew` — no root needed
-- The playbook adds `brew_bin` to `PATH` for all subsequent tasks
+Ownership repair and installing a missing Debian/Ubuntu compiler toolchain may require root or non-interactive sudo. Other systems must supply a compiler if missing. The Homebrew installer itself is downloaded and run non-interactively.

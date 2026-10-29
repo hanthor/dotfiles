@@ -1,52 +1,12 @@
 # gnome
 
+**Unit:** `units/gnome.sh`  
 **Tags:** `desktop`, `gnome`  
 **Secrets needed:** No  
-**Runs on:** Desktop group only
+**Runs on:** desktops, except `skip_gnome: true` or `machine_profile: vm-test`.
 
-Configures [GNOME](https://www.gnome.org/) desktop environment: keybindings, terminal, avatar, extensions, and remote desktop.
+The unit installs `units/gnome/gnome-keybindings.ini` in `~/.config/dconf` and loads it into the invoking user's live session. A pending marker retains a changed load request if the session is unavailable. It disables touchpad tap-to-click and configures the default Ptyxis profile for Homebrew fish and `JetBrainsMono Nerd Font 12` on a best-effort basis, including enabling the custom command and disabling the system font even when the command and font already match. Check mode reports drift in all four settings. It downloads the account avatar for installation by `units/gnome-avatar.py`; the avatar step requires root or non-interactive sudo. A newly created GDM cache directory is owned by GDM; an existing root-owned 0755 directory is also repaired (the ownership left by earlier unit runs). Other cache directory ownership and permissions, including ownership of symlink targets, and unrelated contents are left intact.
 
-## What It Does
+The unit copies the bundled Copyous, PaperShell and PaperWM extensions from `units/gnome/extensions/` to the user's extension directory, without deleting unrelated files. It best-effort loads `units/gnome/gnome-extensions-dconf.dump` and sets `gnome_enabled_extensions` from host variables or `group_vars/all.yml`. Setting the enabled list does not install every listed extension or guarantee compatibility or activation in the current GNOME Shell. The separate Bluefin unit also attempts extension installation.
 
-### Keybindings
-
-Deploys custom keyboard shortcuts via dconf:
-- Custom keybindings for terminal, browser, file manager
-- Workspace navigation and window management shortcuts
-
-### Ptyxis Terminal
-
-Sets the default Ptyxis profile to use `fish` from Homebrew with JetBrains Mono Nerd Font at 12pt.
-
-### User Avatar
-
-- Downloads avatar from `https://reilly.asia/profile.png`
-- Installs to both AccountsService and GDM cache
-- Shows on login screen and user menu
-
-### GNOME Extensions
-
-Deploys and enables extensions from `group_vars/all.yml`:
-
-| Extension | Purpose |
-|-----------|---------|
-| Caffeine | Disable screen blanking |
-| AppIndicator | System tray icons |
-| Blur My Shell | Blur effects |
-| Dash to Dock | macOS-style dock |
-| [GSConnect](https://github.com/GSConnect/gnome-shell-extension-gsconnect) | Phone integration |
-| PaperWM | Tiling window manager |
-| PaperShell | PaperWM companion |
-| Search Light | Spotlight-style search |
-
-### Remote Desktop
-
-Enables GNOME Remote Desktop (RDP) via `grdctl` and starts the systemd user service.
-
-## Extension Sync
-
-Extensions are synced omnidirectionally — the `gnome_enabled_extensions` list in `group_vars/all.yml` is the canonical list. To update it from a running desktop:
-
-```bash
-gsettings get org.gnome.shell enabled-extensions
-```
+RDP enablement and the GNOME Remote Desktop user service are best effort. Session operations require a reachable existing user D-Bus session; the unit avoids creating an ephemeral session over SSH. Enabling RDP does not establish credentials or verify a remote login.

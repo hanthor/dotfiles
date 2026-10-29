@@ -13,8 +13,8 @@ import zipfile
 
 SCRIPT = (
     Path(__file__).parents[1]
-    / "roles"
-    / "bluefin_common"
+    / "units"
+    / "bluefin"
     / "files"
     / "install-extensions.py"
 )

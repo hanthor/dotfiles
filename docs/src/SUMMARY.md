@@ -5,6 +5,8 @@
 # Core Concepts
 
 - [Architecture](architecture.md)
+- [Units](units.md)
+- [Tailnet hygiene](tailnet.md)
 - [Inventory & Groups](inventory.md)
 - [Secrets with Bitwarden](bitwarden.md)
 - [Onboarding a New Machine](onboarding.md)
@@ -25,9 +27,9 @@
   - [Kerala](desktop/kerala/README.md)
 - [Servers]()
   - [Home Kubernetes Images & ISOs](servers/home-k8s-images.md)
-  - [Talos K8s Cluster (offline)](servers/talos-k8s/cluster.md)
-    - [Bihar](servers/talos-k8s/bihar/README.md)
-    - [Karnataka](servers/talos-k8s/karnataka/README.md)
+  - [Home Talos Cluster (historical reference)](servers/talos-k8s/cluster.md)
+  - [Bihar (current state unverified)](servers/talos-k8s/bihar/README.md)
+  - [Karnataka (Utah / active K3s)](servers/talos-k8s/karnataka/README.md)
   - [Goa](servers/goa/README.md)
   - [Spindle VPS (matrix.reilly.asia)](servers/spindle-vps/README.md)
 - [VPS]()
@@ -39,7 +41,7 @@
 - [TunaOS AWS Account & IaC](servers/aws/README.md)
   - [Talos Cluster (terminated; archive)](servers/aws-k8s/cluster.md)
   - [Hive Agent Fleet](cluster/hive.md)
-  - [Punjab (agent box)](servers/punjab/README.md)
+  - [Punjab (active Karnataka VM)](servers/punjab/README.md)
 
 # Roles Reference
 
@@ -60,24 +62,24 @@
 
 ## Dotfiles
 
-- [shell_fonts](roles/shell_fonts.md)
-- [shell_dotfiles](roles/shell_dotfiles.md)
-- [shell_atuin](roles/shell_atuin.md)
-- [shell_ai](roles/shell_ai.md)
-- [omp](roles/omp.md)
+- [shell_fonts (unit)](roles/shell_fonts.md)
+- [shell_dotfiles (chezmoi)](roles/shell_dotfiles.md)
+- [shell_atuin (chezmoi + unit)](roles/shell_atuin.md)
+- [shell_ai (unit)](roles/shell_ai.md)
+- [omp (unit)](roles/omp.md)
 - [hive_ops](roles/hive_ops.md)
-- [git](roles/git.md)
-- [neovim](roles/neovim.md)
+- [git (chezmoi)](roles/git.md)
+- [neovim (chezmoi)](roles/neovim.md)
 
 ## Secrets & Auth
 
 - [bitwarden](roles/bitwarden.md)
 - [ssh_keys](roles/ssh_keys.md)
 - [ssh_mesh](roles/ssh_mesh.md)
-- [github](roles/github.md)
+- [github (unit)](roles/github.md)
 - [tailscale](roles/tailscale.md)
-- [kube](roles/kube.md)
-- [forgejo_registry](roles/forgejo_registry.md)
+- [kube (unit)](roles/kube.md)
+- [forgejo_registry (unit)](roles/forgejo_registry.md)
 
 ## Desktop
 
@@ -94,7 +96,6 @@
 - [proxy (Caddy)](roles/proxy.md)
 - [tailscale_cert](roles/tailscale_cert.md)
 - [bst_dashboard](roles/bst_dashboard.md)
-- [kirocrew](roles/kirocrew.md)
 
 ## Removed / migrated
 

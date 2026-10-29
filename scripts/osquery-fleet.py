@@ -3,8 +3,8 @@
 
 Offline, unsupported and excluded hosts remain visible in coverage. Drift is a
 monitoring result, while stale data and collection failures make the CLI fail.
-Optional snapshots are private and atomic. Subprocess diagnostics/report extras
-are not forwarded: effective Ansible inventory can contain secrets.
+Optional snapshots are private and atomic. Inventory diagnostics never expose
+host variable values.
 """
 import argparse
 from datetime import datetime, timedelta, timezone
@@ -19,6 +19,8 @@ import sys
 import tempfile
 
 from online_hosts import online_peers
+sys.path.append(str(Path(__file__).resolve().parent.parent / "units"))
+from osquery_native_inventory import load_inventory
 
 INVENTORY = Path(__file__).resolve().parent.parent / "inventory.yml"
 REPORT_PATH = "/var/lib/fleet-osquery/report.json"
@@ -47,9 +49,6 @@ def command_json(command, label, timeout=30):
     return value
 
 
-def load_inventory(path):
-    return command_json(["ansible-inventory", "--inventory", str(path), "--list"],
-                        "ansible-inventory")
 
 
 def load_status():

@@ -4,51 +4,44 @@ All secrets live in [Bitwarden](https://bitwarden.com/) and are resolved at runt
 
 ## How It Works
 
-1. The `bitwarden` role runs first in the secrets phase.
-2. It resolves a session token in order: `BW_SESSION` env var → `/tmp/bw_session` → interactive `bw unlock`.
-3. It runs `bw sync` (with a 15 s hard timeout, so a flaky vault server can't hang the play) to refresh the local cached vault.
-4. It calls `bw status` and sets a `bw_unlocked` host fact: `true` only if the CLI is installed, a session was resolved, *and* the vault actually unlocks.
-5. Every BW-using role gates on `when: bw_unlocked | default(false)`. The end-of-play `post_tasks` summary prints one of:
-   - `vault unlocked — all secret roles executed normally`
-   - `Bitwarden vault was LOCKED — … skipped. To enable: bw unlock …`
-   - `SKIPPED (--skip-tags secrets). Run dots-apply to include …`
+1. `just apply` uses `scripts/bw-resolve.sh local` to resolve a session from the environment, `/tmp/bw_session`, or an interactive unlock.
+2. The recipe validates the session and runs `bw sync` with a 15-second timeout before invoking `scripts/run-units.sh`. If resolution or sync fails it continues with `--no-secrets`.
+3. Unit helpers validate `BW_SESSION` or `/tmp/bw_session` noninteractively, and honor `UNITS_NO_SECRETS=1`. Units handle unavailable sessions and items independently; inspect their `SKIPPED` and `PARTIAL` output.
+
+For `just apply-tags` with a secret-bearing tag such as `kube`, `ai`, `omp`, `shell` or `dotfiles`, the recipe resolves and syncs a session before running. If this fails it runs the selected units with secrets disabled and returns nonzero. Unrelated tags do not prompt.
 
 ## Remote Apply
 
-`just apply-remote <host>` (and `just apply-remote-tags <host> <tags>`):
+`just apply-remote <host>` resolves a session on the target. `just apply-remote-tags <host> <tags>` does so only for explicitly secret-bearing tags:
 
-1. Runs `scripts/bw-resolve.sh remote <host>`, which unlocks Bitwarden **on the
+1. When resolution is needed, it runs `scripts/bw-resolve.sh remote <host>`, which unlocks Bitwarden **on the
    remote** and prints that host's session token. If the remote CLI is logged
    out it tries `bw login --apikey` with the `bw-api-key` item from your local
    vault; to unlock it pipes the master password (item `James Bitwarden`) over
    stdin, falling back to an interactive `bw unlock` over `ssh -t`.
-2. Runs `ssh -t <host> "export BW_SESSION='…'; …; just apply"` — the session
-   is exported inline in the remote command, not via `SendEnv`. `apply-remote`
-   also caches it in the remote's `/tmp/bw_session`.
-3. The `bitwarden` role on the remote runs `bw status`: if it reports
-   `unlocked`, `bw_unlocked` flips to true and secrets work proceeds.
+2. Sends a resolved remote session through SSH `SendEnv=BW_SESSION`, not in the command line. The target SSH daemon must accept `BW_SESSION`; if it rejects a resolved session, the apply aborts. `apply-remote` also atomically replaces the remote's `/tmp/bw_session` with a mode-0600 file; it never writes through an existing symlink and aborts if caching fails. Bootstrap uses the same private replacement when caching a validated session.
+3. The remote full apply, or a targeted apply with a secret-bearing tag, resolves and syncs a session before invoking native units. Other targeted applies do not prompt for one.
 
-**Caveat — session portability is not guaranteed.** A `BW_SESSION` token is only valid on the machine that unlocked it — that's why the recipes unlock on the remote instead of forwarding yours. If the remote unlock fails, the remote `bw status` returns `locked`, the role prints a one-line warning, and every BW-touching task is skipped cleanly — nothing fails, no files get clobbered with empty values. Unlock the vault directly on that host (`bw unlock`, then write the session to `/tmp/bw_session`) to enable secrets there.
+**Caveat:** sessions are host-specific. If remote resolution fails, the target apply still attempts its own local session resolution and sync; if that fails, it runs units with secrets disabled, and targeted secret applies return nonzero. Each unit determines how to preserve or report existing data; consult its reference.
 
 ## Vault Items
 
-Every item a role or script reads (grep `bw get` / `bw list` under `roles/` and `scripts/`):
+Common items consumed by units and scripts (the unit sources and their configuration are authoritative):
 
 | Bitwarden Item | Type | Used By |
 |---------------|------|---------|
-| `james@<machine>` | SSH Key | `ssh_keys` role — per-machine ed25519 keys |
-| `tailscale-apikey` | Login (password) | `tailscale` role — key for `tailscale up --authkey` and stale-device cleanup via the API |
-| `kubeconfig` | Secure Note | `kube` role — home cluster kubeconfig |
-| `talosconfig` | Secure Note | `kube` role — home cluster Talos config |
-| `kubeconfig-aws-migration` | Secure Note | `kube` role — retained kubeconfig for the terminated AWS cluster |
-| `talosconfig-aws-migration` | Secure Note | `kube` role — retained Talos config for the terminated AWS cluster |
-| `accounts.firefox.com` | Login + TOTP | `browser_fxa` role — Firefox Account credentials |
-| `github-token` | Login (password) | `github` role — PAT for `gh auth login` |
-| `atuin.sh` | Login + custom field `key` | `shell_atuin` role — atuin sync login + mnemonic |
-| `deepseek-api-key` | Login (password) | `shell_ai` role — pi `auth.json` |
-| `forgejo` | Secure Note (`API Token:` line) | `shell_ai` role — `FORGEJO_TOKEN` |
-| `tavily-api-key` | Login (password) | `shell_ai` role — `TAVILY_API_KEY` |
-| `forgejo.manatee-basking.ts.net` | Login | `forgejo_registry` role — podman registry login |
+| `<login>@<machine>` | SSH Key | `ssh-keys` unit — per-machine ed25519 keys |
+| `tailscale-apikey` | Login (password) | `tailscale` unit — join and stale-device API cleanup |
+| `kubeconfig-karnataka-k3s` | Secure note (`notes` field) | `kube` unit — active Karnataka K3s credentials, context `karnataka-k3s`, merged as the fleet default |
+| `kubeconfig`, `talosconfig` | Secure notes | `kube` unit — retained home Talos recovery credentials; never repurpose for K3s |
+| `kubeconfig-aws-migration`, `talosconfig-aws-migration` | Secure notes | `kube` unit — retained credentials for the terminated AWS cluster |
+| `accounts.firefox.com` | Login + TOTP | `browser-fxa` unit — Firefox Account credentials |
+| `github-token` | Login (password) | `github` unit — PAT for `gh` |
+| `atuin.sh` | Login + custom field `key` | `atuin` unit — history sync |
+| `deepseek-api-key`, `tavily-api-key` | Login (password) | `shell-ai` unit — shell environment |
+| `forgejo`, `meta-api-key`, `kiro-api-key` | Secure notes | `shell-ai` unit — shell environment (`forgejo` has an `API Token:` line) |
+| `omp-auth-broker-token` | Login (password) | `omp` unit — broker client token (item configurable) |
+| `forgejo.manatee-basking.ts.net` | Login | `forgejo-registry` unit — Podman registry login |
 | `bw-api-key` | Login | `scripts/bw-resolve.sh` — `bw login --apikey` on a remote |
 | `James Bitwarden` | Login | `scripts/bw-resolve.sh` — non-interactive unlock on a remote |
 
@@ -57,22 +50,26 @@ Every item a role or script reads (grep `bw get` / `bw list` under `roles/` and 
 For fast iteration that doesn't need the vault — packages, dotfiles, desktop config — use the explicit no-secrets path:
 
 ```bash
-just apply-nosecrets   # git pull + apply with --skip-tags secrets
+just apply-nosecrets   # git pull + native units with --no-secrets
 dots                   # alias: cd to the repo + just apply-nosecrets
 ```
 
-The daily systemd timer (`dotfiles-update.service`) calls `apply-nosecrets` for the same reason: it can't unlock the vault non-interactively, so it doesn't try.
+The systemd update service calls `apply-nosecrets`, so units receive `--no-secrets` even if a cached session exists.
 
 ## No Session?
 
-If Bitwarden can't unlock (first run, no BW CLI installed, vault genuinely locked on this host), every secret-touching task is skipped automatically. Non-secret roles (system, packages, dotfiles, desktop, most services) run normally and the play exits successfully — the end-of-play summary tells you exactly which roles didn't get to do their BW work.
+If Bitwarden can't unlock (first run, no BW CLI installed, vault genuinely locked on this host), `just apply` skips secret work and continues with non-secret configuration. A targeted secret apply (`just apply-tags`) also continues non-secret work but exits non-zero, so the requested secret update is not mistaken for success.
 
 ## Seeding New Secrets
 
 ```bash
-# Push kubeconfig + talosconfig (home cluster) to Bitwarden from a machine that has them:
+# Push retained home-only configs to their historical Bitwarden notes:
 just seed-kube
 ```
 
-`seed-kube` only handles the two home-cluster notes; the `*-aws-migration`
-notes are maintained by hand.
+`seed-kube` reads `~/.kube/config-home-talos` and `~/.talos/config`, not the
+merged K3s default `~/.kube/config`. It only handles the two retained home
+Talos notes. The `*-aws-migration` notes remain recovery material maintained
+by hand; the separate `kubeconfig-karnataka-k3s` note is provisioned privately
+from the current K3s server. See the [kube unit](roles/kube.md#bitwarden-contract)
+for its exact format. Do not upload active K3s credentials into historical notes.

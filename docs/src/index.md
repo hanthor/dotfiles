@@ -1,9 +1,9 @@
 # Dotfiles Fleet Handbook
 
-Ansible-driven dotfiles and infrastructure for a personal fleet. Three distinct concerns live here:
+Native-unit dotfiles and infrastructure for a personal fleet. Three distinct concerns live here:
 
 1. **Workstation config** — shells, packages, browser, SSH, Tailscale, kubeconfig, GNOME, and more
-2. **Home Talos K8s cluster** — manifests for the Bihar + Karnataka cluster
+2. **Home Talos history** — retained manifests and recovery material for the former Bihar + Karnataka cluster
 3. **Hosted infrastructure** — OCI spindle and AWS account configuration; the AWS Talos cluster is terminated
 
 > **This handbook is public.** It covers architecture, decisions and runbooks.
@@ -22,16 +22,16 @@ just apply-tags kube,shell
 # Apply to a remote machine
 just apply-remote himachal
 
-# Dry-run to see what would change
+# Request native inspection (coverage is subject to integration verification)
 just check
 
-# Lint all YAML and Ansible
+# Lint YAML and native unit shell scripts
 just lint
 ```
 
 ## Machine Fleet
 
-Ansible-managed hosts, from `inventory.yml`:
+Fleet hosts, from `inventory.yml`:
 
 | Machine | Group | Type | Role |
 |---------|-------|------|------|
@@ -48,10 +48,13 @@ Ansible-managed hosts, from `inventory.yml`:
 | matrix | vps | VPS | **Retired** — see the cutover runbook |
 | telengana | vps | VPS | **Retired** — see the cutover runbook |
 
-Not Ansible-managed (Talos — `talosctl`/`kubectl` only):
+Other hosts and historical infrastructure:
 
-- **bihar** (control plane) + **karnataka** (worker, AMD GPU) — the home cluster.
-  Powered down and in storage, expected back. See the [cluster handbook](servers/talos-k8s/cluster.md).
+- **Bihar** was recently online but is currently unreachable; its OS and services are unverified.
+- **Karnataka** runs `projectbluefin/utah:testing`, defaults to `multi-user.target`,
+  and is listed in the server inventory.
+- The [home Talos handbook](servers/talos-k8s/cluster.md), manifests, configs and
+  Bitwarden notes are historical recovery material, not proof of current state.
 - The [AWS Talos cluster](servers/aws-k8s/cluster.md) was terminated on 2026-10-25; its handbook is historical.
 
 [Spindle](servers/spindle-vps/README.md) is an OCI Frankfurt VPS running Matrix,
@@ -59,18 +62,14 @@ standalone LiveKit, School, Reef and Hub. It is not currently listed in `invento
 
 The `llm` group is dormant (commented out in `inventory.yml`).
 
-## Playbook Phases
+## Native units
 
-`site.yml` groups roles into four commented phases. Tags cut across them — use
-`just apply-tags <tag>` to target a subset.
+`just apply*` runs the [native units](units.md) via `scripts/run-units.sh`.
+Prerequisites run in stages; independent units can run concurrently via mise,
+with a sequential fallback. `just apply-tags <tag>` selects units from the
+wrapper's tag map, while `just apply-nosecrets` disables unit vault access.
+Unit-specific platform, profile and privilege gates still apply.
 
-| Phase | Roles | Main tags |
-|-------|-------|-----------|
-| 1 — System + packages + dotfiles | sudo, sshd, apk_packages, homebrew, termux_packages, bitwarden, shell_fonts, shell_dotfiles, omp, hive_ops, git, neovim | `system`, `packages`, `dotfiles` |
-| 2 — Secrets + auth | shell_atuin, shell_ai, ssh_keys, ssh_mesh, github, tailscale, kube, forgejo_registry | `secrets` |
-| 3 — Desktop apps | flatpak, bluefin_common, gnome, zen_browser (+ browser_fxa), pipewire_audio | `desktop` |
-| 4 — Services | syncthing, systemd, bst_dashboard, kirocrew, proxy, tailscale_cert, server_hardening | `services` |
-
-Only the `secrets`-tagged work needs Bitwarden. With the vault locked (or
-`--skip-tags secrets`), phases 1, 3 and 4 run normally and BW-touching tasks
-skip cleanly.
+The retired `matrix` and `telengana` VPSes remain powered on for burn-in.
+The shared unit library skips them; **nothing on either host may be restarted**.
+See the [cutover runbook](../matrix-cutover-runbook.md).

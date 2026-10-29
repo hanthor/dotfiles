@@ -1,0 +1,32 @@
+# Fish abbreviations + aliases — managed by chezmoi
+# Abbreviations expand visually on space so you see (and learn) the real command.
+# NOTE: bluefin-cli init handles: eza/ll/ls, bat/cat, ugrep/grep,
+#       zoxide/cd, starship, atuin, fzf — do NOT duplicate those here
+#
+# Most of this file is generated from home/.chezmoidata.yaml,
+# the single source shared with the bash/zsh aliases template. To add/change
+# a plain alias, edit that file, not this one — it'll show up in both
+# shells. Only shell-specific-syntax aliases are hand-written below.
+{{- range $group := .alias_groups }}
+{{- $guarded := hasKey $group "guard" }}
+{{- if $guarded }}
+if command -q {{ $group.guard }}
+{{- end }}
+{{- range $a := $group.aliases }}
+{{- if and (hasKey $group "fish_kind") (eq $group.fish_kind "alias") }}
+{{ if $guarded }}    {{ end }}alias {{ $a.name }} {{ $a.cmd }}
+{{- else }}
+{{ if $guarded }}    {{ end }}abbr --add {{ $a.name }} '{{ $a.cmd }}'
+{{- end }}
+{{- end }}
+{{- if $guarded }}
+end
+{{- end }}
+{{- end }}
+# ── Shell-specific aliases (syntax differs from bash/zsh; not in the shared source) ──
+abbr --add dots       'cd ~/.local/share/dotfiles; and just apply-nosecrets'
+abbr --add dots-apply 'cd ~/.local/share/dotfiles; and git pull --ff-only; and just apply'
+abbr --add dots-edit  'cd ~/.local/share/dotfiles; and $EDITOR .'
+abbr --add reload     'exec fish -l'
+abbr --add path       'string split : $PATH'
+abbr --add myip       'curl -s ifconfig.me; and echo'

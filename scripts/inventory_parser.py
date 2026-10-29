@@ -13,6 +13,33 @@ import re
 class UnknownGroupError(ValueError):
     """Raised when a machine type has no matching group in the inventory."""
 
+def validate_host_name(name: str) -> None:
+    """Require a single DNS hostname, safe in inventory, paths and SSH."""
+    if len(name) > 63 or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", name):
+        raise ValueError("machine name must be a lowercase DNS hostname")
+
+
+def host_groups(text: str, host: str):
+    """Return direct children groups containing a host in this inventory layout."""
+    groups, section, group, in_hosts = set(), None, None, False
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        match = re.match(r"([A-Za-z0-9_-]+):(?:\s*(?:\{\})?)?(?:\s*#.*)?$", line.strip())
+        if not match:
+            continue
+        key = match.group(1)
+        if indent == 2:
+            section, group, in_hosts = key, None, False
+        elif section == "children" and indent == 4:
+            group, in_hosts = key, False
+        elif section == "children" and indent == 6:
+            in_hosts = key == "hosts"
+        elif section == "children" and indent == 8 and in_hosts and key == host:
+            groups.add(group)
+    return groups
+
 
 def _read(inv_path: str) -> str:
     with open(inv_path, "r", encoding="utf-8") as f:
@@ -39,12 +66,74 @@ def parse_inventory(text: str):
         if indent == 2:
             section = key
         elif indent == 4 and section == "hosts":
-            all_hosts.add(key)
+            match = re.match(r"([A-Za-z0-9_-]+):(?:\s*(?:\{\})?)?(?:\s*#.*)?$", line.strip())
+            if match:
+                all_hosts.add(match.group(1))
         elif indent == 4 and section == "children":
             group = key
         elif indent == 8 and section == "children" and group == "vps":
             vps.add(key)
     return all_hosts, vps
+
+
+def parse_host_vars(text: str):
+    """{host: {var: value}} for the 6-space `key: value` lines under each all.hosts entry.
+
+    Values are stripped of inline comments and quotes; no PyYAML (see parse_inventory).
+    """
+    hosts, section, host = {}, None, None
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent == 2:
+            section = line.strip().rstrip(":")
+        elif indent == 4 and section == "hosts":
+            host = line.strip().rstrip(":")
+            hosts[host] = {}
+        elif indent == 6 and section == "hosts" and host is not None:
+            m = re.match(r"([A-Za-z0-9_]+):\s*(.*?)\s*(?:#.*)?$", line.strip())
+            if m and m.group(2):
+                hosts[host][m.group(1)] = m.group(2).strip("'\"")
+    return hosts
+
+
+def set_host_var(text: str, host: str, key: str, value):
+    """Return `text` with `host`'s `key` set to `value` (or removed when value is None).
+
+    Edits only the host's own block under all.hosts, keeping its inline comment.
+    A missing key is appended after the block's last variable line. Unknown hosts
+    leave the text unchanged.
+    """
+    lines = text.split("\n")
+    start = None
+    for i, line in enumerate(lines):
+        if line.startswith("  children:"):
+            break
+        if re.fullmatch(rf"    {re.escape(host)}:\s*(#.*)?", line):
+            start = i
+            break
+    if start is None:
+        return text
+    end = start + 1
+    while end < len(lines) and (lines[end].startswith("      ") or not lines[end].strip() or lines[end].lstrip().startswith("#")):
+        if lines[end].startswith("    ") and not lines[end].startswith("      "):
+            break
+        end += 1
+    last_var = start
+    for i in range(start + 1, end):
+        if lines[i].startswith("      ") and not lines[i].lstrip().startswith("#"):
+            last_var = i
+            m = re.match(rf"(      {re.escape(key)}:\s*)([^#\n]*?)(\s*(?:#.*)?)$", lines[i])
+            if m:
+                if value is None:
+                    del lines[i]
+                else:
+                    lines[i] = f"{m.group(1)}{value}{m.group(3) if m.group(3).strip() else ''}"
+                return "\n".join(lines)
+    if value is not None:
+        lines.insert(last_var + 1, f"      {key}: {value}")
+    return "\n".join(lines)
 
 
 def register_host(name: str, mtype: str = "desktop", inv_path: str = "inventory.yml") -> bool:
@@ -53,17 +142,26 @@ def register_host(name: str, mtype: str = "desktop", inv_path: str = "inventory.
     Returns False (writing nothing) when the host is already present. Raises
     UnknownGroupError, again writing nothing, when `mtype` names no group.
     """
+    validate_host_name(name)
     content = _read(inv_path)
 
-    if f"    {name}:" in content:
+    if name in parse_inventory(content)[0]:
         return False
 
     group_marker = f"    {mtype}:\n      hosts:\n"
     if group_marker not in content:
         raise UnknownGroupError(mtype)
+    # Allow comments and blank lines between all: and hosts:, but never insert
+    # into another group or accept an ambiguous all.hosts section.
+    host_sections = list(re.finditer(
+        r"^all:[ \t]*(?:\#.*)?\n(?:[ \t]*(?:\#.*)?\n)*  hosts:[ \t]*(?:\#.*)?\n",
+        content, re.MULTILINE))
+    if len(host_sections) != 1:
+        raise ValueError("inventory has no unambiguous supported all.hosts section")
 
     host_entry = f"    {name}:\n      ansible_host: localhost\n      ansible_connection: local\n"
-    content = content.replace("all:\n  hosts:\n", f"all:\n  hosts:\n{host_entry}", 1)
+    offset = host_sections[0].end()
+    content = content[:offset] + host_entry + content[offset:]
     content = content.replace(group_marker, f"{group_marker}        {name}:\n", 1)
 
     _write(inv_path, content)

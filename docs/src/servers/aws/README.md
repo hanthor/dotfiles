@@ -20,9 +20,49 @@ and prior deployment, not a verified live resource inventory.
 |---|---|---|
 | `eu-north-1` | Terminated Talos cluster — VPC, nodes, Elastic IPs, security groups, pgdata volume | `aws/cluster.tf` |
 | `eu-north-1` | Backup configuration — DLM policy and retained fleet-backups bucket | `aws/backups.tf` |
-| `us-east-1` | [punjab](../punjab/README.md) EC2 agent box; running as of 2026-10-27 | `aws/punjab.tf` |
-| `us-east-2` | `runs-on` GitHub Actions runners; current stack status unverified | CloudFormation stack `runs-on` |
+| `us-east-1` | Punjab EC2 stopped; EIP released; root volume and five recovery snapshots retained | `aws/punjab.tf` |
+| `us-east-2` | `runs-on` stack deleted 2026-10-28; cache/log buckets retained | Former CloudFormation stack `runs-on` |
 | global | IAM, backup, account and budget configuration | `aws/iam.tf`, `aws/backups.tf`, `aws/account.tf`, `aws/budgets.tf` |
+
+## Verified retirement inventory (2026-10-28)
+
+An administrator inventory covered all 17 enabled regions. Punjab was the only
+remaining EC2 instance; no NAT gateways, load balancers or RDS instances were
+found. The `runs-on` Fargate manager and six Lambda functions were retired with
+its CloudFormation stack; deletion reached `DELETE_COMPLETE`, with no ECS
+clusters or Lambda functions remaining in `us-east-2`.
+
+All three S3 buckets remain. The runner cache and logging buckets retained all
+observed object versions; their lifecycle expiration was disabled. Private
+runner recovery material is root-only on the replacement under
+`/srv/punjab-migration/runs-on-retirement/`. The fleet-backups bucket was not
+modified. Both DLM policies are disabled to freeze the recovery snapshot set;
+the five completed Punjab snapshots remain. Retained storage still incurs
+charges; this is not a zero-bill claim.
+
+## Shutdown re-verification (2026-10-29)
+
+Authenticated live inventory covered all 17 enabled regions in this account.
+The only remaining EC2 instance was Punjab, already stopped. No running
+compute, ECS/EKS clusters, Lambda functions, RDS databases, load balancers,
+NAT gateways or allocated Elastic IPs were found. Auto Scaling groups, open
+Spot requests, Spot Fleets and EC2 Fleets were also empty in every region.
+App Runner and Lightsail endpoint failures were checked against AWS's public
+SSM region-availability registry; those service/region pairs are unsupported.
+No additional stop/delete operation was necessary.
+
+The migrated VM passed authenticated SSH using its recorded host key and a
+fresh omp request explicitly using `anthropic/claude-opus-5-5`, independent of
+AWS/Kiro. The old 250 GiB gp3 root volume, five snapshots and three S3 buckets
+remain intact; both DLM policies remain disabled. Retained storage is billable.
+
+Kiro's live subscription API reports both Enterprise Power and Pro Plus as
+`CANCELLED`, expiring **2026-10-31 23:59:59.999 UTC**. Historical cancellation
+requests used end-of-period removal on October 25. Cost Explorer still shows
+Power charges of about $6.45/day for October 27–29; these do not establish an
+active renewal. [Kiro cancellation documentation](https://kiro.dev/docs/enterprise/subscription-management/)
+explains month-end cancellation and separate SSO-assignment cleanup. Do not
+delete identities or application assignments as a billing workaround.
 
 ## OpenTofu layout
 
@@ -31,7 +71,7 @@ aws/
 ├── versions.tf     # provider (eu-north-1 default, us_east_1 alias) + S3 backend
 ├── cluster.tf      # VPC/subnet/IGW/routes, 3 SGs, 2 Talos nodes, EIPs, pgdata
 ├── backups.tf      # DLM role + policy, fleet-backups bucket (+ versioning/SSE/lifecycle)
-├── punjab.tf       # key pair, SG, instance, EIP, SSM role, DLM
+├── punjab.tf       # retained stopped instance, key pair, SG, SSM role, disabled DLM
 ├── account.tf      # EBS encryption by default (both regions)
 ├── iam.tf          # scoped admin user + its policies
 ├── budgets.tf      # 5 budgets, one for_each
@@ -60,6 +100,33 @@ reconcile the intended resource lifecycle before any `just aws-apply`. Planning
 does not itself create resources, but applying proposed creates can restore
 infrastructure and incur charges. `aws/terraform.tfvars` remains sensitive;
 `just aws-seed-tfvars` stores it in Bitwarden after an intentional edit.
+
+### Punjab replacement transition (2026-10-28)
+
+The fleet inventory's logical `punjab` host now connects to the replacement
+guest on Karnataka at `100.103.187.46`, using the verified `ubuntu` account.
+The replacement now owns the Tailscale name **`punjab`**; the old node is
+`punjab-aws-retired`. Authenticated SSH, broker access, the native no-secrets
+apply and monitoring were exercised on the replacement, including reboot
+persistence. Atuin's later key/history recovery restored sync on Punjab,
+Karnataka and Kerala under the canonical vault key, with original data retained
+in private recovery archives; see [Atuin](../../roles/shell_atuin.md#historykey-recovery-2026-10-28).
+
+`aws/punjab.tf` retains the original EC2 instance, volume protection, security
+group, key pair and SSM role/profile for recovery. Its desired instance state
+is explicitly stopped, the EIP declaration and former cluster allowlist
+dependency are removed, and DLM is disabled. It does **not** manage the
+replacement guest. The replacement retains AWS administration tools and its
+SSH-hardening and no-proxy policies.
+
+The replacement's shutdown service completed successfully at 19:27:15 UTC,
+observing EC2 stopped and releasing its EIP before logging out of AWS. Its
+root-only receipt is `/srv/punjab-migration/aws-cutover-receipt.json`, with
+systemd journal provenance retained rather than treating a config edit as proof.
+The former cluster's broader declarations still require separate state/config
+reconciliation: deleted resources declared here can be proposed for recreation.
+`prevent_destroy` does not protect against recreation. Retain S3 backups,
+recovery storage and state; do not use a blanket destroy to resolve that drift.
 
 ## IAM & access
 

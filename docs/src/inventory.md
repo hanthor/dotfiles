@@ -28,6 +28,7 @@ server:
     punjab:   # EC2 agent box (us-east-1; current instance status unverified)
     vm:       # Local dev VM
     goa:      # Raspberry Pi 5 (ARM)
+    karnataka: # Utah host; multi-user.target by default
 ```
 
 Server roles: `server_hardening`, plus the service roles.
@@ -62,7 +63,7 @@ test_fleet:
 ```
 
 ### `termux_hosts`
-The raw Termux/Android layer on the phone. Gates the `termux_packages` role.
+The raw Termux/Android layer on the phone. Gates the `termux-packages` unit.
 
 ```yaml
 termux_hosts:
@@ -71,14 +72,16 @@ termux_hosts:
 ```
 
 ### `llm` (dormant)
-Commented out in `inventory.yml` — its only member, karnataka, is now a Talos
-worker.
+Commented out in `inventory.yml`; its only listed member is karnataka.
 
 ### Not in the inventory
 
-**bihar** and **karnataka** are Talos nodes (no SSH) and are managed with
-`talosctl`/`kubectl` only. The home cluster is powered down and in storage,
-expected back. The terminated AWS cluster's nodes were not in the inventory either.
+**Bihar** was recently online but is currently unreachable; its OS and services
+are unverified. It is not in the inventory.
+The [home Talos reference](servers/talos-k8s/cluster.md), manifests, configs and
+Bitwarden notes are retained for historical recovery, not evidence of either
+machine's current state. The terminated AWS cluster's nodes were not in the
+inventory either.
 
 ## Per-Machine Configuration
 
@@ -90,17 +93,16 @@ skip_flatpak: true     # Skip Flatpak installs
 skip_gnome: true       # Skip GNOME config
 skip_kube: true        # Skip kubeconfig deploy
 skip_proxy: true       # Skip Caddy proxy
-machine_profile: cli-only  # Free-form profile; `vm-test` skips desktop + service roles
+machine_profile: cli-only  # Free-form profile; some units skip `vm-test`
 web_services: []       # Service links for the local dashboard
 ```
 
-The full set of `skip_*` flags `site.yml` honours: `skip_sudo`, `skip_ssh_mesh`,
-`skip_kube`, `skip_forgejo`, `skip_flatpak`, `skip_bluefin`, `skip_gnome`,
-`skip_zen_browser`, `skip_pipewire_audio`, `skip_syncthing`, `skip_systemd`,
-`skip_proxy`, `skip_tailscale_cert`.
+Units read their own `skip_*` flags and profile settings; see the relevant
+unit under `units/` and [Architecture](architecture.md#conditional-execution).
+The flags are not all interpreted identically.
 
 ## Group Variables
 
 - **`group_vars/all.yml`** — Homebrew package lists, Flatpak remotes, Firefox Accounts config, GNOME extensions, authorized SSH keys
-- **`roles/flatpak/vars/main.yml`** — the `system_flatpaks` list
+- **`units/flatpak-packages.yml`** — the `system_flatpaks` list
 - **`group_vars/vps.yml`** — currently empty

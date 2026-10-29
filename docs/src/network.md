@@ -10,8 +10,8 @@ crosswalk.
 | Name | Role |
 |------|------|
 | gateway | Router (DNS, DHCP) — see [Gateway](network/gateway/README.md) |
-| bihar | Talos K8s control plane (powered down, expected back) — reserved address |
-| karnataka | Talos K8s worker, AMD GPU (powered down, expected back) — reserved address |
+| bihar | OS and services unverified; currently unreachable — reserved address |
+| karnataka | Utah host with AMD GPU; default target `multi-user.target` — reserved address |
 | goa | Fleet control, Debian ARM (Raspberry Pi) — reserved address |
 | phone | Android phone (reserved address) |
 | printer | Network printer (DHCP) |
@@ -20,10 +20,11 @@ crosswalk.
 | esp32 | Unidentified IoT device (static address) |
 | dilli | Laptop (WiFi, when online) |
 
-## Fleet nodes (Tailscale MagicDNS)
+## Fleet nodes and known names
 
-Hosts are reached by MagicDNS name; `ansible_host` in `inventory.yml` holds the
-tailnet address where one is needed.
+For inventory hosts, `ansible_host` in `inventory.yml` holds the tailnet address
+where one is needed. A listed name or reserved address does not establish that
+the host or MagicDNS is currently reachable.
 
 | Hostname | LAN | Group |
 |----------|-----|-------|
@@ -37,5 +38,5 @@ tailnet address where one is needed.
 | termux (ssh `:8022`) | phone | termux_hosts |
 | matrix | remote | vps — retired |
 | telengana | remote | vps — retired |
-| bihar | reserved | Talos, not in inventory — offline |
-| karnataka | reserved | Talos, not in inventory — offline |
+| bihar | reserved | not in inventory — currently unreachable, OS and services unverified |
+| karnataka | reserved | server — Utah; Tailscale `100.66.158.127`; default target `multi-user.target` |

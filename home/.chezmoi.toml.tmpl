@@ -1,0 +1,4 @@
+{{- $machine := env "DOTFILES_MACHINE" | default .chezmoi.hostname -}}
+[data]
+    machine = {{ $machine | quote }}
+    is_desktop = {{ eq (env "DOTFILES_IS_DESKTOP") "1" }}

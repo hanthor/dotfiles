@@ -30,9 +30,6 @@ mock_provider "aws" {
   mock_resource "aws_iam_policy" {
     defaults = { arn = "arn:aws:iam::123456789012:policy/mock" }
   }
-  mock_resource "aws_eip" {
-    defaults = { public_ip = "192.0.2.10" }
-  }
 }
 
 variables {
@@ -62,7 +59,6 @@ run "admin_ingress_without_pmtu" {
       for port in [6443, 50000] : length([
         for r in aws_security_group.admin_bootstrap.ingress : r
         if r.from_port == port && r.to_port == port && r.protocol == "tcp"
-        && r.description != "punjab EIP"
       ]) == 3
     ])
     error_message = "each port must have one rule per cluster_admin_ingress entry"
@@ -208,11 +204,6 @@ run "punjab_hardening" {
   assert {
     condition     = aws_instance.punjab.root_block_device[0].tags["Backup"] == "fleet-daily"
     error_message = "punjab's root volume must be in the snapshot policy"
-  }
-
-  assert {
-    condition     = length([for r in aws_security_group.admin_bootstrap.ingress : r if r.description == "punjab EIP"]) == 2
-    error_message = "punjab's EIP must be allowlisted on 6443 and 50000"
   }
 
   assert {

@@ -15,7 +15,7 @@ Former VPS node in the fleet (`vps` group in `inventory.yml`) that hosted the
 - [Synapse](https://github.com/element-hq/synapse) + MAS on a single-node
   [Kubernetes](https://kubernetes.io/) install, with
   [PostgreSQL](https://www.postgresql.org/) as the database
-- Managed by the fleet playbook (daily cron apply, no secrets/homebrew)
+- Previously managed by the fleet playbook (daily cron apply, no secrets/homebrew)
 
 ## Retirement
 

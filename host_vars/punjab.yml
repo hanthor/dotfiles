@@ -1,13 +1,12 @@
-# Headless agent box: no tailnet Caddy proxy (needs podman quadlets, absent on stock Ubuntu)
+# Headless agent box: keep the existing no-proxy policy during migration.
 skip_proxy: true
-# Runs the OpenTofu config in aws/ (the AWS account's IaC) — see docs/src/servers/aws/README.md
+# AWS administration tools remain useful on the Karnataka replacement.
+# aws/ still describes the old EC2 resources; see docs/src/servers/aws/README.md.
 extra_brews:
   - awscli
   - session-manager-plugin
   - opentofu
-# Internet-facing EC2 box: stricter sshd drop-in (sshd role)
+# Retain stricter sshd policy on the replacement (sshd role).
 sshd_harden: true
-# Kiro Crew gateway (kirocrew role)
-kirocrew_enabled: true
 # Always-on fleet observer; reuse this account's existing Tailscale/SSH access.
 osquery_poller_enabled: true

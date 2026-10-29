@@ -12,7 +12,7 @@ import sys
 scripts_dir = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(scripts_dir))
 
-from inventory_parser import parse_inventory, register_host, purge_host, UnknownGroupError
+from inventory_parser import parse_inventory, register_host, purge_host, UnknownGroupError, host_groups
 
 
 class TestParseInventory(unittest.TestCase):
@@ -135,6 +135,24 @@ class TestRegisterHost(unittest.TestCase):
         self.assertIn("    desktop:\n      hosts:\n        host1:", content)
         # Verify host2 is under laptop
         self.assertIn("    laptop:\n      hosts:\n        host2:", content)
+
+    def test_group_name_is_not_mistaken_for_existing_host(self) -> None:
+        self.assertTrue(register_host("vps", "desktop", str(self.inv_path)))
+        data = yaml.safe_load(self.inv_path.read_text())
+        self.assertIn("vps", data["all"]["hosts"])
+        self.assertIn("vps", data["all"]["children"]["desktop"]["hosts"])
+
+    def test_invalid_name_cannot_mutate_inventory(self) -> None:
+        before = self.inv_path.read_text()
+        with self.assertRaises(ValueError):
+            register_host("../escape", "desktop", str(self.inv_path))
+        self.assertEqual(self.inv_path.read_text(), before)
+
+    def test_group_detection_is_not_limited_to_first_300_characters(self) -> None:
+        hosts = "".join(f"        item{i}: {{}}\n" for i in range(50))
+        text = f"all:\n  hosts:\n    target: {{}}\n  children:\n    server:\n      hosts:\n{hosts}        target: {{}} # entry\n"
+        self.assertEqual(host_groups(text, "target"), {"server"})
+        self.assertEqual(parse_inventory(text)[0], {"target"})
 
 
 class TestPurgeHost(unittest.TestCase):
@@ -269,6 +287,18 @@ class TestInventoryIntegrity(unittest.TestCase):
         content = self.inv_path.read_text()
         self.assertIn("# Production hosts", content)
         self.assertIn("# Development and test environment", content)
+        inventory = yaml.safe_load(content)
+        self.assertIn("prod1", inventory["all"]["hosts"])
+        self.assertEqual(inventory["all"]["hosts"]["newhost"], {
+            "ansible_host": "localhost", "ansible_connection": "local"})
+        self.assertIn("newhost", inventory["all"]["children"]["desktop"]["hosts"])
+
+    def test_registration_rejects_missing_all_hosts_without_writing(self) -> None:
+        content = "all:\n  children:\n    desktop:\n      hosts:\n"
+        self.inv_path.write_text(content)
+        with self.assertRaises(ValueError):
+            register_host("newhost", "desktop", str(self.inv_path))
+        self.assertEqual(self.inv_path.read_text(), content)
 
     def test_purge_preserves_comments(self) -> None:
         """purge_host preserves comments in file."""

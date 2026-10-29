@@ -4,7 +4,7 @@
 #   scripts/omp-login.sh          # status + log into anything missing
 #
 # - API-key providers (DeepSeek, Tavily, ...) need no omp login: omp reads them
-#   from env, and roles/shell_ai exports them from Bitwarden into the shell.
+#   from env, and units/shell-ai.sh exports them from Bitwarden into the shell.
 #   This script only reports whether they resolve.
 # - OAuth providers (Claude Max, Codex Pro, Antigravity) need a one-time browser
 #   approval. They are stored in ~/.omp/agent/agent.db and refresh on their own,
@@ -32,7 +32,7 @@ done
 if session=$("$SCRIPT_DIR/bw-unlock.sh" 2>/dev/null); then
   for item in deepseek-api-key tavily-api-key meta-api-key; do
     if BW_SESSION="$session" bw get item "$item" >/dev/null 2>&1; then
-      printf '  ✓ %s (in Bitwarden; exported by shell_ai role)\n' "$item"
+      printf '  ✓ %s (in Bitwarden; exported by shell-ai unit)\n' "$item"
     else
       printf '  ⚠ %s not found in Bitwarden\n' "$item"
     fi
