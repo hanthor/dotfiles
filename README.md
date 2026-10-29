@@ -91,3 +91,8 @@ Full handbook lives in [`docs/`](docs/) and is published at [reilly.asia/infra/h
 - [Adding a new machine](docs/src/onboarding.md)
 - [Roles reference](docs/src/roles/)
 - [Bitwarden vault setup](docs/src/bitwarden.md)
+
+The playbook publishes `secrets_available` after the Bitwarden role verifies
+that the local vault is unlocked. Secret-consuming roles use that fact as
+their common gate; a locked or unavailable vault leaves existing credentials
+untouched.

@@ -50,7 +50,7 @@ just add-machine NAME   # Onboard + bootstrap an already-reachable machine via S
 
 `site.yml` runs roles in tagged phases. Notable wiring:
 
-- `bitwarden` resolves `BW_SESSION` (env, `/tmp/bw_session`, or interactive unlock), runs `bw sync` with a 15s timeout, and sets a `bw_unlocked` host fact. All BW-using roles gate on `when: bw_unlocked | default(false)`.
+- `bitwarden` resolves `BW_SESSION` (env, `/tmp/bw_session`, or interactive unlock), runs `bw sync` with a 15s timeout, and publishes a `secrets_available` host fact. All BW-using roles gate on `when: secrets_available | default(false)`.
 - `kube` fetches `~/.kube/config` + `~/.talos/config` from Bitwarden — desktops only.
 - `ssh_keys` round-trips per-machine ed25519 keys through Bitwarden, building cross-machine `authorized_keys`.
 

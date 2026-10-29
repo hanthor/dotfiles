@@ -39,10 +39,10 @@
     mode: "0700"
 
 # ── Bitwarden credential fetch ────────────────────────────────────────────────
-# Gated on `bw_unlocked` (set by the bitwarden role, which also runs `bw sync`).
+# Gated on `secrets_available` (published by the bitwarden role after vault status is verified).
 
 - name: Fetch Firefox Account item from Bitwarden
-  when: bw_unlocked | default(false)
+  when: secrets_available | default(false)
   ansible.builtin.shell: |
     bw list items --search "{{ fxa_bw_item }}" 2>/dev/null | python3 -c "
     import json, sys
@@ -110,7 +110,7 @@
   failed_when: false
   changed_when: false
   when:
-    - bw_unlocked | default(false)
+    - secrets_available | default(false)
     - _fxa_item_id is defined
   environment:
     PATH: "{{ ansible_env_path }}"

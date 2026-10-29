@@ -67,7 +67,7 @@
     # 5. Verify the session actually unlocks the vault. Forwarded BW_SESSION
     # tokens (e.g. via 'just apply-remote') can be silently rejected by the
     # remote host's BW CLI because the encrypted vault state / KDF differs.
-    # Downstream roles gate on `bw_unlocked` so they degrade cleanly instead
+    # Downstream roles gate on `secrets_available` so they degrade cleanly instead
     # of issuing API calls with empty credentials.
     - name: Check Bitwarden vault state
       ansible.builtin.shell: |
@@ -81,9 +81,9 @@
       environment:
         BW_SESSION: "{{ bw_session | default('') }}"
 
-- name: Set Bitwarden unlocked fact
+- name: Publish secrets availability
   ansible.builtin.set_fact:
-    bw_unlocked: "{{ bw_check.rc == 0 and bw_session is defined and ((bw_status | default({})).stdout | default('') | trim) == 'unlocked' }}"
+    secrets_available: "{{ bw_check.rc == 0 and bw_session is defined and ((bw_status | default({})).stdout | default('') | trim) == 'unlocked' }}"
 
 - name: Warn if BW session present but vault is locked on this host
   ansible.builtin.debug:
@@ -95,4 +95,4 @@
   when:
     - bw_check.rc == 0
     - bw_session is defined
-    - not bw_unlocked
+    - not secrets_available

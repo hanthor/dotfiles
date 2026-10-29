@@ -4,16 +4,16 @@
 **Secrets needed:** Yes (provides secrets to other roles)
 **Runs on:** All machines
 
-Resolves a Bitwarden session, refreshes the local vault cache, and publishes a single `bw_unlocked` host fact that every other BW-using role consumes. Failure to unlock is **never fatal** to the play; it's reported once at the end and downstream BW operations are skipped cleanly.
+Resolves a Bitwarden session, refreshes the local vault cache, and publishes a single `secrets_available` host fact that every other BW-using role consumes. Failure to unlock is **never fatal** to the play; it's reported once at the end and downstream BW operations are skipped cleanly.
 
 ## What it does
 
 1. Resolves `BW_SESSION` in this order: environment → `/tmp/bw_session` cache → interactive `bw unlock`.
 2. Runs `bw sync` with a hard 15 s timeout (so a flaky vault server can't hang the whole play).
-3. Calls `bw status` and sets `bw_unlocked` (boolean host fact) — `true` only if `bw` is installed, a session was resolved, and the vault actually reports `unlocked`.
+3. Calls `bw status` and sets `secrets_available` (boolean host fact) — `true` only if `bw` is installed, a session was resolved, and the vault actually reports `unlocked`.
 4. If a session is set but the vault is still locked, emits a one-line debug warning so the operator knows secrets work is being skipped here. On a remote apply, this means target-side session resolution did not unlock the target vault.
 
-Every BW-using role downstream gates on `when: bw_unlocked | default(false)`. The end-of-play `post_tasks` summary then prints one of three messages:
+Every BW-using role downstream gates on `when: secrets_available | default(false)`. The end-of-play `post_tasks` summary then prints one of three messages:
 
 | State | Message |
 |---|---|
@@ -34,7 +34,7 @@ host's `BW_SESSION`:
 2. The recipe exports the returned `BW_SESSION` inline in the remote command
    and caches it in the target's `/tmp/bw_session`.
 3. The remote `bitwarden` role runs `bw status`; when it reports `unlocked`,
-   `bw_unlocked` becomes true and secrets work proceeds.
+   `secrets_available` becomes true and secrets work proceeds.
 
 A session token is valid only on the host that unlocked it. If target-side
 resolution fails, the remote vault remains locked and BW-using tasks skip

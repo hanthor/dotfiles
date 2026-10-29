@@ -49,7 +49,7 @@ Tags and `skip_*` host_vars flags are listed in
 
 The repo is public. Secrets come from Bitwarden at runtime only — never
 hardcode credentials, tokens or keys. BW-using tasks gate on
-`bw_unlocked | default(false)`.
+`secrets_available | default(false)`.
 
 ## Don'ts
 

@@ -73,7 +73,7 @@
     - {path: "{{ pub_key }}", mode: "0644"}
 
 # ── Sync local key with Bitwarden ─────────────────────────────────
-# Gated on `bw_unlocked` (set by the bitwarden role earlier in the play).
+# Gated on `secrets_available` (published by the bitwarden role earlier in the play).
 # On every run:
 #   - if BW has no item   → create
 #   - if BW pubkey ≠ disk → leave BW alone and warn, unless
@@ -134,7 +134,7 @@
     executable: /bin/bash
   register: bw_sync
   changed_when: bw_sync.stdout is search("UPDATED|CREATED")
-  when: bw_unlocked | default(false)
+  when: secrets_available | default(false)
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     BW_ITEM_NAME: "{{ user_login }}@{{ inventory_hostname }}"
@@ -255,7 +255,7 @@
   register: all_machine_keys
   changed_when: false
   failed_when: false
-  when: bw_unlocked | default(false)
+  when: secrets_available | default(false)
   environment:
     BW_SESSION: "{{ bw_session | default('') }}"
     PATH: "{{ ansible_env_path }}"
