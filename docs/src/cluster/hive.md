@@ -13,12 +13,62 @@ Caddy configuration routes [school.tunaos.org](https://school.tunaos.org) and
 state alone does not establish that the public endpoints or agents are healthy.
 
 The configured images are `ghcr.io/hivecommons/hive:v6-latest` for the two
-spokes and `ghcr.io/hivecommons/hive-hub:v6-latest` for the hub. The Compose
-services bind-mount `/srv/hives/bin/hive` over `/usr/local/bin/hive`, so the
-image tag alone does not describe the running binary. The observed school and
-reef seed configurations use the `omp` backend with
-`github-copilot/gpt-6-luna`, not the historical pi/DeepSeek backend below.
-Runtime state and model selection may differ from the seed files.
+spokes and `ghcr.io/hivecommons/hive-hub:v6-latest` for the hub, but the image
+tag does not describe the running binary. `compose.override.yaml` bind-mounts a
+`tuna-os/hive` fork build over `/usr/local/bin/hive` on all three services and
+mounts a patched `proxy/server.js` on both spokes. The header comment in that
+file records which commit each `bin/hive-<sha>` contains. The fork's
+`tuna/v6` branch is upstream `v6` plus the patches the fleet pilots; the
+tracker is [tuna-os/tunaOS#4072](https://github.com/tuna-os/tunaOS/issues/4072).
+Since 2026-10-30 the agents use the `omp` backend with
+`openai-codex/gpt-6-luna` through the `omp-auth-broker` user service, and the
+ioscan classifier runs through omp on `anthropic/claude-haiku-4-5`.
+
+### Layout under `/srv/hives`
+
+| Path | Contents |
+|---|---|
+| `compose.yaml`, `compose.override.yaml` | Services; the override pins the fork binary and the proxy patch |
+| `.env` (mode 600) | `HIVE_HUB_SECRET`, `HIVE_DASHBOARD_TOKEN`, `OMP_AUTH_BROKER_TOKEN`, `NTFY_TOPIC` and provider API keys. Copy in Bitwarden: `hive-spindle-env` |
+| `<svc>/config/hive.yaml` | Seed config, mounted read-only at `/etc/hive` |
+| `<svc>/data/` | `/data`. `hive.yaml.runtime` is the running config and **wins over the seed** for `github.*` and most other keys, so change both |
+| `<svc>/secrets/gh-app-key.pem` | GitHub App private key, mounted at `/secrets` |
+| `bin/` | Fork builds, `hive-<sha>`; earlier builds stay for rollback |
+| `backups/` | Timestamped copies taken before each change: `<file>.<UTC stamp>` |
+
+### GitHub Apps
+
+Since 2026-10-30 School and Reef use separate GitHub Apps, so each has its own
+installation rate limit (6,150 requests/hour across the 43 org repos). Before
+that they shared one installation and exhausted it every hour.
+
+| Hive | App (bot login) | App ID | Installation | Key in Bitwarden |
+|---|---|---|---|---|
+| school (the hub mounts the same key) | `hanthor-hive-agent` (`hanthor-hive-agent[bot]`) | 3942065 | 137498420 | `hive-github-app-hanthor-hive-agent` |
+| reef | `tuna-reef-hive` (`tuna-reef-hive[bot]`) | 5546574 | 177007234 | `hive-github-app-tuna-reef-hive` |
+
+The IDs appear in three places per hive: `GH_APP_ID`/`GH_APP_INSTALLATION_ID`
+in `compose.yaml`, and `github.app_id`/`installation_id` in both the seed and
+`hive.yaml.runtime`.
+
+Both hives manage `.github`, `Tavern`, `bluefin-cli`, `corral`, `docs` and
+`flatpak-index`. Each therefore lists the other's bot in
+`github.additional_bot_logins`, so the other hive's issues and PRs count as
+hive-authored.
+
+To restore a key, write the Bitwarden note's key block to
+`<svc>/secrets/gh-app-key.pem` (`ubuntu:ubuntu`, mode 600), then recreate the
+service with `docker compose up -d <svc>`.
+
+To check that each hive is on its own budget, run:
+
+```bash
+ssh ubuntu@100.113.75.88 'for c in hives-school-1 hives-reef-1; do docker exec $c sh -c \
+  "curl -s -H \"Authorization: Bearer \$(cat /var/run/hive-metrics/gh-app-token.cache)\" https://api.github.com/rate_limit" \
+  | jq -c .resources.core; done'
+```
+
+Different `reset` times mean separate installations.
 
 The old AWS cluster also had a `hive.reilly.asia` spoke; no hanthor container
 was present in the inspected Spindle Docker inventory. Its current status was
