@@ -36,6 +36,7 @@ Common items consumed by units and scripts (the unit sources and their configura
 | `kubeconfig`, `talosconfig` | Secure notes | `kube` unit — retained home Talos recovery credentials; never repurpose for K3s |
 | `kubeconfig-aws-migration`, `talosconfig-aws-migration` | Secure notes | `kube` unit — retained credentials for the terminated AWS cluster |
 | `accounts.firefox.com` | Login + TOTP | `browser-fxa` unit — Firefox Account credentials |
+| `beeper` | Login + custom fields `imap_host`, `recovery_key`, optional `imap_user` | `beeper-login` unit — username is the Beeper email, password its IMAP app password; `recovery_key` is the Beeper Recovery Code |
 | `github-token` | Login (password) | `github` unit — PAT for `gh` |
 | `atuin.sh` | Login + custom field `key` | `atuin` unit — history sync |
 | `deepseek-api-key`, `tavily-api-key` | Login (password) | `shell-ai` unit — shell environment |

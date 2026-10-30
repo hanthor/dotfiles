@@ -2,6 +2,8 @@
 flatpak_remotes:
   - name: flathub
     url: https://dl.flathub.org/repo/flathub.flatpakrepo
+  - name: flatpark
+    url: https://dl.flatpark.org/flatpark.flatpakrepo
 
 system_flatpaks:
   - io.typora.Typora
@@ -49,3 +51,6 @@ system_flatpaks:
   - com.belmoussaoui.Obfuscate
   - org.nickvision.money
 
+# Installed system-wide from the flatpark remote (extra-data apps not on Flathub).
+flatpark_flatpaks:
+  - com.automattic.Beeper

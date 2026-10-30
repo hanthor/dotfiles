@@ -30,6 +30,8 @@ load_config() {
   local kind
   package_list system_flatpaks "$flatpak_vars" || return 1
   apps=("${PACKAGE_LIST[@]}")
+  package_list flatpark_flatpaks "$flatpak_vars" || return 1
+  flatpark_apps=("${PACKAGE_LIST[@]}")
   kind="$(yq -r '.flatpak_remotes | tag' "$flatpak_vars")" || return 1
   [ "$kind" = '!!seq' ] || { echo "$flatpak_vars: flatpak_remotes must be a list" >&2; return 1; }
   remotes="$(yq -r '.flatpak_remotes[] | .name + "\t" + .url' "$flatpak_vars")" || return 1
@@ -73,14 +75,15 @@ remove_unwanted() {
   [ "${#remove[@]}" = 0 ] || package_as_root flatpak uninstall --system -y "${remove[@]}"
 }
 install_missing() {
-  local app missing=() rc=0
-  for app in "${apps[@]}"; do
+  local remote="$1" app missing=() rc=0
+  shift
+  for app in "$@"; do
     if ! printf '%s\n' "$installed" | grep -Fxq "$app"; then missing+=("$app"); fi
   done
   [ "${#missing[@]}" -gt 0 ] || return 0
-  if package_as_root flatpak install --system -y flathub "${missing[@]}"; then return 0; fi
+  if package_as_root flatpak install --system -y "$remote" "${missing[@]}"; then return 0; fi
   for app in "${missing[@]}"; do
-    package_as_root flatpak install --system -y flathub "$app" || rc=1
+    package_as_root flatpak install --system -y "$remote" "$app" || rc=1
   done
   return "$rc"
 }
@@ -308,7 +311,8 @@ if command -v flatpak >/dev/null 2>&1; then
     step 'Flatpak remotes' add_remotes
     if get_installed; then
       step 'unwanted system Flatpaks' remove_unwanted
-      step 'system Flatpak applications' install_missing
+      step 'system Flatpak applications' install_missing flathub "${apps[@]}"
+      step 'FlatPark system applications' install_missing flatpark ${flatpark_apps[@]+"${flatpark_apps[@]}"}
     else
       step 'list system Flatpaks' false
     fi

@@ -3,7 +3,7 @@
 # Usage: scripts/run-units.sh [--no-secrets] [--tags a,b]
 set -uo pipefail
 
-ALL_UNITS="sudo sshd apk-packages termux-packages homebrew flatpak chezmoi fonts omp atuin shell-ai ssh-keys ssh-mesh github kube forgejo-registry tailscale bluefin gnome zen-browser browser-fxa pipewire-audio syncthing hive-ops laptop-services system-services osquery server-hardening retired-services proxy tailscale-cert bst-dashboard fleet-facts"
+ALL_UNITS="sudo sshd apk-packages termux-packages homebrew flatpak chezmoi fonts omp atuin shell-ai ssh-keys ssh-mesh github kube forgejo-registry tailscale bluefin gnome zen-browser browser-fxa beeper-login pipewire-audio syncthing hive-ops laptop-services system-services osquery server-hardening retired-services proxy tailscale-cert bst-dashboard fleet-facts"
 tasks_for_tag() { case "$1" in
   system) echo "sudo sshd apk-packages termux-packages retired-services server-hardening" ;;
   sudo) echo sudo ;;
@@ -20,7 +20,7 @@ tasks_for_tag() { case "$1" in
   git|neovim|editor) echo chezmoi ;;
   atuin) echo "chezmoi atuin" ;;
   ai) echo shell-ai ;;
-  secrets) echo "chezmoi atuin shell-ai ssh-keys github kube forgejo-registry tailscale browser-fxa" ;;
+  secrets) echo "chezmoi atuin shell-ai ssh-keys github kube forgejo-registry tailscale browser-fxa beeper-login" ;;
   ssh|ssh_keys) echo "ssh-keys ssh-mesh" ;;
   mesh_check) echo ssh-mesh ;;
   github) echo github ;;
@@ -28,10 +28,11 @@ tasks_for_tag() { case "$1" in
   forgejo|registry) echo forgejo-registry ;;
   tailscale) echo tailscale ;;
   omp) echo omp ;;
-  desktop) echo "flatpak bluefin gnome zen-browser browser-fxa pipewire-audio" ;;
+  desktop) echo "flatpak bluefin gnome zen-browser browser-fxa beeper-login pipewire-audio" ;;
   bluefin) echo bluefin ;;
   gnome) echo gnome ;;
   browser|zen_browser) echo "zen-browser browser-fxa" ;;
+  beeper) echo "flatpak beeper-login" ;;
   audio|pipewire) echo pipewire-audio ;;
   services) echo "syncthing laptop-services system-services osquery proxy tailscale-cert bst-dashboard" ;;
   syncthing) echo syncthing ;;
@@ -132,7 +133,7 @@ for unit in chezmoi bluefin gnome; do
 done
 zen_ok=1; run_stage zen-browser || { zen_ok=0; rc=1; }
 
-later=(fonts omp atuin shell-ai kube forgejo-registry pipewire-audio syncthing hive-ops laptop-services system-services osquery server-hardening retired-services bst-dashboard)
+later=(fonts omp atuin shell-ai kube forgejo-registry beeper-login pipewire-audio syncthing hive-ops laptop-services system-services osquery server-hardening retired-services bst-dashboard)
 if [ "$zen_ok" = 1 ]; then
   later+=(browser-fxa)
 elif selected browser-fxa; then

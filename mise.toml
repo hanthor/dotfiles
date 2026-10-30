@@ -73,6 +73,9 @@ file = "units/zen-browser.sh"
 [tasks."unit:browser-fxa"]
 file = "units/browser-fxa.sh"
 
+[tasks."unit:beeper-login"]
+file = "units/beeper-login.sh"
+
 [tasks."unit:pipewire-audio"]
 file = "units/pipewire-audio.sh"
 
