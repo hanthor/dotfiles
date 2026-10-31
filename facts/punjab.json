@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "host": "punjab",
-  "updated": "2026-10-30T00:23:04Z",
+  "updated": "2026-10-31T00:22:36Z",
   "groups": [
     "server"
   ],
@@ -17,16 +17,16 @@
     "form_factor": "",
     "arch": "x86_64",
     "cpu": "AMD EPYC-Turin Processor",
-    "cpu_threads": 4,
+    "cpu_threads": 12,
     "gpus": [
       "Vendor 1234 Device 1111"
     ],
-    "memory_gb": 11.7
+    "memory_gb": 23.5
   },
   "virtualization": "kvm",
-  "uptime_days": 1.2,
+  "uptime_days": 0.5,
   "last_apply": {
-    "at": "2026-10-29T00:13:04Z",
+    "at": "2026-10-30T00:23:05Z",
     "ok": true
   }
 }
