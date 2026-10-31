@@ -13,12 +13,68 @@ Caddy configuration routes [school.tunaos.org](https://school.tunaos.org) and
 state alone does not establish that the public endpoints or agents are healthy.
 
 The configured images are `ghcr.io/hivecommons/hive:v6-latest` for the two
-spokes and `ghcr.io/hivecommons/hive-hub:v6-latest` for the hub. The Compose
-services bind-mount `/srv/hives/bin/hive` over `/usr/local/bin/hive`, so the
-image tag alone does not describe the running binary. The observed school and
-reef seed configurations use the `omp` backend with
-`github-copilot/gpt-6-luna`, not the historical pi/DeepSeek backend below.
-Runtime state and model selection may differ from the seed files.
+spokes and `ghcr.io/hivecommons/hive-hub:v6-latest` for the hub, but the image
+tag does not describe the running binary. `compose.override.yaml` bind-mounts a
+`tuna-os/hive` fork build over `/usr/local/bin/hive` on all three services and
+mounts a patched `proxy/server.js` on both spokes. The header comment in that
+file records which commit each `bin/hive-<sha>` contains. The fork's
+`tuna/v6` branch is upstream `v6` plus the patches the fleet pilots; the
+tracker is [tuna-os/tunaOS#4072](https://github.com/tuna-os/tunaOS/issues/4072).
+Since 2026-10-30 the agents use the `omp` backend with
+`openai-codex/gpt-6-luna` through the `omp-auth-broker` user service, and the
+ioscan classifier runs through omp on `anthropic/claude-haiku-4-5`.
+Reef and School's Matrix pilot uses commit-pinned builds from
+`deploy/upstream-v6-matrix`, rather than a moving image tag; Hub stays on
+`230f745`. Canary and fleet pins can differ during a rollout.
+See [the fleet ledger](https://github.com/tuna-os/hive/blob/docs/spindle-matrix-rollout/FORK.md#what-the-fleet-runs)
+for the per-service rollout state and
+[integration PR #172](https://github.com/tuna-os/hive/pull/172) for CI and provenance.
+
+### Layout under `/srv/hives`
+
+| Path | Contents |
+|---|---|
+| `compose.yaml`, `compose.override.yaml` | Services; the override pins the fork binary, proxy patch and matching Matrix dashboard HTML |
+| `.env` (mode 600) | `HIVE_HUB_SECRET`, `HIVE_DASHBOARD_TOKEN`, `OMP_AUTH_BROKER_TOKEN`, `NTFY_TOPIC` and provider API keys. Copy in Bitwarden: `hive-spindle-env` |
+| `<svc>/config/hive.yaml` | Seed config, mounted read-only at `/etc/hive` |
+| `<svc>/data/` | `/data`. `hive.yaml.runtime` is the running config and **wins over the seed** for `github.*` and most other keys, so change both |
+| `<svc>/secrets/gh-app-key.pem` | GitHub App private key, mounted at `/secrets` |
+| `bin/` | Fork builds, `hive-<sha>`, and matching `dashboard-<sha>.html`; earlier builds stay for rollback |
+| `backups/` | Timestamped copies taken before each change: `<file>.<UTC stamp>` |
+
+### GitHub Apps
+
+Since 2026-10-30 School and Reef use separate GitHub Apps, so each has its own
+installation rate limit (6,150 requests/hour across the 43 org repos). Before
+that they shared one installation and exhausted it every hour.
+
+| Hive | App (bot login) | App ID | Installation | Key in Bitwarden |
+|---|---|---|---|---|
+| school (the hub mounts the same key) | `hanthor-hive-agent` (`hanthor-hive-agent[bot]`) | 3942065 | 137498420 | `hive-github-app-hanthor-hive-agent` |
+| reef | `tuna-reef-hive` (`tuna-reef-hive[bot]`) | 5546574 | 177007234 | `hive-github-app-tuna-reef-hive` |
+
+The IDs appear in three places per hive: `GH_APP_ID`/`GH_APP_INSTALLATION_ID`
+in `compose.yaml`, and `github.app_id`/`installation_id` in both the seed and
+`hive.yaml.runtime`.
+
+Both hives manage `.github`, `Tavern`, `bluefin-cli`, `corral`, `docs` and
+`flatpak-index`. Each therefore lists the other's bot in
+`github.additional_bot_logins`, so the other hive's issues and PRs count as
+hive-authored.
+
+To restore a key, write the Bitwarden note's key block to
+`<svc>/secrets/gh-app-key.pem` (`ubuntu:ubuntu`, mode 600), then recreate the
+service with `docker compose up -d <svc>`.
+
+To check that each hive is on its own budget, run:
+
+```bash
+ssh ubuntu@100.113.75.88 'for c in hives-school-1 hives-reef-1; do docker exec $c sh -c \
+  "curl -s -H \"Authorization: Bearer \$(cat /var/run/hive-metrics/gh-app-token.cache)\" https://api.github.com/rate_limit" \
+  | jq -c .resources.core; done'
+```
+
+Different `reset` times mean separate installations.
 
 The old AWS cluster also had a `hive.reilly.asia` spoke; no hanthor container
 was present in the inspected Spindle Docker inventory. Its current status was
@@ -30,6 +86,56 @@ For a read-only inventory, run:
 ```bash
 ssh ubuntu@100.113.75.88 'docker ps --filter name=hives-'
 ```
+
+### Ambient code-rain pilot
+
+The pilot ports upstream's Matrix observer, privacy fixes, JSON/SSE API and
+four effects (Rain, Cascade, Ghost coder, Terminal) onto v6 while retaining
+the fork's SDLC policies. It is a dashboard feature, not a Twitch deployment.
+
+After signing in to the corresponding dashboard, open:
+
+- [Reef kiosk](https://reef.tunaos.org/?kiosk=1&view=matrix&sound=off&mx.effect=rain)
+- [School kiosk](https://school.tunaos.org/?kiosk=1&view=matrix&sound=off&mx.effect=rain)
+
+Use `mx.effect=cascade`, `ghost` or `terminal` to change the effect, and
+`mx.fps=15` to lower rendering load. Space/P pauses; sound is explicitly off.
+Each spoke shows admitted patches from its watched repositories, not all
+hub repositories. Known peer bots can appear where watches overlap.
+This is not a hub-wide aggregated code feed or a keystroke stream.
+
+`dashboard.matrix` must be enabled in **both** seed and runtime configs.
+`repos` is an explicit allowlist of already-watched, verified-public repos.
+The pilot excludes `deploy/**`, `config/**`, `.github/**`, YAML, JSON and TOML
+in addition to upstream's built-in secret filtering. Do not add private
+repos: the feed has no per-repository viewer permissions.
+
+An anonymous `/api/matrix/lines?since=0` must return 401/403.
+An authenticated response reports `source: "pushed-lines"` and sequence
+numbers. The server holds up to 2,000 accepted lines in memory; the browser
+retains 120 received lines. Animation can reuse that rolling buffer between
+pushes, so motion is not proof of new activity.
+The source is initialized by the sentinel sweep after reconciliation;
+a cold start can return 404 even with the flag enabled until that sweep runs.
+Do not disable budget, admission or writeback guards to accelerate the feed.
+
+Before `637bae44f`, short `project.repos` names (with `project.org` set) were
+passed unchanged to Matrix's qualified `owner/name` allowlist, silently dropping
+every patch. The fix qualifies observation names; it does not relax admission.
+An active API with `seq: 0` therefore did not prove that these hives were idle.
+See the fleet ledger for deployment and live verification of that fix.
+
+Before an upgrade, stop the affected service, snapshot its retained data,
+copy both configs and the Compose override into `backups/`, then start it
+with a commit-matched binary and HTML. The initial Matrix rollout backups are
+Reef `20261031T180544Z`, School `20261031T182146Z` (previous binary `230f745`).
+The repository-name fix backups are Reef `20261031T215350Z`, School
+`20261031T223247Z` (previous binary `71ce0ef56`). The fix reuses the unchanged
+`dashboard-71ce0ef56.html` mount; do not infer UI drift from that filename alone.
+For rollback, stop the service, restore its matching binary/UI pins and both
+config files, validate Compose, and restart. Restore the data snapshot only
+when required for downgrade compatibility; do not overwrite newer agent work
+as a routine rollback step.
 
 ## Archived cluster guide
 
