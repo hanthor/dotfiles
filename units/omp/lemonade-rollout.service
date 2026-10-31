@@ -1,0 +1,9 @@
+[Unit]
+Description=Provision the Karnataka coding model on online fleet computers
+ConditionPathExists=%h/.local/lib/omp-lemonade/units/omp/rollout.sh
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash %h/.local/lib/omp-lemonade/units/omp/rollout.sh
+Environment="PATH=%h/.local/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
+TimeoutStartSec=10min

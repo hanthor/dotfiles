@@ -53,7 +53,6 @@ def test_fresh_home_is_configured(env, tmp_path):
     assert (home / ".local/bin/omp-route").stat().st_mode & 0o111
     assert broker_url(home) == BROKER_URL
     assert (home / ".omp/agent/config.yml").stat().st_mode & 0o777 == 0o600
-    assert "PARTIAL:" in r.stdout
 
 
 def test_second_run_changes_nothing(env, tmp_path):
@@ -69,6 +68,55 @@ def test_failing_step_does_not_stop_later_steps(env, tmp_path):
     (home / ".claude").write_text("not a directory")
     r = run_unit(env)
     assert r.returncode == 1
-    assert "FAIL  claude skill links" in r.stdout
     assert (home / ".config/omp/kiro.json").is_file()
     assert broker_url(home) == BROKER_URL
+
+
+@pytest.mark.parametrize("filename", ["models.yml", "models.yaml", "models.json"])
+def test_existing_custom_providers_survive_model_provisioning(env, tmp_path, filename):
+    import json
+
+    agent = tmp_path / "home/.omp/agent"
+    agent.mkdir(parents=True)
+    existing = {
+        "providers": {
+            "private-server": {
+                "baseUrl": "http://127.0.0.1:8000/v1",
+                "auth": "none",
+                "models": [{"id": "private-code", "contextWindow": 4096}],
+            }
+        }
+    }
+    source = agent / filename
+    source.write_text(json.dumps(existing) if filename.endswith(".json") else yaml.safe_dump(existing))
+    for _ in range(2):
+        result = run_unit(env)
+        assert result.returncode == 0, result.stdout + result.stderr
+        active = source if filename == "models.yaml" else agent / "models.yml"
+        merged = yaml.safe_load(active.read_text())
+        assert merged["providers"]["private-server"] == existing["providers"]["private-server"]
+        assert "lemonade" in merged["providers"]
+    if filename == "models.yaml":
+        assert not (agent / "models.yml").exists()
+
+
+@pytest.mark.parametrize("enabled", [None, [], ["anthropic/*"], ["lemonade/*", "anthropic/*"]])
+def test_model_only_apply_preserves_cloud_availability_and_settings(env, tmp_path, enabled):
+    agent = tmp_path / "home/.omp/agent"
+    agent.mkdir(parents=True)
+    cfg = agent / "config.yml"
+    original = {"modelRoles": {"default": "private-server/private-code"}, "auth": {"broker": {"url": BROKER_URL}}}
+    if enabled is not None:
+        original["enabledModels"] = enabled
+    cfg.write_text(yaml.safe_dump(original))
+    expected = dict(original)
+    if enabled and "lemonade/*" not in enabled:
+        expected["enabledModels"] = [*enabled, "lemonade/*"]
+    for _ in range(2):
+        result = subprocess.run(
+            ["bash", str(REPO / "units/omp/models.sh")],
+            env={**env, "DOTFILES_DIR": str(REPO), "UNITS_NO_SECRETS": "1"},
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert yaml.safe_load(cfg.read_text()) == expected

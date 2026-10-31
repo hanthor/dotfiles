@@ -109,6 +109,7 @@ soft "ccleft" ccleft_install
 step "kiro.json" install_if_changed "$DOTFILES_DIR/units/omp/kiro.json" "$HOME/.config/omp/kiro.json" 0644
 step "omp-route" install_if_changed "$DOTFILES_DIR/units/omp/omp-route" "$HOME/.local/bin/omp-route" 0755
 step "routing merged" routing_merge
+step "shared models" bash "$DOTFILES_DIR/units/omp/models.sh"
 step "broker url" broker_url
 step "broker token" broker_token
 if [ "$(yq '.auth.broker | has("token")' "$cfg" 2>/dev/null)" != true ]; then
