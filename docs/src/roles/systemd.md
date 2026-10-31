@@ -15,6 +15,10 @@ Keeps the dotfiles repo up to date automatically.
 - **Desktops/servers:** Daily timer (`dotfiles-update.timer`)
 - **Laptops:** Runs on login via `graphical-session.target` (no timer)
 
+### phone-apply (himachal only)
+
+Pushes non-secret Ansible configuration to `termux` and `mumbai`, then runs the non-secret units on each phone from a temporary archive of the controller's tracked revision. Each operation is attempted independently; an unreachable phone does not fail the service. SSH aliases for the two inventory hosts must be configured on himachal.
+
 ### atuin-daemon
 
 Keeps [Atuin](https://atuin.sh/) shell history synced in the background.

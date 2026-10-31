@@ -63,8 +63,10 @@ The bootstrap script:
 1. Ensures python, git, uv and Ansible, then clones the dotfiles repo from [GitHub](https://github.com/hanthor/dotfiles)
 2. Registers the machine in `inventory.yml` if needed (prompts for the type when `--type` isn't given)
 3. Writes `/etc/dotfiles-machine` so the playbook can self-identify, sets the hostname, sets up sudo and Tailscale
-4. Runs `site.yml` with `--skip-tags secrets` (installs [Homebrew](https://brew.sh/) and core packages among the rest)
-5. If the Bitwarden CLI is now available and unlocks, runs `site.yml --tags secrets` and pushes any inventory changes
+4. Runs `site.yml --skip-tags secrets`, then all bash units with `--no-secrets` (installing [Homebrew](https://brew.sh/) and core packages among the rest)
+5. Unlocks and syncs Bitwarden, runs `site.yml --tags secrets`, then the `omp` and `secrets` units, and pushes any inventory changes
+
+Each phase runs its units even if Ansible fails. Bootstrap continues to Phase 2 when possible, but exits non-zero if either phase or Bitwarden setup fails.
 
 ## After Bootstrap Completes
 
@@ -79,9 +81,9 @@ just apply
 ```
 
 **Why this step matters:**
-- Bootstrap runs `site.yml --skip-tags secrets`, which skips Bitwarden integration
-- `just apply` runs the full playbook with secrets, unlocking Bitwarden and completing setup
-- This pull-in step distributes SSH keys across the fleet, registers with GitHub and Tailscale, and sets up daily/on-login automation
+- Bootstrap's first phase deliberately skips secrets; the second phase only covers secret-tagged roles and the broker unit.
+- `just apply` reruns the full playbook and units with secrets and completes any work that was skipped.
+- This distributes SSH keys across the fleet, registers with GitHub and Tailscale, and sets up daily/on-login automation.
 
 Do **not** edit `host_vars/<name>.yml` before the first `just apply` — bootstrap sets sensible defaults, and `just apply` will pull in critical secrets (SSH keys, GitHub tokens, Tailscale auth). Any per-machine customizations can follow once the first apply succeeds; the `skip_*` flags that turn individual roles off are listed in [Architecture → Skip Flags](architecture.md#skip-flags).
 

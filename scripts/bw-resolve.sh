@@ -47,8 +47,8 @@ if [ "$mode" = "remote" ]; then
     # Get local BW session for API key lookup
     local_session=$("$SCRIPT_DIR/bw-unlock.sh" 2>/dev/null || true)
     if [ -n "$local_session" ]; then
-      BW_CLIENTID=$(bw get username bw-api-key --session "$local_session" 2>/dev/null || true)
-      BW_CLIENTSECRET=$(bw get password bw-api-key --session "$local_session" 2>/dev/null || true)
+      BW_CLIENTID=$(BW_SESSION="$local_session" bw get username bw-api-key 2>/dev/null || true)
+      BW_CLIENTSECRET=$(BW_SESSION="$local_session" bw get password bw-api-key 2>/dev/null || true)
       if [ -n "$BW_CLIENTID" ] && [ -n "$BW_CLIENTSECRET" ]; then
         # Credentials go over stdin (never on either side's command line), and
         # bw's chatter goes to stderr so it can't pollute the session that
@@ -72,7 +72,7 @@ if [ "$mode" = "remote" ]; then
     # Try non-interactive unlock using master password from local vault
     local_session=$("$SCRIPT_DIR/bw-unlock.sh" 2>/dev/null || true)
     if [ -n "$local_session" ]; then
-      BW_MASTER_PASS=$(bw get password "James Bitwarden" --session "$local_session" 2>/dev/null || true)
+      BW_MASTER_PASS=$(BW_SESSION="$local_session" bw get password "James Bitwarden" 2>/dev/null || true)
       if [ -n "$BW_MASTER_PASS" ]; then
         echo "Unlocking Bitwarden on $host (non-interactive)..." >&2
         # Password is piped over stdin and read into a remote env var via

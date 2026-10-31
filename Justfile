@@ -15,6 +15,7 @@ _online_hosts := shell('python3 "$1"', justfile_directory() / "scripts/online_ho
 # Defined once so a change to how the fleet addresses itself is a one-line
 # edit instead of eight.
 _play := "ansible-playbook --connection=local -l " + machine + " -e target=" + machine + " -e ansible_connection=local -e ansible_host=127.0.0.1"
+_secret_tag_pattern := "secrets|bitwarden|ssh|ssh_keys|github|tailscale|kube|forgejo|registry|atuin|ai|omp"
 
 # Apply all config to this machine (unlocks BW interactively if needed)
 apply *args:
@@ -38,11 +39,15 @@ apply *args:
       SKIP_TAGS="secrets"
     fi
     rc=0
+    unit_args=()
     if [ -n "$SKIP_TAGS" ]; then
+      unit_args+=(--no-secrets)
       {{ _play }} site.yml --skip-tags "$SKIP_TAGS" $BECOME_ARGS {{ args }} || rc=$?
     else
-      {{ _play }} -e "bw_session=${BW_SESSION:-}" site.yml $BECOME_ARGS {{ args }} || rc=$?
+      {{ _play }} site.yml $BECOME_ARGS {{ args }} || rc=$?
     fi
+    urc=0; scripts/run-units.sh "${unit_args[@]}" || urc=$?
+    [ "$rc" -ne 0 ] || rc=$urc
     scripts/record-apply.py "$rc" apply "$SKIP_TAGS"
     exit $rc
 
@@ -50,9 +55,41 @@ apply *args:
 apply-tags tags:
     #!/usr/bin/env bash
     set -uo pipefail
-    cd {{ dotfiles_dir }}
+    cd {{ dotfiles_dir }} || exit 1
     rc=0
-    {{ _play }} -e "bw_session=${BW_SESSION:-}" site.yml --tags {{ tags }} || rc=$?
+    ansible_tags="{{ tags }}"
+    unit_args=(--tags "{{ tags }}")
+    skip_args=()
+    needs_secrets=0
+    IFS=',' read -ra tag_list <<< "{{ tags }}"
+    for tag in "${tag_list[@]}"; do
+      case "$tag" in
+        {{ _secret_tag_pattern }}) needs_secrets=1 ;;
+      esac
+    done
+    if [ "$needs_secrets" -eq 1 ]; then
+      # bw-unlock accepts an environment session as-is; reject stale ones first.
+      if [ -n "${BW_SESSION:-}" ] && ! bw unlock --check >/dev/null 2>&1; then
+        unset BW_SESSION
+      fi
+      if bw_env=$(scripts/bw-resolve.sh local) && eval "$bw_env" &&
+         [ -n "${BW_SESSION:-}" ] && bw unlock --check >/dev/null 2>&1 &&
+         timeout 15 bw sync >/dev/null; then
+        # Secret roles selected by their own tag still need bw_unlocked set.
+        ansible_tags="$ansible_tags,bitwarden"
+      else
+        echo "Bitwarden unavailable or sync failed; skipping secrets." >&2
+        unset BW_SESSION
+        skip_args=(--skip-tags secrets)
+        unit_args+=(--no-secrets)
+        rc=1
+      fi
+    fi
+    arc=0
+    {{ _play }} site.yml --tags "$ansible_tags" "${skip_args[@]}" || arc=$?
+    [ "$rc" -ne 0 ] || rc=$arc
+    urc=0; scripts/run-units.sh "${unit_args[@]}" || urc=$?
+    [ "$rc" -ne 0 ] || rc=$urc
     scripts/record-apply.py "$rc" apply-tags "{{ tags }}"
     exit $rc
 
@@ -64,6 +101,8 @@ apply-nosecrets *args:
     git pull --ff-only || true
     rc=0
     {{ _play }} site.yml --skip-tags secrets {{ args }} || rc=$?
+    urc=0; scripts/run-units.sh --no-secrets || urc=$?
+    [ "$rc" -ne 0 ] || rc=$urc
     scripts/record-apply.py "$rc" apply-nosecrets secrets
     exit $rc
 
@@ -71,12 +110,22 @@ apply-nosecrets *args:
 apply-remote-tags name tags:
     #!/usr/bin/env bash
     set -euo pipefail
-    # A BW session is only valid on the machine that unlocked it, so resolve
-    # one on the remote rather than forwarding ours.
-    REMOTE_BW_SESSION=$({{ dotfiles_dir }}/scripts/bw-resolve.sh remote {{ name }} || true)
-    ssh -t {{ name }} "
+    # Resolve on the target only for explicitly secret-bearing tags.
+    REMOTE_BW_SESSION=""
+    IFS=',' read -ra tag_list <<< "{{ tags }}"
+    for tag in "${tag_list[@]}"; do
+      case "$tag" in
+        {{ _secret_tag_pattern }})
+          REMOTE_BW_SESSION=$({{ dotfiles_dir }}/scripts/bw-resolve.sh remote {{ name }} || true)
+          break ;;
+      esac
+    done
+    EXPECT_SESSION=0; [ -z "$REMOTE_BW_SESSION" ] || EXPECT_SESSION=1
+    BW_SESSION="$REMOTE_BW_SESSION" ssh -o SendEnv=BW_SESSION -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-      export BW_SESSION='${REMOTE_BW_SESSION}'
+      if [ '$EXPECT_SESSION' = 1 ] && [ -z \"\${BW_SESSION:-}\" ]; then
+        echo 'SSH server did not accept BW_SESSION; remote apply aborted.' >&2; exit 1
+      fi
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply-tags {{ tags }}
     "
 
@@ -86,7 +135,18 @@ mesh-check:
 
 # Apply only dotfile configs (shell, git, tmux, etc.)
 dotfiles:
-    cd {{ dotfiles_dir }} && {{ _play }} site.yml --tags dotfiles
+    #!/usr/bin/env bash
+    set -uo pipefail
+    cd {{ dotfiles_dir }}
+    rc=0
+    {{ _play }} site.yml --tags dotfiles || rc=$?
+    urc=0; scripts/run-units.sh --tags dotfiles || urc=$?
+    [ "$rc" -ne 0 ] || rc=$urc
+    exit $rc
+
+# Run the bash units (units/*.sh) in parallel via mise, e.g. `just units --tags omp`
+units *args:
+    cd {{ dotfiles_dir }} && scripts/run-units.sh {{ args }}
 
 # Apply only packages (Homebrew + Flatpak)
 packages:
@@ -103,10 +163,13 @@ apply-remote name *args:
       echo "Bitwarden unlocked on {{ name }} (session: ${#APPLY_BW_SESSION} chars)"
     fi
     echo "Applying to {{ name }} with forwarded BW session..."
-    ssh -t {{ name }} "
+    EXPECT_SESSION=0; [ -z "$APPLY_BW_SESSION" ] || EXPECT_SESSION=1
+    BW_SESSION="$APPLY_BW_SESSION" ssh -o SendEnv=BW_SESSION -t {{ name }} "
       export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-      export BW_SESSION='${APPLY_BW_SESSION}'
-      [ -n \"\$BW_SESSION\" ] && (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
+      if [ '$EXPECT_SESSION' = 1 ] && [ -z \"\${BW_SESSION:-}\" ]; then
+        echo 'SSH server did not accept BW_SESSION; remote apply aborted.' >&2; exit 1
+      fi
+      [ -n \"\${BW_SESSION:-}\" ] && (umask 077 && printf '%s' \"\$BW_SESSION\" > /tmp/bw_session)
       cd ~/.local/share/dotfiles && git pull --ff-only && just apply {{ args }}
     "
     just push-terminfo {{ name }}
@@ -282,8 +345,15 @@ apply-online-tags tags:
     [ -z "$ONLINE_HOSTS" ] && echo "No remote hosts online." && exit 0
 
     declare -A SESSIONS
-    for host in $ONLINE_HOSTS; do
-      SESSIONS[$host]=$(scripts/bw-resolve.sh remote "$host" || true)
+    IFS=',' read -ra tag_list <<< "{{ tags }}"
+    for tag in "${tag_list[@]}"; do
+      case "$tag" in
+        {{ _secret_tag_pattern }})
+          for host in $ONLINE_HOSTS; do
+            SESSIONS[$host]=$(scripts/bw-resolve.sh remote "$host" || true)
+          done
+          break ;;
+      esac
     done
 
     PIDS=()
@@ -296,7 +366,7 @@ apply-online-tags tags:
       echo "Applying tags '{{ tags }}' to $host (background)..."
       ssh "$host" "
         export PATH=\"\$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:\$PATH\"
-        export BW_SESSION='${SESSIONS[$host]}'
+        export BW_SESSION='${SESSIONS[$host]:-}'
         cd ~/.local/share/dotfiles && git pull --ff-only && just apply-tags {{ tags }}
       " > "/tmp/apply_${host}.log" 2>&1 &
       PIDS+=("$!:$host")
@@ -443,7 +513,7 @@ doctor:
     echo "→ Machine identity"
     if [ -f /etc/dotfiles-machine ]; then pass "machine: $(cat /etc/dotfiles-machine)"; else warn "/etc/dotfiles-machine missing — run bootstrap"; fi
     echo "→ Core binaries"
-    for bin in brew bw gh tailscale ansible-playbook just; do
+    for bin in brew bw gh tailscale ansible-playbook just mise; do
       if command -v "$bin" >/dev/null 2>&1; then pass "$bin"; else warn "$bin missing"; fi
     done
     echo "→ Tailscale"
@@ -515,6 +585,10 @@ docs-build:
 # Seed Bitwarden with this machine's kubeconfig + talosconfig (so other machines can fetch)
 seed-kube:
     @{{ dotfiles_dir }}/scripts/bw-seed-kube.sh
+
+# Seed Bitwarden with the omp auth-broker token via SSH to spindle
+seed-omp-broker:
+    @{{ dotfiles_dir }}/scripts/bw-seed-omp-broker.sh
 
 # Show all online fleet machines' doctor status in parallel
 doctor-fleet:

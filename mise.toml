@@ -1,0 +1,7 @@
+[tasks.units]
+description = "Run every unit in parallel; one failing unit does not stop the others"
+depends = ["unit:*"]
+
+[tasks."unit:omp"]
+description = "omp: skills, Kiro plugin, routing, and the auth-broker client"
+file = "units/omp.sh"

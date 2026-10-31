@@ -94,7 +94,7 @@ alias_groups:
       - { name: md, cmd: "mkdir -p" }
       - { name: h, cmd: history }
 
-  # Quota-aware launcher (roles/omp): starts omp on the first provider with
+  # Quota-aware launcher (units/omp): starts omp on the first provider with
   # ccleft-reported quota left. `command omp` bypasses it.
   - guard: omp-route
     fish_kind: alias

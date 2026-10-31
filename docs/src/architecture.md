@@ -47,7 +47,7 @@ SSHes to the target, forwards the Bitwarden session token, pulls the latest dotf
 just apply-tags kube,shell
 ```
 
-Runs only roles tagged with the given tags. Useful for deploying specific configs without running the full playbook. `--skip-tags` works the same way in reverse — `just apply-nosecrets` is `--skip-tags secrets` under the hood (see [Bitwarden](bitwarden.md)).
+Runs roles and units selected by the given tags. Explicit secret-bearing tags first resolve and sync Bitwarden; unrelated tags do not prompt. `just apply-nosecrets` passes `--skip-tags secrets` to Ansible and `--no-secrets` to units (see [Bitwarden](bitwarden.md)).
 
 #### Available Tags
 
@@ -64,7 +64,7 @@ Every role in `site.yml` carries one or more tags. Tags fall into two kinds: **p
 | System + packages | `bitwarden` | `secrets`, `bitwarden` |
 | System + packages | `shell_fonts` | `dotfiles`, `shell`, `fonts` |
 | System + packages | `shell_dotfiles` | `dotfiles`, `shell`, `dotfiles` |
-| System + packages | `omp` | `dotfiles`, `omp` |
+| System + packages | `omp` unit | `dotfiles`, `omp` |
 | System + packages | `hive_ops` | `hive`, `hive_ops` |
 | System + packages | `git` | `dotfiles`, `git` |
 | System + packages | `neovim` | `dotfiles`, `neovim`, `editor` |
@@ -96,7 +96,7 @@ Common phase-wide selections:
 - `--tags secrets` — every BW-backed role only (`bitwarden`, `shell_atuin`, `shell_ai`, `ssh_keys`, `github`, `tailscale`, `kube`, `forgejo_registry`)
 - `--tags desktop` — every desktop-app role (`flatpak`, `bluefin_common`, `gnome`, `zen_browser`, `pipewire_audio`)
 - `--tags services` — every long-running service role (`syncthing`, `systemd`, `bst_dashboard`, `kirocrew`, `proxy`, `tailscale_cert`)
-- `--skip-tags secrets` — everything except BW-backed roles. This is `just apply-nosecrets`, which the daily `dotfiles-update.timer` and the `dots` alias run; `bootstrap.sh` and `phone-apply.service` pass `--skip-tags secrets` directly
+- `--skip-tags secrets` — everything except BW-backed roles. `just apply-nosecrets`, bootstrap's first phase and `phone-apply.service` also pass `--no-secrets` to units.
 
 Tags do not replace the [`skip_*` host_vars flags](#skip-flags) or inventory-group gating described below — a role can be tag-selected and still no-op if its `when:` condition (group membership, `skip_*`, `machine_profile`) evaluates false.
 
@@ -167,13 +167,13 @@ Every flag `site.yml` reads, all defaulting to `false` (`| default(false)`). Set
 | `skip_proxy` | `proxy` | not `vps`, not `vm-test` | `mumbai`, `punjab`, `termux` |
 | `skip_tailscale_cert` | `tailscale_cert` | not `vps`, not `vm-test` | `mumbai`, `termux` |
 
-"desktop" is `is_desktop` (membership of the `desktop` group unless overridden); "not `vm-test`" is `machine_profile != 'vm-test'`. Roles without a flag either always run or are gated another way: `termux_packages` (`termux_hosts` group), `omp` (not Termux), `kirocrew` (`kirocrew_enabled: true`), `server_hardening` (`server`/`vps` groups), `retired_services` (not `vps`, not Termux, systemd hosts).
+"desktop" is `is_desktop` (membership of the `desktop` group unless overridden); "not `vm-test`" is `machine_profile != 'vm-test'`. Roles without a flag either always run or are gated another way: `termux_packages` (`termux_hosts` group), `kirocrew` (`kirocrew_enabled: true`), `server_hardening` (`server`/`vps` groups), `retired_services` (not `vps`, not Termux, systemd hosts). The `omp` unit skips Termux.
 
 ## Secrets Flow
 
 1. Ansible requests a Bitwarden session (env var, cached file, or interactive unlock)
 2. The `bitwarden` role resolves `BW_SESSION` and caches it
 3. Secrets-tagged roles consume the session token for API calls
-4. For remote applies, `scripts/bw-resolve.sh remote <host>` unlocks the vault on the target and the recipe exports that session inline over `ssh -t` (no `SendEnv`) — see [Remote Apply](bitwarden.md#remote-apply)
+4. For remote applies, `scripts/bw-resolve.sh remote <host>` unlocks the vault on the target and SSH forwards that session using `SendEnv=BW_SESSION`; the target must accept it — see [Remote Apply](bitwarden.md#remote-apply).
 
 No secrets are stored in git — the repo is fully public.
