@@ -14,7 +14,7 @@ Bootable container images for the home K8s cluster (bihar, karnataka, starter). 
 
 Each image includes:
 
-- **Base:** `projectbluefin/utah` (Hummingbird + GNOME 51 desktop + Bluefin theming)
+- **Base:** `projectbluefin/utah:stable`, pinned by digest (Hummingbird + GNOME 51 desktop + Bluefin theming). Utah is experimental pre-alpha, including its stable stream.
 - **K3s:** Kubernetes v1.36.1 + SELinux policy
 - **Storage:** iSCSI utils, NFS utils, Longhorn tools
 - **Networking:** NetworkManager, Tailscale, iptables-nft
@@ -50,6 +50,8 @@ Both are public (no login required).
 ## Installation
 
 ### From Installer ISO
+
+Live media enables the local console and serial `ttyS0` for installation, including when the base image masks the serial instance.
 
 1. **Boot the ISO** from USB stick (UEFI, Secure Boot must be disabled)
 2. **At root console:**
