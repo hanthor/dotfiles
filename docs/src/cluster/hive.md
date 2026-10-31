@@ -125,6 +125,15 @@ every patch. The fix qualifies observation names; it does not relax admission.
 An active API with `seq: 0` therefore did not prove that these hives were idle.
 See the fleet ledger for deployment and live verification of that fix.
 
+The fixed build `637bae44f` was deployed to both spokes and visually verified
+on 2026-10-31: Rain/Ghost on Reef, Cascade/Terminal on School, and P-key
+pause/resume. Both APIs returned 1,200 buffered lines; a sample from each
+matched a public PR addition at its reported commit after whitespace trimming.
+Anonymous requests remained 401; authenticated responses remained `no-store`.
+The Apps currently use polling rather than PR webhooks, so freshness can lag.
+Cold-start quota exhaustion can delay the first capture substantially even
+when Matrix is enabled; a larger display window does not fix that.
+
 Before an upgrade, stop the affected service, snapshot its retained data,
 copy both configs and the Compose override into `backups/`, then start it
 with a commit-matched binary and HTML. The initial Matrix rollout backups are
