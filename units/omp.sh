@@ -78,6 +78,20 @@ routing_merge() {
   yq -i ". *= (load(\"$DOTFILES_DIR/units/omp/routing.yml\") | explode(.) | ... comments=\"\")" "$cfg"
 }
 
+models_merge() {
+  local models_cfg="$HOME/.omp/agent/models.yml"
+  mkdir -p "$(dirname "$models_cfg")" || return 1
+  if [ ! -f "$models_cfg" ] && [ -f "$HOME/.omp/agent/models.yaml" ]; then
+    models_cfg="$HOME/.omp/agent/models.yaml"
+  fi
+  if [ ! -f "$models_cfg" ] && [ -f "$HOME/.omp/agent/models.json" ]; then
+    yq -P '.' "$HOME/.omp/agent/models.json" | write_atomic "$models_cfg" || return 1
+  fi
+  [ -f "$models_cfg" ] || : > "$models_cfg" || return 1
+  yq -i ". *= (load(\"$DOTFILES_DIR/units/omp/models.yml\") | explode(.) | ... comments=\"\")" "$models_cfg" || return 1
+  chmod 600 "$models_cfg"
+}
+
 broker_url() {
   mkdir -p "$(dirname "$cfg")" || return 1
   [ -f "$cfg" ] || : > "$cfg" || return 1
@@ -109,6 +123,7 @@ soft "ccleft" ccleft_install
 step "kiro.json" install_if_changed "$DOTFILES_DIR/units/omp/kiro.json" "$HOME/.config/omp/kiro.json" 0644
 step "omp-route" install_if_changed "$DOTFILES_DIR/units/omp/omp-route" "$HOME/.local/bin/omp-route" 0755
 step "routing merged" routing_merge
+step "models merged" models_merge
 step "broker url" broker_url
 step "broker token" broker_token
 if [ "$(yq '.auth.broker | has("token")' "$cfg" 2>/dev/null)" != true ]; then

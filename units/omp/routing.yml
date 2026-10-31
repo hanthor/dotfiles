@@ -36,6 +36,7 @@ enabledModels:
   - kiro/*
   - meta/muse-spark-1.3-contributor
   - local/*
+  - lemonade/*
   - web/*
 disabledProviders:
   - amazon-bedrock

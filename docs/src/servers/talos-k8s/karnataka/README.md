@@ -35,6 +35,58 @@ updates from the unmerged checkout.
 - GPU: AMD integrated
 - LAN: DHCP on the home network
 
+## Lemonade coding server
+
+Lemonade Server `2026.44.1` runs as the root-managed Podman Quadlet
+`/etc/containers/systemd/lemonade.container`, tracked in
+`home-k3s/lemonade.container`. Its generated `lemonade.service` is attached to
+`multi-user.target`. The image is digest-pinned; no host OS layering or driver
+replacement is required on immutable Utah.
+
+The downloaded model is `Qwen3-Coder-Next-GGUF`:
+`unsloth/Qwen3-Coder-Next-GGUF:Qwen3-Coder-Next-MXFP4_MOE.gguf`
+(44.7 GiB of weights, 80B total / 3B active parameters). The ROCm stable
+backend uses Radeon 8060S (`gfx1151`); context is limited to 32768 tokens and
+only one model is loaded. Named volumes `lemonade-cache`, `lemonade-llama`,
+`lemonade-data`, and `lemonade-config` retain weights, backends, and settings.
+Do not remove these volumes during a service restart or upgrade.
+
+Podman publishes only `127.0.0.1:13305`. Tailscale Serve persistently forwards
+tailnet TCP 13305 to that listener:
+
+```bash
+sudo tailscale serve --bg --tcp=13305 tcp://127.0.0.1:13305
+```
+
+Clients use `http://100.66.158.127:13305/api/v1` over the encrypted tailnet.
+There is no API key: all tailnet peers permitted by Tailscale policy can use
+the API, including model-management endpoints. Do not publish this port on
+LAN/public interfaces or enable Funnel. Corral's existing HTTPS route is
+separate and remains intact.
+
+To restore the server, install the tracked Quadlet at the path above, then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start lemonade.service
+sudo podman exec lemonade-server ./lemonade config set llamacpp.backend=rocm ctx_size=32768 max_loaded_models=1
+sudo podman exec lemonade-server ./lemonade backends install llamacpp:rocm
+sudo podman exec lemonade-server ./lemonade pull Qwen3-Coder-Next-GGUF
+```
+
+Restore the Tailscale Serve rule separately with the command above. Verify
+with `sudo podman exec lemonade-server ./lemonade status --json`,
+`sudo tailscale serve status`, and `systemctl status lemonade.service`.
+The model loads on the first inference request, not merely on service start.
+The service has lower CPU/IO weights and a 64 GiB cgroup memory ceiling;
+GPU allocations may not count against that ceiling, so monitor host memory
+alongside Kubernetes and VM workloads.
+
+On 2026-10-31, direct coding output and a structured tool-call/result round
+trip passed with the GPU/ROCm backend. Warm generation was about 36–39
+tokens/second on these short requests, not a concurrency benchmark. See the
+[`omp` unit](../../../roles/omp.md#karnataka-coding-model) for client configuration.
+
 ## Current K3s cluster
 
 Read-only inspection on **2026-10-29** found:

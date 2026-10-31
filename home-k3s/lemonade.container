@@ -1,0 +1,30 @@
+[Unit]
+Description=Lemonade coding model server (AMD ROCm)
+Wants=network-online.target tailscaled.service
+After=network-online.target tailscaled.service
+
+[Container]
+Image=ghcr.io/lemonade-sdk/lemonade-server@sha256:8ae593e309c5f8f348ea7404f20e27db83d0d247cc9ba3b2bf7fb6310e13e73c
+ContainerName=lemonade-server
+PublishPort=127.0.0.1:13305:13305
+Volume=lemonade-cache:/opt/lemonade/.cache/huggingface
+Volume=lemonade-llama:/opt/lemonade/llama
+Volume=lemonade-data:/opt/lemonade/.cache/lemonade
+Volume=lemonade-config:/opt/lemonade/.config/lemonade
+AddDevice=/dev/kfd
+AddDevice=/dev/dri
+GroupAdd=105
+GroupAdd=39
+SecurityLabelDisable=true
+Exec=./lemond --host 0.0.0.0 --no-broadcast
+
+[Service]
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=900
+MemoryMax=64G
+CPUWeight=50
+IOWeight=50
+
+[Install]
+WantedBy=multi-user.target
