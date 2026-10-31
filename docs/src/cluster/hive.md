@@ -23,9 +23,9 @@ tracker is [tuna-os/tunaOS#4072](https://github.com/tuna-os/tunaOS/issues/4072).
 Since 2026-10-30 the agents use the `omp` backend with
 `openai-codex/gpt-6-luna` through the `omp-auth-broker` user service, and the
 ioscan classifier runs through omp on `anthropic/claude-haiku-4-5`.
-Reef and School's 2026-10-31 Matrix pilot is pinned to
-`deploy/upstream-v6-matrix` at `71ce0ef56889f8f023dc77236b03c1d08611c0a8`,
-rather than a moving image tag; Hub stays on `230f745`.
+Reef and School's Matrix pilot uses commit-pinned builds from
+`deploy/upstream-v6-matrix`, rather than a moving image tag; Hub stays on
+`230f745`. Canary and fleet pins can differ during a rollout.
 See [the fleet ledger](https://github.com/tuna-os/hive/blob/docs/spindle-matrix-rollout/FORK.md#what-the-fleet-runs)
 for the per-service rollout state and
 [integration PR #172](https://github.com/tuna-os/hive/pull/172) for CI and provenance.
@@ -100,8 +100,9 @@ After signing in to the corresponding dashboard, open:
 
 Use `mx.effect=cascade`, `ghost` or `terminal` to change the effect, and
 `mx.fps=15` to lower rendering load. Space/P pauses; sound is explicitly off.
-Each spoke shows its own admitted PR patches; this is not a hub-wide
-aggregated code feed or a keystroke stream.
+Each spoke shows admitted patches from its watched repositories, not all
+hub repositories. Known peer bots can appear where watches overlap.
+This is not a hub-wide aggregated code feed or a keystroke stream.
 
 `dashboard.matrix` must be enabled in **both** seed and runtime configs.
 `repos` is an explicit allowlist of already-watched, verified-public repos.
@@ -115,6 +116,12 @@ numbers. Animation can replay buffered patches and is not proof of a new
 push. The source is initialized by the sentinel sweep after reconciliation;
 a cold start can return 404 even with the flag enabled until that sweep runs.
 Do not disable budget, admission or writeback guards to accelerate the feed.
+
+Before `637bae44f`, short `project.repos` names (with `project.org` set) were
+passed unchanged to Matrix's qualified `owner/name` allowlist, silently dropping
+every patch. The fix qualifies observation names; it does not relax admission.
+An active API with `seq: 0` therefore did not prove that these hives were idle.
+See the fleet ledger for deployment and live verification of that fix.
 
 Before an upgrade, stop the affected service, snapshot its retained data,
 copy both configs and the Compose override into `backups/`, then start it
