@@ -1,0 +1,12 @@
+[Unit]
+Description=Retry model-only provisioning when fleet computers reconnect
+
+[Timer]
+OnBootSec=2min
+OnCalendar=*-*-* *:00,30:00
+RandomizedDelaySec=60
+Persistent=true
+Unit=lemonade-rollout.service
+
+[Install]
+WantedBy=timers.target

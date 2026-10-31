@@ -98,3 +98,25 @@ def test_existing_custom_providers_survive_model_provisioning(env, tmp_path, fil
         assert "lemonade" in merged["providers"]
     if filename == "models.yaml":
         assert not (agent / "models.yml").exists()
+
+
+@pytest.mark.parametrize("enabled", [None, [], ["anthropic/*"], ["lemonade/*", "anthropic/*"]])
+def test_model_only_apply_preserves_cloud_availability_and_settings(env, tmp_path, enabled):
+    agent = tmp_path / "home/.omp/agent"
+    agent.mkdir(parents=True)
+    cfg = agent / "config.yml"
+    original = {"modelRoles": {"default": "private-server/private-code"}, "auth": {"broker": {"url": BROKER_URL}}}
+    if enabled is not None:
+        original["enabledModels"] = enabled
+    cfg.write_text(yaml.safe_dump(original))
+    expected = dict(original)
+    if enabled and "lemonade/*" not in enabled:
+        expected["enabledModels"] = [*enabled, "lemonade/*"]
+    for _ in range(2):
+        result = subprocess.run(
+            ["bash", str(REPO / "units/omp/models.sh")],
+            env={**env, "DOTFILES_DIR": str(REPO), "UNITS_NO_SECRETS": "1"},
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert yaml.safe_load(cfg.read_text()) == expected
