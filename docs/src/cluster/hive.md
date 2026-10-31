@@ -23,17 +23,23 @@ tracker is [tuna-os/tunaOS#4072](https://github.com/tuna-os/tunaOS/issues/4072).
 Since 2026-10-30 the agents use the `omp` backend with
 `openai-codex/gpt-6-luna` through the `omp-auth-broker` user service, and the
 ioscan classifier runs through omp on `anthropic/claude-haiku-4-5`.
+Reef and School's 2026-10-31 Matrix pilot is pinned to
+`deploy/upstream-v6-matrix` at `71ce0ef56889f8f023dc77236b03c1d08611c0a8`,
+rather than a moving image tag; Hub stays on `230f745`.
+See [the fleet ledger](https://github.com/tuna-os/hive/blob/docs/spindle-matrix-rollout/FORK.md#what-the-fleet-runs)
+for the per-service rollout state and
+[integration PR #172](https://github.com/tuna-os/hive/pull/172) for CI and provenance.
 
 ### Layout under `/srv/hives`
 
 | Path | Contents |
 |---|---|
-| `compose.yaml`, `compose.override.yaml` | Services; the override pins the fork binary and the proxy patch |
+| `compose.yaml`, `compose.override.yaml` | Services; the override pins the fork binary, proxy patch and matching Matrix dashboard HTML |
 | `.env` (mode 600) | `HIVE_HUB_SECRET`, `HIVE_DASHBOARD_TOKEN`, `OMP_AUTH_BROKER_TOKEN`, `NTFY_TOPIC` and provider API keys. Copy in Bitwarden: `hive-spindle-env` |
 | `<svc>/config/hive.yaml` | Seed config, mounted read-only at `/etc/hive` |
 | `<svc>/data/` | `/data`. `hive.yaml.runtime` is the running config and **wins over the seed** for `github.*` and most other keys, so change both |
 | `<svc>/secrets/gh-app-key.pem` | GitHub App private key, mounted at `/secrets` |
-| `bin/` | Fork builds, `hive-<sha>`; earlier builds stay for rollback |
+| `bin/` | Fork builds, `hive-<sha>`, and matching `dashboard-<sha>.html`; earlier builds stay for rollback |
 | `backups/` | Timestamped copies taken before each change: `<file>.<UTC stamp>` |
 
 ### GitHub Apps
@@ -80,6 +86,45 @@ For a read-only inventory, run:
 ```bash
 ssh ubuntu@100.113.75.88 'docker ps --filter name=hives-'
 ```
+
+### Ambient code-rain pilot
+
+The pilot ports upstream's Matrix observer, privacy fixes, JSON/SSE API and
+four effects (Rain, Cascade, Ghost coder, Terminal) onto v6 while retaining
+the fork's SDLC policies. It is a dashboard feature, not a Twitch deployment.
+
+After signing in to the corresponding dashboard, open:
+
+- [Reef kiosk](https://reef.tunaos.org/?kiosk=1&view=matrix&sound=off&mx.effect=rain)
+- [School kiosk](https://school.tunaos.org/?kiosk=1&view=matrix&sound=off&mx.effect=rain)
+
+Use `mx.effect=cascade`, `ghost` or `terminal` to change the effect, and
+`mx.fps=15` to lower rendering load. Space/P pauses; sound is explicitly off.
+Each spoke shows its own admitted PR patches; this is not a hub-wide
+aggregated code feed or a keystroke stream.
+
+`dashboard.matrix` must be enabled in **both** seed and runtime configs.
+`repos` is an explicit allowlist of already-watched, verified-public repos.
+The pilot excludes `deploy/**`, `config/**`, `.github/**`, YAML, JSON and TOML
+in addition to upstream's built-in secret filtering. Do not add private
+repos: the feed has no per-repository viewer permissions.
+
+An anonymous `/api/matrix/lines?since=0` must return 401/403.
+An authenticated response reports `source: "pushed-lines"` and sequence
+numbers. Animation can replay buffered patches and is not proof of a new
+push. The source is initialized by the sentinel sweep after reconciliation;
+a cold start can return 404 even with the flag enabled until that sweep runs.
+Do not disable budget, admission or writeback guards to accelerate the feed.
+
+Before an upgrade, stop the affected service, snapshot its retained data,
+copy both configs and the Compose override into `backups/`, then start it
+with a commit-matched binary and HTML. The 2026-10-31 Reef canary backup stamp
+is `20261031T180544Z`; School's is `20261031T182146Z`.
+Both previous binaries are `bin/hive-230f745`.
+For rollback, stop the service, restore its matching binary/UI pins and both
+config files, validate Compose, and restart. Restore the data snapshot only
+when required for downgrade compatibility; do not overwrite newer agent work
+as a routine rollback step.
 
 ## Archived cluster guide
 
