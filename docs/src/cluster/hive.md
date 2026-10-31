@@ -112,8 +112,10 @@ repos: the feed has no per-repository viewer permissions.
 
 An anonymous `/api/matrix/lines?since=0` must return 401/403.
 An authenticated response reports `source: "pushed-lines"` and sequence
-numbers. Animation can replay buffered patches and is not proof of a new
-push. The source is initialized by the sentinel sweep after reconciliation;
+numbers. The server holds up to 2,000 accepted lines in memory; the browser
+retains 120 received lines. Animation can reuse that rolling buffer between
+pushes, so motion is not proof of new activity.
+The source is initialized by the sentinel sweep after reconciliation;
 a cold start can return 404 even with the flag enabled until that sweep runs.
 Do not disable budget, admission or writeback guards to accelerate the feed.
 
@@ -125,9 +127,11 @@ See the fleet ledger for deployment and live verification of that fix.
 
 Before an upgrade, stop the affected service, snapshot its retained data,
 copy both configs and the Compose override into `backups/`, then start it
-with a commit-matched binary and HTML. The 2026-10-31 Reef canary backup stamp
-is `20261031T180544Z`; School's is `20261031T182146Z`.
-Both previous binaries are `bin/hive-230f745`.
+with a commit-matched binary and HTML. The initial Matrix rollout backups are
+Reef `20261031T180544Z`, School `20261031T182146Z` (previous binary `230f745`).
+The repository-name fix backups are Reef `20261031T215350Z`, School
+`20261031T223247Z` (previous binary `71ce0ef56`). The fix reuses the unchanged
+`dashboard-71ce0ef56.html` mount; do not infer UI drift from that filename alone.
 For rollback, stop the service, restore its matching binary/UI pins and both
 config files, validate Compose, and restart. Restore the data snapshot only
 when required for downgrade compatibility; do not overwrite newer agent work
