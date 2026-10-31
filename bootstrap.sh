@@ -13,6 +13,15 @@ MACHINE_NAME=""
 MACHINE_TYPE=""   # desktop | server | vps
 INVENTORY_MODIFIED=false
 
+# ── Installation script checksums (SHA256) ────────────────────────
+# These checksums should be verified and updated whenever upstream
+# installation scripts change. Users can verify independently:
+#   curl -fsSL <url> | sha256sum
+#
+# Last verified: 2026-10-16
+UV_INSTALL_SHA256="01f1d303aef86ba9f59cbe7b4ac06ff2ce05318b21edf0a94f9f29b61a8b3a5f"
+TAILSCALE_INSTALL_SHA256="a54e3d92c29019cccb26e7c937a51d16e7be3c30e3ca5dde92d5f87d22c18fa4"
+
 # ── Parse arguments ───────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -21,6 +30,32 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
+
+# ── Verify script checksum ────────────────────────────────────────
+verify_checksum() {
+  local file="$1"
+  local expected_hash="$2"
+  local script_name="$3"
+  
+  if [ ! -f "$file" ]; then
+    echo "ERROR: File not found: $file" >&2
+    return 1
+  fi
+  
+  local actual_hash
+  actual_hash=$(sha256sum "$file" | awk '{print $1}')
+  
+  if [ "$actual_hash" != "$expected_hash" ]; then
+    echo "ERROR: Checksum mismatch for $script_name" >&2
+    echo "  Expected: $expected_hash" >&2
+    echo "  Got:      $actual_hash" >&2
+    echo "  File:     $file" >&2
+    echo "  This could indicate tampering or network corruption." >&2
+    return 1
+  fi
+  
+  return 0
+}
 
 # ── Detect OS ─────────────────────────────────────────────────────
 detect_os() {
@@ -78,10 +113,16 @@ ensure_uv() {
   local tmp_install
   tmp_install=$(mktemp)
   while [ $attempts -lt 3 ]; do
-    if curl -LsSf --max-time 30 https://astral.sh/uv/install.sh -o "$tmp_install" && [ -s "$tmp_install" ] && sh "$tmp_install"; then
-      rm -f "$tmp_install"
-      export PATH="$HOME/.local/bin:$PATH"
-      return
+    if curl -LsSf --max-time 30 https://astral.sh/uv/install.sh -o "$tmp_install" && [ -s "$tmp_install" ]; then
+      if verify_checksum "$tmp_install" "$UV_INSTALL_SHA256" "astral.sh/uv/install.sh"; then
+        if sh "$tmp_install"; then
+          rm -f "$tmp_install"
+          export PATH="$HOME/.local/bin:$PATH"
+          return
+        fi
+      else
+        echo "Checksum verification failed, retrying in 5s..." >&2
+      fi
     fi
     attempts=$((attempts + 1))
     echo "uv install attempt $attempts failed, retrying in 5s..."
@@ -126,7 +167,11 @@ ensure_tailscale() {
     local tmp_ts
     tmp_ts=$(mktemp)
     if curl -fsSL --max-time 30 https://tailscale.com/install.sh -o "$tmp_ts" && [ -s "$tmp_ts" ]; then
-      sh "$tmp_ts"
+      if verify_checksum "$tmp_ts" "$TAILSCALE_INSTALL_SHA256" "tailscale.com/install.sh"; then
+        sh "$tmp_ts"
+      else
+        echo "WARNING: Tailscale checksum verification failed, skipping install." >&2
+      fi
     fi
     rm -f "$tmp_ts"
   fi
