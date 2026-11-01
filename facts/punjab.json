@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "host": "punjab",
-  "updated": "2026-10-31T00:22:36Z",
+  "updated": "2026-11-01T00:12:03Z",
   "groups": [
     "server"
   ],
@@ -24,9 +24,9 @@
     "memory_gb": 23.5
   },
   "virtualization": "kvm",
-  "uptime_days": 0.5,
+  "uptime_days": 1.5,
   "last_apply": {
-    "at": "2026-10-30T00:23:05Z",
+    "at": "2026-10-31T00:22:37Z",
     "ok": true
   }
 }
