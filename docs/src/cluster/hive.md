@@ -13,12 +13,69 @@ Caddy configuration routes [school.tunaos.org](https://school.tunaos.org) and
 state alone does not establish that the public endpoints or agents are healthy.
 
 The configured images are `ghcr.io/hivecommons/hive:v6-latest` for the two
-spokes and `ghcr.io/hivecommons/hive-hub:v6-latest` for the hub. The Compose
-services bind-mount `/srv/hives/bin/hive` over `/usr/local/bin/hive`, so the
-image tag alone does not describe the running binary. The observed school and
-reef seed configurations use the `omp` backend with
-`github-copilot/gpt-6-luna`, not the historical pi/DeepSeek backend below.
-Runtime state and model selection may differ from the seed files.
+spokes and `ghcr.io/hivecommons/hive-hub:v6-latest` for the hub, but the image
+tag does not describe the running binary. `compose.override.yaml` bind-mounts a
+`tuna-os/hive` fork build over `/usr/local/bin/hive` on all three services and
+mounts a patched `proxy/server.js` on both spokes. The header comment in that
+file records which commit each `bin/hive-<sha>` contains. The fork's
+`tuna/v6` branch is upstream `v6` plus the patches the fleet pilots; the
+tracker is [tuna-os/tunaOS#4072](https://github.com/tuna-os/tunaOS/issues/4072).
+Since 2026-10-30 the agents use the `omp` backend with
+`openai-codex/gpt-6-luna` through the `omp-auth-broker` user service, and the
+ioscan classifier runs through omp on `anthropic/claude-haiku-4-5`.
+Reef and School's Code activity pilot runs `e0c044e15` from
+`feature/matrix-cascade-diffs`, based on `deploy/upstream-v6-matrix`, with
+commit-matched binary and dashboard HTML mounts. Hub stays on `230f745`.
+See [the fleet ledger](https://github.com/tuna-os/hive/blob/docs/spindle-matrix-rollout/FORK.md#what-the-fleet-runs)
+for per-service pins, checksums and recovery evidence;
+[reader PR #174](https://github.com/tuna-os/hive/pull/174) builds on
+[the original Matrix integration #172](https://github.com/tuna-os/hive/pull/172).
+
+### Layout under `/srv/hives`
+
+| Path | Contents |
+|---|---|
+| `compose.yaml`, `compose.override.yaml` | Services; the override pins the fork binary, proxy patch and matching Matrix dashboard HTML |
+| `.env` (mode 600) | `HIVE_HUB_SECRET`, `HIVE_DASHBOARD_TOKEN`, `OMP_AUTH_BROKER_TOKEN`, `NTFY_TOPIC` and provider API keys. Copy in Bitwarden: `hive-spindle-env` |
+| `<svc>/config/hive.yaml` | Seed config, mounted read-only at `/etc/hive` |
+| `<svc>/data/` | `/data`. `hive.yaml.runtime` is the running config and **wins over the seed** for `github.*` and most other keys, so change both |
+| `<svc>/secrets/gh-app-key.pem` | GitHub App private key, mounted at `/secrets` |
+| `bin/` | Fork builds, `hive-<sha>`, and matching `dashboard-<sha>.html`; earlier builds stay for rollback |
+| `backups/` | Timestamped config copies and stopped-service data/temporary-workspace archives; protect as secrets |
+
+### GitHub Apps
+
+Since 2026-10-30 School and Reef use separate GitHub Apps, so each has its own
+installation rate limit (6,150 requests/hour across the 43 org repos). Before
+that they shared one installation and exhausted it every hour.
+
+| Hive | App (bot login) | App ID | Installation | Key in Bitwarden |
+|---|---|---|---|---|
+| school (the hub mounts the same key) | `hanthor-hive-agent` (`hanthor-hive-agent[bot]`) | 3942065 | 137498420 | `hive-github-app-hanthor-hive-agent` |
+| reef | `tuna-reef-hive` (`tuna-reef-hive[bot]`) | 5546574 | 177007234 | `hive-github-app-tuna-reef-hive` |
+
+The IDs appear in three places per hive: `GH_APP_ID`/`GH_APP_INSTALLATION_ID`
+in `compose.yaml`, and `github.app_id`/`installation_id` in both the seed and
+`hive.yaml.runtime`.
+
+Both hives manage `.github`, `Tavern`, `bluefin-cli`, `corral`, `docs` and
+`flatpak-index`. Each therefore lists the other's bot in
+`github.additional_bot_logins`, so the other hive's issues and PRs count as
+hive-authored.
+
+To restore a key, write the Bitwarden note's key block to
+`<svc>/secrets/gh-app-key.pem` (`ubuntu:ubuntu`, mode 600), then recreate the
+service with `docker compose up -d <svc>`.
+
+To check that each hive is on its own budget, run:
+
+```bash
+ssh ubuntu@100.113.75.88 'for c in hives-school-1 hives-reef-1; do docker exec $c sh -c \
+  "curl -s -H \"Authorization: Bearer \$(cat /var/run/hive-metrics/gh-app-token.cache)\" https://api.github.com/rate_limit" \
+  | jq -c .resources.core; done'
+```
+
+Different `reset` times mean separate installations.
 
 The old AWS cluster also had a `hive.reilly.asia` spoke; no hanthor container
 was present in the inspected Spindle Docker inventory. Its current status was
@@ -30,6 +87,98 @@ For a read-only inventory, run:
 ```bash
 ssh ubuntu@100.113.75.88 'docker ps --filter name=hives-'
 ```
+
+### Code activity pilot
+
+The pilot is now a passive, readable code activity view, not simulated typing.
+After signing in to the corresponding dashboard, click **Code activity** in
+the Activity Monitor, or open:
+
+- [Reef code activity](https://reef.tunaos.org/?kiosk=1&view=matrix&sound=off&mx.effect=cascade)
+- [School code activity](https://school.tunaos.org/?kiosk=1&view=matrix&sound=off&mx.effect=cascade)
+
+Cascade shows complete green `+` additions and red `−` removals with indentation,
+blank lines and repeated lines intact. Paragraphs wrap. Each block identifies its
+repository, file and observation time:
+
+- **In progress · workspace vs HEAD** identifies the managed agent workspace.
+  This is a snapshot, not a keystroke stream or proof of model authorship.
+- **Pushed PR** identifies a published checkpoint and links its actual PR.
+  Existing sentinel author checks, change detection, polling and quotas apply;
+  pushed checkpoints can lag or remain quiet until an eligible new head appears.
+
+Space/P or **Pause** stops motion; scroll to inspect. Reduced motion is static
+and scrollable. The reader holds when caught up. **Replay buffered changes** is
+explicit, labeled and off by default; motion is not proof of new activity.
+Rain, Ghost coder and Terminal remain optional decorative effects through
+`mx.effect=rain`, `ghost` or `terminal`; `mx.fps=15` reduces their render load.
+Sound is off in the links above. This is not a hub-wide feed or a Twitch deployment.
+
+#### Capture scope and privacy
+
+`dashboard.matrix.enabled` and the separately consented
+`dashboard.matrix.workspaces: true` are enabled in **both** spoke seed and runtime
+configs. `repos` remains an explicit allowlist of already-watched, verified-public
+repositories. Private repositories are ineligible: the feed has no per-repository
+viewer permissions. Unpublished code can still contain sensitive information;
+secret filtering is a safeguard, not a guarantee that public broadcasting is safe.
+
+Workspace discovery includes configured agents under `$HIVE_WORK_DIR`
+(`/data/agents` by default) and temporary subtrees owned by registered isolated
+agent UIDs. Shared, root, service and ambiguous UIDs cannot authorize temporary
+capture. Discovery does not follow symlinked directories; ownership and origin
+are rechecked, and existing filesystem permissions remain in force. It does not
+collect terminal output or inspect arbitrary host paths.
+
+Discovery runs every 30 seconds; two workspaces are sampled per two-second batch,
+round-robin, with a shared 64-workspace limit. GitHub public visibility must be
+verified before publishing a changed snapshot. The pilot still excludes
+`deploy/**`, `config/**`, `.github/**`, YAML, JSON and TOML, in addition to built-in
+secret filters. Unsafe or oversized changed regions are omitted whole, including
+on the removal side.
+
+An anonymous or forged-role `/api/matrix/lines?since=0` returns 401/403.
+An authorized response uses `Cache-Control: no-store`, `source: "code-activity"`,
+`workspaces`, continuation `seq`, `latest` and policy `epoch`. The server retains
+up to 2,000 accepted lines / 512 KiB of text; reader history is bounded to 1,200
+lines / 256 KiB, and the viewport to 32 whole cards. An enabled cold source now
+initializes on an authorized read and can return a valid empty feed immediately.
+Do not disable budget, admission or writeback guards to accelerate it.
+
+#### Verified deployment and recovery
+
+Both spokes run `e0c044e15` with its matching Node-served HTML. Exact-source full
+CI passed 27 jobs (three skipped; no coverage verdict), and both architecture
+artifacts passed their version smoke. See the fleet ledger for hashes and CI links.
+Hub was not restarted.
+
+On 2026-11-01, clearly marked controlled changes in genuine public Tavern clones
+proved managed-directory capture on Reef and isolated-UID temporary capture on
+School. Both feeds advanced from 12 to 24 changed lines after a new filesystem
+edit; native browsers showed full green/red paragraphs, blanks, repeated lines,
+newly-received provenance and pause-to-inspect. The fake-credential region was
+rejected. Native 390px reduced-motion wrapping and the actual toolbar link worked.
+Anonymous/forged-role requests remained 401; authorized responses remained `no-store`.
+The actual public Tavern #323 diff also exercised published-checkpoint rendering.
+No synthetic pushed checkpoint was injected or claimed as native post-rollout activity.
+
+Controlled fixtures were removed and their transient entries reset. Both clean
+feeds returned 200 with `latest: 0` and no verification cards. A quiet view is
+intentional, not generated filler. School's two pre-existing temporary Git
+subtrees survived recreation with ownership and permissions unchanged.
+
+Before upgrading, stop only the affected service and snapshot its retained data,
+both configs, the Compose override and temporary Git checkouts. Code activity
+snapshots are `backups/reef-code-activity-20261101T022412Z/` and
+`backups/school-code-activity-20261101T023300Z/`. Restore temporary Git archives
+into a newly created, stopped container **before** starting it; an ordinary
+container restart retains `/tmp`. Keep backups mode-restricted: they contain secrets.
+
+The previous spoke pair is `hive-637bae44f` plus `dashboard-71ce0ef56.html`.
+For rollback, restore only that spoke's matching binary/UI pins and both configs,
+validate Compose, and restart with `--no-deps`. Do not overwrite another service's
+pins with a whole old override. Restore a data snapshot only when downgrade
+compatibility requires it; never overwrite newer agent work routinely.
 
 ## Archived cluster guide
 

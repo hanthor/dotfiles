@@ -52,6 +52,16 @@ Every item a role or script reads (grep `bw get` / `bw list` under `roles/` and 
 | `bw-api-key` | Login | `scripts/bw-resolve.sh` — `bw login --apikey` on a remote |
 | `James Bitwarden` | Login | `scripts/bw-resolve.sh` — non-interactive unlock on a remote |
 
+### Recovery items (not read by any role)
+
+These items are kept so a lost host can be rebuilt by hand. No role reads them.
+
+| Bitwarden Item | Type | Holds |
+|---------------|------|-------|
+| `hive-github-app-hanthor-hive-agent` | Secure Note | School's GitHub App: App ID, installation ID, PEM private key (the hub mounts the same key). See [Hive](cluster/hive.md#github-apps) |
+| `hive-github-app-tuna-reef-hive` | Secure Note | Reef's GitHub App: App ID, installation ID, PEM private key |
+| `hive-spindle-env` | Secure Note | `/srv/hives/.env` on Spindle (hub secret, dashboard token, omp broker token, provider keys) |
+
 ## Running Without Secrets
 
 For fast iteration that doesn't need the vault — packages, dotfiles, desktop config — use the explicit no-secrets path:

@@ -8,7 +8,8 @@ as Docker Compose services under `/srv/spindle`.
 The School and Reef Hives, Hub and branded hub frontend run separately under `/srv/hives`, sharing
 the `spindle_default` network and Caddy ingress. The `omp-auth-broker` user service also runs on
 this host. The Hive deployment's runtime configuration and data are not restored by `deploy.sh`;
-preserve and back them up separately.
+preserve and back them up separately. Its layout, GitHub Apps and Bitwarden recovery items are in
+[Hive](../../cluster/hive.md#current-deployment-spindle-vps).
 
 | Piece | Source |
 |---|---|
