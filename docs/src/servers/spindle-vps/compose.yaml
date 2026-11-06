@@ -12,8 +12,8 @@ services:
     depends_on: [spindle, mas, matrixrtc-auth, livekit]
 
   spindle:
-    # arm64 build of exactly the code production ran (main + #723); see README.
-    image: ghcr.io/tuna-os/spindle:perf-723-de17805-arm64
+    # arm64 hotfix build of production (legacy-media-compat + concurrent outbox); see README.
+    image: ghcr.io/tuna-os/spindle:outbox-hotfix-arm64
     restart: unless-stopped
     command: ["/etc/spindle/spindle.toml"]
     environment:
