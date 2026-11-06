@@ -13,7 +13,7 @@ preserve and back them up separately.
 | Piece | Source |
 |---|---|
 | Host | Oracle Cloud Always Free, `VM.Standard.A1.Flex`, Ubuntu 24.04 aarch64, `eu-frankfurt-1` AD-1; public IPv4 `92.5.82.232`, Tailscale `100.113.75.88` |
-| Spindle | `ghcr.io/tuna-os/spindle:perf-723-de17805-arm64`, the production commit (`main` + #723, amd64 digest `7021ada8…`) built for arm64 from `tuna-os/spindle` branch `ops/arm64-perf-723` |
+| Spindle | `ghcr.io/tuna-os/spindle:outbox-hotfix-arm64` (deployed 2026-11-06): production's `ops/legacy-media-compat` build plus the concurrent federation outbox from `tuna-os/spindle` PR #794 and the row-hashed transaction IDs of #762, built for arm64 from branch `ops/outbox-hotfix`. The previous image, `legacy-media-compat-arm64`, sent outbound federation one server at a time and stalled behind dead servers |
 | MatrixRTC | `livekit-server:v1.13.5` + `lk-jwt-service:0.6.0` as standalone containers |
 | Data | `ess_ess-spindle-data.tar.gz` (the store, taken 15:33 UTC) and `postgres/2026-10-25/mas.dump` (15:22 UTC), from `~/backups/tunaos-aws-2026-10-25` on himachal-1 |
 | Config | production runtime + delegated-auth block, MAS under/overrides and LiveKit template; deploy.sh renders credentials from cluster-state |
