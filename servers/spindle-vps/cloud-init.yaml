@@ -1,0 +1,36 @@
+#cloud-config
+# Bootstrap for the Spindle VPS (Ubuntu 24.04 on Oracle Cloud Always Free A1, aarch64).
+# Installs Docker/Tailscale and unattended upgrades, opens direct host ingress on 80/443, and
+# authorizes fleet SSH keys. OCI rules restrict Docker-published LiveKit media ports separately.
+# The node joins the tailnet via interactive `tailscale up`; lockdown.sh then restricts SSH to it.
+# No secrets are in this file. See README.md in this directory.
+package_update: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - netfilter-persistent
+  - iptables-persistent
+  - rsync
+  - jq
+  - age
+  - postgresql-client
+  - unattended-upgrades
+
+# Public keys only: punjab (this repo's agent box) and himachal-1 (holds the backup).
+ssh_authorized_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKTteKkOac3kryqONYQB91nN9tuVTxogiiRG5LRmiiIH punjab
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHZvKYVwdjsZLZyWmllmfOKu2nichF0Z9BRFcDHwjXiF himachal
+
+runcmd:
+  # Oracle's Ubuntu image ends INPUT with a REJECT rule; accept web traffic before it.
+  - iptables -I INPUT 1 -p tcp -m multiport --dports 80,443 -m state --state NEW -j ACCEPT
+  - netfilter-persistent save
+  - systemctl enable --now docker
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - systemctl enable --now unattended-upgrades
+  - sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/;s/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && systemctl reload ssh
+  - usermod -aG docker ubuntu
+  - mkdir -p /srv/spindle/data /srv/spindle/pg /srv/spindle/caddy /srv/spindle/mas /srv/spindle/import
+  - chown -R ubuntu:ubuntu /srv/spindle
+  # Spindle runs as uid 1000 inside its image, which may not be the ubuntu user's uid here.
+  - chown 1000:1000 /srv/spindle/data

@@ -1,0 +1,383 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Upgrade to main (draft) - Infrastructure Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="James Reilly&#x27;s personal fleet (Ansible dotfiles) and the TunaOS infrastructure it administers">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../../highlight.css">
+        <link rel="stylesheet" href="../../tomorrow-night.css">
+        <link rel="stylesheet" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Infrastructure Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/servers/spindle-vps/upgrade-to-main.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="upgrading-the-vps-spindle-from-the-hotfix-image-to-main"><a class="header" href="#upgrading-the-vps-spindle-from-the-hotfix-image-to-main">Upgrading the VPS Spindle from the hotfix image to main</a></h1>
+<p>Status: <strong>done 2026-11-07.</strong> Production runs <code>ghcr.io/tuna-os/spindle:v0.1.1</code> (main <code>1d8dfd99</code>,
+arm64 release image). The rehearsal below was run first, against a copy of production; both
+blockers it found were cleared before the upgrade (see <a href="#blockers">Blockers</a>).</p>
+<p>Before the upgrade production ran <code>ghcr.io/tuna-os/spindle:outbox-hotfix-arm64</code>, built from
+branch <code>ops/outbox-hotfix</code>. That branch is the Oct 22 <code>main</code> (<code>79f00253</code>) plus #723, the
+legacy-media patch and the concurrent outbox (#794).</p>
+<h2 id="the-production-upgrade-2026-11-07"><a class="header" href="#the-production-upgrade-2026-11-07">The production upgrade (2026-11-07)</a></h2>
+<p>The procedure under <a href="#production-procedure-once-the-blockers-are-cleared">Production procedure</a>
+was followed as written, with the release tag <code>v0.1.1</code>:</p>
+<div class="table-wrapper"><table><thead><tr><th>Step</th><th>Result</th></tr></thead><tbody>
+<tr><td><code>docker pull</code></td><td><code>v0.1.1</code>, <code>arm64 linux</code></td></tr>
+<tr><td>Stop (05:22:53 UTC) and <code>cp -a</code> of the store</td><td><code>data/store.pre-v0.1.1</code>, 3.4 GB</td></tr>
+<tr><td><code>migrate --list</code> / <code>--dry-run</code></td><td>store and binary at schema 1/1/3; <code>intern-state-keys</code> "not needed"; "already at this binary's schema"</td></tr>
+<tr><td>Start</td><td>listening at 05:24:58 (outage about 2 minutes); room warm-up finished, 118 rooms in 21.2 s</td></tr>
+<tr><td><code>/_matrix/client/versions</code>, <code>.well-known/matrix/client</code>, MAS discovery, <code>call.reilly.asia/sfu/get</code></td><td>200, 200, 200, 405</td></tr>
+<tr><td>First 8 minutes</td><td>324 inbound <code>/send</code> answered 200, 156 PDUs accepted, 0 ERROR log lines</td></tr>
+</tbody></table>
+</div>
+<p>The compose file before the upgrade is <code>/srv/spindle/compose.yaml.bak-20261107T052253</code>.</p>
+<h2 id="what-the-rehearsal-showed"><a class="header" href="#what-the-rehearsal-showed">What the rehearsal showed</a></h2>
+<p>The rehearsal compared main <code>1e8f6973</code> with hotfix <code>fe76489a</code>. Both were x86_64 release builds,
+run on punjab, pinned to two cores (<code>taskset -c 0,1</code>, <code>TOKIO_WORKER_THREADS=2</code> as in
+<code>compose.yaml</code>). The config was production's <code>spindle.toml</code> with these changes: scratch store path,
+localhost binds, federation and push disabled, and no <code>[auth.delegated]</code> block. A scratch password
+replaced MAS login for one account, set on the copy only.</p>
+<p>The store was the live production store (2.7 GB including 2,371 media blobs). It was copied
+read-only over Tailscale: <code>sudo nice -n 19 ionice -c3</code> tar, then rsync, then a final rsync pass at
+01:58 UTC. That final pass changed only the active journal (<code>89.jnl</code>). Nothing was written on the VPS.</p>
+<div class="table-wrapper"><table><thead><tr><th>Check</th><th>Hotfix (baseline)</th><th>Main</th></tr></thead><tbody>
+<tr><td>Opens the copied store; <code>verify-media</code></td><td>2,371 blobs, all present (0.5 s)</td><td>2,371 blobs, all present (0.4 s)</td></tr>
+<tr><td><code>migrate --list</code> / <code>--dry-run</code></td><td>n/a</td><td>store at 1/1/3, only step <code>intern-state-keys</code> is "not needed"; dry-run and migrate: "already at this binary's schema" (0.5–0.6 s, writes nothing)</td></tr>
+<tr><td>Rooms (admin API)</td><td>118; 70,919 joined members; 105,020 state events</td><td>identical, same room-ID hash</td></tr>
+<tr><td>State of the 15 largest rooms (up to 51,884 events)</td><td>event-ID hashes</td><td>identical hashes</td></tr>
+<tr><td>Last 100 log entries of those rooms; <code>/messages</code> in 5 joined rooms</td><td>event-ID hashes</td><td>identical hashes</td></tr>
+<tr><td>Accounts (admin API)</td><td>1,360</td><td>1,360, same hash</td></tr>
+<tr><td>Initial <code>/sync</code> for a local user (115 joined rooms, 2,103 timeline events)</td><td>200 in 9.7–10.1 s</td><td>200 in 9.1–11.0 s; same counts</td></tr>
+<tr><td>Incremental <code>/sync</code></td><td>0.03 s</td><td>0.03–0.06 s</td></tr>
+<tr><td>Cold start (page cache dropped): listening / warm-up done (118 rooms)</td><td>1.0 s / 14.2 s</td><td>0.4 s / 12.0 s</td></tr>
+<tr><td>Largest room cold load (≥1M bucket)</td><td>1.04 s cold, 5.37 s on first run</td><td>1.06 s cold, 1.70 s on first run</td></tr>
+<tr><td>RSS after probe</td><td>2.9 GiB</td><td>2.8 GiB</td></tr>
+<tr><td>WARN/ERROR log lines</td><td>0</td><td>0</td></tr>
+<tr><td>Write path: send message, upload media, restart, read back</td><td>n/a</td><td>message found, media 200, <code>verify-media</code> 2,372/2,372</td></tr>
+<tr><td><strong>Rollback</strong>: hotfix binary on the store after main ran and wrote</td><td>n/a</td><td>opens; same room/state/timeline/account hashes; 0 WARN/ERROR</td></tr>
+<tr><td>Legacy <code>GET /_matrix/media/v3/download</code> and <code>/thumbnail</code></td><td><strong>200</strong></td><td><strong>404</strong> (see Blockers)</td></tr>
+</tbody></table>
+</div>
+<p>Other measurements on the copy (main binary, offline):</p>
+<ul>
+<li><code>spindle backup</code> took 15.7 s and wrote 16.7 M rows into a 4.0 GB file. The backup holds rows,
+not media.</li>
+<li><code>spindle gc --dry-run</code> took 64.5 s and found 364,697 unreachable state nodes (290 MB) that
+could be swept.</li>
+</ul>
+<p>Production warm-up is slower than on punjab. The 2026-11-06 restarts logged 19.2 s and 59.9 s for
+the same 118 rooms on the hotfix image. Budget about a minute of degraded service after the
+container starts.</p>
+<p>No data migration runs. The store's schema (key 1, record 1, content digest 3, fjall 3) is the
+same in both builds, so <code>migrate</code> is a no-op. The rollback is a plain image swap, and the rehearsal
+exercised it.</p>
+<p>Behaviour that changes with main and is not a data question:</p>
+<ul>
+<li>Per-user rate limits now default to Synapse's numbers: messages 0.2/s with burst 10, local
+joins 0.1/s with burst 10, room creation 0.016/s with burst 10, media uploads 10/s with burst 50.
+Production's config sets none of these. There are no appservices, so no bridge is affected.</li>
+<li>The MAS introspection verdict is cached for 120 s
+(<code>[auth.delegated] introspection_cache_ttl_secs</code>). A revoked MAS session can work for up to two
+minutes.</li>
+<li>Production's <code>spindle.toml</code> parses unchanged under main. The rehearsal checked this by starting
+main with that file, delegated block included.</li>
+</ul>
+<h2 id="blockers"><a class="header" href="#blockers">Blockers</a></h2>
+<p>Both were cleared before the upgrade:</p>
+<ol>
+<li><strong>Legacy media.</strong> Production depends on the frozen unauthenticated media endpoints
+(<code>/_matrix/media/v3/download|thumbnail</code>), which pre-MSC3916 clients use for avatars and
+thumbnails. The rehearsal found <code>main</code> returned 404 there. <code>tuna-os/spindle#736</code> merged before
+<code>v0.1.1</code>; it serves local media and remote media already cached, and never fetches uncached
+remote media without a token.</li>
+<li><strong>No arm64 image of main.</strong> <code>release.yml</code> builds amd64 and arm64 images for every <code>v*</code> tag;
+<code>v0.1.1</code> was cut from <code>main</code> <code>1d8dfd99</code> after #736, #800, #804 and #805 merged.</li>
+</ol>
+<h2 id="re-running-the-rehearsal-punjab"><a class="header" href="#re-running-the-rehearsal-punjab">Re-running the rehearsal (punjab)</a></h2>
+<p>The rehearsal needs about 3 GB for the copy, 3 GB for a working copy and 8 GB more if a backup
+is taken. Everything stays in one mode-700 directory, which is deleted at the end because it
+holds user data.</p>
+<pre><code class="language-bash">S=~/rehearsal-scratch; mkdir -p "$S/prod-copy/store" &amp;&amp; chmod 700 "$S"
+# Read-only copy of the live store. Run it twice; the second pass should only touch the journal.
+rsync -a --delete --partial -z --rsync-path='sudo -n nice -n 19 ionice -c3 rsync' \
+  ubuntu@100.113.75.88:/srv/spindle/data/store/ "$S/prod-copy/store/"
+cp -a "$S/prod-copy/store" "$S/store"
+# Binaries: cargo build --release -p spindle-server --bin spindle --locked at each commit.
+OLD=spindle-hotfix; NEW=spindle-&lt;tag&gt;
+CFG=$S/cfg/prodlike.toml   # production spindle.toml: storage path -&gt; $S/store, binds on
+                           # 127.0.0.1, federation/push disabled, [auth.delegated] removed
+$OLD verify-media "$CFG"
+$NEW promote-admin "$CFG" james
+$NEW set-password-hash "$CFG" james &lt; pw.hash   # argon2id of a throwaway password
+$NEW migrate --list "$CFG"; $NEW migrate "$CFG" --dry-run
+$NEW migrate "$CFG"; $NEW verify-media "$CFG"
+TOKIO_WORKER_THREADS=2 taskset -c 0,1 $NEW "$CFG"
+# Probe the server: admin API /_spindle/admin/v1/rooms, rooms/{id}/state and
+# rooms/{id}/timeline, users; client /joined_rooms, /messages and /sync;
+# metrics spindle_room_cold_* and spindle_room_warmup_*. Compare the results
+# with a run of $OLD on a fresh copy.
+rm -rf "$S"
+</code></pre>
+<p>The rehearsal compared runs by hashing event and room IDs, so the comparison files never held
+message content. An incoming message on production during the copy window would show up as a
+difference between the copy and production. It would not show up as a difference between the
+two binaries.</p>
+<p>The run on 2026-11-07 took about 40 minutes. Most of that was the copy: 2.7 GB over a DERP-relayed
+Tailscale path at about 0.7 MB/s. All the checks together took under 5 minutes.</p>
+<h2 id="production-procedure-once-the-blockers-are-cleared"><a class="header" href="#production-procedure-once-the-blockers-are-cleared">Production procedure (once the blockers are cleared)</a></h2>
+<p>Run on the VPS in <code>/srv/spindle</code>. <code>&lt;tag&gt;</code> is the release tag, for example <code>v0.1.1</code>. Expected
+outage: the time to stop and copy the store (seconds; 2.7 GB on local disk), plus about a minute
+of warm-up.</p>
+<pre><code class="language-bash">cd /srv/spindle
+# 1. Pull ahead of time; no outage.
+docker pull ghcr.io/tuna-os/spindle:&lt;tag&gt;
+cp compose.yaml compose.yaml.bak-$(date -u +%Y%m%dT%H%M%S)
+sed -i 's#ghcr.io/tuna-os/spindle:outbox-hotfix-arm64#ghcr.io/tuna-os/spindle:&lt;tag&gt;#' compose.yaml
+
+# 2. Stop Spindle and keep a byte-for-byte copy of the stopped store (includes media).
+docker compose stop spindle
+sudo cp -a data/store data/store.pre-&lt;tag&gt;
+
+# 3. Migration plan; must say "already at this binary's schema" (rehearsed: no steps).
+docker compose run --rm --no-deps spindle migrate --list /etc/spindle/spindle.toml
+docker compose run --rm --no-deps spindle migrate /etc/spindle/spindle.toml --dry-run
+docker compose run --rm --no-deps spindle verify-media /etc/spindle/spindle.toml
+
+# 4. Start and watch warm-up.
+docker compose up -d spindle
+docker compose logs -f spindle | grep -m1 'room warm-up finished'
+</code></pre>
+<p>If the dry run lists any step other than "not needed", stop. Swap the image back and investigate:
+the rehearsal did not cover that step.</p>
+<p>Checks after the start:</p>
+<pre><code class="language-bash">curl -s https://matrix.reilly.asia/_matrix/client/versions | jq '.versions[-1]'
+curl -s -o /dev/null -w '%{http_code}\n' \
+  https://matrix.reilly.asia/_matrix/media/v3/download/reilly.asia/&lt;known-media-id&gt;   # 200 (#736)
+curl -i https://call.reilly.asia/sfu/get   # 405
+</code></pre>
+<p>Then:</p>
+<ul>
+<li>Log in through MAS in Element and confirm that sync completes.</li>
+<li>Send a message in a federated room and confirm a remote server receives it.</li>
+<li>Start a call.</li>
+</ul>
+<h3 id="rollback"><a class="header" href="#rollback">Rollback</a></h3>
+<p>The schema did not change, so rolling back is an image swap:</p>
+<pre><code class="language-bash">docker compose stop spindle
+cp compose.yaml.bak-&lt;stamp&gt; compose.yaml
+docker compose up -d spindle
+</code></pre>
+<p>The rehearsal opened a store that main had already written with the hotfix binary: same rooms,
+state and timelines, no errors. Data written by features only main has (new keyspaces) is ignored
+by the old binary.</p>
+<p>Restore <code>data/store.pre-&lt;tag&gt;</code> only if the store itself is damaged:</p>
+<pre><code class="language-bash">sudo mv data/store data/store.bad &amp;&amp; sudo mv data/store.pre-&lt;tag&gt; data/store
+</code></pre>
+<p>That restore loses everything written since the stop.</p>
+<h3 id="afterwards"><a class="header" href="#afterwards">Afterwards</a></h3>
+<ul>
+<li>Delete <code>data/store.pre-&lt;tag&gt;</code> after a week without problems, and remove the old images
+(<code>outbox-hotfix-arm64</code>, <code>legacy-media-compat-arm64</code>, <code>perf-723-de17805-arm64</code>).</li>
+<li>Optional, offline, with a fresh copy taken first: <code>spindle gc</code> reclaims about 290 MB of
+unreachable state nodes. It took 64 s on the copy.</li>
+<li>Update the image row in <a href="README.html">README.md</a> and delete the <code>ops/outbox-hotfix</code> branch.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../servers/spindle-vps/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../vps/matrix/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../servers/spindle-vps/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../vps/matrix/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
