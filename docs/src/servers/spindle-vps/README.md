@@ -13,7 +13,7 @@ preserve and back them up separately.
 | Piece | Source |
 |---|---|
 | Host | Oracle Cloud Always Free, `VM.Standard.A1.Flex`, Ubuntu 24.04 aarch64, `eu-frankfurt-1` AD-1; public IPv4 `92.5.82.232`, Tailscale `100.113.75.88` |
-| Spindle | `ghcr.io/tuna-os/spindle:v0.1.1` (deployed 2026-11-07; main `1d8dfd99`, arm64 release image). The upgrade from the `outbox-hotfix-arm64` build and its rehearsal are in [upgrade-to-main.md](upgrade-to-main.md) |
+| Spindle | `ghcr.io/tuna-os/spindle:v0.1.2` (deployed 2026-11-07 18:29 UTC; main `6d91ba4a`, arm64 release image). It fixes `tuna-os/spindle#808`: inbound federation from matrix.org had stalled. The upgrade from the `outbox-hotfix-arm64` build and its rehearsal are in [upgrade-to-main.md](upgrade-to-main.md) |
 | MatrixRTC | `livekit-server:v1.13.5` + `lk-jwt-service:0.6.0` as standalone containers |
 | Data | `ess_ess-spindle-data.tar.gz` (the store, taken 15:33 UTC) and `postgres/2026-10-25/mas.dump` (15:22 UTC), from `~/backups/tunaos-aws-2026-10-25` on himachal-1 |
 | Config | production runtime + delegated-auth block, MAS under/overrides and LiveKit template; deploy.sh renders credentials from cluster-state |
