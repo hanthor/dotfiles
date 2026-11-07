@@ -1,0 +1,79 @@
+# Public Matrix routing after the consolidation; federation rides 443 via .well-known.
+# Spindle serves login (built-in OIDC provider on auth.reilly.asia) and mints LiveKit tokens;
+# MAS and lk-jwt-service no longer run.
+
+matrix.reilly.asia {
+	request_body {
+		max_size 100MB
+	}
+	# All of the client API, login, logout and refresh included, is Spindle's.
+	handle /_matrix/* {
+		reverse_proxy spindle:8008
+	}
+	handle /_synapse/* {
+		reverse_proxy spindle:8008
+	}
+	# The built-in minter: the transport /rtc/transports advertises. The SFU webhook
+	# (/_spindle/rtc/livekit/sfu/webhook) stays on the compose network.
+	@minter path /_spindle/rtc/livekit/sfu/get /_spindle/rtc/livekit/get_token
+	handle @minter {
+		reverse_proxy spindle:8008
+	}
+	handle {
+		respond "not found" 404
+	}
+}
+
+# Spindle's built-in OIDC provider; auth.oidc_issuer = "https://auth.reilly.asia/".
+# Only the provider's own paths: the rest of Spindle is not published on this host.
+auth.reilly.asia {
+	@provider path /.well-known/openid-configuration /oauth2/* /account /account/* /upstream/*
+	handle @provider {
+		reverse_proxy spindle:8008
+	}
+	handle {
+		respond "not found" 404
+	}
+}
+
+call.reilly.asia {
+	# https://call.reilly.asia is the transport in the reilly.asia Worker's .well-known and in
+	# clients' cached transports; its token requests go to the built-in minter.
+	handle /sfu/get {
+		rewrite * /_spindle/rtc/livekit/sfu/get
+		reverse_proxy spindle:8008
+	}
+	handle /get_token {
+		rewrite * /_spindle/rtc/livekit/get_token
+		reverse_proxy spindle:8008
+	}
+	# The built-in minter does not hold a delayed leave from this probe; 404 tells
+	# Element Call so (docs/matrix-rtc.md in tuna-os/spindle).
+	handle /delegate_delayed_leave {
+		respond 404
+	}
+	handle {
+		reverse_proxy livekit:7880
+	}
+}
+
+# The Hive Compose project shares spindle_default with Caddy.
+school.tunaos.org {
+	reverse_proxy school:3001
+}
+
+reef.tunaos.org {
+	reverse_proxy reef:3001
+}
+
+hub.tunaos.org {
+	handle /api/* {
+		reverse_proxy hub:3001
+	}
+	handle /login/* {
+		reverse_proxy hub:3001
+	}
+	handle {
+		reverse_proxy hub-front:80
+	}
+}

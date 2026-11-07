@@ -1,0 +1,23 @@
+port: 7880
+logging:
+  level: info
+  pion_level: error
+  json: true
+rtc:
+  use_external_ip: false
+  node_ip: 92.5.82.232
+  tcp_port: 30001
+  port_range_start: 32700
+  port_range_end: 32767
+room:
+  # Spindle's minter creates each room through the SFU API before it hands out a token.
+  auto_create: false
+turn:
+  enabled: false
+# consolidate.sh fills the secret on the VPS from the live livekit.yaml, so the key does not change.
+keys:
+  matrix-rtc: "@LIVEKIT_SECRET@"
+webhook:
+  api_key: matrix-rtc
+  urls:
+    - http://spindle:8008/_spindle/rtc/livekit/sfu/webhook

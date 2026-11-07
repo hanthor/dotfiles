@@ -1,0 +1,69 @@
+# The production runtime base (../spindle.base.toml) after the consolidation: no [auth.delegated],
+# Spindle's built-in OIDC provider on MAS's issuer, and the built-in LiveKit minter in place of
+# lk-jwt-service. consolidate.sh fills @LIVEKIT_SECRET@ on the VPS from the live livekit.yaml.
+[server]
+name = "reilly.asia"
+bind = "0.0.0.0:8008"
+# No trailing slash: the minter's transport URL is this plus /_spindle/rtc/livekit.
+public_base_url = "https://matrix.reilly.asia"
+
+[storage]
+path = "/var/lib/spindle-data/store"
+
+[media]
+# Installed Synapse Config.parse_size("100M") = 104857600.
+max_upload_bytes = 104857600
+
+[federation]
+enabled = true
+insecure_http = false
+allow_internal = []
+
+[previews]
+enabled = true
+allow_private = []
+
+[push]
+enabled = true
+allow_internal = []
+
+[metrics]
+# Not published by compose; reachable only inside the compose network.
+bind = "0.0.0.0:9100"
+
+[auth]
+builtin_oidc = true
+# MAS's issuer (its http.public_base). Caddy sends auth.reilly.asia to Spindle, so the issuer,
+# the account URL and the endpoints that clients and the reilly.asia Worker know stay the same.
+oidc_issuer = "https://auth.reilly.asia/"
+# No [[auth.upstream_oidc]]: production MAS has no upstream providers (config and database
+# both list none, checked 2026-11-07). Add one per MAS provider, with its ULID as `id`, if
+# that changes before the cutover; the import refuses links to an unknown provider.
+
+[registration]
+# MAS ran with password registration off. Spindle's registration is open by default; this keeps
+# it closed: the token stage needs a token from /_spindle/admin/v1/registration_tokens.
+require_token = true
+
+[appservices]
+registrations = []
+
+[turn]
+uris = []
+
+[rtc]
+# No foci: [rtc.livekit] advertises https://matrix.reilly.asia/_spindle/rtc/livekit itself.
+# https://call.reilly.asia (the Worker's .well-known) reaches the same minter through Caddy.
+
+[rtc.livekit]
+# The SFU's address. The minter also creates rooms at its https form (compose maps the host).
+url = "wss://call.reilly.asia"
+key = "matrix-rtc"
+secret = "@LIVEKIT_SECRET@"
+# lk-jwt-service ran with LIVEKIT_FULL_ACCESS_HOMESERVERS=reilly.asia. This server's own users
+# always publish; other servers' users join and subscribe only.
+full_access_servers = ["reilly.asia"]
+# token_ttl_seconds = 900   # the default; lk-jwt-service issued an hour
+
+[logging]
+filter = "info,spindle_server::push=debug"
