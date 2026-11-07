@@ -1,12 +1,28 @@
 # Upgrading the VPS Spindle from the hotfix image to main
 
-Status: **draft, rehearsed 2026-11-07 against a copy of production.** Production has not been
-upgraded yet. Two things block the upgrade. Both are listed under [Blockers](#blockers).
+Status: **done 2026-11-07.** Production runs `ghcr.io/tuna-os/spindle:v0.1.1` (main `1d8dfd99`,
+arm64 release image). The rehearsal below was run first, against a copy of production; both
+blockers it found were cleared before the upgrade (see [Blockers](#blockers)).
 
-Production runs `ghcr.io/tuna-os/spindle:outbox-hotfix-arm64`, built from branch
-`ops/outbox-hotfix`. That branch is the Oct 22 `main` (`79f00253`) plus #723, the legacy-media patch
-and the concurrent outbox (#794). Current `main` is 62 commits ahead of that base. The upgrade
-replaces that image with an arm64 release image of `main`.
+Before the upgrade production ran `ghcr.io/tuna-os/spindle:outbox-hotfix-arm64`, built from
+branch `ops/outbox-hotfix`. That branch is the Oct 22 `main` (`79f00253`) plus #723, the
+legacy-media patch and the concurrent outbox (#794).
+
+## The production upgrade (2026-11-07)
+
+The procedure under [Production procedure](#production-procedure-once-the-blockers-are-cleared)
+was followed as written, with the release tag `v0.1.1`:
+
+| Step | Result |
+|---|---|
+| `docker pull` | `v0.1.1`, `arm64 linux` |
+| Stop (05:22:53 UTC) and `cp -a` of the store | `data/store.pre-v0.1.1`, 3.4 GB |
+| `migrate --list` / `--dry-run` | store and binary at schema 1/1/3; `intern-state-keys` "not needed"; "already at this binary's schema" |
+| Start | listening at 05:24:58 (outage about 2 minutes); room warm-up finished, 118 rooms in 21.2 s |
+| `/_matrix/client/versions`, `.well-known/matrix/client`, MAS discovery, `call.reilly.asia/sfu/get` | 200, 200, 200, 405 |
+| First 8 minutes | 324 inbound `/send` answered 200, 156 PDUs accepted, 0 ERROR log lines |
+
+The compose file before the upgrade is `/srv/spindle/compose.yaml.bak-20261107T052253`.
 
 ## What the rehearsal showed
 
@@ -66,15 +82,15 @@ Behaviour that changes with main and is not a data question:
 
 ## Blockers
 
+Both were cleared before the upgrade:
+
 1. **Legacy media.** Production depends on the frozen unauthenticated media endpoints
    (`/_matrix/media/v3/download|thumbnail`), which pre-MSC3916 clients use for avatars and
-   thumbnails. That patch is `tuna-os/spindle#736` and is not on `main` yet. A build of `main`
-   without it returns 404 there. The rehearsal confirmed this on the same media ID: hotfix 200,
-   main 404. Wait for #736 to merge.
-2. **No arm64 image of main exists yet.** `release.yml` builds amd64 and arm64 images for every
-   `v*` tag, so the next release tag, `v0.1.1` or later, provides one. Cut it after #736, and after
-   any other fix wanted on production, is on `main`. Then re-run the rehearsal below against that
-   tag's commit.
+   thumbnails. The rehearsal found `main` returned 404 there. `tuna-os/spindle#736` merged before
+   `v0.1.1`; it serves local media and remote media already cached, and never fetches uncached
+   remote media without a token.
+2. **No arm64 image of main.** `release.yml` builds amd64 and arm64 images for every `v*` tag;
+   `v0.1.1` was cut from `main` `1d8dfd99` after #736, #800, #804 and #805 merged.
 
 ## Re-running the rehearsal (punjab)
 
