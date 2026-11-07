@@ -92,6 +92,9 @@ ssh_opts=(-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30)
 rsh() { ssh "${ssh_opts[@]}" "$user@$vps" "$@"; }
 rsh 'docker --version >/dev/null && test -d /srv/spindle' || { echo "VPS not bootstrapped (cloud-init.yaml)" >&2; exit 1; }
 [ "$(rsh uname -m)" = aarch64 ] || echo "warning: VPS is not aarch64; the compose image is the arm64 build" >&2
+# After consolidate.sh, this MAS-shaped kit would put MAS and lk-jwt-service back over the live files.
+rsh 'test ! -e /srv/spindle/.consolidated' ||
+  { echo "/srv/spindle is consolidated (consolidate.sh); run consolidate.sh --rollback first" >&2; exit 1; }
 
 # The containers run as their own uids (Spindle 1000, MAS and Caddy others), so the files they read
 # are 0644; the secrets stay private because /srv/spindle itself is 0700 for the ssh user.

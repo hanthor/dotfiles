@@ -1,0 +1,47 @@
+# Consolidated stack: Spindle (built-in OIDC provider and LiveKit minter) + LiveKit + Caddy.
+# MAS, its Postgres and lk-jwt-service are gone; consolidate.sh switches to this file after
+# `spindle import-mas` and keeps the previous files for --rollback. ./pg and ./mas stay on disk.
+# consolidate.sh replaces @SPINDLE_IMAGE@; secrets are filled in on the VPS, none are committed.
+name: spindle
+services:
+  caddy:
+    image: docker.io/library/caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy:/data
+    depends_on: [spindle, livekit]
+
+  spindle:
+    # Must contain #791, #799 (built with FEATURES=mas-import), #800 and #736; see README.
+    image: "@SPINDLE_IMAGE@"
+    restart: unless-stopped
+    command: ["/etc/spindle/spindle.toml"]
+    environment:
+      TOKIO_WORKER_THREADS: "2"
+    # The minter creates each call's room through the SFU API at https://call.reilly.asia
+    # (the https form of rtc.livekit.url); resolve it to this host's Caddy, not the public IP.
+    extra_hosts:
+      - "call.reilly.asia:host-gateway"
+    volumes:
+      - ./data:/var/lib/spindle-data
+      - ./spindle.toml:/etc/spindle/spindle.toml:ro
+    # The cluster allowed 11 GiB; this host has 12 GiB in total (2 OCPU Always Free tenancy).
+    mem_limit: 7g
+
+  livekit:
+    # The version production runs; upgrade it in a change of its own.
+    image: docker.io/livekit/livekit-server:v1.13.5
+    restart: unless-stopped
+    user: "10030:10030"
+    command: ["--config", "/etc/livekit/livekit.yaml"]
+    ports:
+      - "30001:30001/tcp"
+      - "32700-32767:32700-32767/udp"
+    volumes:
+      - ./livekit.yaml:/etc/livekit/livekit.yaml:ro
+    # Webhooks go to Spindle's /_spindle/rtc/livekit/sfu/webhook.
+    depends_on: [spindle]
+    cpus: 1.0
+    mem_limit: 2g
