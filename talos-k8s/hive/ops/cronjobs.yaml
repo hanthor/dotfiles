@@ -40,7 +40,7 @@ spec:
                   value: "false"
                 - name: HIVE_NUDGE_NAMESPACES
                   value: hive
-              image: alpine/k8s:1.37.1
+              image: alpine/k8s:1.37.2
               imagePullPolicy: IfNotPresent
               name: ops
               resources:
@@ -170,7 +170,7 @@ spec:
                   value: /tmp
                 - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
                   value: "false"
-              image: alpine/k8s:1.37.1
+              image: alpine/k8s:1.37.2
               imagePullPolicy: IfNotPresent
               name: ops
               resources:
@@ -274,7 +274,7 @@ spec:
                   value: supervisor
                 - name: KUBECTL_REMOTE_COMMAND_WEBSOCKETS
                   value: "false"
-              image: alpine/k8s:1.37.1
+              image: alpine/k8s:1.37.2
               imagePullPolicy: IfNotPresent
               name: ops
               resources:
@@ -378,7 +378,7 @@ spec:
                   value: supervisor
                 - name: HIVE_ROTATE_HOLD
                   value: reviewer
-              image: alpine/k8s:1.37.1
+              image: alpine/k8s:1.37.2
               imagePullPolicy: IfNotPresent
               name: ops
               resources:
