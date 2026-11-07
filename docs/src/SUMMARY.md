@@ -30,6 +30,7 @@
     - [Karnataka](servers/talos-k8s/karnataka/README.md)
   - [Goa](servers/goa/README.md)
   - [Spindle VPS (matrix.reilly.asia)](servers/spindle-vps/README.md)
+    - [Upgrade to main (draft)](servers/spindle-vps/upgrade-to-main.md)
 - [VPS]()
   - [Matrix (retired)](vps/matrix/README.md)
   - [Telengana (retired)](vps/telengana/README.md)

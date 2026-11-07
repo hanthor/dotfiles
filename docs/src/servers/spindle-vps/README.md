@@ -13,7 +13,7 @@ preserve and back them up separately.
 | Piece | Source |
 |---|---|
 | Host | Oracle Cloud Always Free, `VM.Standard.A1.Flex`, Ubuntu 24.04 aarch64, `eu-frankfurt-1` AD-1; public IPv4 `92.5.82.232`, Tailscale `100.113.75.88` |
-| Spindle | `ghcr.io/tuna-os/spindle:outbox-hotfix-arm64` (deployed 2026-11-06): production's `ops/legacy-media-compat` build plus the concurrent federation outbox from `tuna-os/spindle` PR #794 and the row-hashed transaction IDs of #762, built for arm64 from branch `ops/outbox-hotfix`. The previous image, `legacy-media-compat-arm64`, sent outbound federation one server at a time and stalled behind dead servers |
+| Spindle | `ghcr.io/tuna-os/spindle:v0.1.1` (deployed 2026-11-07; main `1d8dfd99`, arm64 release image). The upgrade from the `outbox-hotfix-arm64` build and its rehearsal are in [upgrade-to-main.md](upgrade-to-main.md) |
 | MatrixRTC | `livekit-server:v1.13.5` + `lk-jwt-service:0.6.0` as standalone containers |
 | Data | `ess_ess-spindle-data.tar.gz` (the store, taken 15:33 UTC) and `postgres/2026-10-25/mas.dump` (15:22 UTC), from `~/backups/tunaos-aws-2026-10-25` on himachal-1 |
 | Config | production runtime + delegated-auth block, MAS under/overrides and LiveKit template; deploy.sh renders credentials from cluster-state |
@@ -88,8 +88,8 @@ at this VPS or removing the Worker domain would take the homepage offline. The W
 same `https://call.reilly.asia` MatrixRTC service as this deployment.
 
 `call.reilly.asia` routes JWT requests to the standalone `lk-jwt-service` and LiveKit signaling to
-the standalone SFU. The separate authorizer preserves federated Matrix participants; Spindle's
-built-in minter only supports local users.
+the standalone SFU. Since `v0.1.1` Spindle's built-in minter also serves federated participants;
+moving to it is the consolidation step, not yet applied here.
 
 This is manual DNS cutover, not automatic failover. The zone is on Cloudflare Free; health-checked
 Load Balancing is an add-on, and no second Matrix origin is available. A 60-second TTL only limits
@@ -106,8 +106,8 @@ to avoid public-IP hairpin routing; `reilly.asia` remains on the portfolio Worke
   room read passed against the VPS, but that does not prove the later writes were restored.
 - The AWS cluster is terminated. The S3 and himachal-1 backups are untouched, but stopping the VPS
   stack is an outage, not a rollback; recovery requires provisioning and restoring from backup.
-- When `tuna-os/spindle` publishes an arm64 release containing #723, switch the image in
-  `compose.yaml` and delete the `ops/arm64-perf-723` branch.
+- `v0.1.1` contains #723, #736 and #794, so the `ops/arm64-perf-723`, `ops/legacy-media-compat`
+  and `ops/outbox-hotfix` branches can be deleted once production has run it for a week.
 - LiveKit is capped at 2 GiB and 1 OCPU to leave room for Spindle and the Hives on this 2-OCPU host;
   suitable for light personal calls, not high-concurrency conferencing. No TURN relay is configured,
   so clients on networks that block UDP may fail to connect.
