@@ -13,7 +13,7 @@ services:
 
   spindle:
     # Release image (amd64+arm64); see README and upgrade-to-main.md.
-    image: ghcr.io/tuna-os/spindle:v0.1.1
+    image: ghcr.io/tuna-os/spindle:v0.1.2
     restart: unless-stopped
     command: ["/etc/spindle/spindle.toml"]
     environment:
