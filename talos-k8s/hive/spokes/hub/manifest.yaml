@@ -307,10 +307,16 @@ data:
       repos:
         - tunaOS
       primary_repo: tunaOS
-      ai_author: hanthor
+      # Empty: agents author as the App bot (github.app_authored_prs), and
+      # /hive commands from @hanthor are honoured instead of refused.
+      ai_author: ""
 
     github:
       app_id: 3942065
+      # Without this the hive assumes the public "hivecommons-hive" slug and
+      # never recognises its own hanthor-hive-agent[bot] comments.
+      app_slug: hanthor-hive-agent
+      app_authored_prs: true
       installation_id: 137498420
       key_file: /secrets/gh-app-key.pem
 

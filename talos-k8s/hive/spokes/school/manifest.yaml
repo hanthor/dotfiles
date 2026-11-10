@@ -339,7 +339,9 @@ data:
         - tuna-os/Tavern
         - tuna-os/corral
         - tuna-os/flatpak-index
-      ai_author: hanthor
+      # Empty: agents author as the App bot (github.app_authored_prs), and
+      # /hive commands from @hanthor are honoured instead of refused.
+      ai_author: ""
       primary_repo: tuna-os/tunaos
 
     # ACMM level set explicitly in agent config; packs override backends to copilot
@@ -508,6 +510,10 @@ data:
 
     github:
       app_id: 3942065
+      # Without this the hive assumes the public "hivecommons-hive" slug and
+      # never recognises its own hanthor-hive-agent[bot] comments.
+      app_slug: hanthor-hive-agent
+      app_authored_prs: true
       installation_id: 137498420
       key_file: /var/run/hive-metrics/gh-app-key.pem
 
