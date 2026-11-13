@@ -21,7 +21,7 @@ Three distinct concerns live here:
 - **AWS** (`eu-north-1`, built 2026-08-27) — **terminated 2026-10-25** after credits were exhausted. It previously ran Matrix, the Hives and the CFP dashboard. The S3 bucket `hanthor-fleet-backups-*` and the himachal-1 mirror (`~/backups/tunaos-aws-2026-10-25`) were retained; verify individual AWS resources rather than assuming they are gone. OpenTofu still describes the old cluster and can propose recreating resources.
   Configs retained as recovery material: `~/.kube/config-aws-migration`, `~/.talos/config-aws-migration`.
   Handbook: [`docs/src/servers/aws-k8s/cluster.md`](docs/src/servers/aws-k8s/cluster.md).
-- **Spindle VPS** — Matrix, standalone LiveKit, School, Reef and Hub run on an Oracle Always Free A1 VM in `eu-frankfurt-1`, 2 OCPU / 12 GB, joined to the tailnet and locked down. The kit and runbook are in [`docs/src/servers/spindle-vps/`](docs/src/servers/spindle-vps/README.md); Oracle API key/config are in Bitwarden. Cloudflare DNS failover is manual, not automatic.
+- **Spindle VPS** — Matrix, standalone LiveKit, School, Reef and Hub run on an Oracle Always Free A1 VM in `eu-frankfurt-1`, 2 OCPU / 12 GB, joined to the tailnet and locked down. The kit and runbook are in [`docs/src/servers/spindle-vps/`](docs/src/servers/spindle-vps/README.md); Oracle API key/config are in Bitwarden. Cloudflare DNS failover is manual, not automatic. School and Reef (Compose under `/srv/hives`) are documented, with roster, identity and the safe edit procedure, in [`docs/src/cluster/hive.md`](docs/src/cluster/hive.md); more than one operator edits that directory.
 
 Neither cluster's nodes are Ansible-managed — Talos has no SSH. They are not in
 `inventory.yml`; access is `talosctl`/`kubectl` only.
@@ -81,7 +81,7 @@ Production workloads: Lemonade (AMD-optimized local AI), KubeVirt v1.8.2 + KubeV
 
 ## Automation (bots + Hive)
 
-Renovate and the Hive (hive.reilly.asia, `hanthor-hive-agent`) open PRs; master is protected (CI + code-owner review, admin bypass). `.github/CODEOWNERS` is deny-by-default with carve-outs for paths that never run on the fleet (docs, tests, talos-k8s, pi skills, dep manifests) — only those auto-merge. See [`docs/src/automation.md`](docs/src/automation.md). Don't widen the carve-outs to anything the fleet timer executes.
+Renovate and the Hive open PRs; the live Hives are school (`hanthor-hive-agent`) and reef (`tuna-reef-hive`) on the Spindle VPS and cover only `tuna-os/*` repos, not this repo (see [`docs/src/cluster/hive.md`](docs/src/cluster/hive.md)). master is protected (CI + code-owner review, admin bypass). `.github/CODEOWNERS` is deny-by-default with carve-outs for paths that never run on the fleet (docs, tests, talos-k8s, pi skills, dep manifests) — only those auto-merge. See [`docs/src/automation.md`](docs/src/automation.md). Don't widen the carve-outs to anything the fleet timer executes.
 
 ## Don'ts
 

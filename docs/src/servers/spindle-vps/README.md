@@ -6,9 +6,12 @@ standalone **LiveKit** and **lk-jwt-service** (MatrixRTC; no ESS chart/runtime),
 as Docker Compose services under `/srv/spindle`.
 
 The School and Reef Hives, Hub and branded hub frontend run separately under `/srv/hives`, sharing
-the `spindle_default` network and Caddy ingress. The `omp-auth-broker` user service also runs on
-this host. The Hive deployment's runtime configuration and data are not restored by `deploy.sh`;
-preserve and back them up separately.
+the `spindle_default` network and Caddy ingress. Their layout, roster, identity and the safe way to
+edit them are in the [Hive operations guide](../../cluster/hive.md#current-deployment-spindle-vps).
+The `omp-auth-broker` user service also runs on this host. The Hive deployment's runtime
+configuration and data are not restored by `deploy.sh`; preserve and back them up separately. Each
+spoke is capped at 2560 MB (raised from 2 GB on 2026-11-13 after OOM kills during builds), so
+budget that alongside Spindle and LiveKit when sizing the host.
 
 | Piece | Source |
 |---|---|

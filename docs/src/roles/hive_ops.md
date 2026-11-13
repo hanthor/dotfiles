@@ -34,7 +34,7 @@ part of this documentation update.
 ## Historical unit inventory
 
 The checked-in unit files describe the old DeepSeek-era setup, not the current
-`omp` seed configuration on Spindle. Their schedules are:
+`claude`-backend configuration on Spindle. Their schedules are:
 
 | Timer | Checked-in schedule | Historical purpose |
 |---|---|---|
