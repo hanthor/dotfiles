@@ -1,0 +1,821 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Hive Agent Fleet - Infrastructure Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="James Reilly&#x27;s personal fleet (Ansible dotfiles) and the TunaOS infrastructure it administers">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Infrastructure Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/cluster/hive.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="hive--ai-agent-supervisor"><a class="header" href="#hive--ai-agent-supervisor">Hive — AI Agent Supervisor</a></h1>
+<h2 id="current-deployment-spindle-vps"><a class="header" href="#current-deployment-spindle-vps">Current deployment: Spindle VPS</a></h2>
+<p>Two Hive spokes, <strong>school</strong> and <strong>reef</strong>, and their <strong>hub</strong> run as Docker
+Compose services on the <a href="../servers/spindle-vps/README.html">Spindle VPS</a> under
+<code>/srv/hives</code> (<code>ubuntu@100.113.75.88</code> over Tailscale). Caddy routes
+<a href="https://school.tunaos.org">school.tunaos.org</a>,
+<a href="https://reef.tunaos.org">reef.tunaos.org</a> and
+<a href="https://hub.tunaos.org">hub.tunaos.org</a> to them. Everything below was read from
+the host on 2026-11-13 unless marked <em>unverified</em>. Container state alone does
+not prove agents are healthy; see <a href="#checking-health">Checking health</a>.</p>
+<p>This section is the current operations guide. The
+<a href="#archived-cluster-guide">archived cluster guide</a> after it describes the retired
+Kubernetes deployment and must not be applied here.</p>
+<h3 id="layout"><a class="header" href="#layout">Layout</a></h3>
+<pre><code class="language-text">/srv/hives/
+├── compose.yaml            # services: hub, hub-front, school, reef (network spindle_default)
+├── compose.override.yaml   # pins the running binary/dashboard, memory limits, session pool
+├── .env                    # secrets and NTFY topic (mode 600; never print or commit)
+├── bin/hive-&lt;sha&gt;          # fork builds; compose.yaml mounts bin/hive, the override re-pins one
+├── &lt;spoke&gt;/config/hive.yaml        # seed, mounted read-only at /etc/hive
+├── &lt;spoke&gt;/data/hive.yaml.runtime  # live config, in the spoke's /data volume
+├── hub/  hub-front/        # hub config/data/secrets; static front page
+└── backups/                # timestamped copies of every config and data snapshot
+</code></pre>
+<ul>
+<li><strong>Seed vs runtime.</strong> The spoke starts from the seed and persists its live
+configuration to <code>data/hive.yaml.runtime</code>, which then wins. Hive can rewrite
+the runtime file (dashboard changes, ACMM level), so the two files drift:
+reef's runtime is ACMM 6 while its seed says 5. Edit the <strong>seed and the
+runtime</strong> for anything you want to stick, then verify the parsed result.</li>
+<li><strong>Binary.</strong> <code>compose.yaml</code> bind-mounts <code>bin/hive</code> over <code>/usr/local/bin/hive</code>;
+on 2026-11-13 <code>compose.override.yaml</code> re-pins hub, school and reef to
+<code>bin/hive-2ef7dc7c0</code> (a <code>tuna-os/hive</code> fork build on upstream v6) and mounts a
+matching dashboard HTML on the spokes. The image tag
+(<code>ghcr.io/hivecommons/hive:v6-latest</code>, hub <code>hive-hub:v6-latest</code>) does not
+identify the running code; the header of the override file is the change log
+and rollback note.</li>
+<li><strong>Agents.</strong> All agents use the <code>claude</code> backend (sonnet, opus, haiku and
+fable tiers) on both spokes; the seed's <code>backends.allow</code> also lists <code>omp</code>
+(and <code>muse</code> on school). Runtime model assignments differ from the seed's.</li>
+<li><strong>Dashboard.</strong> <code>dashboard.authorized_users</code> is <code>hanthor:owner</code>. The
+<code>dashboard.auth_token</code> in the runtime file and the GitHub App key are
+secrets: never print, paste or commit them.</li>
+</ul>
+<h3 id="roster"><a class="header" href="#roster">Roster</a></h3>
+<p>Each non-empty <code>tuna-os</code> repo is in exactly one hive, except the deliberate
+exclusions below (state of 2026-11-13; <code>xfce-linux</code> was renamed <code>brussels</code>).</p>
+<div class="table-wrapper"><table><thead><tr><th>Hive</th><th>Repos</th></tr></thead><tbody>
+<tr><td><strong>school</strong> (21)</td><td>tunaos, tromso, tacklebox, brussels, tunaos-packages, wootc, fisherman, bootc-installer, bootc-migrate, bootsahi, remora, bst-ci, iso-builder, branding, homebrew-tap, scoop-bucket, athens, docs, .github, bluefin-cli, tuna-desktop</td></tr>
+<tr><td><strong>reef</strong> (22)</td><td>Tavern, corral, flatpak-index, gtk-office-suite, blueshell, dualcut, gnome-hive-monitor, hive, mandelbrot, mariner, protota, spindle, PaperWM, compass, ccleft, hive-operator, quickcast, postcard, lifafa, tuna-mail, proton-unofficial-sdk, tuta-unofficial-sdk</td></tr>
+<tr><td><strong>excluded</strong></td><td>iced, libcosmic, rust-atomicwrites, rdocx, changelog-action (patch-carrier forks, no issues); flatpark (excluded from automation); publish-proof (empty)</td></tr>
+</tbody></table>
+</div>
+<p>The roster is two lists, <code>project.repos</code> and <code>dashboard.matrix.repos</code>, and both
+must match in <strong>both</strong> files of the spoke (four edits per change). The seed uses
+either bare names or <code>tuna-os/&lt;name&gt;</code> in <code>project.repos</code> (reef bare, school full);
+the runtime file uses bare names there and <code>tuna-os/&lt;name&gt;</code> in the matrix. Keep
+whatever style the file already has. <code>school</code> also has a separate
+<code>revert_sheriff.repos</code> list (shadow mode); it is not part of the roster.</p>
+<p>As of 13:01Z on 2026-11-13 the reef <strong>seed</strong> lacked <code>postcard</code> (21 repos) while
+the runtime listed it (22); the intent of that seed edit is unverified.</p>
+<h3 id="identity"><a class="header" href="#identity">Identity</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Hive</th><th>GitHub App</th><th>App id</th></tr></thead><tbody>
+<tr><td>school</td><td><code>hanthor-hive-agent</code></td><td>3942065</td></tr>
+<tr><td>reef</td><td><code>tuna-reef-hive</code></td><td>5546574</td></tr>
+</tbody></table>
+</div>
+<p>Both set <code>github.app_authored_prs: true</code> and <code>project.ai_author: ""</code>, so PRs and
+comments come from the App's <code>[bot]</code> account, not from a human or AI-author
+trailer. Each hive lists the other App in <code>github.additional_bot_logins</code>. Both
+Apps are installed on every org repo <em>(per the maintainer; not checkable from
+the host)</em>, so <strong>adding a repo needs only a roster edit</strong>, no App change.</p>
+<p>Both hives set <code>sentinel.exempt_logins: [renovate[bot]]</code>. Sentinel's
+<code>sensitive_path</code> rule flagged every dependency bump and re-flagged after each
+rebase. The alternative, <code>auto_merge.trusted_bot_authors</code>, would also let Hive
+auto-merge Renovate major bumps, which the org forbids.</p>
+<h3 id="adding-or-moving-a-repo"><a class="header" href="#adding-or-moving-a-repo">Adding or moving a repo</a></h3>
+<ol>
+<li>Pick the hive: school for the OS, packaging, installer and org-level repos;
+reef for apps, libraries and the Matrix/Hive tooling (see the table). Check
+the repo is in no other roster.</li>
+<li>Apply the <a href="#safe-edit-procedure">safe edit procedure</a> with <code>add &lt;repo&gt;</code> on
+the target hive's two files. To <strong>move</strong> a repo, also run <code>remove &lt;repo&gt;</code> on
+the old hive's two files, in the same maintenance window, so it is never in
+both or neither.</li>
+<li>Re-parse both files and check the list lengths and that the new repo shows
+up on the hive's dashboard; no App installation step is needed.</li>
+</ol>
+<h3 id="safe-edit-procedure"><a class="header" href="#safe-edit-procedure">Safe edit procedure</a></h3>
+<p>More than one operator edits <code>/srv/hives</code> (including agents). Re-read the files
+immediately before editing and never overwrite a file you read earlier.</p>
+<p>Do <strong>not</strong> <code>docker compose up</code> a spoke that is running to apply config: it
+triggered a container-rename bug. Remove the container first:</p>
+<pre><code class="language-bash">cd /srv/hives
+docker compose rm -f -s reef          # stop and remove the spoke container only
+python3 hive-roster.py add NAME reef/config/hive.yaml reef/data/hive.yaml.runtime
+docker compose up -d --no-deps reef   # recreate only this spoke
+docker ps --filter name=hives-        # verify: Up, and the right name
+</code></pre>
+<p>The edit step must (a) write a timestamped copy of each file into
+<code>/srv/hives/backups/</code> first, (b) parse the YAML before and after, and (c) abort,
+writing nothing, if anything other than the intended change would differ. This
+helper does that for roster edits (save it as <code>/srv/hives/hive-roster.py</code> and
+run it from <code>/srv/hives</code>; it needs PyYAML):</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+"""hive-roster.py add|remove REPO FILE...  (run with the spoke container removed)"""
+import datetime, shutil, sys, yaml
+
+ORG = "tuna-os"
+BACKUPS = "/srv/hives/backups"
+PATHS = (("project", "repos"), ("dashboard", "matrix", "repos"))
+
+def seq_node(root, path):
+    node = root
+    for key in path:
+        node = next(v for k, v in node.value if k.value == key)
+    return node
+
+def edit(text, op, repo):
+    lines = text.split("\n")
+    root = yaml.compose(text)
+    # bottom-most list first so earlier line numbers stay valid
+    seqs = sorted((seq_node(root, p) for p in PATHS), key=lambda n: -n.start_mark.line)
+    for seq in seqs:
+        full = seq.value[0].value.startswith(ORG + "/")
+        item = f"{ORG}/{repo}" if full else repo
+        hit = [n for n in seq.value if n.value in (repo, f"{ORG}/{repo}")]
+        col, last = seq.value[0].start_mark.column, seq.value[-1].start_mark.line
+        if op == "add" and not hit:
+            lines.insert(last + 1, " " * (col - 2) + "- " + item)
+        elif op == "remove":
+            for n in sorted(hit, key=lambda n: -n.start_mark.line):
+                del lines[n.start_mark.line]
+    return "\n".join(lines)
+
+def main(op, repo, *files):
+    assert op in ("add", "remove") and files
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    new = {}
+    for f in files:
+        old = open(f).read()
+        want = yaml.safe_load(old)
+        for path in PATHS:
+            d = want
+            for k in path[:-1]:
+                d = d[k]
+            style = d[path[-1]][0].startswith(ORG + "/")
+            item = f"{ORG}/{repo}" if style else repo
+            d[path[-1]] = [x for x in d[path[-1]] if x not in (repo, f"{ORG}/{repo}")]
+            if op == "add":
+                d[path[-1]].append(item)
+        text = edit(old, op, repo)
+        if yaml.safe_load(text) != want:
+            sys.exit(f"{f}: unrelated change detected, aborting (nothing written)")
+        new[f] = text
+    for f, text in new.items():
+        shutil.copy2(f, f"{BACKUPS}/{f.replace('/', '-')}.{stamp}")
+        open(f, "w").write(text)
+
+main(*sys.argv[1:])
+</code></pre>
+<p>The script was exercised only on synthetic copies of the two file styles, not
+on the live files. Backups from the 2026-11-13 edits are
+<code>backups/*.20261113T040153Z</code> (sentinel exemption) and
+<code>backups/*.roster.20261113T125525Z</code> (roster); to roll back, remove the
+container, restore both files of the spoke from the same stamp, and <code>up</code> it.
+Rolling back the binary is described in the header of <code>compose.override.yaml</code>.</p>
+<h3 id="operating-from-github"><a class="header" href="#operating-from-github">Operating from GitHub</a></h3>
+<p>You rarely need the host. On a hive-managed issue or PR:</p>
+<ul>
+<li><code>/hive decision &lt;instruction&gt;</code> records a maintainer decision for the agents;
+<code>/hive approve</code> lifts Hive's own <code>needs-human</code> hold on a PR; <code>/fixed</code> tells
+Hive an issue is resolved.</li>
+<li>On PRs that Hive did not author, a GitHub review (approve or request changes)
+is honoured.</li>
+<li>When Hive un-parks an issue it removes the <code>blocked</code> label itself. Decision
+comments written by the maintainer's agent start with
+<code>Decision (for @hanthor):</code>.</li>
+</ul>
+<p>(The command names are present in the running binary and the usage comes from
+the maintainer; their exact semantics were not exercised for this page.)</p>
+<h3 id="checking-health"><a class="header" href="#checking-health">Checking health</a></h3>
+<pre><code class="language-bash">curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/api/health   # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://reef.tunaos.org/api/health     # 200
+curl -s https://hub.tunaos.org/api/fleet-stats                                  # hub: /api/health is 404
+ssh ubuntu@100.113.75.88 'docker ps --filter name=hives-'
+</code></pre>
+<p>For authenticated status from the host, call the API inside the container with
+the container's own token, so it is never printed:</p>
+<pre><code class="language-bash">ssh ubuntu@100.113.75.88 'docker exec hives-school-1 sh -c \
+  "curl -sS -H \"X-Hive-Internal: \$HIVE_DASHBOARD_TOKEN\" http://127.0.0.1:3002/api/status"' \
+  | jq '.agents[] | {name, paused, state}'
+</code></pre>
+<p>Agents that show <code>stopped</code> are normal between governor kicks; check authored
+PRs and issues (<code>gh search prs --author "hanthor-hive-agent[bot]"</code> and
+<code>"tuna-reef-hive[bot]"</code>) to see whether a hive is producing.</p>
+<h3 id="known-limits"><a class="header" href="#known-limits">Known limits</a></h3>
+<ul>
+<li><strong>Memory.</strong> Spokes are capped at 2560 MB each (raised from 2 GB on 2026-11-13
+after hive was OOM-killed during rustc/govulncheck builds). The hub allows 2
+concurrent shared-pool agent sessions across both spokes (about 400 MB per
+Claude session; the host had about 5 GB free and no swap). Do not raise either
+without revisiting the host's headroom.</li>
+<li><strong>Hive's own CI</strong> for <code>tuna-os/hive</code> is blocked by GitHub ("Actions has been
+disabled"; a support ticket is pending), so fork builds are not CI-verified.</li>
+<li><strong>Reply spam</strong>: upstream
+<a href="https://github.com/hivecommons/hive/pull/17512">hivecommons/hive#17512</a>
+(draft) fixes Hive repeating its un-park replies because it does not
+recognise its own earlier reply when posting as an App login.</li>
+<li><strong>Concurrent edits and drift</strong>: see the layout notes above; verify after every
+restart that the parsed seed and runtime agree on the roster.</li>
+<li>Not covered here: the hub's own config, the <code>omp-auth-broker</code> user service
+the spokes call (<code>OMP_AUTH_BROKER_URL</code>), and Caddy routing, which were not
+re-inspected for this page. The <code>hive.reilly.asia</code> hanthor spoke of the old AWS
+cluster has no container on this host; its current status is unverified. The
+<a href="../roles/hive_ops.html">hive_ops role</a> targets the retired cluster, not this
+deployment.</li>
+</ul>
+<h2 id="archived-cluster-guide"><a class="header" href="#archived-cluster-guide">Archived cluster guide</a></h2>
+<blockquote>
+<p><strong>Historical reference only — do not apply or run the Kubernetes, image-build,
+secret, restart, or state-reset instructions below.</strong> The AWS Talos cluster
+was terminated on 2026-10-25; its Kubernetes resources and CronJobs are not a
+current deployment. The home Talos cluster (bihar and karnataka) is powered
+down temporarily, not decommissioned. Preserve its configurations. The
+sections below describe older home-cluster and AWS configurations at different
+points in time, not the current Spindle service. See the
+<a href="../servers/aws-k8s/cluster.html">AWS cluster history</a> and
+<a href="https://github.com/hanthor/dotfiles/tree/master/talos-k8s/hive">historical cluster manifests</a>.
+Examples are retained for context, not as instructions for either cluster.</p>
+</blockquote>
+<h2>The earlier home-cluster Hive used pi with DeepSeek, tmux agents, a governor,
+and a GitHub App. The architecture and examples below are snapshots of that
+period; later AWS configurations and the current Compose deployment differ.</h2>
+<h2 id="1-architecture-historical"><a class="header" href="#1-architecture-historical">1. Architecture (historical)</a></h2>
+<pre><code>┌──────────────────────────────────────────────────────────────┐
+│ Namespace: hive (node: bihar)                                │
+│                                                              │
+│  ┌─────────┐  ┌──────────┐  ┌────────────────────────────┐  │
+│  │ hive    │  │ proxy    │  │ 9x pi agents (tmux sessions)│  │
+│  │ Go bin  │  │ node.js  │  │                            │  │
+│  │ :3002   │  │ :3001    │  │ supervisor  ADVISORY       │  │
+│  │ (API)   │  │ (web UI) │  │ scanner     ISSUES_AND_PRS │  │
+│  └────┬────┘  └────┬─────┘  │ ci-maintain ISSUES_AND_PRS │  │
+│       │            │        │ quality     ISSUES_AND_PRS │  │
+│       └────────────┘        │ sec-check   ISSUES_AND_PRS │  │
+│                             │ guide       ISSUES_AND_PRS │  │
+│  ┌──────────────────────────│ architect   ISSUES_AND_PRS │  │
+│  │  pi → DeepSeek API       │ strategist  ISSUES_AND_PRS │  │
+│  │  (native, no proxy)      │ brainstorm  on-demand     │  │
+│  │  GitHub App → gh CLI     └────────────┬───────────────┘  │
+│  └───────────────────────────────────────┘                  │
+│                                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
+│  │ ConfigMap│  │ Secret   │  │ PVC      │                  │
+│  │ hive.yaml│  │ DEEPSEEK │  │ hive-data│                  │
+│  │ backends │  │ GH App   │  │ (10Gi)   │                  │
+│  └──────────┘  └──────────┘  └──────────┘                  │
+└──────────────────────────────────────────────────────────────┘
+         │
+    ┌────▼────┐     ┌──────────────────┐
+    │ GitHub  │     │ Tailscale Ingress │
+    │ tuna-os │     │ hive.manatee-     │
+    │ repos   │     │ basking.ts.net    │
+    └─────────┘     └──────────────────┘
+</code></pre>
+<h3 id="components"><a class="header" href="#components">Components</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Language</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><strong>hive</strong> (Go binary)</td><td>Go</td><td>Agent manager, governor, scheduler, dashboard API</td></tr>
+<tr><td><strong>proxy</strong> (Node.js)</td><td>JS</td><td>Dashboard web UI + SSE, proxies to Go API</td></tr>
+<tr><td><strong>pi</strong> (coding agent)</td><td>Node.js</td><td>AI agent CLI running in tmux sessions</td></tr>
+<tr><td><strong>pi-wrapper.sh</strong></td><td>Shell</td><td>Tmux interface adapter — restart loop, ready markers</td></tr>
+</tbody></table>
+</div>
+<h3 id="how-agents-work"><a class="header" href="#how-agents-work">How agents work</a></h3>
+<p>Each agent runs as a long-lived <strong>pi</strong> process inside a tmux session. The Go binary:</p>
+<ol>
+<li>Creates a tmux session per agent (<code>hive-supervisor</code>, <code>hive-scanner</code>, etc.)</li>
+<li>Writes a boot prompt (agent role, authorized repos, instructions) via <code>send-keys</code></li>
+<li>Detects agent readiness from CLI markers in the pane output</li>
+<li><strong>Governor</strong> evaluates the issue queue every 5 minutes and sends <em>kick</em> prompts to due agents</li>
+<li><code>clear_on_kick: true</code> agents receive <code>^C</code> before each kick to reset their session</li>
+</ol>
+<p>Agents share a persistent <code>/data</code> volume (10Gi PVC) for beads, session state, and agent configs.</p>
+<hr />
+<h2 id="2-what-hive-did-historical"><a class="header" href="#2-what-hive-did-historical">2. What Hive did (historical)</a></h2>
+<h3 id="advisory-digest"><a class="header" href="#advisory-digest">Advisory digest</a></h3>
+<p>The dashboard shows agent findings — CI failures, test coverage gaps, security issues, documentation problems. Each agent produces <strong>beads</strong> (structured findings) that appear in the advisory digest.</p>
+<h3 id="issue-creation"><a class="header" href="#issue-creation">Issue creation</a></h3>
+<p>At ACMM L3+, agents create GitHub issues. At L4+, they can create hold-gated PRs. The <strong>sec-check</strong> agent scans dependencies for CVEs. The <strong>ci-maintainer</strong> agent monitors CI failures.</p>
+<h3 id="strategy-lab"><a class="header" href="#strategy-lab">Strategy Lab</a></h3>
+<p>Inception feature: describe what you want to build, and Hive scaffolds a new project with knowledge base facts and spec-kit specifications. Powered by the <strong>brainstorm</strong> agent (on-demand).</p>
+<h3 id="knowledge-base"><a class="header" href="#knowledge-base">Knowledge Base</a></h3>
+<p>Agents can contribute facts to a shared knowledge base. Facts are tagged by type (pattern, gotcha, regression, decision, etc.) and searchable from the dashboard.</p>
+<hr />
+<h2 id="3-deployment-historical"><a class="header" href="#3-deployment-historical">3. Deployment (historical)</a></h2>
+<h3 id="namespace-and-resources"><a class="header" href="#namespace-and-resources">Namespace and resources</a></h3>
+<p>The home-cluster deployment used the <code>hive</code> namespace on bihar:</p>
+<pre><code>hive (namespace)
+├── deploy/hive           — main controller pod
+├── svc/hive              — ClusterIP :3001 (dashboard), :3002 (API), :7681 (ttyd)
+├── ingress/hive          — Tailscale ingress → hive.manatee-basking.ts.net
+├── configmap/hive-config — hive.yaml (project config, agents, governor)
+├── secret/hive-secrets   — DEEPSEEK_API_KEY, GH App credentials
+├── pvc/hive-data         — 10Gi persistent state
+└── secret/ghcr-auth      — GHCR pull credentials
+</code></pre>
+<h3 id="historical-files-not-the-current-repository-layout"><a class="header" href="#historical-files-not-the-current-repository-layout">Historical files (not the current repository layout)</a></h3>
+<pre><code>talos-k8s/hive/
+├── hive.yaml              — All K8s resources (namespace, deploy, svc, ingress, configmap)
+├── Dockerfile             — Custom image (hive v2 + pi + fd/ripgrep)
+├── pi-wrapper.sh          — Wrapper: Hive tmux interface → pi interactive TUI
+├── pi-marker.patch        — Adds "pi" to hive's cliPaneMarkers (source patch)
+├── build-job.yaml         — Kaniko build job (deprecated, use CI)
+├── deepseek-chat.py       — Python fallback (unused with pi)
+├── goose-wrapper.sh       — Legacy goose wrapper (replaced by pi-wrapper.sh)
+├── goose-marker.patch     — Legacy goose patch (replaced by pi-marker.patch)
+├── SKILL.md               — Skill file for pi coding agent
+├── README.md              — Quick reference
+└── HANDOFF.md             — Debugging session notes
+</code></pre>
+<h3 id="ci-workflow"><a class="header" href="#ci-workflow">CI workflow</a></h3>
+<p>The former <code>.github/workflows/hive-build.yml</code> workflow did the following:</p>
+<ol>
+<li>Clones <code>kubestellar/hive</code> v2 source</li>
+<li>Applies <code>pi-marker.patch</code> and three sed patches to the Go source:
+<ul>
+<li>Adds <code>"pi"</code> to <code>cliPaneMarkers</code> (so agents aren't detected as crashed)</li>
+<li>Adds <code>"pi": true</code> to <code>validBackends</code> (config validation)</li>
+<li>Adds <code>"pi": "pi"</code> to <code>backendBinary()</code> (binary resolution)</li>
+</ul>
+</li>
+<li>Cross-compiles Go binary for amd64</li>
+<li>Builds Docker image with pi + pi-wrapper.sh + fd/ripgrep</li>
+<li>Pushes to <code>ghcr.io/hanthor/hive:latest</code></li>
+</ol>
+<h3 id="secrets-and-deployment-historical"><a class="header" href="#secrets-and-deployment-historical">Secrets and deployment (historical)</a></h3>
+<p>The home-cluster pod used a Kubernetes Secret for DeepSeek and GitHub App
+credentials. Later, the AWS deployment exported spoke manifests under
+<code>talos-k8s/hive/spokes/</code> and used the hive-operator to manage images. These
+manifests are historical records, <strong>not deployment instructions</strong>. The home
+cluster's former Tailscale ingress was <code>hive.manatee-basking.ts.net</code>.</p>
+<hr />
+<h2 id="4-ai-backend-pi--deepseek-historical"><a class="header" href="#4-ai-backend-pi--deepseek-historical">4. AI backend: pi + DeepSeek (historical)</a></h2>
+<h3 id="why-pi-not-goose"><a class="header" href="#why-pi-not-goose">Why pi (not goose)</a></h3>
+<p>Hive originally used <strong>goose</strong> (v1.36 from AAIF) as the AI agent CLI. Goose does not natively support DeepSeek, requiring a <strong>Python proxy</strong> (<code>deepseek-proxy.py</code>) to:</p>
+<ul>
+<li>Strip <code>reasoning_content</code> from message history</li>
+<li>Inject <code>thinking:{type:disabled}</code> to prevent thinking block generation</li>
+<li>Route through <code>litellm</code> pointing at a local proxy</li>
+</ul>
+<p>This was fragile. <strong>pi</strong> natively supports DeepSeek via its <code>deepseek</code> provider — no proxy, no litellm, no workaround.</p>
+<h3 id="why-pi-works-for-unattended-agents"><a class="header" href="#why-pi-works-for-unattended-agents">Why pi works for unattended agents</a></h3>
+<p>Pi intentionally has <strong>no permission popups</strong> — tools (<code>read</code>, <code>write</code>, <code>edit</code>, <code>bash</code>) auto-execute without user confirmation. This makes it ideal for Hive's unattended agent workflow where no human is available to approve tool calls.</p>
+<h3 id="pi-wrappersh"><a class="header" href="#pi-wrappersh">pi-wrapper.sh</a></h3>
+<p>The wrapper translates Hive's backend CLI interface to pi:</p>
+<pre><code class="language-bash"># Hive calls: pi --no-confirm --model deepseek-v4-pro
+# Wrapper strips --no-confirm (pi doesn't need it), passes --model to pi
+# Sets up ~/.pi/agent/settings.json with DeepSeek config
+# Runs pi in interactive TUI mode inside the tmux pane
+# Restart loop: ^C from clear_on_kick kills pi-real, wrapper re-emits ready markers
+</code></pre>
+<h3 id="pi-configuration"><a class="header" href="#pi-configuration">pi configuration</a></h3>
+<p>Written at runtime by the wrapper:</p>
+<pre><code class="language-json">{
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-v4-pro",
+  "quietStartup": true,
+  "hideThinkingBlock": true,
+  "enableInstallTelemetry": false
+}
+</code></pre>
+<h3 id="helper-tools"><a class="header" href="#helper-tools">Helper tools</a></h3>
+<p><code>fd</code> (fd-find) and <code>ripgrep</code> are pre-installed via apt in the Docker image so pi doesn't need to download them at runtime (the Hive MITM proxy would corrupt the downloads).</p>
+<hr />
+<h2 id="5-agents-historical"><a class="header" href="#5-agents-historical">5. Agents (historical)</a></h2>
+<h3 id="historical-agents-acmm-l5"><a class="header" href="#historical-agents-acmm-l5">Historical agents (ACMM L5)</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Agent</th><th>Mode</th><th>Cadence</th><th>Role</th></tr></thead><tbody>
+<tr><td><strong>supervisor</strong></td><td>ADVISORY</td><td>5m</td><td>Agent health monitoring, sweep analysis, stall detection</td></tr>
+<tr><td><strong>scanner</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Issue triage, PR dispatch, merge management</td></tr>
+<tr><td><strong>ci-maintainer</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>CI/CD health, workflow fixes, build monitoring</td></tr>
+<tr><td><strong>quality</strong></td><td>ISSUES_AND_PRS</td><td>2h</td><td>Test coverage, integration tests, quality gates</td></tr>
+<tr><td><strong>sec-check</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Security scanning, dependency audit, CVE monitoring</td></tr>
+<tr><td><strong>guide</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Documentation gaps, onboarding analysis</td></tr>
+<tr><td><strong>architect</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Cross-cutting RFCs, refactors, new features</td></tr>
+<tr><td><strong>strategist</strong></td><td>ISSUES_AND_PRS</td><td>4h</td><td>Experiment design, A/B testing, strategy lab</td></tr>
+<tr><td><strong>brainstorm</strong></td><td>on-demand</td><td>—</td><td>Ideation via Inception; proposes features and architecture</td></tr>
+</tbody></table>
+</div>
+<h3 id="agent-modes"><a class="header" href="#agent-modes">Agent modes</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Mode</th><th>Can create issues</th><th>Can create PRs</th><th>Can merge</th></tr></thead><tbody>
+<tr><td>ADVISORY</td><td>✗</td><td>✗</td><td>✗</td></tr>
+<tr><td>ISSUES_ONLY</td><td>✓</td><td>✗</td><td>✗</td></tr>
+<tr><td>ISSUES_AND_PRS</td><td>✓</td><td>✓ (hold-gated)</td><td>✗</td></tr>
+</tbody></table>
+</div>
+<p>Mode is determined by ACMM level + agent config. At L5, most agents run in ISSUES_AND_PRS.</p>
+<h3 id="agent-lifecycle"><a class="header" href="#agent-lifecycle">Agent lifecycle</a></h3>
+<ol>
+<li><strong>Boot</strong>: Agent starts in tmux session, receives role prompt + authorized repos</li>
+<li><strong>Kick</strong>: Governor sends a task prompt (e.g., "scan for open issues", "check CI health")</li>
+<li><strong>Work</strong>: pi processes the prompt, runs tools, produces beads or GitHub issues/PRs</li>
+<li><strong>Idle</strong>: Agent waits for next kick</li>
+<li><strong>Clear on kick</strong> (<code>clear_on_kick: true</code>): <code>^C</code> kills the pi process before the next kick, wrapper restarts it fresh</li>
+</ol>
+<h3 id="adding-a-new-agent"><a class="header" href="#adding-a-new-agent">Adding a new agent</a></h3>
+<pre><code class="language-yaml"># In hive.yaml ConfigMap, under agents:
+my-agent:
+  enabled: true
+  backend: pi
+  model: deepseek-v4-pro
+  mode: ISSUES_AND_PRS
+  beads_dir: /data/beads/my-agent
+  clear_on_kick: true
+</code></pre>
+<p>Also add the agent to governor cadences for each mode:</p>
+<pre><code class="language-yaml">governor:
+  modes:
+    idle:
+      my-agent: 4h
+    quiet:
+      my-agent: 4h
+    busy:
+      my-agent: 1h
+    surge:
+      my-agent: pause
+</code></pre>
+<hr />
+<h2 id="6-acmm-levels-historical"><a class="header" href="#6-acmm-levels-historical">6. ACMM levels (historical)</a></h2>
+<p>The ACMM (Autonomous Code Maintenance Maturity) framework defines 6 levels:</p>
+<div class="table-wrapper"><table><thead><tr><th>Level</th><th>Name</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><strong>L1</strong></td><td>Advisory</td><td>Advisory-only reports, no writes</td></tr>
+<tr><td><strong>L2</strong></td><td>Issues</td><td>Can create issues, no PRs</td></tr>
+<tr><td><strong>L3</strong></td><td>CI/CD</td><td>Issues + hold-gated PRs, merge requires human LGTM</td></tr>
+<tr><td><strong>L4</strong></td><td>Guarded</td><td>Broader write access, more agents active</td></tr>
+<tr><td><strong>L5</strong></td><td>Guarded Auto-Merge</td><td>Auto-merge on green CI with guardrails</td></tr>
+<tr><td><strong>L6</strong></td><td>Full Autonomy</td><td>Unrestricted agent actions</td></tr>
+</tbody></table>
+</div>
+<p>That historical configuration used <strong>L5</strong>; this is not a statement about the current spokes.</p>
+<h3 id="changing-acmm-level"><a class="header" href="#changing-acmm-level">Changing ACMM level</a></h3>
+<pre><code class="language-yaml"># In hive.yaml ConfigMap
+acmm_level: 5
+</code></pre>
+<p>The old procedure reset persistent state and restarted the pod; do not use it
+on the current deployment or on retained backups.</p>
+<hr />
+<h2 id="7-governor-historical"><a class="header" href="#7-governor-historical">7. Governor (historical)</a></h2>
+<p>The governor evaluates the issue queue every 5 minutes (<code>eval_interval_s: 300</code>) and switches between four modes:</p>
+<div class="table-wrapper"><table><thead><tr><th>Mode</th><th>Threshold</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><strong>idle</strong></td><td>0 issues</td><td>Slow cadences, minimal activity</td></tr>
+<tr><td><strong>quiet</strong></td><td>≤2 issues</td><td>Normal cadences</td></tr>
+<tr><td><strong>busy</strong></td><td>≤50 issues</td><td>Faster scanner, ci-maintainer still active</td></tr>
+<tr><td><strong>surge</strong></td><td>&gt;50 issues</td><td>Scanner every 15m, ci-maintainer paused</td></tr>
+</tbody></table>
+</div>
+<h3 id="historical-cadences"><a class="header" href="#historical-cadences">Historical cadences</a></h3>
+<pre><code class="language-yaml">governor:
+  eval_interval_s: 300
+  modes:
+    surge:
+      threshold: 50
+      scanner: 15m
+      ci-maintainer: pause
+      quality: pause
+      sec-check: pause
+      guide: pause
+      architect: pause
+      strategist: pause
+    busy:
+      threshold: 10
+      scanner: 15m
+      ci-maintainer: 1h
+    quiet:
+      threshold: 2
+      scanner: 15m
+      ci-maintainer: 45m
+    idle:
+      threshold: 0
+      scanner: 4h
+      ci-maintainer: 4h
+</code></pre>
+<p>The supervisor always runs at 5m regardless of mode.</p>
+<hr />
+<h2 id="8-configuration-historical"><a class="header" href="#8-configuration-historical">8. Configuration (historical)</a></h2>
+<h3 id="backends-backendsconf"><a class="header" href="#backends-backendsconf">Backends (backends.conf)</a></h3>
+<p>The <code>backends.conf</code> in the ConfigMap defines supported AI backends. Adding a new backend requires entries in three places:</p>
+<ol>
+<li><code>KNOWN_BACKENDS</code> list</li>
+<li><code>backend_binary()</code> — maps backend name to binary in PATH</li>
+<li><code>backend_perm_flag()</code> — permission flag (pi returns empty — no permission popups)</li>
+</ol>
+<p>The old supported list was <code>claude copilot bob gemini codex amazonq goose aider pi</code>.</p>
+<h3 id="agent-configuration-hiveyaml"><a class="header" href="#agent-configuration-hiveyaml">Agent configuration (hive.yaml)</a></h3>
+<pre><code class="language-yaml">agents:
+  supervisor:
+    enabled: true
+    backend: pi
+    model: deepseek-v4-pro
+    beads_dir: /data/beads/supervisor
+    clear_on_kick: true
+</code></pre>
+<h3 id="persistent-state"><a class="header" href="#persistent-state">Persistent state</a></h3>
+<p>Two locations store state that survives pod restarts:</p>
+<ul>
+<li><strong><code>/data/hive-state.json</code></strong> — Governor mode, agent overrides, kick history, cadence overrides</li>
+<li><strong><code>/data/agent-configs/*.yaml</code></strong> — Per-agent persistent config (backend, model, mode, enabled, display name)</li>
+</ul>
+<p>Persistent overrides could cause stale values in that deployment. Do not copy
+its old state-reset and backend-rewrite commands to the current deployment.</p>
+<hr />
+<h2 id="9-building-the-image-historical"><a class="header" href="#9-building-the-image-historical">9. Building the image (historical)</a></h2>
+<p>The former CI workflow built <code>ghcr.io/hanthor/hive:latest</code>; an older Kaniko
+job was also used. Neither is a current deployment procedure.</p>
+<h3 id="whats-in-the-image"><a class="header" href="#whats-in-the-image">What's in the image</a></h3>
+<ul>
+<li><strong>Base</strong>: <code>node:24-slim</code></li>
+<li><strong>Runtime deps</strong>: bash, curl, git, gosu, iptables, jq, procps, python3, tmux, <code>fd-find</code>, <code>ripgrep</code></li>
+<li><strong>Go binaries</strong>: hive (agent manager), bd (bead CLI) — cross-compiled from <code>kubestellar/hive</code> v2</li>
+<li><strong>Node.js proxy</strong>: Dashboard UI + SSE, serves on :3001</li>
+<li><strong>pi</strong>: <code>@earendil-works/pi-coding-agent</code> installed via npm</li>
+<li><strong>pi-wrapper.sh</strong>: Replaces <code>/usr/local/bin/pi</code> with the tmux interface wrapper</li>
+<li><strong>gh CLI</strong>: GitHub CLI with wrapper for App token auth</li>
+<li><strong>Entrypoint</strong>: UID isolation, tmux setup, config backup, App token generation</li>
+</ul>
+<hr />
+<h2 id="10-historical-operations"><a class="header" href="#10-historical-operations">10. Historical operations</a></h2>
+<p>Operators inspected the old pod's health, tmux panes, pi processes and logs
+with <code>kubectl</code>. Those commands targeted the retired Kubernetes deployment;
+the read-only Compose inventory at the top of this page is the current starting
+point instead.</p>
+<h3 id="historical-restarts-and-state-resets"><a class="header" href="#historical-restarts-and-state-resets">Historical restarts and state resets</a></h3>
+<p>The former procedure restarted the pod and sometimes reset persistent state.
+It is not a recovery procedure for Spindle; do not reset retained data.</p>
+<hr />
+<h2 id="11-historical-troubleshooting"><a class="header" href="#11-historical-troubleshooting">11. Historical troubleshooting</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Symptom</th><th>Check</th></tr></thead><tbody>
+<tr><td>ImagePullBackOff</td><td>The home cluster once encountered IPv6 timeouts to ghcr.io</td></tr>
+<tr><td>Agent CLI crashed</td><td>Check <code>ps aux | grep pi</code> — should see 9 pi processes</td></tr>
+<tr><td>Agent stuck in ADVISORY mode</td><td>Historical state-file ACMM overrides</td></tr>
+<tr><td>Dashboard shows old backend/model</td><td>Historical <code>/data/agent-configs/*.yaml</code> overrides</td></tr>
+<tr><td>No kicks sent</td><td>Governor eval cycle: 5min. Agent cadences vary per mode</td></tr>
+<tr><td>Issues not created</td><td>GitHub App installation and authentication were relevant</td></tr>
+<tr><td>"CLI did not reach input prompt"</td><td>pi is mid-response when kick arrives. Normal — agent will pick up next kick</td></tr>
+<tr><td>fd/ripgrep download errors</td><td>pi can't download tools through MITM proxy. Pre-installed in Docker image</td></tr>
+<tr><td>"backend binary not found"</td><td>Missing binary in PATH. Check <code>backends.conf</code> and verify wrapper is at <code>/usr/local/bin/pi</code></td></tr>
+<tr><td>"failed to persist config"</td><td>Read-only ConfigMap mount. Cosmetic — config is cached in memory</td></tr>
+</tbody></table>
+</div>
+<h3 id="historical-agent-issues"><a class="header" href="#historical-agent-issues">Historical agent issues</a></h3>
+<p><strong>Agent shows bare bash shell:</strong></p>
+<ul>
+<li>pi process died or never started</li>
+<li>Check: <code>tmux capture-pane -t hive-scanner -p | tail -5</code></li>
+<li>Should show pi's footer (<code>deepseek-v4-pro • high</code>), not <code>$</code> bash prompt</li>
+</ul>
+<p><strong>Agent stuck at <code>/clear</code>:</strong></p>
+<ul>
+<li>Hive sent <code>/clear</code> to reset the agent before a kick</li>
+<li>Agent processed it but new kick hasn't arrived yet</li>
+<li>Wait for next governor cycle</li>
+</ul>
+<p><strong>Agent mode mismatch:</strong></p>
+<ul>
+<li>The state file held persistent mode overrides in that deployment.</li>
+</ul>
+<hr />
+<h2 id="12-github-app-historical"><a class="header" href="#12-github-app-historical">12. GitHub App (historical)</a></h2>
+<p>Hive authenticates to GitHub via a GitHub App installed on <code>tuna-os</code> (App and installation IDs are in the <code>hive-secrets</code> Secret).</p>
+<h3 id="token-generation"><a class="header" href="#token-generation">Token generation</a></h3>
+<p>The entrypoint generates an installation token on startup and caches it at <code>/var/run/hive-metrics/gh-app-token.cache</code>. Agents access it via <code>$GH_TOKEN</code>.</p>
+<h3 id="required-permissions"><a class="header" href="#required-permissions">Required permissions</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Permission</th><th>Scope</th><th>Why</th></tr></thead><tbody>
+<tr><td><code>contents: read</code></td><td>Repo</td><td>Read code, files</td></tr>
+<tr><td><code>contents: write</code></td><td>Repo</td><td>Create branches, push commits for PRs</td></tr>
+<tr><td><code>issues: write</code></td><td>Repo</td><td>Create and update issues</td></tr>
+<tr><td><code>pull_requests: write</code></td><td>Repo</td><td>Create PRs</td></tr>
+<tr><td><code>metadata: read</code></td><td>Repo</td><td>Basic repo access</td></tr>
+<tr><td><code>security_events: read</code></td><td>Repo</td><td>Dependabot alerts (sec-check agent)</td></tr>
+</tbody></table>
+</div>
+<h3 id="rate-limits"><a class="header" href="#rate-limits">Rate limits</a></h3>
+<ul>
+<li>GitHub App: 15,000 req/hr (shared across all installations)</li>
+<li>Personal Access Token: 5,000 req/hr</li>
+</ul>
+<p>The App gives Hive its own rate limit pool, separate from personal API usage.</p>
+<h3 id="permission-changes-historical"><a class="header" href="#permission-changes-historical">Permission changes (historical)</a></h3>
+<p>GitHub App permission changes required re-acceptance by the installation. Do
+not use the old Kubernetes restart procedure to apply them.</p>
+<h2 id="images-and-upgrades-on-the-former-aws-cluster"><a class="header" href="#images-and-upgrades-on-the-former-aws-cluster">Images and upgrades on the former AWS cluster</a></h2>
+<p>On 2026-09-24 the AWS Hives used stock upstream images
+(<code>ghcr.io/hivecommons/hive</code>, <code>hive-hub</code>), not the <code>tuna-os/hive</code> fork.
+The configuration described below was subsequently superseded by the
+<code>HiveRelease</code> operator controller before the cluster was terminated.</p>
+<div class="table-wrapper"><table><thead><tr><th>Hive</th><th>Namespace</th><th>Branding</th></tr></thead><tbody>
+<tr><td>hive.reilly.asia (canary)</td><td><code>hive-hanthor</code></td><td>none</td></tr>
+<tr><td>reef.tunaos.org</td><td><code>hive-reef</code></td><td>REEF</td></tr>
+<tr><td>school.tunaos.org (legacy alias hive.tunaos.org)</td><td><code>hive</code></td><td>SCHOOL</td></tr>
+<tr><td>hub.tunaos.org</td><td><code>hive-hub</code></td><td>—</td></tr>
+</tbody></table>
+</div>
+<p>At that time the <code>hive-upgrade</code> CronJob checked upstream v5 releases daily,
+upgrading one Hive at a time with a soak and rollback. It was later deleted in
+favor of the operator's <code>HiveRelease</code> controller. The retained
+<a href="https://github.com/hanthor/dotfiles/blob/master/talos-k8s/hive/upgrade/README.md"><code>upgrade</code> history</a>
+is not an active upgrade runbook.</p>
+<p>The old <code>hive-fork-{switch,verify,drift,ai-check}</code> CronJobs had been suspended;
+they do not run on the terminated AWS cluster.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../servers/aws-k8s/cluster.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../servers/punjab/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../servers/aws-k8s/cluster.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../servers/punjab/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
