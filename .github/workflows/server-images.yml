@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   installer-acceptance:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 90
     outputs:
       registry-owner: ${{ steps.request.outputs.registry-owner }}
@@ -393,7 +393,7 @@ jobs:
   publish:
     needs: installer-acceptance
     if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     concurrency:
       group: home-k8s-publication
