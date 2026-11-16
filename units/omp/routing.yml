@@ -12,7 +12,7 @@ retry:
   fallbackOn: any
   fallbackRevertPolicy: cooldown-expiry # drift back to Claude once its window resets
   usageAwareFallback: true
-  usageReservePct: 10
+  usageReservePct: 0 # no reserve: stay on Claude Max until its window is actually spent
   usageReservePolicy: auto # switch at the reserve without prompting
   fallbackChains:
     default: &chain
