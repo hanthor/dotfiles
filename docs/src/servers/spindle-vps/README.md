@@ -101,6 +101,11 @@ resolver caching; it does not detect failures or switch records automatically.
 The authorizer resolves `matrix.reilly.asia` and `call.reilly.asia` through Docker's host gateway
 to avoid public-IP hairpin routing; `reilly.asia` remains on the portfolio Worker.
 
+## Incidents
+
+- [2026-11-16/17: slow sync, missing avatars, Element X image errors](incident-2026-11-17-media.md):
+  causes, fixes, the live state left behind, and how to diagnose on this host.
+
 ## Caveats
 
 - The MAS dump is from 15:22 UTC. The Spindle store's last write was 15:25 UTC and its archive was
