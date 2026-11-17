@@ -97,7 +97,7 @@ ensure_uv() {
 # ── Install Ansible ───────────────────────────────────────────────
 ensure_ansible() {
   for p in "$HOME/.local/bin" "/home/linuxbrew/.linuxbrew/bin"; do
-    if [ -x "$p/ansible-playbook" ]; then
+    if [ -x "$p/ansible-playbook" ] && "$p/ansible-playbook" --version &>/dev/null; then
       export PATH="$p:$PATH"
       echo "Ansible found in $p."
       return
@@ -108,7 +108,10 @@ ensure_ansible() {
     return
   fi
   echo "Installing Ansible via uv..."
-  uv tool install --with ansible ansible-core
+  # Pin a uv-managed Python: ansible-core 2.21 crashes on Python 3.15
+  # (dataclasses._is_type was removed), which is the system Python on
+  # Fedora 44 / Hummingbird. --force replaces a broken earlier install.
+  uv tool install --force --python 3.13 --with ansible ansible-core
   export PATH="$HOME/.local/bin:$PATH"
 }
 
