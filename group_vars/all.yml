@@ -99,8 +99,12 @@ brew_blocked:
   - trash-cli
 core_taps:
   - ublue-os/experimental-tap
+  - can1357/tap
 core_tap_brews:
   - ublue-os/experimental-tap/bluefin-cli
+  # The omp role verifies `omp --version` on every non-termux host; musl hosts
+  # get it from the upstream installer, glibc hosts need it from the tap.
+  - can1357/tap/omp
 # ── Desktop-only packages ────────────────────────────────────────
 # Trimmed to essentials — Bluefin already ships gcc, python, node, etc.
 desktop_taps:

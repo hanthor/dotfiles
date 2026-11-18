@@ -115,6 +115,12 @@
     creates: "{{ ansible_facts['env']['HOME'] }}/go/bin/ccleft"
   failed_when: false
 
+- name: Ensure OMP config directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/omp"
+    state: directory
+    mode: "0755"
+
 - name: Deploy omp-kiro-provider config (kiro-cli ACP fallback on 401/403)
   ansible.builtin.copy:
     src: kiro.json
