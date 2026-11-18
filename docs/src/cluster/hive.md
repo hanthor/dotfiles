@@ -108,6 +108,45 @@ auto-merge Renovate major bumps, which the org forbids.
 3. Re-parse both files and check the list lengths and that the new repo shows
    up on the hive's dashboard; no App installation step is needed.
 
+### GitHub Apps
+
+Since 2026-10-30 School and Reef use separate GitHub Apps, so each has its own
+installation rate limit (6,150 requests/hour across the 43 org repositories). Before
+that change they shared one installation and used all of its limit every hour.
+
+| Hive | App (bot login) | App ID | Installation | Key in Bitwarden |
+|---|---|---|---|---|
+| school (the hub mounts the same key) | `hanthor-hive-agent` (`hanthor-hive-agent[bot]`) | 3942065 | 137498420 | `hive-github-app-hanthor-hive-agent` |
+| reef | `tuna-reef-hive` (`tuna-reef-hive[bot]`) | 5546574 | 177007234 | `hive-github-app-tuna-reef-hive` |
+
+The IDs occur in three places for each hive:
+- `GH_APP_ID` and `GH_APP_INSTALLATION_ID` in `compose.yaml`;
+- `github.app_id` and `installation_id` in the seed;
+- the same keys in `hive.yaml.runtime`.
+
+Both hives manage `.github`, `Tavern`, `bluefin-cli`, `corral`, `docs` and
+`flatpak-index`. Each hive lists the bot of the other hive in
+`github.additional_bot_logins`, so that the issues and PRs of the other hive count as
+hive-authored.
+
+To restore a key:
+1. Write the key block of the Bitwarden note to
+   `/var/srv/hives/<svc>/secrets/gh-app-key.pem` on the active host (mode 600).
+2. Run `chcon -t container_file_t` on the file.
+3. Recreate the service with `sudo /var/srv/hives-host/hives up -d --no-deps <svc>`.
+
+The next `hive-sync` copies the key to the standby host.
+
+To make sure that each hive has its own rate limit, run:
+
+```bash
+ssh james@bihar 'for c in hives-school-1 hives-reef-1; do sudo podman exec $c sh -c \
+  "curl -s -H \"Authorization: Bearer \$(cat /var/run/hive-metrics/gh-app-token.cache)\" https://api.github.com/rate_limit" \
+  | jq -c .resources.core; done'
+```
+
+Different `reset` times show separate installations.
+
 ### Safe edit procedure
 
 More than one operator edits `/var/srv/hives` (including agents). Re-read the files
