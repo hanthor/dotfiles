@@ -1,0 +1,25 @@
+[Unit]
+Description=K3s single-node server on Karnataka
+Documentation=https://docs.k3s.io/
+Wants=network-online.target tailscaled.service
+After=network-online.target tailscaled.service
+
+[Service]
+Type=notify
+Environment=PATH=/var/usrlocal/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+ExecStartPre=/var/usrlocal/libexec/k3s-wait-tailnet
+ExecStartPre=-/usr/sbin/modprobe br_netfilter
+ExecStartPre=-/usr/sbin/modprobe overlay
+ExecStart=/var/usrlocal/bin/k3s server
+KillMode=process
+Delegate=yes
+LimitNOFILE=1048576
+LimitNPROC=infinity
+LimitCORE=infinity
+TasksMax=infinity
+TimeoutStartSec=0
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

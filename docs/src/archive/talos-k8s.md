@@ -1,8 +1,10 @@
 # Talos Kubernetes Cluster
 
+> **ARCHIVED (2026-11-18).** This page describes the home Talos cluster, which was replaced by Bluefin + k3s. See [Fleet status](../fleet.md).
+
 Two-node Kubernetes cluster running on Talos Linux, managed from the `talos-k8s/` directory.
 
-> **Powered down and in storage, expected back** — commands below fail until it returns. Matrix and School, Reef and Hub run on the [OCI Spindle VPS](servers/spindle-vps/README.md); the [AWS Talos cluster](servers/aws-k8s/cluster.md) was terminated on 2026-10-25.
+> **Powered down and in storage, expected back** — commands below fail until it returns. Matrix and School, Reef and Hub run on the [OCI Spindle VPS](../servers/spindle-vps/README.md); the [AWS Talos cluster](../servers/aws-k8s/cluster.md) was terminated on 2026-10-25.
 
 ## Hardware
 
@@ -49,7 +51,7 @@ Manifest: `talos-k8s/ai/lemonade.yaml`
 
 ### Additional services
 
-See the [cluster handbook](servers/talos-k8s/cluster.md) for the full list — Forgejo, Hive, Authentik, n8n, AppFlowy Cloud, Grafana, Corral, and more.
+See the [cluster handbook](talos-home-cluster/cluster.md) for the full list — Forgejo, Hive, Authentik, n8n, AppFlowy Cloud, Grafana, Corral, and more.
 
 ## Cluster Access
 
@@ -68,4 +70,4 @@ Karnataka uses a custom Talos image from Image Factory that includes the `sidero
 
 ## Handbook
 
-Full cluster documentation at [`docs/src/servers/talos-k8s/cluster.md`](servers/talos-k8s/cluster.md) (hardware details, reinstall procedure, troubleshooting).
+Full cluster documentation at [`docs/src/servers/talos-k8s/cluster.md`](talos-home-cluster/cluster.md) (hardware details, reinstall procedure, troubleshooting).

@@ -1,0 +1,19 @@
+# Bihar's tailnet address. K3s API and kubelet do not bind the LAN NIC.
+bind-address: 100.103.44.48
+advertise-address: 100.103.44.48
+node-ip: 100.103.44.48
+flannel-iface: tailscale0
+# KubeFlex vcluster control planes hard-code the kind service range.
+service-cidr: 10.96.0.0/12
+cluster-dns: 10.96.0.10
+resolv-conf: /etc/rancher/k3s/resolv.conf
+tls-san:
+  - 100.103.44.48
+  - bihar
+  - bihar.manatee-basking.ts.net
+kubelet-arg:
+  - address=100.103.44.48
+disable:
+  - traefik
+  - servicelb
+write-kubeconfig-mode: "0600"

@@ -1,0 +1,7 @@
+[Unit]
+Description=Push hive data to the cold-standby peer
+After=network-online.target tailscaled.service podman.socket
+[Service]
+Type=oneshot
+ExecStart=/var/srv/hives-host/hive-sync
+TimeoutStartSec=2h

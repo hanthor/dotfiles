@@ -1,0 +1,37 @@
+# Host-specific layer for the cold-standby hives on karnataka (x86_64); same layout as bihar. Formerly
+# spindle (aarch64). Kept outside /var/srv/hives so the spindle rsync
+# (--delete) never removes it. Use with:
+#   cd /var/srv/hives && docker-compose -f compose.yaml -f compose.override.yaml \
+#     -f /var/srv/hives-host/compose.karnataka.yaml up -d
+# Caddy on spindle reaches these ports over the tailnet only.
+# Images pinned to the digests spindle ran with hive-2ef7dc7c0 (2026-11-13
+# builds); v6-latest has moved on. Bump binary and images together.
+services:
+  hub:
+    image: ghcr.io/hivecommons/hive-hub@sha256:3c0162ebb5db7a49ec31b162d303af36dcffd96770288e910dff964090eb8fa4
+    ports: ["100.66.158.127:3101:3001"]
+    mem_limit: 1g
+    environment:
+      HIVE_SHARED_AGENT_POOL_MAX_SESSIONS: "4"
+    volumes:
+      - /var/srv/hives-host/bin/hive-2ef7dc7c0-amd64:/usr/local/bin/hive:ro
+  hub-front:
+    ports: ["100.66.158.127:3100:80"]
+  school:
+    image: ghcr.io/hivecommons/hive@sha256:d56425fbaa1b5854a96356d56ebc2f371f337038339c56c94dcf3f2ec29ead51
+    ports: ["100.66.158.127:3102:3001"]
+    mem_limit: 8g
+    environment:
+      # The broker listens on spindle's tailnet IP; the old 172.18.0.1 socket
+      # proxy existed only for spindle's Docker bridge.
+      OMP_AUTH_BROKER_URL: "http://100.113.75.88:8765"
+    volumes:
+      - /var/srv/hives-host/bin/hive-2ef7dc7c0-amd64:/usr/local/bin/hive:ro
+  reef:
+    image: ghcr.io/hivecommons/hive@sha256:d56425fbaa1b5854a96356d56ebc2f371f337038339c56c94dcf3f2ec29ead51
+    ports: ["100.66.158.127:3103:3001"]
+    mem_limit: 8g
+    environment:
+      OMP_AUTH_BROKER_URL: "http://100.113.75.88:8765"
+    volumes:
+      - /var/srv/hives-host/bin/hive-2ef7dc7c0-amd64:/usr/local/bin/hive:ro

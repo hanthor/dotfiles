@@ -25,7 +25,7 @@ Headless hosts.
 ```yaml
 server:
   hosts:
-    punjab:   # EC2 agent box (us-east-1; current instance status unverified)
+    punjab:   # agent box, KubeVirt VM on karnataka (100.103.187.46)
     vm:       # Local dev VM
     goa:      # Raspberry Pi 5 (ARM)
 ```
@@ -71,14 +71,15 @@ termux_hosts:
 ```
 
 ### `llm` (dormant)
-Commented out in `inventory.yml` — its only member, karnataka, is now a Talos
-worker.
+Commented out in `inventory.yml` — karnataka, its former member, now runs k3s workloads.
 
 ### Not in the inventory
 
-**bihar** and **karnataka** are Talos nodes (no SSH) and are managed with
-`talosctl`/`kubectl` only. The home cluster is powered down and in storage,
-expected back. The terminated AWS cluster's nodes were not in the inventory either.
+**bihar** is in the `desktop` group (Bluefin, bootstrapped 2026-11-17).
+**karnataka** is configured from the native-units branch
+([#348](https://github.com/hanthor/dotfiles/pull/348)) and is not listed here.
+Neither is a Talos node any more; see [Fleet status](fleet.md). **spindle** is
+not in the inventory. The terminated AWS cluster's nodes were not in the inventory either.
 
 ## Per-Machine Configuration
 

@@ -1,0 +1,7 @@
+[Unit]
+Description=Hive failover check (spindle coordinates bihar/karnataka)
+After=network-online.target tailscaled.service docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hive-failover check
+TimeoutStartSec=20min

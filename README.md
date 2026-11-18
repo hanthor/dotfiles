@@ -59,18 +59,22 @@ From `inventory.yml`:
 | dilli | desktop | Secondary workstation (Bluefin) |
 | kerala | desktop | postmarketOS ARM device (musl, `apk`) |
 | mumbai | desktop | Debian VM on the phone (Android Virtualization Framework), `cli-only` |
-| punjab | server | EC2 agent box (us-east-1) |
+| punjab | server | Agent box, KubeVirt VM on karnataka |
+| bihar | desktop | Home server (Bluefin): active hive host, KubeStellar hub |
 | goa | server | Raspberry Pi 5 (applies locally) |
 | vm | server | Local dev VM |
 | termux | termux_hosts | Raw Termux layer on the phone — `termux_packages` only |
 | test-fleet-fedora, test-fleet-node2 | test_fleet | KubeVirt test VMs (`machine_profile: vm-test`) |
 | matrix, telengana | vps | **Retired** Hetzner VPSes, powered on for burn-in — restart nothing on them |
 
-The home Talos cluster, **bihar** + **karnataka**, is not Ansible-managed: it is
-powered down and in storage, expected back. The AWS Talos cluster was terminated
-on 2026-10-25. [Spindle](docs/src/servers/spindle-vps/README.md), an OCI VPS in
-Frankfurt running Matrix, standalone LiveKit and the School, Reef and Hub Hives,
-is not listed in this inventory.
+**bihar** and **karnataka** are home servers on Bluefin with separate k3s
+clusters linked by KubeStellar (the Talos cluster they ran before is archived).
+bihar runs the School, Reef and Hub hives, with karnataka as a cold standby;
+karnataka hosts KubeVirt (including punjab), CI runners and the LMS.
+[Spindle](docs/src/servers/spindle-vps/README.md), an OCI VPS in Frankfurt, runs
+Matrix and LiveKit, is the public front door (Caddy) for the hives and coordinates
+their failover; it is not in this inventory. The AWS Talos cluster was terminated
+on 2026-10-25. Current state of every host: [Fleet status](docs/src/fleet.md).
 The `llm` group is dormant (commented out in `inventory.yml`).
 
 ---
@@ -85,8 +89,11 @@ Repo is public — no secrets in git, ever. All secrets are fetched from Bitward
 
 Full handbook lives in [`docs/`](docs/) and is published at [reilly.asia/infra/handbook](https://reilly.asia/infra/handbook/) — run `just docs` to serve it locally.
 
-- [Talos cluster handbook](docs/src/servers/talos-k8s/cluster.md) — Bihar + Karnataka (home, offline), Lemonade, KubeVirt
-- [Spindle VPS](docs/src/servers/spindle-vps/README.md) — Matrix, LiveKit and Hives on OCI
+- [Fleet status](docs/src/fleet.md) — every host, live / intermittent / retired
+- [Bihar](docs/src/servers/bihar.md), [Karnataka](docs/src/servers/karnataka.md), [Home k3s + KubeStellar](docs/src/servers/home-k3s.md)
+- [Hives hosting and failover](docs/src/servers/hives.md) — bihar primary, karnataka standby, spindle front door
+- [Spindle VPS](docs/src/servers/spindle-vps/README.md) — Matrix, LiveKit, Caddy front door on OCI
+- [Archive](docs/src/archive/talos-k8s.md) — the retired home Talos cluster
 - [TunaOS AWS cluster handbook](docs/src/servers/aws-k8s/cluster.md) — archived cluster history
 - [Adding a new machine](docs/src/onboarding.md)
 - [Roles reference](docs/src/roles/)

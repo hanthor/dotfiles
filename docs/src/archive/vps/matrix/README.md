@@ -1,8 +1,8 @@
 # Matrix
 
 > **Retired 2026-08-27.** The Matrix homeserver moved first to the
-> [AWS Talos cluster](../../servers/aws-k8s/cluster.md), terminated 2026-10-25,
-> and now runs on the [OCI VPS](../../servers/spindle-vps/README.md). Restart
+> [AWS Talos cluster](../../../servers/aws-k8s/cluster.md), terminated 2026-10-25,
+> and now runs on the [OCI VPS](../../../servers/spindle-vps/README.md). Restart
 > nothing on this retired host; the page below is historical. See the
 > [Matrix cutover runbook](https://github.com/hanthor/dotfiles/blob/master/docs/matrix-cutover-runbook.md).
 
@@ -27,6 +27,6 @@ upgrades on the box were disabled so nothing resurrects them.
 
 - A single VPS with no swap and unmanaged journald growth was fragile for K8s;
   the former AWS cluster needed more headroom (see the OOM incident in its
-  [archived handbook](../../servers/aws-k8s/cluster.md)).
+  [archived handbook](../../../servers/aws-k8s/cluster.md)).
 - `reilly.asia` DNS is on [Cloudflare](https://www.cloudflare.com/), which made
   the cutover a DNS change rather than a server move.

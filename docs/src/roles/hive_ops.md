@@ -7,7 +7,7 @@
 > **Retired AWS-cluster integration, not the current Hive operations guide.**
 > The AWS Talos cluster was terminated on 2026-10-25. The current school and
 > reef spokes and hub run as Docker Compose services on the
-> [Spindle VPS](../cluster/hive.md#current-deployment-spindle-vps). Do not
+> [bihar (karnataka standby)](../cluster/hive.md#current-deployment-bihar-karnataka-standby). Do not
 > enable this role or run its old Kubernetes helpers against that deployment.
 
 The role still exists in the repository. When enabled it installs host user

@@ -1,15 +1,24 @@
 # Hive — AI Agent Supervisor
 
-## Current deployment: Spindle VPS
+## Current deployment: bihar (karnataka standby)
 
-Two Hive spokes, **school** and **reef**, and their **hub** run as Docker
-Compose services on the [Spindle VPS](../servers/spindle-vps/README.md) under
-`/srv/hives` (`ubuntu@100.113.75.88` over Tailscale). Caddy routes
+Two Hive spokes, **school** and **reef**, and their **hub** run as compose
+services under rootful podman on [bihar](../servers/bihar.md), in
+`/var/srv/hives` (`ssh james@bihar`, commands need `sudo`). Until 2026-11-18
+they ran on the [Spindle VPS](../servers/spindle-vps/README.md) under
+`/srv/hives`. Spindle's Caddy still routes
 [school.tunaos.org](https://school.tunaos.org),
 [reef.tunaos.org](https://reef.tunaos.org) and
-[hub.tunaos.org](https://hub.tunaos.org) to them. Everything below was read from
-the host on 2026-11-13 unless marked *unverified*. Container state alone does
-not prove agents are healthy; see [Checking health](#checking-health).
+[hub.tunaos.org](https://hub.tunaos.org), over the tailnet to the active host.
+[karnataka](../servers/karnataka.md) is a cold standby. A lease on spindle
+selects the active host. Run every command below on **the host the lease
+names** (`ssh spindle sudo hive-failover status`). Hosting, failover and the
+host-specific compose layer are described in
+[Hives hosting and failover](../servers/hives.md).
+
+The layout and roster below were read on spindle on 2026-11-13. The move
+changed the paths and the commands, but not the hive configuration. Container
+state alone does not prove that agents are healthy. See [Checking health](#checking-health).
 
 This section is the current operations guide. The
 [archived cluster guide](#archived-cluster-guide) after it describes the retired
@@ -18,7 +27,7 @@ Kubernetes deployment and must not be applied here.
 ### Layout
 
 ```text
-/srv/hives/
+/var/srv/hives/          # on the active host; the host layer is /var/srv/hives-host/compose.<host>.yaml
 ├── compose.yaml            # services: hub, hub-front, school, reef (network spindle_default)
 ├── compose.override.yaml   # pins the running binary/dashboard, memory limits, session pool
 ├── .env                    # secrets and NTFY topic (mode 600; never print or commit)
@@ -101,25 +110,27 @@ auto-merge Renovate major bumps, which the org forbids.
 
 ### Safe edit procedure
 
-More than one operator edits `/srv/hives` (including agents). Re-read the files
+More than one operator edits `/var/srv/hives` (including agents). Re-read the files
 immediately before editing and never overwrite a file you read earlier.
 
-Do **not** `docker compose up` a spoke that is running to apply config: it
+Do **not** `hives up` a spoke that is running to apply config: it
 triggered a container-rename bug. Remove the container first:
 
 ```bash
-cd /srv/hives
-docker compose rm -f -s reef          # stop and remove the spoke container only
+sudo -i                                   # the files are root-owned on bihar/karnataka
+cd /var/srv/hives
+H=/var/srv/hives-host/hives               # docker-compose wrapper: podman + host layer
+$H rm -f -s reef                          # stop and remove the spoke container only
 python3 hive-roster.py add NAME reef/config/hive.yaml reef/data/hive.yaml.runtime
-docker compose up -d --no-deps reef   # recreate only this spoke
-docker ps --filter name=hives-        # verify: Up, and the right name
+$H up -d --no-deps reef                   # recreate only this spoke
+podman ps --filter name=hives-            # verify: Up, and the right name
 ```
 
 The edit step must (a) write a timestamped copy of each file into
-`/srv/hives/backups/` first, (b) parse the YAML before and after, and (c) abort,
+`/var/srv/hives/backups/` first, (b) parse the YAML before and after, and (c) abort,
 writing nothing, if anything other than the intended change would differ. This
-helper does that for roster edits (save it as `/srv/hives/hive-roster.py` and
-run it from `/srv/hives`; it needs PyYAML):
+helper does that for roster edits (save it as `/var/srv/hives/hive-roster.py` and
+run it from `/var/srv/hives`; it needs PyYAML):
 
 ```python
 #!/usr/bin/env python3
@@ -127,7 +138,7 @@ run it from `/srv/hives`; it needs PyYAML):
 import datetime, shutil, sys, yaml
 
 ORG = "tuna-os"
-BACKUPS = "/srv/hives/backups"
+BACKUPS = "/var/srv/hives/backups"
 PATHS = (("project", "repos"), ("dashboard", "matrix", "repos"))
 
 def seq_node(root, path):
@@ -209,14 +220,14 @@ the maintainer; their exact semantics were not exercised for this page.)
 curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/api/health   # 200
 curl -s -o /dev/null -w '%{http_code}\n' https://reef.tunaos.org/api/health     # 200
 curl -s https://hub.tunaos.org/api/fleet-stats                                  # hub: /api/health is 404
-ssh ubuntu@100.113.75.88 'docker ps --filter name=hives-'
+ssh james@bihar 'sudo podman ps --filter name=hives-'   # or karnataka after a failover
 ```
 
 For authenticated status from the host, call the API inside the container with
 the container's own token, so it is never printed:
 
 ```bash
-ssh ubuntu@100.113.75.88 'docker exec hives-school-1 sh -c \
+ssh james@bihar 'sudo podman exec hives-school-1 sh -c \
   "curl -sS -H \"X-Hive-Internal: \$HIVE_DASHBOARD_TOKEN\" http://127.0.0.1:3002/api/status"' \
   | jq '.agents[] | {name, paused, state}'
 ```
@@ -227,11 +238,12 @@ PRs and issues (`gh search prs --author "hanthor-hive-agent[bot]"` and
 
 ### Known limits
 
-- **Memory.** Spokes are capped at 2560 MB each (raised from 2 GB on 2026-11-13
-  after hive was OOM-killed during rustc/govulncheck builds). The hub allows 2
-  concurrent shared-pool agent sessions across both spokes (about 400 MB per
-  Claude session; the host had about 5 GB free and no swap). Do not raise either
-  without revisiting the host's headroom.
+- **Memory.** On bihar and karnataka, each spoke can use 8 GB and the hub allows 4
+  concurrent shared-pool sessions (`compose.<host>.yaml`). On spindle the limits were
+  2560 MB per spoke and 2 sessions, and spokes were OOM-killed during
+  rustc/govulncheck builds.
+- **Pinned images.** The hive and hive-hub images are pinned by digest with the
+  amd64 fork binary `hive-2ef7dc7c0-amd64`. Do not change to `:v6-latest`.
 - **Hive's own CI** for `tuna-os/hive` is blocked by GitHub ("Actions has been
   disabled"; a support ticket is pending), so fork builds are not CI-verified.
 - **Reply spam**: upstream
@@ -240,9 +252,10 @@ PRs and issues (`gh search prs --author "hanthor-hive-agent[bot]"` and
   recognise its own earlier reply when posting as an App login.
 - **Concurrent edits and drift**: see the layout notes above; verify after every
   restart that the parsed seed and runtime agree on the roster.
-- Not covered here: the hub's own config, the `omp-auth-broker` user service
-  the spokes call (`OMP_AUTH_BROKER_URL`), and Caddy routing, which were not
-  re-inspected for this page. The `hive.reilly.asia` hanthor spoke of the old AWS
+- The spokes call the `omp-auth-broker` on spindle (`OMP_AUTH_BROKER_URL`,
+  `http://100.113.75.88:8765`). Caddy routing and failover are described in
+  [Hives hosting and failover](../servers/hives.md). This page does not describe
+  the hub's own configuration. The `hive.reilly.asia` hanthor spoke of the old AWS
   cluster has no container on this host; its current status is unverified. The
   [hive_ops role](../roles/hive_ops.md) targets the retired cluster, not this
   deployment.

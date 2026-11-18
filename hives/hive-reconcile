@@ -1,0 +1,41 @@
+#!/bin/bash
+# hive-reconcile: make this host follow the lease on spindle (run each minute).
+#   lease == this host, hives not all running -> start them
+#   lease != this host, hives running         -> stop them
+#   lease unreadable for FENCE_MIN minutes    -> stop them (self-fence)
+# Touch /var/srv/hives-host/maintenance to skip starts (stops still happen).
+set -uo pipefail
+H=/var/srv/hives-host
+ME=$(hostname -s)
+FENCE_MIN=8   # spindle waits longer than this before a blind failover
+LAST_OK=/run/hive-reconcile.last-ok
+log() { logger -t hive-reconcile -- "$*"; echo "$*"; }
+
+running=$(podman ps -q --filter label=com.docker.compose.project=hives | wc -l)
+lease=$(ssh -i $H/keys/lease -o BatchMode=yes -o ConnectTimeout=15 \
+  -o UserKnownHostsFile=$H/keys/known_hosts -o StrictHostKeyChecking=accept-new \
+  ubuntu@100.113.75.88 2>/dev/null | tr -d '[:space:]')
+
+if [[ "$lease" =~ ^(bihar|karnataka|none)$ ]]; then
+  date +%s > $LAST_OK
+  if [ "$lease" = "$ME" ]; then
+    if [ "$running" -lt 4 ] && [ ! -e $H/maintenance ]; then
+      log "lease is $ME and $running/4 hive containers run: starting"
+      $H/hives up -d
+    fi
+  elif [ "$running" -gt 0 ]; then
+    log "lease is '$lease', not $ME: stopping hives"
+    $H/hives stop
+  fi
+  exit 0
+fi
+
+# Lease unreadable (spindle or the path to it is down).
+[ -f $LAST_OK ] || date +%s > $LAST_OK   # first run after boot: start the clock
+mins=$(( ($(date +%s) - $(cat $LAST_OK)) / 60 ))
+if [ "$running" -gt 0 ] && [ "$mins" -ge "$FENCE_MIN" ]; then
+  log "lease unreadable for ${mins} min: self-fencing (stopping hives)"
+  $H/hives stop
+elif [ "$running" -gt 0 ]; then
+  log "lease unreadable for ${mins} min (fence at $FENCE_MIN)"
+fi

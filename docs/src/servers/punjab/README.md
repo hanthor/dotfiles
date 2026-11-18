@@ -1,65 +1,49 @@
 # Punjab
 
-> **TunaOS infrastructure.** This runs in the TunaOS AWS account and serves
-> the TunaOS project (Hive, Matrix, CI), not James's personal fleet. See
-> [TunaOS AWS Account & IaC](../aws/README.md).
+Headless agent and development box, and the fleet's Ansible host. Since
+2026-10-27 it is a **KubeVirt VM on [karnataka](../karnataka.md)**. The EC2
+instance it replaced (tailnet node `punjab-aws-retired`, `100.78.73.8`) was last seen on 2026-10-28.
+See [EC2 history](#ec2-history-retired).
 
-Headless agent/dev box — the fleet's AWS-hosted Ansible host. It runs in the
-same AWS account as the former [AWS Talos cluster](../aws-k8s/cluster.md),
-but is an ordinary fleet member, not a cluster node. The Talos cluster was
-terminated; Matrix and the Hives now run on the [OCI VPS](../spindle-vps/README.md).
-
-## Hardware
-
-- EC2 `t3.large` (2 vCPU, 8 GiB, unlimited CPU credits), `us-east-1d`
-- 250 GB gp3 root volume (unencrypted — predates EBS encryption-by-default;
-  snapshotted daily ×7 / weekly ×4 by DLM)
-- Default VPC, stable Elastic IP
-- IMDSv2 required, hop limit 1; termination protection on
-- Instance role: Session Manager only
-- Tailscale: `punjab` (MagicDNS)
-
-The instance, its security group and key pair are codified in
-[`aws/punjab.tf`](https://github.com/hanthor/dotfiles/blob/master/aws/punjab.tf) —
-see [AWS Account](../aws/README.md).
-
-## OS
-
-Ubuntu 24.04 LTS (stock `ubuntu-noble-24.04-amd64-server` AMI), AWS kernel.
+| | |
+|---|---|
+| Runs on | karnataka k3s, `corral-vms/punjab` (VM created 2026-10-27) |
+| Resources | 12 cores, 24 Gi of RAM, 500 Gi root PVC (`punjab-root`, local-path on karnataka) |
+| OS | Ubuntu 24.04 LTS |
+| Tailnet | `punjab` / `100.103.187.46` |
+| Access | `ssh ubuntu@punjab` (there is no `james` user). For the VM console, run `virtctl console -n corral-vms punjab` from a host that has karnataka's kubeconfig |
 
 ## Role
 
-- Agent host: Claude Code, Kiro, `pi`, run in tmux
-- **Kiro Crew gateway** — `kirocrew.service` (system unit, runs as `ubuntu`,
-  binary `~/.local/bin/kirocrew`, env `/etc/kirocrew/kirocrew.env`). Installed
-  with Kiro's own installer; the [`kirocrew`](../../roles/kirocrew.md) role keeps
-  it running, its env file root-only, and its dashboard on localhost.
-- AWS admin box: `awscli` + `opentofu` (via `extra_brews`) for the
-  [AWS IaC](../aws/README.md)
+- Agent host: Claude Code, OMP and Codex sessions in tmux. Most git worktrees
+  are in `~/dev`.
+- `kubectl` against karnataka's k3s: `~/.kube/config`.
+- Hive fork builds: `~/dev/hive-v6-port` (`tuna-os/hive`, deploy branches). The
+  amd64 binary that bihar and karnataka run was built here. See [Hives hosting](../hives.md).
+- `sccache.service` (user) is a shared compiler cache for cargo builds.
+- The **Kiro Crew gateway is retired**: `kirocrew.service` is masked.
 
-## Access
+## Disk
 
-- **Normal**: `ssh punjab` over Tailscale.
-- **Break-glass** (Tailscale down): SSM Session Manager, no open port needed:
-  ```bash
-  aws ssm start-session --region us-east-1 --target <instance-id>
-  ```
-  (needs `session-manager-plugin`; the instance ID is in the OpenTofu state).
-- **Cluster**: `kubectl`/`talosctl` work from here with
-  `~/.kube/config-aws-migration` / `~/.talos/config-aws-migration`.
-- **AWS CLI**: prefer the scoped admin user; it can plan the whole config
-  (read-only IAM). Log in as root (`aws login`) only for IAM changes, and don't
-  leave a root session lying around on a shared box.
+On 2026-11-18 `/` was **96% full (19 GB free)**. `~/dev` used 156 GB. Delete
+stale worktrees under `~/dev` and `~/tuna-wt` before you make the PVC larger.
 
-## Host hardening
+## Dependencies
 
-- sshd drop-in (`sshd_harden: true`): no root login, no passwords/kbd-interactive,
-  no X11, `MaxAuthTries 3`.
-- `unattended-upgrades` on (Ubuntu default).
-- Kiro Crew dashboard binds localhost only — the `kirocrew` role asserts it.
+punjab is a VM on karnataka. When karnataka restarts or k3s restarts its VMs,
+punjab also restarts, and the agent tmux sessions stop.
 
 ## Ansible notes (`host_vars/punjab.yml`)
 
-- `skip_proxy: true` — no podman on stock Ubuntu, so no Caddy quadlet.
-- Not a desktop: no GNOME/flatpak/browser roles.
-- `syncthing` only runs if its brew binary exists (it currently doesn't).
+- `skip_proxy: true`: there is no podman on stock Ubuntu, so there is no Caddy quadlet.
+- Not a desktop: no GNOME, flatpak or browser roles.
+- `syncthing` runs only if its brew binary exists.
+
+## EC2 history (retired)
+
+From 2026-08 to 2026-10, punjab was an EC2 `t3.large` in `us-east-1`, the
+Ansible host of the TunaOS AWS account ([AWS account](../aws/README.md)). It had
+SSM break-glass access, daily DLM snapshots and Kiro Crew. It is described in
+[`aws/punjab.tf`](https://github.com/hanthor/dotfiles/blob/master/aws/punjab.tf).
+Its tailnet node is now `punjab-aws-retired`. Before you delete the instance and
+its snapshots, confirm that the VM has all the data.
