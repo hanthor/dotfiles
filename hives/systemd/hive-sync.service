@@ -1,0 +1,10 @@
+[Unit]
+Description=Push hive data to the cold-standby peer
+After=network-online.target tailscaled.service podman.socket
+[Service]
+# Under systemd, rsync switches to the confined rsync_t domain, and its ssh cannot
+# read the key or ssh_config. unconfined_t matches an interactive root shell.
+SELinuxContext=system_u:system_r:unconfined_t:s0
+Type=oneshot
+ExecStart=/usr/bin/bash /var/srv/hives-host/hive-sync
+TimeoutStartSec=2h

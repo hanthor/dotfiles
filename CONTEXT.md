@@ -2,7 +2,7 @@
 
 > Created 2026-06-14 during architecture review.
 > Add terms as they are sharpened during grilling sessions or refactors.
-> This is a glossary, not a spec. Implementation details live in `docs/src/roles/` and the cluster handbooks (`docs/src/servers/talos-k8s/cluster.md`, `docs/src/servers/aws-k8s/cluster.md`).
+> This is a glossary, not a spec. Implementation details live in `docs/src/roles/` and the host pages (`docs/src/fleet.md`, `docs/src/servers/{bihar,karnataka,home-k3s,hives}.md`); the Talos handbooks are archived (`docs/src/archive/talos-home-cluster/cluster.md`, `docs/src/servers/aws-k8s/cluster.md`).
 
 ## Fleet
 
@@ -26,9 +26,10 @@
 
 ## Cluster
 
-- **Node** — a Talos Linux machine in a K8s cluster. Home: `bihar` = control plane, `karnataka` = worker (powered down, expected back). AWS (`eu-north-1`): one control-plane + one worker. Neither is in `inventory.yml`.
-- **Workload** — a Kubernetes deployment on a cluster (home: Lemonade, KubeVirt, Tailscale Operator; AWS: Matrix/ESS, the Hive, CFP dashboard).
-- **Manifest** — a YAML file in `talos-k8s/` that defines a workload.
+- **Node** — a k3s node. Home: `bihar` and `karnataka` are each a **separate single-node k3s** on Bluefin, linked by KubeStellar (hub on bihar: ITS `its1`, WDS `wds1`). The former Talos clusters (home, and AWS `eu-north-1`) are retired.
+- **Workload** — a Kubernetes deployment on a cluster (karnataka: KubeVirt VMs incl. punjab, ARC runners, Frappe LMS, Corral, front-door; bihar: KubeStellar control plane). The hives are **not** a k8s workload: they run as podman compose on bihar (karnataka standby).
+- **Lease** — the one-line file on spindle (`/var/lib/hive-failover/active`) naming the single host allowed to run the hives.
+- **Manifest** — a YAML file that defines a workload: `home-k3s/<host>/` (current) or `talos-k8s/` (archived Talos-era).
 
 ## Architecture (from improve-codebase-architecture)
 

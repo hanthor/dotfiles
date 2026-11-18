@@ -1,5 +1,10 @@
 # Home Kubernetes Server Images
 
+> **Not deployed (2026-11-18).** bihar and karnataka run stock Bluefin
+> (`ghcr.io/projectbluefin/utah:testing`), not these images; k3s is installed on
+> the host from [`home-k3s/`](https://github.com/hanthor/dotfiles/tree/master/home-k3s).
+> The `server-images` CI still builds them. Treat this page as a design for a future rebuild.
+
 Bootable container images for the home K8s cluster (bihar, karnataka, starter). Built from **Fedora Hummingbird + GNOME desktop + K3s**, with graphical target disabled by default.
 
 ## Image Variants
@@ -264,7 +269,7 @@ sudo tailscale up
 
 ## See Also
 
-- [Talos K8s Cluster Handbook](./talos-k8s/cluster.md) — Bihar & karnataka hardware, networking, advanced operations
+- [Talos K8s Cluster Handbook](../archive/talos-home-cluster/cluster.md) — Bihar & karnataka hardware, networking, advanced operations
 - [AWS K8s Cluster Handbook](./aws-k8s/cluster.md) — Production cluster migration info
 - [Roles Documentation](../roles/) — Individual role configurations
 - [GitHub Releases](https://github.com/hanthor/dotfiles/releases) — Download ISOs and archives

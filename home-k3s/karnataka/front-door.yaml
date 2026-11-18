@@ -1,0 +1,98 @@
+# Front door for short tailnet URLs: http://karnataka/<name> redirects to each app's own HTTPS origin.
+# Apps keep their own origins because Frappe and RaveBSD both assume they own "/" (/api, /assets, ...),
+# so neither can be proxied under a path prefix.
+# Exposed by the host: tailscale serve --bg --http=80 http://<svc/front-door ClusterIP>:80
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: front-door
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: caddyfile
+  namespace: front-door
+data:
+  Caddyfile: |
+    {
+      admin off
+      auto_https off
+    }
+    :80 {
+      @course path /course /course/*
+      redir @course https://karnataka.manatee-basking.ts.net:8443/lms/courses/a-new-testament-biblical-theology-g-k-beale-nt575 302
+      @learn path /learn /learn/* /lms /lms/* /frappe/learning /frappe/learning/*
+      redir @learn https://karnataka.manatee-basking.ts.net:8443/lms/courses 302
+      @frappe path /frappe /frappe/*
+      redir @frappe https://karnataka.manatee-basking.ts.net:8443/app 302
+      @books path /books /books/* /ravebsd /ravebsd/*
+      redir @books https://karnataka.manatee-basking.ts.net:8444/ 302
+      @corral path /corral /corral/*
+      redir @corral https://karnataka.manatee-basking.ts.net/ 302
+      handle {
+        header Content-Type "text/html; charset=utf-8"
+        respond <<HTML
+          <!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>karnataka</title>
+          <style>body{font:18px system-ui;margin:2rem;max-width:32rem}a{display:block;padding:.6rem 0}</style>
+          <h1>karnataka</h1>
+          <a href="/course">/course: Beale NT Biblical Theology</a>
+          <a href="/frappe/learning">/frappe/learning: all courses (also /learn)</a>
+          <a href="/frappe">/frappe: Frappe admin desk</a>
+          <a href="/books">/books: RaveBSD</a>
+          <a href="/corral">/corral: Corral</a>
+          HTML 200
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caddy
+  namespace: front-door
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: front-door
+  template:
+    metadata:
+      labels:
+        app: front-door
+      annotations:
+        # Bump to roll the pod after editing the Caddyfile.
+        front-door/config-rev: "1"
+    spec:
+      containers:
+        - name: caddy
+          image: docker.io/library/caddy:2.11.9-alpine@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            tcpSocket:
+              port: 80
+          volumeMounts:
+            - name: config
+              mountPath: /etc/caddy
+          resources:
+            requests:
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: config
+          configMap:
+            name: caddyfile
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: front-door
+  namespace: front-door
+spec:
+  selector:
+    app: front-door
+  ports:
+    - port: 80
+      targetPort: 80

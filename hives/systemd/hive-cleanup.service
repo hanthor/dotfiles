@@ -1,0 +1,8 @@
+[Unit]
+Description=Hive host disk backstop: idle agent scratch in the spokes, dangling images, old backups
+After=podman.socket
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /var/srv/hives-host/hive-cleanup
+TimeoutStartSec=30min

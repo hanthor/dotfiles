@@ -1,0 +1,137 @@
+#!/bin/bash
+# hive-failover: spindle coordinates which host runs the hives (cold standby).
+#
+# The lease file names the one host that may run the hives:
+#   /var/lib/hive-failover/active   bihar | karnataka | none
+# Each host runs hive-reconcile every minute: it starts the hives when the
+# lease names it, stops them when it does not, and stops them when it cannot
+# read the lease for HOST_FENCE_MIN minutes. That keeps a single writer.
+#
+#   hive-failover check          run by hive-failover.timer every minute
+#   hive-failover status
+#   hive-failover move <host>    planned move / failback: stop, sync, start
+#   hive-failover hold on|off    pause / resume automatic failover
+set -uo pipefail
+
+STATE=/var/lib/hive-failover
+LEASE=$STATE/active
+declare -A IP=([bihar]=100.103.44.48 [karnataka]=100.66.158.127)
+KEY=/root/.ssh/hive_failover
+CADDYFILE=/srv/spindle/Caddyfile
+CADDY_CTR=spindle-caddy-1
+FAIL_MIN=5          # unhealthy minutes before the lease is revoked
+HOST_FENCE_MIN=8    # must match hive-reconcile on the hosts
+START_WAIT_MIN=10   # > HOST_FENCE_MIN: start standby blind only after this
+NTFY_TOPIC=$(sed -n 's/^NTFY_TOPIC=//p' /srv/hives/.env 2>/dev/null)
+
+log()    { logger -t hive-failover -- "$*"; echo "$*"; }
+notify() { log "$*"; [ -n "$NTFY_TOPIC" ] && curl -s -m10 -H "Title: hive failover" -d "$*" "https://ntfy.sh/$NTFY_TOPIC" >/dev/null; true; }
+peer()   { [ "$1" = bihar ] && echo karnataka || echo bihar; }
+now()    { date +%s; }
+rsh() {
+  local h=$1; shift
+  ssh -i "$KEY" -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 \
+    -o UserKnownHostsFile=$STATE/known_hosts -o StrictHostKeyChecking=accept-new \
+    "james@${IP[$h]}" "$@"
+}
+healthy() {
+  local ip=${IP[$1]} p
+  for p in 3101 3102 3103; do curl -sf -m15 -o /dev/null "http://$ip:$p/" || return 1; done
+}
+running_count() { rsh "$1" 'sudo podman ps -q --filter label=com.docker.compose.project=hives | wc -l'; }
+set_lease() { echo "$1" > "$LEASE.tmp" && chmod 644 "$LEASE.tmp" && mv "$LEASE.tmp" "$LEASE"; }
+
+set_caddy() {
+  local ip=${IP[$1]} tmp
+  tmp=$(mktemp)
+  sed -E "s#reverse_proxy 100\.(103\.44\.48|66\.158\.127):(310[0-3])#reverse_proxy $ip:\2#" "$CADDYFILE" > "$tmp"
+  cmp -s "$tmp" "$CADDYFILE" || cat "$tmp" > "$CADDYFILE"   # in place: keep the bind-mounted inode
+  rm -f "$tmp"
+  docker cp "$CADDYFILE" "$CADDY_CTR:/tmp/Caddyfile" >/dev/null &&
+    docker exec "$CADDY_CTR" caddy reload --adapter caddyfile --config /tmp/Caddyfile >/dev/null 2>&1
+}
+
+wait_healthy() {  # host minutes
+  local i
+  for ((i = 0; i < $2 * 6; i++)); do healthy "$1" && return 0; sleep 10; done
+  return 1
+}
+
+activate() {  # host -> start, wait, switch Caddy, take lease
+  local h=$1
+  # Lease first: hive-reconcile on $h would stop hives it sees running
+  # while the lease does not name it. The old host is already stopped.
+  set_lease "$h"
+  rsh "$h" 'sudo /var/srv/hives-host/hives up -d' >/dev/null 2>&1 || log "start on $h over ssh failed; hive-reconcile there starts it from the lease"
+  if wait_healthy "$h" 5; then
+    set_caddy "$h" && notify "hives now active on $h"
+    rm -f $STATE/down_since $STATE/pending
+    return 0
+  fi
+  notify "hives on $h did not become healthy within 5 min (lease is $h, Caddy unchanged)"
+  return 1
+}
+
+cmd_check() {
+  [ -f $STATE/hold ] && exit 0
+  local a t down n
+  a=$(cat "$LEASE")
+  if [ "$a" != none ]; then
+    if healthy "$a"; then rm -f $STATE/down_since; exit 0; fi
+    [ -f $STATE/down_since ] || now > $STATE/down_since
+    n=$(( ($(now) - $(cat $STATE/down_since)) / 60 ))
+    log "hives on $a unhealthy for ${n} min"
+    [ "$n" -lt "$FAIL_MIN" ] && exit 0
+    t=$(peer "$a")
+    notify "hives on $a unhealthy for ${n} min: revoking lease, failing over to $t"
+    echo "$t" > $STATE/pending
+    set_lease none
+    rsh "$a" 'sudo /var/srv/hives-host/hives stop' >/dev/null 2>&1 || log "could not stop hives on $a; waiting for it to self-fence"
+    a=none
+  fi
+  [ -f $STATE/pending ] || exit 0
+  t=$(cat $STATE/pending); [ "$t" ] || exit 0
+  local old; old=$(peer "$t")
+  down=$(cat $STATE/down_since 2>/dev/null || now); n=$(( ($(now) - down) / 60 ))
+  local c; c=$(running_count "$old" 2>/dev/null)
+  if [ "$c" = 0 ] || [ "$n" -ge "$START_WAIT_MIN" ]; then
+    log "starting $t (old host $old running=${c:-unknown}, down ${n} min)"
+    activate "$t"
+  else
+    log "waiting for $old to stop or self-fence (running=${c:-unreachable}, down ${n} min)"
+  fi
+}
+
+cmd_move() {
+  local h=${1:?usage: hive-failover move bihar|karnataka} cur
+  [ -n "${IP[$h]:-}" ] || { echo "unknown host $h"; exit 2; }
+  cur=$(cat "$LEASE")
+  [ "$cur" = "$h" ] && { echo "already active on $h"; exit 0; }
+  touch $STATE/hold
+  rm -f $STATE/pending
+  set_lease none
+  if [ "$cur" != none ]; then
+    log "stopping hives on $cur"
+    rsh "$cur" 'sudo /var/srv/hives-host/hives stop' || { echo "could not stop $cur; fix it or stop it by hand, then rerun"; exit 1; }
+    log "syncing $cur -> $h"
+    rsh "$cur" "sudo /var/srv/hives-host/hive-sync --force $h" || { echo "sync failed; lease left at none, hold on"; exit 1; }
+  fi
+  activate "$h" && rm -f $STATE/hold
+}
+
+cmd_status() {
+  local h
+  echo "lease: $(cat "$LEASE")   hold: $([ -f $STATE/hold ] && echo on || echo off)   pending: $(cat $STATE/pending 2>/dev/null || echo -)"
+  for h in bihar karnataka; do
+    printf '%-10s healthy=%s running=%s\n' "$h" "$(healthy $h && echo yes || echo no)" "$(running_count $h 2>/dev/null || echo ?)"
+  done
+  grep -oE 'reverse_proxy 100\.[0-9.]+:310[0-3]' "$CADDYFILE" | sort -u
+}
+
+case "${1:-}" in
+  check)  exec 9>$STATE/lock; flock -n 9 || exit 0; cmd_check ;;
+  move)   exec 9>$STATE/lock; flock 9; cmd_move "${2:-}" ;;
+  status) cmd_status ;;
+  hold)   case "${2:-}" in on) touch $STATE/hold ;; off) rm -f $STATE/hold ;; *) echo "hold on|off"; exit 2 ;; esac ;;
+  *)      sed -n '2,15p' "$0"; exit 2 ;;
+esac

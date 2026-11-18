@@ -1,0 +1,31 @@
+#!/bin/bash
+# hive-sync: push this host's hive data to the cold-standby peer.
+#   hive-sync            timer mode: push to the peer only while the lease names this host
+#   hive-sync --force P  push to P now (hive-failover move uses this after a stop)
+# Leaves out caches and per-agent toolchains; agents rebuild them on demand.
+set -euo pipefail
+H=/var/srv/hives-host
+ME=$(hostname -s)
+declare -A IP=([bihar]=100.103.44.48 [karnataka]=100.66.158.127)
+SSHOPT="-i $H/keys/sync -o BatchMode=yes -o ConnectTimeout=15 -o UserKnownHostsFile=$H/keys/known_hosts -o StrictHostKeyChecking=accept-new"
+
+if [ "${1:-}" = --force ]; then
+  P=${2:?peer}
+else
+  [ "$ME" = bihar ] && P=karnataka || P=bihar
+  lease=$(ssh -i $H/keys/lease -o BatchMode=yes -o ConnectTimeout=15 \
+    -o UserKnownHostsFile=$H/keys/known_hosts -o StrictHostKeyChecking=accept-new \
+    ubuntu@100.113.75.88 2>/dev/null | tr -d '[:space:]')
+  [ "$lease" = "$ME" ] || { echo "lease is '$lease', not $ME: no sync"; exit 0; }
+fi
+[ -n "${IP[$P]:-}" ] && [ "$P" != "$ME" ] || { echo "bad peer $P"; exit 2; }
+
+rsync -aHA --numeric-ids --delete --info=stats1 -e "ssh $SSHOPT" --rsync-path="sudo rsync" \
+  --exclude='data/home/.cache' --exclude='data/home/go' \
+  --exclude='data/home/agents/*/go' --exclude='data/home/agents/*/.rustup' \
+  --exclude='data/home/agents/*/.cargo' --exclude='data/home/agents/*/.npm' \
+  --exclude='data/home/agents/*/.cache' --exclude='data/home/agents/*/.omp/natives' \
+  /var/srv/hives/ "james@${IP[$P]}:/var/srv/hives/"
+ssh $SSHOPT "james@${IP[$P]}" 'sudo chcon -R -t container_file_t /var/srv/hives'
+date -u +%FT%TZ > $H/last-sync-to-$P
+echo "synced to $P"

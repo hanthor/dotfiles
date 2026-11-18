@@ -11,7 +11,7 @@ you, and anything that executes on the fleet still waits for you.
 |---|---|---|
 | **Renovate** | minor/patch/digest bumps (pi npm deps, Go, GitHub Actions, OpenTofu providers), weekly lockfile maintenance | yes, once CI is green |
 | **Renovate** (cluster) | image/chart bumps in `talos-k8s/`, grouped weekly, label `deploy-needed` | **no** — manifests are applied by hand, so a merge would only make git lie about the cluster |
-| **Hive** (school and reef spokes on the [Spindle VPS](cluster/hive.md#current-deployment-spindle-vps); Apps `hanthor-hive-agent` and `tuna-reef-hive`) | its agents open PRs labelled `hold`; the Hive itself only merges PRs labelled `lgtm` | only if the PR stays inside the carve-outs below. **Neither hive's roster includes this repo today** (both cover only `tuna-os/*`), so no Hive PRs are expected here unless a hanthor spoke is rebuilt |
+| **Hive** (school and reef spokes on [bihar, with karnataka as standby](cluster/hive.md#current-deployment-bihar-karnataka-standby); Apps `hanthor-hive-agent` and `tuna-reef-hive`) | its agents open PRs labelled `hold`; the Hive itself only merges PRs labelled `lgtm` | only if the PR stays inside the carve-outs below. **Neither hive's roster includes this repo today** (both cover only `tuna-os/*`), so no Hive PRs are expected here unless a hanthor spoke is rebuilt |
 | **You** | direct pushes, `just onboard`, etc. | admin bypass — unaffected |
 
 ## The gate
@@ -56,7 +56,7 @@ was the seed of the former `hive.reilly.asia` spoke on the terminated AWS
 cluster (exported 2026-10-01); it does not describe a running Hive. For the
 current school and reef files, read-only inspection and the safe edit
 procedure, see the
-[Hive operations guide](cluster/hive.md#current-deployment-spindle-vps):
+[Hive operations guide](cluster/hive.md#current-deployment-bihar-karnataka-standby):
 
 ```bash
 ssh ubuntu@100.113.75.88 'docker ps --filter name=hives-; ls /srv/hives/*/data/hive.yaml.runtime'

@@ -10,8 +10,7 @@ crosswalk.
 | Name | Role |
 |------|------|
 | gateway | Router (DNS, DHCP) — see [Gateway](network/gateway/README.md) |
-| bihar | Talos K8s control plane (powered down, expected back) — reserved address |
-| karnataka | Talos K8s worker, AMD GPU (powered down, expected back) — reserved address |
+| karnataka | Home server: k3s, KubeVirt, AMD GPU — reserved address |
 | goa | Fleet control, Debian ARM (Raspberry Pi) — reserved address |
 | phone | Android phone (reserved address) |
 | printer | Network printer (DHCP) |
@@ -28,7 +27,7 @@ tailnet address where one is needed.
 | Hostname | LAN | Group |
 |----------|-----|-------|
 | goa | reserved | server (applies locally) |
-| punjab | — (AWS) | server |
+| punjab | — (VM on karnataka) | server |
 | himachal | DHCP | desktop |
 | dilli | DHCP | desktop |
 | kanpur | DHCP | desktop |
@@ -37,5 +36,5 @@ tailnet address where one is needed.
 | termux (ssh `:8022`) | phone | termux_hosts |
 | matrix | remote | vps — retired |
 | telengana | remote | vps — retired |
-| bihar | reserved | Talos, not in inventory — offline |
-| karnataka | reserved | Talos, not in inventory — offline |
+| bihar | — (separate site, WiFi) | desktop — home server, hive host |
+| karnataka | reserved | not in inventory (native units) — k3s host |

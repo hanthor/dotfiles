@@ -1,22 +1,31 @@
-# Spindle VPS (Matrix and Hive)
+# Spindle VPS (Matrix and the public front door)
 
 The Oracle Cloud VPS in Frankfurt runs the Matrix homeserver that was on the AWS Talos cluster,
-terminated 2026-10-25. **Spindle**, **MAS** (delegated login), **Postgres** (MAS database only),
-standalone **LiveKit** and **lk-jwt-service** (MatrixRTC; no ESS chart/runtime), and **Caddy** run
-as Docker Compose services under `/srv/spindle`.
+terminated 2026-10-25. **Spindle**, **Postgres**, standalone **LiveKit** and **lk-jwt-service**
+(MatrixRTC; no ESS chart/runtime), **synctap** and **Caddy** run as Docker Compose services under
+`/srv/spindle` (state on 2026-11-18). On 2026-11-16, Spindle's built-in OIDC replaced **MAS**
+(`auth.reilly.asia` now goes to Spindle). The MAS sections below are history.
 
-The School and Reef Hives, Hub and branded hub frontend run separately under `/srv/hives`, sharing
-the `spindle_default` network and Caddy ingress. Their layout, roster, identity and the safe way to
-edit them are in the [Hive operations guide](../../cluster/hive.md#current-deployment-spindle-vps).
-The `omp-auth-broker` user service also runs on this host. The Hive deployment's runtime
-configuration and data are not restored by `deploy.sh`; preserve and back them up separately. Each
-spoke is capped at 2560 MB (raised from 2 GB on 2026-11-13 after OOM kills during builds), so
-budget that alongside Spindle and LiveKit when sizing the host.
+**The hives moved off this host on 2026-11-18.** School, Reef, Hub and the hub
+frontend now run on [bihar](../bihar.md), with [karnataka](../karnataka.md) as a cold
+standby. Spindle keeps three hive roles:
+
+- **Caddy front door:** `school`, `reef` and `hub.tunaos.org` go to the active host's
+  tailnet IP on ports 3100-3103. `hive-failover` rewrites these upstreams.
+- **Failover coordinator:** the lease in `/var/lib/hive-failover/active`,
+  `/usr/local/sbin/hive-failover`, and `hive-failover.timer`.
+- **OMP auth broker:** the `omp-auth-broker` user service on `100.113.75.88:8765`. The hives
+  connect to it over the tailnet. The `omp-auth-broker-docker-proxy` socket
+  (`172.18.0.1:18765`) was used only by the hives when they ran on this host.
+
+See [Hives hosting and failover](../hives.md). The stopped copy in `/srv/hives` is
+kept for rollback only (`MOVED-TO-BIHAR.txt`). This removes the 2560 MB per-spoke
+memory budget from this host.
 
 | Piece | Source |
 |---|---|
 | Host | Oracle Cloud Always Free, `VM.Standard.A1.Flex`, Ubuntu 24.04 aarch64, `eu-frankfurt-1` AD-1; public IPv4 `92.5.82.232`, Tailscale `100.113.75.88` |
-| Spindle | `ghcr.io/tuna-os/spindle:v0.1.1` (deployed 2026-11-07; main `1d8dfd99`, arm64 release image). The upgrade from the `outbox-hotfix-arm64` build and its rehearsal are in [upgrade-to-main.md](upgrade-to-main.md) |
+| Spindle | `ghcr.io/tuna-os/spindle:v0.1.6` running on 2026-11-18 (v0.1.1 deployed 2026-11-07; arm64 release images). The upgrade from the `outbox-hotfix-arm64` build and its rehearsal are in [upgrade-to-main.md](upgrade-to-main.md) |
 | MatrixRTC | `livekit-server:v1.13.5` + `lk-jwt-service:0.6.0` as standalone containers |
 | Data | `ess_ess-spindle-data.tar.gz` (the store, taken 15:33 UTC) and `postgres/2026-10-25/mas.dump` (15:22 UTC), from `~/backups/tunaos-aws-2026-10-25` on himachal-1 |
 | Config | production runtime + delegated-auth block, MAS under/overrides and LiveKit template; deploy.sh renders credentials from cluster-state |

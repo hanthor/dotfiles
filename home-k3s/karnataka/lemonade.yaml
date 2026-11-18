@@ -1,0 +1,103 @@
+# Lemonade coding model server (llama.cpp on ROCm), formerly the lemonade.container Quadlet.
+# Scaled to 0 while unused. To run it: set replicas: 1 here and re-apply.
+#
+# Memory: on this APU, model weights + KV cache live in amdgpu GTT, which is carved from system
+# RAM but NOT charged to the pod's memory cgroup. Observed with Qwen3.8-Flash-Next IQ2_XS at
+# ctx 32768: ~38Gi GTT + ~30Gi process RSS. The request covers both so the scheduler refuses to
+# start lemonade unless that RAM is actually free next to the VMs; the limit only bounds the
+# cgroup-charged part (same 80G cap the Quadlet had).
+#
+# Exposed on the tailnet by the host's `tailscale serve` (karnataka:13305 -> 10.43.133.5:13305).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lemonade
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lemonade
+  namespace: lemonade
+  labels:
+    app: lemonade
+spec:
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: lemonade
+  template:
+    metadata:
+      labels:
+        app: lemonade
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: karnataka
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 999
+        # render, video: matches the host's /dev/kfd and /dev/dri group ownership.
+        supplementalGroups: [105, 39]
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: lemonade
+          image: ghcr.io/lemonade-sdk/lemonade-server@sha256:8ae593e309c5f8f348ea7404f20e27db83d0d247cc9ba3b2bf7fb6310e13e73c
+          workingDir: /opt/lemonade
+          command: ["./lemond", "--host", "0.0.0.0", "--no-broadcast"]
+          ports:
+            - name: http
+              containerPort: 13305
+          resources:
+            requests:
+              cpu: "4"
+              memory: 72Gi
+            limits:
+              memory: 80Gi
+              amd.com/gpu: 1
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 10
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /opt/lemonade/.cache/huggingface
+            - name: data
+              mountPath: /opt/lemonade/.cache/lemonade
+            - name: llama
+              mountPath: /opt/lemonade/llama
+            - name: config
+              mountPath: /opt/lemonade/.config/lemonade
+      volumes:
+        - name: hf-cache
+          hostPath:
+            path: /var/lib/tuna-ci-scratch/lemonade-cache
+            type: Directory
+        - name: data
+          hostPath:
+            path: /var/lib/tuna-ci-scratch/lemonade-data
+            type: Directory
+        - name: llama
+          hostPath:
+            path: /var/lib/tuna-ci-scratch/lemonade-llama
+            type: Directory
+        - name: config
+          hostPath:
+            path: /var/lib/tuna-ci-scratch/lemonade-config
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lemonade
+  namespace: lemonade
+spec:
+  # Pinned: the host's `tailscale serve` TCP forward targets this address.
+  clusterIP: 10.43.133.5
+  selector:
+    app: lemonade
+  ports:
+    - name: http
+      port: 13305
+      targetPort: http
