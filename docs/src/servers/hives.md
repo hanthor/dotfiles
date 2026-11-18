@@ -108,6 +108,7 @@ The file `spindle:/var/lib/hive-failover/active` contains `bihar`, `karnataka` o
 | `hive-failover check` | spindle, `hive-failover.timer` | every 1 min | Checks the active host on ports 3101-3103. After 5 min of failures it sets the lease to `none`, stops the old host if it can, and waits. When the old host has 0 containers, or after 10 min, it starts the standby, sets the lease, changes Caddy and sends a ntfy notification on `$NTFY_TOPIC`. |
 | `hive-reconcile` | both hosts, `hive-reconcile.timer` | every 1 min | If the lease names this host and fewer than 4 containers run, it starts them (unless `maintenance` exists). If the lease names a different host, it stops them. If it cannot read the lease for 8 min, it stops them (self-fence). |
 | `hive-sync` | both hosts, `hive-sync.timer` | every 15 min | If the lease names this host, it uses rsync to push `/var/srv/hives` to the peer, without caches and toolchains. |
+| `hive-cleanup` | both hosts, `hive-cleanup.timer` | every 1 h | On running spokes only: removes idle Claude session scratch and stale work dirs in `/tmp` inside the containers, removes dangling images and old backups, and warns when `/var` has less than 10 GB free. Ported from spindle, where the writable layers of the hive containers had reached 16.8 GB. |
 
 Logs:
 
@@ -152,7 +153,11 @@ Use one of these methods:
 4. `move bihar` completed in 50 s, including the sync back.
 
 ## Gotchas
-- **SELinux (bihar and karnataka are bootc and enforcing):** files mounted into containers must have the type `container_file_t`. `semanage` cannot write on bootc, so `hive-sync` runs `chcon -R` after each copy. Do not copy SELinux attributes with rsync (`-X`).
+- **SELinux (bihar and karnataka are bootc and enforcing):**
+  - Files mounted into containers must have the type `container_file_t`. `semanage` cannot write on bootc, so `hive-sync` runs `chcon -R` after each copy. Do not copy SELinux attributes with rsync (`-X`).
+  - systemd cannot run scripts that have the label `var_t` (the result is `203/EXEC Permission denied`). For this reason the units start the scripts as `/usr/bin/bash /var/srv/hives-host/<script>`. Do not use `chcon` on the scripts.
+  - Under systemd, rsync changes to the confined `rsync_t` domain, and its ssh cannot read the key. `hive-sync.service` therefore runs as `SELinuxContext=system_u:system_r:unconfined_t:s0`. `setsebool -P` has no effect on bootc.
+  - **Until 2026-11-18 18:50Z, the reconcile and sync timers did not run because of these two problems.** The failover drill passed only because spindle sent the commands directly over SSH. After you change a unit, use `systemctl show <unit> -p Result` to make sure that it ran.
 - **The Caddyfile on spindle is a single-file bind mount:** `sed -i` makes a new inode, and Caddy continues to see the old file. Write in place (`cat new > Caddyfile`), or run `docker cp Caddyfile spindle-caddy-1:/tmp/Caddyfile` then `docker exec spindle-caddy-1 caddy reload --adapter caddyfile --config /tmp/Caddyfile`. `hive-failover` does both.
 - **The spindle-to-host path uses a relay:** it goes through Tailscale DERP (Frankfurt), with approximately 170 ms of latency and 1 MB/s. This is sufficient for dashboard and API traffic.
 - **Disk:** the caches (Go build, rustup and others) are not synced. After a move, the first builds on the new host are slower.
@@ -169,7 +174,8 @@ The files in [`hives/`](https://github.com/hanthor/dotfiles/tree/master/hives) g
 |---|---|
 | `hives`, `hive-reconcile`, `hive-sync` | `/var/srv/hives-host/` on bihar and karnataka (mode 0755) |
 | `compose.<host>.yaml` | `/var/srv/hives-host/` on that host |
-| `systemd/hive-reconcile.*`, `systemd/hive-sync.*` | `/etc/systemd/system/` on bihar and karnataka |
+| `hive-cleanup` | `/var/srv/hives-host/` on bihar and karnataka (mode 0755) |
+| `systemd/hive-{reconcile,sync,cleanup}.*` | `/etc/systemd/system/` on bihar and karnataka |
 | `hive-failover` | `/usr/local/sbin/` on spindle |
 | `systemd/hive-failover.*` | `/etc/systemd/system/` on spindle |
 
@@ -180,15 +186,13 @@ On a new host, also do these steps:
 4. Pull the pinned images.
 5. Copy `bin/hive-2ef7dc7c0-amd64` from the other host. If neither host has it, build it from `tuna-os/hive` at `2ef7dc7c0`.
 6. Create the SSH keys in `/var/srv/hives-host/keys/`, and add the firewalld rule for ports 3100-3103 from spindle.
-7. Label the files: `chcon -R -t container_file_t /var/srv/hives /var/srv/hives-host`.
-8. Enable `hive-reconcile.timer` and `hive-sync.timer`.
+7. Label the data and compose files (not the scripts): `chcon -R -t container_file_t /var/srv/hives /var/srv/hives-host/compose.*.yaml /var/srv/hives-host/bin`.
+8. Enable `hive-reconcile.timer`, `hive-sync.timer` and `hive-cleanup.timer`. Start each service one time and make sure that its `Result` is `success`.
 
 ## Rollback to spindle (emergency only)
-Spindle's old copy is stopped in `/srv/hives` and is not up to date (from 2026-11-18 13:31Z). It uses the arm64 binary `bin/hive-2ef7dc7c0`.
+On 2026-11-18 the cleanup removed the stale data copies, the arm64 binaries, and the hive containers and images on spindle. `/srv/hives` contains only the compose files, `.env`, `<svc>/config`, `<svc>/secrets` and `backups/`. karnataka is the fallback. Use spindle only if both hosts are lost:
 1. On spindle, run `sudo hive-failover hold on`.
-2. Stop the hives on the active host.
-3. Copy `/var/srv/hives` back to spindle without `.cache`. The arm64 binaries must stay.
+2. Build an arm64 binary from `tuna-os/hive` at `2ef7dc7c0` (`GOARCH=arm64`) and copy it to `/srv/hives/bin/`.
+3. Copy the newest `/var/srv/hives` from bihar or karnataka to spindle (`<svc>/data`, without `.cache`).
 4. Change the hive blocks in Caddy back to `school:3001`, `reef:3001`, `hub:3001` and `hub-front:80`.
-5. Run `docker compose start` in `/srv/hives`.
-
-After the move is stable, delete `/srv/hives` on spindle to recover approximately 30 GB.
+5. Run `docker compose up -d` in `/srv/hives`. Spindle has 2 ARM cores, so reduce `HIVE_SHARED_AGENT_POOL_MAX_SESSIONS` to 2.

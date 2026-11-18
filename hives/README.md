@@ -11,7 +11,8 @@ the design, the install locations, daily operations, failover and the gotchas.
 |---|---|
 | `hives`, `hive-reconcile`, `hive-sync` | `/var/srv/hives-host/` on bihar and karnataka |
 | `compose.<host>.yaml` | `/var/srv/hives-host/` on that host |
-| `systemd/hive-{reconcile,sync}.{service,timer}` | `/etc/systemd/system/` on bihar and karnataka |
+| `hive-cleanup` | `/var/srv/hives-host/` on bihar and karnataka |
+| `systemd/hive-{reconcile,sync,cleanup}.{service,timer}` | `/etc/systemd/system/` on bihar and karnataka |
 | `hive-failover` | `/usr/local/sbin/` on spindle |
 | `systemd/hive-failover.{service,timer}` | `/etc/systemd/system/` on spindle |
 
