@@ -31,6 +31,7 @@
   - [Goa](servers/goa/README.md)
   - [Spindle VPS (matrix.reilly.asia)](servers/spindle-vps/README.md)
     - [Upgrade to main (draft)](servers/spindle-vps/upgrade-to-main.md)
+    - [2026-11 media and sync incident](servers/spindle-vps/incident-2026-11-17-media.md)
 - [VPS]()
   - [Matrix (retired)](vps/matrix/README.md)
   - [Telengana (retired)](vps/telengana/README.md)
