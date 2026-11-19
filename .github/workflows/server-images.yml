@@ -97,7 +97,7 @@ jobs:
           go-version-file: .sources/fisherman/tui/go.mod
           cache: false
 
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@v10.3.3
 
       - uses: extractions/setup-just@v4
 
