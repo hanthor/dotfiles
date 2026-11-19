@@ -1,0 +1,32 @@
+  # hanthor: hive.reilly.asia, the hanthor/* personal-account hive. Same App as
+  # school, installation 158987150 (hanthor account). Rebuilt 2026-11-19; the
+  # AWS-era data was not kept. Host files publish it on :3104.
+  hanthor:
+    image: ghcr.io/hivecommons/hive:v6-latest
+    restart: unless-stopped
+    command: ["--config", "/etc/hive/hive.yaml"]
+    environment:
+      HIVE_ID: "hanthor"
+      HIVE_HUB_URL: "http://hub:3001"
+      HIVE_HUB_SECRET: "${HIVE_HUB_SECRET}"
+      HIVE_DASHBOARD_TOKEN: "${HIVE_DASHBOARD_TOKEN}"
+      HIVE_SHARED_AGENT_POOL_ENABLED: "true"
+      OMP_AUTH_BROKER_TOKEN: "${OMP_AUTH_BROKER_TOKEN}"
+      GH_APP_ID: "3942065"
+      GH_APP_INSTALLATION_ID: "158987150"
+      GH_APP_KEY_FILE: "/secrets/gh-app-key.pem"
+      NTFY_TOPIC: "${NTFY_TOPIC}"
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN}"
+      HIVE_ACTIONABLE_PRIORITY_LABELS: "priority/p0,triage/accepted,ai-fix-requested,approved-direction,kind/bug,bug,priority/critical-urgent,priority/important-soon,help wanted,good first issue"
+    volumes:
+      - ./bin/dashboard-f3e6d836a.html:/opt/hive/proxy/public/index.html:ro
+      - ./hanthor/config:/etc/hive:ro
+      - ./hanthor/data:/data
+      - ./hanthor/secrets:/secrets:ro
+    depends_on:
+      - hub
+    networks:
+      - default
+    mem_limit: 2560m
+    cap_add:
+      - NET_ADMIN

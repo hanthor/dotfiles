@@ -50,14 +50,14 @@ manifest on fleet machines.
 
 Each live spoke persists its configuration to `data/hive.yaml.runtime` next to
 the seed `config/hive.yaml`, and the runtime file wins on restart, so roster or
-level changes made in the dashboard stick. The `hive-config` ConfigMap in
-[`talos-k8s/hive/spokes/hanthor/manifest.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/hive/spokes/hanthor/manifest.yaml)
-was the seed of the former `hive.reilly.asia` spoke on the terminated AWS
-cluster (exported 2026-10-01); it does not describe a running Hive. For the
-current school and reef files, read-only inspection and the safe edit
-procedure, see the
+level changes made in the dashboard stick. hive.reilly.asia is the `hanthor`
+spoke on bihar (rebuilt 2026-11-19); its seed is
+[`hives/hanthor/hive.yaml`](https://github.com/hanthor/dotfiles/blob/master/hives/hanthor/hive.yaml).
+The AWS-era ConfigMap in `talos-k8s/hive/spokes/hanthor/manifest.yaml` is
+history. For the live files, read-only inspection and the safe edit procedure,
+see the
 [Hive operations guide](cluster/hive.md#current-deployment-bihar-karnataka-standby):
 
 ```bash
-ssh ubuntu@100.113.75.88 'docker ps --filter name=hives-; ls /srv/hives/*/data/hive.yaml.runtime'
+ssh james@bihar 'sudo podman ps --filter name=hives-; sudo cat /var/srv/hives/hanthor/data/hive.yaml.runtime'
 ```

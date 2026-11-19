@@ -35,3 +35,11 @@ services:
       OMP_AUTH_BROKER_URL: "http://100.113.75.88:8765"
     volumes:
       - /var/srv/hives-host/bin/hive-2ef7dc7c0-amd64:/usr/local/bin/hive:ro
+  hanthor:
+    image: ghcr.io/hivecommons/hive@sha256:d56425fbaa1b5854a96356d56ebc2f371f337038339c56c94dcf3f2ec29ead51
+    ports: ["100.103.44.48:3104:3001"]
+    mem_limit: 4g
+    environment:
+      OMP_AUTH_BROKER_URL: "http://100.113.75.88:8765"
+    volumes:
+      - /var/srv/hives-host/bin/hive-2ef7dc7c0-amd64:/usr/local/bin/hive:ro

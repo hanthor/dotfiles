@@ -44,7 +44,7 @@ set_lease() { echo "$1" > "$LEASE.tmp" && chmod 644 "$LEASE.tmp" && mv "$LEASE.t
 set_caddy() {
   local ip=${IP[$1]} tmp
   tmp=$(mktemp)
-  sed -E "s#reverse_proxy 100\.(103\.44\.48|66\.158\.127):(310[0-3])#reverse_proxy $ip:\2#" "$CADDYFILE" > "$tmp"
+  sed -E "s#reverse_proxy 100\.(103\.44\.48|66\.158\.127):(310[0-4])#reverse_proxy $ip:\2#" "$CADDYFILE" > "$tmp"
   cmp -s "$tmp" "$CADDYFILE" || cat "$tmp" > "$CADDYFILE"   # in place: keep the bind-mounted inode
   rm -f "$tmp"
   docker cp "$CADDYFILE" "$CADDY_CTR:/tmp/Caddyfile" >/dev/null &&
@@ -125,7 +125,7 @@ cmd_status() {
   for h in bihar karnataka; do
     printf '%-10s healthy=%s running=%s\n' "$h" "$(healthy $h && echo yes || echo no)" "$(running_count $h 2>/dev/null || echo ?)"
   done
-  grep -oE 'reverse_proxy 100\.[0-9.]+:310[0-3]' "$CADDYFILE" | sort -u
+  grep -oE 'reverse_proxy 100\.[0-9.]+:310[0-4]' "$CADDYFILE" | sort -u
 }
 
 case "${1:-}" in

@@ -13,6 +13,8 @@ the design, the install locations, daily operations, failover and the gotchas.
 | `compose.<host>.yaml` | `/var/srv/hives-host/` on that host |
 | `hive-cleanup` | `/var/srv/hives-host/` on bihar and karnataka |
 | `systemd/hive-{reconcile,sync,cleanup}.{service,timer}` | `/etc/systemd/system/` on bihar and karnataka |
+| `hanthor/hive.yaml` | seed for the hanthor spoke: `/var/srv/hives/hanthor/config/hive.yaml` (synced to the standby by `hive-sync`) |
+| `hanthor/compose.override.snippet.yaml` | the `hanthor` service, appended to `/var/srv/hives/compose.override.yaml` |
 | `hive-failover` | `/usr/local/sbin/` on spindle |
 | `systemd/hive-failover.{service,timer}` | `/etc/systemd/system/` on spindle |
 

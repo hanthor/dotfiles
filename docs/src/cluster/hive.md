@@ -2,19 +2,35 @@
 
 ## Current deployment: bihar (karnataka standby)
 
-Two Hive spokes, **school** and **reef**, and their **hub** run as compose
+Three Hive spokes, **school**, **reef** and **hanthor**, and their **hub** run as compose
 services under rootful podman on [bihar](../servers/bihar.md), in
 `/var/srv/hives` (`ssh james@bihar`, commands need `sudo`). Until 2026-11-18
 they ran on the [Spindle VPS](../servers/spindle-vps/README.md) under
 `/srv/hives`. Spindle's Caddy still routes
 [school.tunaos.org](https://school.tunaos.org),
-[reef.tunaos.org](https://reef.tunaos.org) and
+[reef.tunaos.org](https://reef.tunaos.org),
+[hive.reilly.asia](https://hive.reilly.asia) and
 [hub.tunaos.org](https://hub.tunaos.org), over the tailnet to the active host.
 [karnataka](../servers/karnataka.md) is a cold standby. A lease on spindle
 selects the active host. Run every command below on **the host the lease
 names** (`ssh spindle sudo hive-failover status`). Hosting, failover and the
 host-specific compose layer are described in
 [Hives hosting and failover](../servers/hives.md).
+
+### hanthor (hive.reilly.asia)
+
+The personal-account spoke from the old AWS cluster was rebuilt on bihar on
+2026-11-19. It is the `hanthor` service in `compose.override.yaml` (port 3104),
+with its data in `/var/srv/hives/hanthor`. It uses the same GitHub App as
+school (`hanthor-hive-agent`, App ID 3942065) through the App's installation on
+the hanthor account (158987150), and the same key file. Its seed is
+[`hives/hanthor/hive.yaml`](https://github.com/hanthor/dotfiles/blob/master/hives/hanthor/hive.yaml):
+ACMM level 5, four agents (supervisor, scanner, quality, guide) on the `claude`
+backend, and the repositories `dotfiles`, `reilly.asia`, `homebrew-tap`,
+`shrimply` and `indiafoss-chat-android`. Compared with the AWS seed it drops
+`indiafoss-companion` (archived), `hummingbird-github` (deleted) and
+`rust-wayland-desktop` (now `tuna-os/tuna-desktop`, which school covers). The
+AWS data volume was not kept, so the hive started with empty state.
 
 The layout and roster below were read on spindle on 2026-11-13. The move
 changed the paths and the commands, but not the hive configuration. Container
@@ -29,7 +45,8 @@ Kubernetes deployment and must not be applied here.
 ```text
 /var/srv/hives/          # on the active host; the host layer is /var/srv/hives-host/compose.<host>.yaml
 ├── compose.yaml            # services: hub, hub-front, school, reef (network spindle_default)
-├── compose.override.yaml   # pins the running binary/dashboard, memory limits, session pool
+├── compose.override.yaml   # pins the running binary/dashboard, memory limits, session pool;
+│                           # also defines the hanthor spoke (added 2026-11-19)
 ├── .env                    # secrets and NTFY topic (mode 600; never print or commit)
 ├── bin/hive-<sha>          # fork builds; compose.yaml mounts bin/hive, the override re-pins one
 ├── <spoke>/config/hive.yaml        # seed, mounted read-only at /etc/hive
@@ -294,8 +311,7 @@ PRs and issues (`gh search prs --author "hanthor-hive-agent[bot]"` and
 - The spokes call the `omp-auth-broker` on spindle (`OMP_AUTH_BROKER_URL`,
   `http://100.113.75.88:8765`). Caddy routing and failover are described in
   [Hives hosting and failover](../servers/hives.md). This page does not describe
-  the hub's own configuration. The `hive.reilly.asia` hanthor spoke of the old AWS
-  cluster has no container on this host; its current status is unverified. The
+  the hub's own configuration. The
   [hive_ops role](../roles/hive_ops.md) targets the retired cluster, not this
   deployment.
 
