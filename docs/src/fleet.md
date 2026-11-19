@@ -29,7 +29,7 @@ Internet ─▶ Cloudflare ─▶ spindle (Oracle, Frankfurt): Caddy, Matrix, Li
 | **pixel-9a** (`termux`) | Phone | Android + Termux | Ansible `termux` host | [Inventory](inventory.md) |
 
 Cross-host services:
-- The hives (school, reef, hub) are on bihar. If bihar fails, they move to karnataka. See [Hives hosting](servers/hives.md).
+- The hives (school, reef, hanthor, hub) are on bihar. If bihar fails, they move to karnataka. See [Hives hosting](servers/hives.md).
 - KubeStellar is described in [Home k3s and KubeStellar](servers/home-k3s.md).
 
 ## Intermittent (desktops and laptops)

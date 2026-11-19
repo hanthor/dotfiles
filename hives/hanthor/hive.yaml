@@ -1,0 +1,94 @@
+# hanthor: hive.reilly.asia. The personal-account hive (hanthor/*), split from
+# school because one hive.yaml holds one GitHub App installation. Same App as
+# school (hanthor-hive-agent), its installation on the hanthor account.
+# Rebuilt on bihar 2026-11-19 from the AWS-era seed (talos-k8s/hive/spokes/
+# hanthor); the AWS data volume was not kept, so state started fresh.
+# The live config is /data/hive.yaml.runtime; dashboard changes win over this.
+#
+# L5: agents open PRs labelled `hold`; the hive merges only `lgtm` PRs.
+# dotfiles auto-merge is gated repo-side (CODEOWNERS + agent-automerge.yml).
+acmm_level: 5
+project:
+  org: hanthor
+  name: hanthor
+  repos:
+    - hanthor/dotfiles
+    - hanthor/reilly.asia
+    - hanthor/homebrew-tap
+    - hanthor/shrimply
+    - hanthor/indiafoss-chat-android
+  ai_author: ""
+  primary_repo: hanthor/dotfiles
+hub:
+  enabled: true
+  url: http://hub:3001
+agents:
+  supervisor:
+    enabled: true
+    backend: claude
+    model: claude-sonnet-5-5
+    reasoning_effort: high
+    beads_dir: /data/beads/supervisor
+    clear_on_kick: false
+    bead_role: supervisor
+    caveman_mode: full
+    backend_owner: operator
+    model_owner: operator
+  scanner:
+    enabled: true
+    backend: claude
+    model: claude-haiku-5-5
+    reasoning_effort: high
+    mode: ISSUES_AND_PRS
+    beads_dir: /data/beads/scanner
+    clear_on_kick: false
+    caveman_mode: full
+    backend_owner: operator
+    model_owner: operator
+  quality:
+    enabled: true
+    backend: claude
+    model: claude-sonnet-5-5
+    reasoning_effort: high
+    mode: ISSUES_AND_PRS
+    beads_dir: /data/beads/quality
+    clear_on_kick: false
+    caveman_mode: full
+    backend_owner: operator
+    model_owner: operator
+  guide:
+    enabled: true
+    backend: claude
+    model: claude-sonnet-5-5
+    reasoning_effort: high
+    beads_dir: /data/beads/guide
+    clear_on_kick: false
+    caveman_mode: full
+    backend_owner: operator
+    model_owner: operator
+governor:
+  eval_interval_s: 300
+  modes:
+    surge:   {threshold: 70, supervisor: 10m, scanner: 30m, quality: 1h, guide: 2h}
+    busy:    {threshold: 10, supervisor: 15m, scanner: 1h,  quality: 2h, guide: 4h}
+    quiet:   {threshold: 2,  supervisor: 30m, scanner: 2h,  quality: 4h, guide: 6h}
+    idle:    {threshold: 0,  supervisor: 1h,  scanner: 4h,  quality: 6h, guide: 8h}
+github:
+  app_id: 3942065
+  installation_id: 158987150
+  app_slug: hanthor-hive-agent
+  app_authored_prs: true
+  key_file: /secrets/gh-app-key.pem
+dashboard:
+  port: 3002
+  hub_proxied: false
+  authorized_users:
+    - hanthor:owner
+backends:
+  allow:
+    - claude
+    - omp
+  deny: []
+sentinel:
+  exempt_logins:
+    - renovate[bot]

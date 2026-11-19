@@ -8,10 +8,10 @@ terminated 2026-10-25. **Spindle**, **Postgres**, standalone **LiveKit** and **l
 
 **The hives moved off this host on 2026-11-18.** School, Reef, Hub and the hub
 frontend now run on [bihar](../bihar.md), with [karnataka](../karnataka.md) as a cold
-standby. Spindle keeps three hive roles:
+standby. The `hanthor` spoke (`hive.reilly.asia`) joined them on 2026-11-19. Spindle keeps three hive roles:
 
-- **Caddy front door:** `school`, `reef` and `hub.tunaos.org` go to the active host's
-  tailnet IP on ports 3100-3103. `hive-failover` rewrites these upstreams.
+- **Caddy front door:** `school`, `reef`, `hub.tunaos.org` and `hive.reilly.asia` go to the active host's
+  tailnet IP on ports 3100-3104 (`hive.reilly.asia` on 3104). `hive-failover` rewrites these upstreams.
 - **Failover coordinator:** the lease in `/var/lib/hive-failover/active`,
   `/usr/local/sbin/hive-failover`, and `hive-failover.timer`.
 - **OMP auth broker:** the `omp-auth-broker` user service on `100.113.75.88:8765`. The hives

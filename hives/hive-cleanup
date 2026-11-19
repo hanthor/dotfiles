@@ -21,7 +21,7 @@ WORKDIR_MIN=${WORKDIR_MIN:-2880}
 BACKUP_DAYS=${BACKUP_DAYS:-14}
 MIN_FREE_GB=${MIN_FREE_GB:-10}
 HIVES=/var/srv/hives
-CONTAINERS=${CONTAINERS:-"hives-school-1 hives-reef-1"}
+CONTAINERS=${CONTAINERS:-"hives-school-1 hives-reef-1 hives-hanthor-1"}
 
 log() { echo "hive-cleanup: $*"; }
 free_gb() { df -BG --output=avail /var | tail -1 | tr -dc 0-9; }

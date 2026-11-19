@@ -4,14 +4,14 @@
 > For the hives themselves (agents, configuration, health), see the
 > [Hive operations guide](../cluster/hive.md).
 
-Last updated: 2026-11-18. The source for the scripts, compose layers and systemd
+Last updated: 2026-11-19 (hanthor added). The source for the scripts, compose layers and systemd
 units is [`hives/`](https://github.com/hanthor/dotfiles/tree/master/hives) in this
 repository. Each host also has a copy of this runbook at
 `/var/srv/hives-host/RUNBOOK.md` (on spindle: `/var/lib/hive-failover/RUNBOOK.md`).
 
 ## Overview
 
-The tuna-os hives run as one compose project named `hives`, with four containers:
+The hives run as one compose project named `hives`, with five containers:
 
 | Service | Purpose | Public URL |
 |---|---|---|
@@ -19,12 +19,13 @@ The tuna-os hives run as one compose project named `hives`, with four containers
 | `hub-front` | Static hub page (nginx) | `https://hub.tunaos.org/` |
 | `school` | Spoke for the tuna-os org (GitHub App 3942065) | `https://school.tunaos.org` |
 | `reef` | Spoke (GitHub App 5546574) | `https://reef.tunaos.org` |
+| `hanthor` | Spoke for the `hanthor/*` personal repositories (App 3942065, installation 158987150). Added 2026-11-19 | `https://hive.reilly.asia` |
 
 Until 2026-11-18 the hives ran on spindle (Oracle ARM VM, Frankfurt, 2 cores and 11 GB of RAM). They now run on **bihar** (x86, 24 cores, 62 GB of RAM). **karnataka** is a cold standby. **spindle** keeps the public IP and Caddy, and it coordinates failover.
 
 ```
 Internet ─▶ Cloudflare ─▶ spindle Caddy (92.5.82.232)
-                              │  tailnet, ports 3100-3103
+                              │  tailnet, ports 3100-3104
                ┌──────────────┴──────────────┐
                ▼ (active, holds the lease)    ▼ (standby, stopped)
         bihar 100.103.44.48          karnataka 100.66.158.127
@@ -39,7 +40,7 @@ The OMP auth broker still runs on spindle at `http://100.113.75.88:8765`, reache
 
 | Path | Contents |
 |---|---|
-| `/var/srv/hives/` | Hive data and configuration, copied from spindle's `/srv/hives`: `compose.yaml`, `compose.override.yaml`, `.env`, `{hub,school,reef}/{config,data,secrets}`, `hub-front/`, `proxy/`, `bin/dashboard-*.html` |
+| `/var/srv/hives/` | Hive data and configuration, copied from spindle's `/srv/hives`: `compose.yaml`, `compose.override.yaml`, `.env`, `{hub,school,reef,hanthor}/{config,data,secrets}`, `hub-front/`, `proxy/`, `bin/dashboard-*.html` |
 | `/var/srv/hives-host/compose.<host>.yaml` | Host layer: ports, memory limits, broker URL, image digests, and the amd64 binary mount |
 | `/var/srv/hives-host/bin/hive-2ef7dc7c0-amd64` | `tuna-os/hive` at `2ef7dc7c0` (branch `deploy/upstream-v6-20261113`) built with `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath ./cmd/hive` |
 | `/var/srv/hives-host/hives` | Wrapper that runs docker-compose against rootful podman with the three compose files |
@@ -56,11 +57,12 @@ Each host publishes its ports on its own tailnet IP only:
 | 3101 | hub |
 | 3102 | school |
 | 3103 | reef |
+| 3104 | hanthor |
 
 A firewalld rich rule in the `public` zone accepts these ports only from spindle (`100.113.75.88`). Inside the compose network the services reach each other by name, for example `http://hub:3001`. The podman network is named `spindle_default` so that `compose.yaml` works unchanged.
 
 Images are pinned by digest, and the pin must match the binary:
-- `ghcr.io/hivecommons/hive@sha256:d56425fb…` (school and reef)
+- `ghcr.io/hivecommons/hive@sha256:d56425fb…` (school, reef and hanthor)
 - `ghcr.io/hivecommons/hive-hub@sha256:3c0162eb…` (hub)
 
 Do not change to `:v6-latest`. On 2026-11-18 a newer image made the hub log "failed to write token cache". **Upgrade the binary and the images together.**
@@ -185,7 +187,7 @@ On a new host, also do these steps:
 3. Create the podman network `spindle_default`.
 4. Pull the pinned images.
 5. Copy `bin/hive-2ef7dc7c0-amd64` from the other host. If neither host has it, build it from `tuna-os/hive` at `2ef7dc7c0`.
-6. Create the SSH keys in `/var/srv/hives-host/keys/`, and add the firewalld rule for ports 3100-3103 from spindle.
+6. Create the SSH keys in `/var/srv/hives-host/keys/`, and add the firewalld rule for ports 3100-3104 from spindle. Also install `/etc/sysctl.d/90-hives-inotify.conf` (`fs.inotify.max_user_instances = 1024`, `fs.inotify.max_user_watches = 1048576`): with five containers the per-agent permission watchers exhaust the default of 128 instances.
 7. Label the data and compose files (not the scripts): `chcon -R -t container_file_t /var/srv/hives /var/srv/hives-host/compose.*.yaml /var/srv/hives-host/bin`.
 8. Enable `hive-reconcile.timer`, `hive-sync.timer` and `hive-cleanup.timer`. Start each service one time and make sure that its `Result` is `success`.
 
