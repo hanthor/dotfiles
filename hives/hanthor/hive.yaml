@@ -70,9 +70,9 @@ governor:
   eval_interval_s: 300
   modes:
     surge: {threshold: 70, supervisor: 10m, scanner: 30m, quality: 1h, guide: 2h}
-    busy: {threshold: 10, supervisor: 15m, scanner: 1h,  quality: 2h, guide: 4h}
-    quiet: {threshold: 2,  supervisor: 30m, scanner: 2h,  quality: 4h, guide: 6h}
-    idle: {threshold: 0,  supervisor: 1h,  scanner: 4h,  quality: 6h, guide: 8h}
+    busy: {threshold: 10, supervisor: 15m, scanner: 1h, quality: 2h, guide: 4h}
+    quiet: {threshold: 2, supervisor: 30m, scanner: 2h, quality: 4h, guide: 6h}
+    idle: {threshold: 0, supervisor: 1h, scanner: 4h, quality: 6h, guide: 8h}
 github:
   app_id: 3942065
   installation_id: 158987150
