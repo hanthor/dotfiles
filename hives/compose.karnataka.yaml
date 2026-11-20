@@ -12,7 +12,11 @@ services:
     ports: ["100.66.158.127:3101:3001"]
     mem_limit: 1g
     environment:
-      HIVE_SHARED_AGENT_POOL_MAX_SESSIONS: "4"
+      # Fleet-wide live CLI sessions. 4 was sized for the spindle VPS and
+      # starved hanthor once three hives shared it (2026-11-20); the cap per
+      # hive keeps one tenant from holding every slot.
+      HIVE_SHARED_AGENT_POOL_MAX_SESSIONS: "9"
+      HIVE_SHARED_AGENT_POOL_MAX_PER_HIVE: "4"
     volumes:
       - /var/srv/hives-host/bin/hive-2ef7dc7c0-amd64:/usr/local/bin/hive:ro
   hub-front:
