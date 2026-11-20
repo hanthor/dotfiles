@@ -1,0 +1,8 @@
+[Unit]
+Description=Follow the hive lease on spindle (timer)
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=10s
+[Install]
+WantedBy=timers.target

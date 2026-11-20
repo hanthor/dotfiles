@@ -8,27 +8,19 @@ Ansible-driven dotfiles + infra for a personal fleet (desktops, servers, VPS). E
 
 Three distinct concerns live here:
 1. **Workstation config** (`roles/`, `site.yml`, `host_vars/`, `group_vars/`) — shells, packages, browser, SSH, Tailscale, kubeconfig, etc.
-2. **Talos K8s cluster IaC** (`talos-k8s/`) — manifests for the Bihar + Karnataka cluster. Detailed handbook in [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md).
+2. **Home servers** (`home-k3s/`, `hives/`) — bihar and karnataka run Bluefin with a separate single-node k3s each, linked by KubeStellar; the hives run on bihar with karnataka as cold standby. `talos-k8s/` is the **archived** Talos-era IaC (kept for tests/history; do not apply). Current state of every host: [`docs/src/fleet.md`](docs/src/fleet.md).
 3. **TunaOS AWS account IaC** (`aws/`, OpenTofu) — the account is **TunaOS infrastructure**, not the personal fleet: punjab's instance, backups (S3), IAM, budgets, and (terminated, still in the code) the AWS Talos cluster's VPC/nodes/EIPs. Credits are exhausted: everything left here costs real money. Handbook: [`docs/src/servers/aws/README.md`](docs/src/servers/aws/README.md).
 
-### Two Talos clusters, not one
+### Where things run (2026-11-18 — see [`docs/src/fleet.md`](docs/src/fleet.md))
 
-- **Home** (`bihar` + `karnataka`) — on the LAN. Configs: `~/.kube/config`, `~/.talos/config`.
-  **Currently powered down and in storage; expected back.** Treat it as
-  temporarily offline, not decommissioned — don't delete its configs, Bitwarden
-  notes, or `talos-k8s/` manifests, and expect `just doctor`/`kubectl` against it
-  to fail until it returns.
-- **AWS** (`eu-north-1`, built 2026-08-27) — **terminated 2026-10-25** after credits were exhausted. It previously ran Matrix, the Hives and the CFP dashboard. The S3 bucket `hanthor-fleet-backups-*` and the himachal-1 mirror (`~/backups/tunaos-aws-2026-10-25`) were retained; verify individual AWS resources rather than assuming they are gone. OpenTofu still describes the old cluster and can propose recreating resources.
-  Configs retained as recovery material: `~/.kube/config-aws-migration`, `~/.talos/config-aws-migration`.
-  Handbook: [`docs/src/servers/aws-k8s/cluster.md`](docs/src/servers/aws-k8s/cluster.md).
-- **Spindle VPS** — Matrix, standalone LiveKit, School, Reef and Hub run on an Oracle Always Free A1 VM in `eu-frankfurt-1`, 2 OCPU / 12 GB, joined to the tailnet and locked down. The kit and runbook are in [`docs/src/servers/spindle-vps/`](docs/src/servers/spindle-vps/README.md); Oracle API key/config are in Bitwarden. Cloudflare DNS failover is manual, not automatic.
+- **bihar** — Bluefin (`utah:testing`), WiFi, `100.103.44.48`, `ssh james@bihar`. Single-node k3s + **KubeStellar hub** (ITS `its1`, WDS `wds1`). **Active hive host**: hub, hub-front, school, reef as rootful-podman compose in `/var/srv/hives` (wrapper `/var/srv/hives-host/hives`). In `inventory.yml` (`desktop`). Handbook: [`docs/src/servers/bihar.md`](docs/src/servers/bihar.md).
+- **karnataka** — Bluefin, `100.66.158.127`. Single-node k3s with KubeVirt (VMs incl. **punjab**), ARC runners (`tuna-ci`), Frappe LMS, Corral, front-door; KubeStellar WEC; **hive cold standby**. Configured from the native-units branch (#348), not in `inventory.yml`. Handbook: [`docs/src/servers/karnataka.md`](docs/src/servers/karnataka.md).
+- **spindle** — Oracle A1 VM in `eu-frankfurt-1` (2 OCPU, ARM): Matrix (Spindle + built-in OIDC), LiveKit, Caddy (public `92.5.82.232`, the front door for `school`/`reef`/`hub.tunaos.org`), the OMP auth broker, and the **hive failover coordinator** (lease `/var/lib/hive-failover/active`, `sudo hive-failover status|move|hold`). Kit/runbook: [`docs/src/servers/spindle-vps/`](docs/src/servers/spindle-vps/README.md); Oracle API key/config in Bitwarden. Not in `inventory.yml`.
+- **punjab** — KubeVirt VM on karnataka (`corral-vms/punjab`), Ubuntu, `100.103.187.46`, user `ubuntu`. Agent box and this repo's Ansible host. The EC2 instance it replaced is `punjab-aws-retired`.
+- **Hives** — hosting, failover lease and runbook: [`docs/src/servers/hives.md`](docs/src/servers/hives.md) (source in `hives/`); the hives themselves: [`docs/src/cluster/hive.md`](docs/src/cluster/hive.md). Exactly one host may run them; never start them by hand on the host the lease does not name.
+- **KubeStellar / k3s** — [`docs/src/servers/home-k3s.md`](docs/src/servers/home-k3s.md). Fresh k3s on these hosts needs the firewalld rules there (cni0 → internal, pod→kubelet 10250, `k3s-pod-egress` policy).
 
-Neither cluster's nodes are Ansible-managed — Talos has no SSH. They are not in
-`inventory.yml`; access is `talosctl`/`kubectl` only.
-
-The two Hetzner VPSes it replaced (`matrix`, `telengana`) are retired but still
-powered on for burn-in. **Nothing on them may be restarted** — see the
-[cutover runbook](docs/matrix-cutover-runbook.md).
+**Retired** (history only; see the [archive](docs/src/archive/talos-k8s.md)): the home Talos cluster (same hardware, replaced by k3s), the AWS Talos cluster (`eu-north-1`, terminated 2026-10-25; configs `~/.kube/config-aws-migration` / `~/.talos/config-aws-migration` kept as recovery material; handbook [`docs/src/servers/aws-k8s/cluster.md`](docs/src/servers/aws-k8s/cluster.md)), and the Hetzner VPSes `matrix` / `telengana` (**nothing on them may be restarted** — see the [cutover runbook](docs/matrix-cutover-runbook.md)).
 
 ## Core commands
 
@@ -58,30 +50,26 @@ Roles are conditional on inventory group (`desktop`, `server`, `vps`, `test_flee
 
 ## Kubeconfig + Talos secrets
 
-`~/.kube/config` and `~/.talos/config` contain cluster PKI — they live in **Bitwarden as secure notes** named `kubeconfig` and `talosconfig` (home cluster). The AWS cluster's are `kubeconfig-aws-migration` / `talosconfig-aws-migration`, written to `~/.kube/config-aws-migration` / `~/.talos/config-aws-migration`. Pull all four via `just apply-tags kube`; `just seed-kube` only seeds the two home-cluster notes.
+`~/.kube/config` and `~/.talos/config` contain cluster PKI — they live in **Bitwarden as secure notes** named `kubeconfig` and `talosconfig`. **Those notes hold the retired home Talos cluster's configs**; the k3s clusters' kubeconfigs are `/etc/rancher/k3s/k3s.yaml` on each host (punjab's `~/.kube/config` targets karnataka; bihar's has contexts `bihar`, `its1`, `wds1`) and have not been re-seeded — don't run `just apply-tags kube` on a host whose `~/.kube/config` you need to keep without checking first. The AWS cluster's are `kubeconfig-aws-migration` / `talosconfig-aws-migration`, written to `~/.kube/config-aws-migration` / `~/.talos/config-aws-migration`. Pull all four via `just apply-tags kube`; `just seed-kube` only seeds the two home-cluster notes.
 
 `talos-k8s/.gitignore` excludes `controlplane.yaml`, `worker.yaml`, and `talosconfig` from git.
 
-## Talos cluster
+## Home k3s (replaces the Talos cluster)
 
-Two nodes: **bihar** (control plane, Intel) and **karnataka** (worker, AMD Strix Halo APU). Talos `v1.13.2`, K8s `v1.36.1`, flannel CNI. AMD GPU exposed to Kubernetes via the Image Factory schematic.
-
-Production workloads: Lemonade (AMD-optimized local AI), KubeVirt v1.8.2 + KubeVirt Manager, Tailscale Operator (Ingress to `*.manatee-basking.ts.net`).
-
-**The cluster handbook is [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md)** — hardware, network, reinstall, troubleshooting.
+No Talos anywhere now. Each of bihar/karnataka has its own k3s v1.36.5 bound to its tailnet IP (flannel on `tailscale0`, traefik/servicelb disabled); kits in `home-k3s/<host>/` (`install-host.sh`, `config.yaml`, `k3s.service`). bihar uses service CIDR `10.96.0.0/12` (KubeFlex requirement). karnataka's AMD GPU is exposed through `amdgpu-device-plugin.yaml`; Lemonade is scaled to 0. The [k3s handbook](docs/src/servers/home-k3s.md) covers design, firewalld and KubeStellar.
 
 ## TunaOS AWS account (`aws/`)
 
-- **punjab** (this repo's AWS-hosted Ansible host) is an EC2 `t3.large` in `us-east-1`; the former Talos cluster in `eu-north-1` is terminated. `runs-on` (us-east-2) is its own CloudFormation stack — don't import it.
+- **punjab** is no longer in AWS (it is a VM on karnataka); `aws/punjab.tf` describes the retired EC2 instance. The former Talos cluster in `eu-north-1` is terminated. `runs-on` (us-east-2) is its own CloudFormation stack — don't import it.
 - **Do not blindly apply `aws/`:** its configuration still describes the terminated cluster and may propose recreating paid infrastructure. Inspect live resources and review plans before changes; credits are exhausted.
 - State is in S3 (`hanthor-fleet-backups-*/tofu/aws/`) and contains Talos PKI. `aws/terraform.tfvars` is gitignored and lives in Bitwarden note `aws-tofu-tfvars`.
-- punjab uses Tailscale for access and SSM Session Manager for break-glass. Preserve its data and the S3 backups until a verified replacement and an explicit cleanup decision exist.
+- Preserve the retired punjab EC2 instance's data and the S3 backups until an explicit cleanup decision exists.
 - The former cluster uploaded Postgres dumps to `s3://hanthor-fleet-backups-*/postgres/`; the `postgres-backup-writer` key is in Bitwarden, never in tofu state.
 - `prevent_destroy` in configuration does not prevent creation of resources missing from the account. Never put Talos `user_data` in the config.
 
 ## Automation (bots + Hive)
 
-Renovate and the Hive (hive.reilly.asia, `hanthor-hive-agent`) open PRs; master is protected (CI + code-owner review, admin bypass). `.github/CODEOWNERS` is deny-by-default with carve-outs for paths that never run on the fleet (docs, tests, talos-k8s, pi skills, dep manifests) — only those auto-merge. See [`docs/src/automation.md`](docs/src/automation.md). Don't widen the carve-outs to anything the fleet timer executes.
+Renovate and the Hive open PRs; the live Hives are school (`hanthor-hive-agent`) and reef (`tuna-reef-hive`) on bihar (karnataka standby) and cover only `tuna-os/*` repos, not this repo (see [`docs/src/cluster/hive.md`](docs/src/cluster/hive.md)). master is protected (CI + code-owner review, admin bypass). `.github/CODEOWNERS` is deny-by-default with carve-outs for paths that never run on the fleet (docs, tests, talos-k8s, pi skills, dep manifests) — only those auto-merge. See [`docs/src/automation.md`](docs/src/automation.md). Don't widen the carve-outs to anything the fleet timer executes.
 
 ## Don'ts
 
@@ -94,7 +82,10 @@ Renovate and the Hive (hive.reilly.asia, `hanthor-hive-agent`) open PRs; master 
 
 ## References
 
-- [`docs/src/servers/talos-k8s/cluster.md`](docs/src/servers/talos-k8s/cluster.md) — Talos cluster handbook
+- [`docs/src/fleet.md`](docs/src/fleet.md) — every host: live, intermittent, retired
+- [`docs/src/servers/hives.md`](docs/src/servers/hives.md) — hive hosting + failover runbook
+- [`docs/src/servers/home-k3s.md`](docs/src/servers/home-k3s.md) — k3s + KubeStellar
+- [`docs/src/archive/`](docs/src/archive/talos-k8s.md) — retired Talos cluster handbooks
 - [`docs/src/roles/`](docs/src/roles/) — every Ansible role explained
 - [`docs/src/bitwarden.md`](docs/src/bitwarden.md) — BW vault structure
 - `Justfile` — every task recipe; `just --list` for a menu

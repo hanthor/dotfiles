@@ -1,0 +1,8 @@
+#!/bin/bash
+# Run docker-compose for the hives against rootful podman with the host layer.
+# Usage: sudo hives ps | up -d | logs -f school | stop ...
+H=/var/srv/hives-host
+exec env DOCKER_HOST=unix:///run/podman/podman.sock /home/linuxbrew/.linuxbrew/bin/docker-compose \
+  --project-directory /var/srv/hives -p hives \
+  -f /var/srv/hives/compose.yaml -f /var/srv/hives/compose.override.yaml \
+  -f "$H/compose.$(hostname -s).yaml" "$@"

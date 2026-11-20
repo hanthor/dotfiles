@@ -3,9 +3,11 @@ all:
   hosts:
     # `tailnet_name`: the host's MagicDNS name when it isn't the inventory
     # name; scripts/online_hosts.py matches online peers by it.
+    # punjab is a KubeVirt VM on karnataka since 2026-10-27 (corral-vms/punjab).
+    # The old EC2 instance is tailnet node punjab-aws-retired (100.78.73.8).
     punjab:
-      ansible_host: 100.78.73.8
-      ansible_user: ubuntu  # stock Ubuntu AMI login; there is no `james` here
+      ansible_host: 100.103.187.46
+      ansible_user: ubuntu  # Ubuntu 24.04 image; there is no `james` here
       ansible_connection: ssh
     # This targets the Debian VM running via Android's Virtualization
     # Framework on the phone (tailnet node name "mumbai"), not the raw
@@ -35,9 +37,15 @@ all:
     vm:
       ansible_host: localhost
       ansible_connection: local
-    # ── Talos K8s cluster (not ansible-managed — talosctl / kubectl only) ──
-    # karnataka:     Talos worker  — AMD Strix Halo APU, 192.168.0.6
-    # bihar:         Talos control-plane — Intel, 192.168.0.5
+    # ── Home servers (Bluefin + k3s since 2026-10/11; the Talos cluster is archived) ──
+    # bihar: active hive host + KubeStellar hub. Bootstrapped with `just apply`
+    # on 2026-11-17 (desktop group, as bootstrap.sh registered it).
+    bihar:
+      ansible_host: 100.103.44.48
+      ansible_user: james
+      ansible_connection: ssh
+    # karnataka: k3s/KubeVirt host (punjab runs on it). Configured from the
+    # feat/native-laptop-units branch (hanthor/dotfiles#348), not this inventory.
     matrix:
       ansible_host: 100.73.19.81
       ansible_connection: ssh
@@ -68,12 +76,13 @@ all:
   children:
     desktop:
       hosts:
+        bihar:
         mumbai:
         kerala:
         kanpur:
         himachal:
         dilli:
-    # llm group is dormant — karnataka (former LLM host) is now a Talos worker
+    # llm group is dormant — karnataka (former LLM host) now runs k3s workloads
     # llm:
     #   hosts:
     #     karnataka:

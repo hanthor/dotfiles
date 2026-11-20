@@ -1,3 +1,9 @@
+> **ARCHIVED (2026-11-18).** This Talos cluster no longer exists: bihar and
+> karnataka now run Bluefin with separate k3s clusters, configured from
+> [`home-k3s/`](../home-k3s/). See [Fleet status](../docs/src/fleet.md) and
+> [Home k3s and KubeStellar](../docs/src/servers/home-k3s.md). The manifests are kept
+> because tests and history refer to them (`talos-k8s/hive/**`); do not apply them.
+
 # Talos Linux 2-Node Kubernetes Cluster with AMD GPU Acceleration
 
 This directory contains the complete infrastructure-as-code configurations, manifests, and documentation for a highly custom, high-performance 2-node Kubernetes cluster utilizing **Talos Linux (v1.13.2)**, designed specifically for running hardware-accelerated LLM workloads (via **Lemonade**) and virtualized infrastructure (via **KubeVirt**).

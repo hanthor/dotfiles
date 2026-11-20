@@ -11,7 +11,7 @@ you, and anything that executes on the fleet still waits for you.
 |---|---|---|
 | **Renovate** | minor/patch/digest bumps (pi npm deps, Go, GitHub Actions, OpenTofu providers), weekly lockfile maintenance | yes, once CI is green |
 | **Renovate** (cluster) | image/chart bumps in `talos-k8s/`, grouped weekly, label `deploy-needed` | **no** — manifests are applied by hand, so a merge would only make git lie about the cluster |
-| **Hive** ([hive.reilly.asia](https://hive.reilly.asia), `hanthor-hive-agent`, ACMM L5) | its agents open PRs labelled `hold`; the Hive itself only merges PRs labelled `lgtm` | only if the PR stays inside the carve-outs below |
+| **Hive** (school and reef spokes on [bihar, with karnataka as standby](cluster/hive.md#current-deployment-bihar-karnataka-standby); Apps `hanthor-hive-agent` and `tuna-reef-hive`) | its agents open PRs labelled `hold`; the Hive itself only merges PRs labelled `lgtm` | only if the PR stays inside the carve-outs below. **Neither hive's roster includes this repo today** (both cover only `tuna-os/*`), so no Hive PRs are expected here unless a hanthor spoke is rebuilt |
 | **You** | direct pushes, `just onboard`, etc. | admin bypass — unaffected |
 
 ## The gate
@@ -48,13 +48,16 @@ manifest on fleet machines.
 
 ## Hive config lives on its volume
 
-hive.reilly.asia persists its live config to `/data/hive.yaml.runtime` and
-restores it over the ConfigMap seed on every restart. Roster or level changes
-made in its dashboard win. The `hive-config` ConfigMap in
-[`talos-k8s/hive/spokes/hanthor/manifest.yaml`](https://github.com/hanthor/dotfiles/blob/master/talos-k8s/hive/spokes/hanthor/manifest.yaml)
-is the seed, exported from the cluster on 2026-10-01. Before trusting it,
-check the runtime file:
+Each live spoke persists its configuration to `data/hive.yaml.runtime` next to
+the seed `config/hive.yaml`, and the runtime file wins on restart, so roster or
+level changes made in the dashboard stick. hive.reilly.asia is the `hanthor`
+spoke on bihar (rebuilt 2026-11-19); its seed is
+[`hives/hanthor/hive.yaml`](https://github.com/hanthor/dotfiles/blob/master/hives/hanthor/hive.yaml).
+The AWS-era ConfigMap in `talos-k8s/hive/spokes/hanthor/manifest.yaml` is
+history. For the live files, read-only inspection and the safe edit procedure,
+see the
+[Hive operations guide](cluster/hive.md#current-deployment-bihar-karnataka-standby):
 
 ```bash
-kubectl -n hive-hanthor exec deploy/hive -- cat /data/hive.yaml.runtime
+ssh james@bihar 'sudo podman ps --filter name=hives-; sudo cat /var/srv/hives/hanthor/data/hive.yaml.runtime'
 ```

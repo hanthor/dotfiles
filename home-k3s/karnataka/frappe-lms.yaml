@@ -1,0 +1,279 @@
+# Frappe Learning (LMS) for the courses in ~/courses.
+# Image: localhost/frappe-lms:v16.1.0-<patch hash>, built by frappe-lms-image/build.sh: frappe_docker
+# images/layered with payments version-16 and lms v16.1.0 plus frappe-lms-image/patches/*.patch
+# (prominent audio player), imported into k3s containerd. ghcr.io/frappe/lms:v16.1.0 is unusable: upstream
+# passes apps.json as a build-arg, but frappe_docker now reads it from a build secret, so it ships frappe alone.
+# Secrets come from Secret/lms-secrets (db-root-password, admin-password), created out of band.
+# Exposed on the tailnet by the host: tailscale serve --bg --https=8443 http://<svc/lms ClusterIP>:8080
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lms
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lms-sites
+  namespace: lms
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lms-db
+  namespace: lms
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  namespace: lms
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: lms-db
+  template:
+    metadata:
+      labels:
+        app: lms-db
+    spec:
+      containers:
+        - name: mariadb
+          image: docker.io/library/mariadb:11.8
+          args:
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_unicode_ci
+            - --skip-character-set-client-handshake
+            - --innodb-snapshot-isolation=OFF
+          env:
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: lms-secrets
+                  key: db-root-password
+          ports:
+            - containerPort: 3306
+          readinessProbe:
+            exec:
+              command: [healthcheck.sh, --connect, --innodb_initialized]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          resources:
+            requests:
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: lms-db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: lms
+spec:
+  selector:
+    app: lms-db
+  ports:
+    - port: 3306
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: lms
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lms-redis
+  template:
+    metadata:
+      labels:
+        app: lms-redis
+    spec:
+      containers:
+        - name: redis
+          image: docker.io/library/redis:6.2-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: lms
+spec:
+  selector:
+    app: lms-redis
+  ports:
+    - port: 6379
+---
+# All bench processes share the sites volume, so they run as one pod and talk over localhost.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frappe
+  namespace: lms
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: lms-frappe
+  template:
+    metadata:
+      labels:
+        app: lms-frappe
+    spec:
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        - name: configure
+          image: localhost/frappe-lms:v16.1.0-b358f31a
+          imagePullPolicy: Never
+          # args, not command: the image ENTRYPOINT links baked assets into the sites volume.
+          args:
+            - bash
+            - -c
+            - |
+              set -e
+              ls -1 apps > sites/apps.txt
+              [ -f sites/common_site_config.json ] || echo '{}' > sites/common_site_config.json
+              bench set-config -g db_host db
+              bench set-config -gp db_port 3306
+              bench set-config -g redis_cache redis://redis:6379/0
+              bench set-config -g redis_queue redis://redis:6379/1
+              bench set-config -g redis_socketio redis://redis:6379/1
+              bench set-config -gp socketio_port 9000
+              wait-for-it -t 300 db:3306
+              wait-for-it -t 120 redis:6379
+              if [ ! -d sites/learn ]; then
+                bench new-site learn --mariadb-user-host-login-scope='%' \
+                  --db-root-username root --db-root-password "$DB_ROOT_PASSWORD" \
+                  --admin-password "$ADMIN_PASSWORD" \
+                  --install-app payments --install-app lms --set-default
+              fi
+              bench --site learn set-config host_name "$HOST_NAME"
+              bench --site learn list-apps | grep -q '^lms ' || bench --site learn install-app payments lms
+              bench --site learn set-config -p max_file_size 209715200
+              bench --site learn migrate
+          env:
+            - name: HOST_NAME
+              value: https://karnataka.manatee-basking.ts.net:8443
+            - name: DB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: lms-secrets
+                  key: db-root-password
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: lms-secrets
+                  key: admin-password
+          volumeMounts:
+            - name: sites
+              mountPath: /home/frappe/frappe-bench/sites
+      containers:
+        - name: backend
+          image: localhost/frappe-lms:v16.1.0-b358f31a
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            periodSeconds: 10
+          volumeMounts:
+            - name: sites
+              mountPath: /home/frappe/frappe-bench/sites
+          resources:
+            requests:
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+        - name: frontend
+          image: localhost/frappe-lms:v16.1.0-b358f31a
+          imagePullPolicy: Never
+          args: [nginx-entrypoint.sh]
+          env:
+            - name: BACKEND
+              value: 127.0.0.1:8000
+            - name: SOCKETIO
+              value: 127.0.0.1:9000
+            - name: FRAPPE_SITE_NAME_HEADER
+              value: learn
+            - name: UPSTREAM_REAL_IP_ADDRESS
+              value: 127.0.0.1
+            - name: UPSTREAM_REAL_IP_HEADER
+              value: X-Forwarded-For
+            - name: UPSTREAM_REAL_IP_RECURSIVE
+              value: "off"
+            - name: PROXY_READ_TIMEOUT
+              value: "300"
+            - name: CLIENT_MAX_BODY_SIZE
+              value: 200m
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: sites
+              mountPath: /home/frappe/frappe-bench/sites
+        - name: websocket
+          image: localhost/frappe-lms:v16.1.0-b358f31a
+          imagePullPolicy: Never
+          args: [node, /home/frappe/frappe-bench/apps/frappe/socketio.js]
+          volumeMounts:
+            - name: sites
+              mountPath: /home/frappe/frappe-bench/sites
+        - name: worker
+          image: localhost/frappe-lms:v16.1.0-b358f31a
+          imagePullPolicy: Never
+          args: [bench, worker, --queue, "long,default,short"]
+          volumeMounts:
+            - name: sites
+              mountPath: /home/frappe/frappe-bench/sites
+        - name: scheduler
+          image: localhost/frappe-lms:v16.1.0-b358f31a
+          imagePullPolicy: Never
+          args: [bench, schedule]
+          volumeMounts:
+            - name: sites
+              mountPath: /home/frappe/frappe-bench/sites
+      volumes:
+        - name: sites
+          persistentVolumeClaim:
+            claimName: lms-sites
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lms
+  namespace: lms
+spec:
+  selector:
+    app: lms-frappe
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

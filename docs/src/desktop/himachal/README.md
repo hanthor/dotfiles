@@ -25,7 +25,7 @@ Laptop workstation in the hanthor fleet.
   Kubernetes, which was terminated on 2026-10-25; the host-vars comment saying
   those jobs now run in-cluster is stale. See
   [hive_ops](../../roles/hive_ops.md) and the
-  [current Hive deployment](../../cluster/hive.md#current-deployment-spindle-vps).
+  [current Hive deployment](../../cluster/hive.md#current-deployment-bihar-karnataka-standby).
 
 The fleet's GNOME role includes [PaperWM](https://github.com/paperwm/PaperWM),
 PaperShell and Copyous; their enabled state on this host was not checked.

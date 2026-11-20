@@ -1,0 +1,8 @@
+[Unit]
+Description=Push hive data to the cold-standby peer (timer)
+[Timer]
+OnBootSec=10min
+OnUnitInactiveSec=15min
+AccuracySec=10s
+[Install]
+WantedBy=timers.target

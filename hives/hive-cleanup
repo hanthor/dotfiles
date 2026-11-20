@@ -1,0 +1,77 @@
+#!/bin/bash
+# hive-cleanup: hourly disk backstop on the hive hosts (bihar, karnataka).
+# Ported from spindle's /usr/local/sbin/hive-cleanup on 2026-11-18, when the
+# hives moved to rootful podman. On spindle the stopped hive containers had built up
+# 16.8 GB of writable layers. Every step removes only data that can be rebuilt or
+# pulled again, and only after an age limit:
+#   1. Claude CLI session scratch in the running spokes
+#      (/tmp/claude-*/<project>/<session>) with no write for $SCRATCH_MIN minutes.
+#   1b. Other top-level work dirs in the spokes' /tmp (agent clones, build
+#      trees, toolchains) with no write for $WORKDIR_MIN minutes.
+#   2. Dangling (untagged) podman images.
+#   3. /var/srv/hives/backups archives older than $BACKUP_DAYS, but always the
+#      newest archive of each kind.
+# The script does nothing to spokes that are not running (the standby host).
+# It warns when free space on /var is below $MIN_FREE_GB afterwards.
+# The bootc root (/) always shows as 100% full, so the script measures /var.
+set -uo pipefail
+
+SCRATCH_MIN=${SCRATCH_MIN:-360}
+WORKDIR_MIN=${WORKDIR_MIN:-2880}
+BACKUP_DAYS=${BACKUP_DAYS:-14}
+MIN_FREE_GB=${MIN_FREE_GB:-10}
+HIVES=/var/srv/hives
+CONTAINERS=${CONTAINERS:-"hives-school-1 hives-reef-1 hives-hanthor-1"}
+
+log() { echo "hive-cleanup: $*"; }
+free_gb() { df -BG --output=avail /var | tail -1 | tr -dc 0-9; }
+
+before=$(free_gb)
+
+# 1. Idle Claude CLI session scratch in the spokes.
+for c in $CONTAINERS; do
+    podman inspect -f '{{.State.Running}}' "$c" 2>/dev/null | grep -q true || continue
+    n=$(podman exec "$c" sh -c '
+        n=0
+        for d in /tmp/claude-*/*/*/; do
+            [ -d "$d" ] && [ ! -L "${d%/}" ] || continue
+            [ -z "$(find "$d" -mmin -'"$SCRATCH_MIN"' -print -quit 2>/dev/null)" ] || continue
+            rm -rf "$d" && n=$((n+1))
+        done
+        echo $n')
+    log "$c: removed ${n:-0} idle session scratch dirs"
+    # 1b. Idle top-level work dirs: nothing inside written for WORKDIR_MIN.
+    gone=$(podman exec "$c" sh -c '
+        for d in /tmp/*/; do
+            d=${d%/}
+            case "${d##*/}" in claude-*|.*) continue ;; esac
+            [ -d "$d" ] && [ ! -L "$d" ] || continue
+            mountpoint -q "$d" 2>/dev/null && continue
+            [ -z "$(find "$d" -mmin -'"$WORKDIR_MIN"' -print -quit 2>/dev/null)" ] || continue
+            rm -rf "$d" && echo "${d##*/}"
+        done')
+    log "$c: removed idle work dirs: ${gone:-none}" | tr '\n' ' '; echo
+done
+
+# 2. Dangling images.
+podman image prune -f >/dev/null && log "pruned dangling images"
+
+# 3. Old backup archives, keeping the newest of each kind.
+declare -A newest
+while IFS= read -r f; do
+    kind=$(basename "$f" | sed -E 's/[.-]?[0-9]{8}T[0-9]{6}Z.*//')
+    [ -n "${newest[$kind]:-}" ] || newest[$kind]=$f
+done < <(ls -t "$HIVES"/backups/*.tar.gz 2>/dev/null)
+find "$HIVES"/backups -maxdepth 1 -name '*.tar.gz' -mtime +"$BACKUP_DAYS" -print | while IFS= read -r f; do
+    kind=$(basename "$f" | sed -E 's/[.-]?[0-9]{8}T[0-9]{6}Z.*//')
+    [ "${newest[$kind]}" = "$f" ] && continue
+    rm -f -- "$f" && log "removed old backup ${f##*/}"
+done
+
+after=$(free_gb)
+log "free on /var: ${before}G -> ${after}G"
+if [ "$after" -lt "$MIN_FREE_GB" ]; then
+    logger -p user.warning -t hive-cleanup "only ${after}G free on /var after cleanup (threshold ${MIN_FREE_GB}G)"
+    echo "<4>hive-cleanup: only ${after}G free on /var (threshold ${MIN_FREE_GB}G)"
+fi
+exit 0

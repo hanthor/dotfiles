@@ -21,7 +21,10 @@
 # runtime. LV2/LADSPA plugins must be in the Containerfile.
 
 - name: Install LV2 + LADSPA DSP prerequisites (dnf)
-  when: dnf_bin.stat.exists | default(false)
+  # bootc images ship /usr/bin/dnf but /usr is read-only, so dnf install fails.
+  when:
+    - dnf_bin.stat.exists | default(false)
+    - not (bootc_bin.stat.exists | default(false))
   become: true
   ansible.builtin.dnf:
     name:

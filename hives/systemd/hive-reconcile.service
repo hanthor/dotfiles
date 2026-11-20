@@ -1,0 +1,7 @@
+[Unit]
+Description=Follow the hive lease on spindle
+After=network-online.target tailscaled.service podman.socket
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /var/srv/hives-host/hive-reconcile
+TimeoutStartSec=10min

@@ -15,6 +15,7 @@
 
 # Fleet Reference
 
+- [Fleet status](fleet.md)
 - [Network](network.md)
   - [Gateway](network/gateway/README.md)
   - [KVM](network/kvm/README.md)
@@ -24,23 +25,21 @@
   - [Kanpur](desktop/kanpur/README.md)
   - [Kerala](desktop/kerala/README.md)
 - [Servers]()
-  - [Home Kubernetes Images & ISOs](servers/home-k8s-images.md)
-  - [Talos K8s Cluster (offline)](servers/talos-k8s/cluster.md)
-    - [Bihar](servers/talos-k8s/bihar/README.md)
-    - [Karnataka](servers/talos-k8s/karnataka/README.md)
-  - [Goa](servers/goa/README.md)
+  - [Bihar](servers/bihar.md)
+  - [Karnataka](servers/karnataka.md)
+  - [Home k3s & KubeStellar](servers/home-k3s.md)
+  - [Hives hosting & failover](servers/hives.md)
   - [Spindle VPS (matrix.reilly.asia)](servers/spindle-vps/README.md)
     - [Upgrade to main (draft)](servers/spindle-vps/upgrade-to-main.md)
-- [VPS]()
-  - [Matrix (retired)](vps/matrix/README.md)
-  - [Telengana (retired)](vps/telengana/README.md)
+    - [2026-11 media and sync incident](servers/spindle-vps/incident-2026-11-17-media.md)
+  - [Punjab (agent box)](servers/punjab/README.md)
+  - [Goa](servers/goa/README.md)
+  - [Home Kubernetes Images (not deployed)](servers/home-k8s-images.md)
 
 # TunaOS Infrastructure
 
 - [TunaOS AWS Account & IaC](servers/aws/README.md)
-  - [Talos Cluster (terminated; archive)](servers/aws-k8s/cluster.md)
   - [Hive Agent Fleet](cluster/hive.md)
-  - [Punjab (agent box)](servers/punjab/README.md)
 
 # Roles Reference
 
@@ -103,6 +102,13 @@
 - [authentik](roles/authentik.md)
 - [n8n](roles/n8n.md)
 
-# Cluster
+# Archive
 
-- [Talos Kubernetes](talos-k8s.md)
+- [Home Talos cluster (replaced by k3s)](archive/talos-k8s.md)
+  - [Cluster handbook](archive/talos-home-cluster/cluster.md)
+  - [Bihar on Talos](archive/talos-home-cluster/bihar/README.md)
+  - [Karnataka on Talos](archive/talos-home-cluster/karnataka/README.md)
+- [AWS Talos cluster (terminated 2026-10-25)](servers/aws-k8s/cluster.md)
+  - [Shutdown, 2026-10-25](servers/aws-k8s/shutdown-2026-10-25.md)
+- [Matrix VPS (retired)](archive/vps/matrix/README.md)
+- [Telengana VPS (retired)](archive/vps/telengana/README.md)

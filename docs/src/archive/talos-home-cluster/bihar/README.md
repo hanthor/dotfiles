@@ -1,5 +1,7 @@
 # Bihar
 
+> **ARCHIVED (2026-11-18).** This page describes bihar on Talos, which was replaced by Bluefin + k3s. See [Fleet status](../../../fleet.md).
+
 Kubernetes control plane. [Talos Linux](https://www.talos.dev/) node — not in `inventory.yml`, managed with `talosctl`/`kubectl` only.
 
 > **Powered down and in storage, expected back.** See the [cluster handbook](../cluster.md).

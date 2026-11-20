@@ -1,35 +1,319 @@
 # Hive — AI Agent Supervisor
 
-## Current deployment: Spindle VPS
+## Current deployment: bihar (karnataka standby)
 
-The school and reef Hives and their hub are deployed on the
-[Spindle VPS](../servers/spindle-vps/README.md), not Kubernetes. On 2026-10-27,
-read-only inspection found the `school`,
-`reef`, `hub`, and `hub-front` Docker Compose services running under
-`/srv/hives` on `spindle` (`ubuntu@100.113.75.88` over Tailscale). The live
-Caddy configuration routes [school.tunaos.org](https://school.tunaos.org) and
-[reef.tunaos.org](https://reef.tunaos.org) to their spokes, and
-[hub.tunaos.org](https://hub.tunaos.org) to the hub and its frontend. Container
-state alone does not establish that the public endpoints or agents are healthy.
+Three Hive spokes, **school**, **reef** and **hanthor**, and their **hub** run as compose
+services under rootful podman on [bihar](../servers/bihar.md), in
+`/var/srv/hives` (`ssh james@bihar`, commands need `sudo`). Until 2026-11-18
+they ran on the [Spindle VPS](../servers/spindle-vps/README.md) under
+`/srv/hives`. Spindle's Caddy still routes
+[school.tunaos.org](https://school.tunaos.org),
+[reef.tunaos.org](https://reef.tunaos.org),
+[hive.reilly.asia](https://hive.reilly.asia) and
+[hub.tunaos.org](https://hub.tunaos.org), over the tailnet to the active host.
+[karnataka](../servers/karnataka.md) is a cold standby. A lease on spindle
+selects the active host. Run every command below on **the host the lease
+names** (`ssh spindle sudo hive-failover status`). Hosting, failover and the
+host-specific compose layer are described in
+[Hives hosting and failover](../servers/hives.md).
 
-The configured images are `ghcr.io/hivecommons/hive:v6-latest` for the two
-spokes and `ghcr.io/hivecommons/hive-hub:v6-latest` for the hub. The Compose
-services bind-mount `/srv/hives/bin/hive` over `/usr/local/bin/hive`, so the
-image tag alone does not describe the running binary. The observed school and
-reef seed configurations use the `omp` backend with
-`github-copilot/gpt-6-luna`, not the historical pi/DeepSeek backend below.
-Runtime state and model selection may differ from the seed files.
+### hanthor (hive.reilly.asia)
 
-The old AWS cluster also had a `hive.reilly.asia` spoke; no hanthor container
-was present in the inspected Spindle Docker inventory. Its current status was
-not established. The former [hive_ops role](../roles/hive_ops.md) targets the
-retired cluster, not this Compose deployment.
+The personal-account spoke from the old AWS cluster was rebuilt on bihar on
+2026-11-19. It is the `hanthor` service in `compose.override.yaml` (port 3104),
+with its data in `/var/srv/hives/hanthor`. It uses the same GitHub App as
+school (`hanthor-hive-agent`, App ID 3942065) through the App's installation on
+the hanthor account (158987150), and the same key file. Its seed is
+[`hives/hanthor/hive.yaml`](https://github.com/hanthor/dotfiles/blob/master/hives/hanthor/hive.yaml):
+ACMM level 5, four agents (supervisor, scanner, quality, guide) on the `claude`
+backend, and the repositories `dotfiles`, `reilly.asia`, `homebrew-tap`,
+`shrimply` and `indiafoss-chat-android`. Compared with the AWS seed it drops
+`indiafoss-companion` (archived), `hummingbird-github` (deleted) and
+`rust-wayland-desktop` (now `tuna-os/tuna-desktop`, which school covers). The
+AWS data volume was not kept, so the hive started with empty state.
 
-For a read-only inventory, run:
+The layout and roster below were read on spindle on 2026-11-13. The move
+changed the paths and the commands, but not the hive configuration. Container
+state alone does not prove that agents are healthy. See [Checking health](#checking-health).
+
+This section is the current operations guide. The
+[archived cluster guide](#archived-cluster-guide) after it describes the retired
+Kubernetes deployment and must not be applied here.
+
+### Layout
+
+```text
+/var/srv/hives/          # on the active host; the host layer is /var/srv/hives-host/compose.<host>.yaml
+├── compose.yaml            # services: hub, hub-front, school, reef (network spindle_default)
+├── compose.override.yaml   # pins the running binary/dashboard, memory limits, session pool;
+│                           # also defines the hanthor spoke (added 2026-11-19)
+├── .env                    # secrets and NTFY topic (mode 600; never print or commit)
+├── bin/hive-<sha>          # fork builds; compose.yaml mounts bin/hive, the override re-pins one
+├── <spoke>/config/hive.yaml        # seed, mounted read-only at /etc/hive
+├── <spoke>/data/hive.yaml.runtime  # live config, in the spoke's /data volume
+├── hub/  hub-front/        # hub config/data/secrets; static front page
+└── backups/                # timestamped copies of every config and data snapshot
+```
+
+- **Seed vs runtime.** The spoke starts from the seed and persists its live
+  configuration to `data/hive.yaml.runtime`, which then wins. Hive can rewrite
+  the runtime file (dashboard changes, ACMM level), so the two files drift:
+  reef's runtime is ACMM 6 while its seed says 5. Edit the **seed and the
+  runtime** for anything you want to stick, then verify the parsed result.
+- **Binary.** `compose.yaml` bind-mounts `bin/hive` over `/usr/local/bin/hive`;
+  on 2026-11-13 `compose.override.yaml` re-pins hub, school and reef to
+  `bin/hive-2ef7dc7c0` (a `tuna-os/hive` fork build on upstream v6) and mounts a
+  matching dashboard HTML on the spokes. The image tag
+  (`ghcr.io/hivecommons/hive:v6-latest`, hub `hive-hub:v6-latest`) does not
+  identify the running code; the header of the override file is the change log
+  and rollback note.
+- **Agents.** All agents use the `claude` backend (sonnet, opus, haiku and
+  fable tiers) on both spokes; the seed's `backends.allow` also lists `omp`
+  (and `muse` on school). Runtime model assignments differ from the seed's.
+- **Dashboard.** `dashboard.authorized_users` is `hanthor:owner`. The
+  `dashboard.auth_token` in the runtime file and the GitHub App key are
+  secrets: never print, paste or commit them.
+
+### Roster
+
+Each non-empty `tuna-os` repo is in exactly one hive, except the deliberate
+exclusions below (state of 2026-11-13; `xfce-linux` was renamed `brussels`).
+
+| Hive | Repos |
+|---|---|
+| **school** (21) | tunaos, tromso, tacklebox, brussels, tunaos-packages, wootc, fisherman, bootc-installer, bootc-migrate, bootsahi, remora, bst-ci, iso-builder, branding, homebrew-tap, scoop-bucket, athens, docs, .github, bluefin-cli, tuna-desktop |
+| **reef** (22) | Tavern, corral, flatpak-index, gtk-office-suite, blueshell, dualcut, gnome-hive-monitor, hive, mandelbrot, mariner, protota, spindle, PaperWM, compass, ccleft, hive-operator, quickcast, postcard, lifafa, tuna-mail, proton-unofficial-sdk, tuta-unofficial-sdk |
+| **excluded** | iced, libcosmic, rust-atomicwrites, rdocx, changelog-action (patch-carrier forks, no issues); flatpark (excluded from automation); publish-proof (empty) |
+
+The roster is two lists, `project.repos` and `dashboard.matrix.repos`, and both
+must match in **both** files of the spoke (four edits per change). The seed uses
+either bare names or `tuna-os/<name>` in `project.repos` (reef bare, school full);
+the runtime file uses bare names there and `tuna-os/<name>` in the matrix. Keep
+whatever style the file already has. `school` also has a separate
+`revert_sheriff.repos` list (shadow mode); it is not part of the roster.
+
+As of 13:01Z on 2026-11-13 the reef **seed** lacked `postcard` (21 repos) while
+the runtime listed it (22); the intent of that seed edit is unverified.
+
+### Identity
+
+| Hive | GitHub App | App id |
+|---|---|---|
+| school | `hanthor-hive-agent` | 3942065 |
+| reef | `tuna-reef-hive` | 5546574 |
+
+Both set `github.app_authored_prs: true` and `project.ai_author: ""`, so PRs and
+comments come from the App's `[bot]` account, not from a human or AI-author
+trailer. Each hive lists the other App in `github.additional_bot_logins`. Both
+Apps are installed on every org repo *(per the maintainer; not checkable from
+the host)*, so **adding a repo needs only a roster edit**, no App change.
+
+Both hives set `sentinel.exempt_logins: [renovate[bot]]`. Sentinel's
+`sensitive_path` rule flagged every dependency bump and re-flagged after each
+rebase. The alternative, `auto_merge.trusted_bot_authors`, would also let Hive
+auto-merge Renovate major bumps, which the org forbids.
+
+### Adding or moving a repo
+
+1. Pick the hive: school for the OS, packaging, installer and org-level repos;
+   reef for apps, libraries and the Matrix/Hive tooling (see the table). Check
+   the repo is in no other roster.
+2. Apply the [safe edit procedure](#safe-edit-procedure) with `add <repo>` on
+   the target hive's two files. To **move** a repo, also run `remove <repo>` on
+   the old hive's two files, in the same maintenance window, so it is never in
+   both or neither.
+3. Re-parse both files and check the list lengths and that the new repo shows
+   up on the hive's dashboard; no App installation step is needed.
+
+### GitHub Apps
+
+Since 2026-10-30 School and Reef use separate GitHub Apps, so each has its own
+installation rate limit (6,150 requests/hour across the 43 org repositories). Before
+that change they shared one installation and used all of its limit every hour.
+
+| Hive | App (bot login) | App ID | Installation | Key in Bitwarden |
+|---|---|---|---|---|
+| school (the hub mounts the same key) | `hanthor-hive-agent` (`hanthor-hive-agent[bot]`) | 3942065 | 137498420 | `hive-github-app-hanthor-hive-agent` |
+| reef | `tuna-reef-hive` (`tuna-reef-hive[bot]`) | 5546574 | 177007234 | `hive-github-app-tuna-reef-hive` |
+
+The IDs occur in three places for each hive:
+- `GH_APP_ID` and `GH_APP_INSTALLATION_ID` in `compose.yaml`;
+- `github.app_id` and `installation_id` in the seed;
+- the same keys in `hive.yaml.runtime`.
+
+Both hives manage `.github`, `Tavern`, `bluefin-cli`, `corral`, `docs` and
+`flatpak-index`. Each hive lists the bot of the other hive in
+`github.additional_bot_logins`, so that the issues and PRs of the other hive count as
+hive-authored.
+
+To restore a key:
+1. Write the key block of the Bitwarden note to
+   `/var/srv/hives/<svc>/secrets/gh-app-key.pem` on the active host (mode 600).
+2. Run `chcon -t container_file_t` on the file.
+3. Recreate the service with `sudo /var/srv/hives-host/hives up -d --no-deps <svc>`.
+
+The next `hive-sync` copies the key to the standby host.
+
+To make sure that each hive has its own rate limit, run:
 
 ```bash
-ssh ubuntu@100.113.75.88 'docker ps --filter name=hives-'
+ssh james@bihar 'for c in hives-school-1 hives-reef-1; do sudo podman exec $c sh -c \
+  "curl -s -H \"Authorization: Bearer \$(cat /var/run/hive-metrics/gh-app-token.cache)\" https://api.github.com/rate_limit" \
+  | jq -c .resources.core; done'
 ```
+
+Different `reset` times show separate installations.
+
+### Safe edit procedure
+
+More than one operator edits `/var/srv/hives` (including agents). Re-read the files
+immediately before editing and never overwrite a file you read earlier.
+
+Do **not** `hives up` a spoke that is running to apply config: it
+triggered a container-rename bug. Remove the container first:
+
+```bash
+sudo -i                                   # the files are root-owned on bihar/karnataka
+cd /var/srv/hives
+H=/var/srv/hives-host/hives               # docker-compose wrapper: podman + host layer
+$H rm -f -s reef                          # stop and remove the spoke container only
+python3 hive-roster.py add NAME reef/config/hive.yaml reef/data/hive.yaml.runtime
+$H up -d --no-deps reef                   # recreate only this spoke
+podman ps --filter name=hives-            # verify: Up, and the right name
+```
+
+The edit step must (a) write a timestamped copy of each file into
+`/var/srv/hives/backups/` first, (b) parse the YAML before and after, and (c) abort,
+writing nothing, if anything other than the intended change would differ. This
+helper does that for roster edits (save it as `/var/srv/hives/hive-roster.py` and
+run it from `/var/srv/hives`; it needs PyYAML):
+
+```python
+#!/usr/bin/env python3
+"""hive-roster.py add|remove REPO FILE...  (run with the spoke container removed)"""
+import datetime, shutil, sys, yaml
+
+ORG = "tuna-os"
+BACKUPS = "/var/srv/hives/backups"
+PATHS = (("project", "repos"), ("dashboard", "matrix", "repos"))
+
+def seq_node(root, path):
+    node = root
+    for key in path:
+        node = next(v for k, v in node.value if k.value == key)
+    return node
+
+def edit(text, op, repo):
+    lines = text.split("\n")
+    root = yaml.compose(text)
+    # bottom-most list first so earlier line numbers stay valid
+    seqs = sorted((seq_node(root, p) for p in PATHS), key=lambda n: -n.start_mark.line)
+    for seq in seqs:
+        full = seq.value[0].value.startswith(ORG + "/")
+        item = f"{ORG}/{repo}" if full else repo
+        hit = [n for n in seq.value if n.value in (repo, f"{ORG}/{repo}")]
+        col, last = seq.value[0].start_mark.column, seq.value[-1].start_mark.line
+        if op == "add" and not hit:
+            lines.insert(last + 1, " " * (col - 2) + "- " + item)
+        elif op == "remove":
+            for n in sorted(hit, key=lambda n: -n.start_mark.line):
+                del lines[n.start_mark.line]
+    return "\n".join(lines)
+
+def main(op, repo, *files):
+    assert op in ("add", "remove") and files
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    new = {}
+    for f in files:
+        old = open(f).read()
+        want = yaml.safe_load(old)
+        for path in PATHS:
+            d = want
+            for k in path[:-1]:
+                d = d[k]
+            style = d[path[-1]][0].startswith(ORG + "/")
+            item = f"{ORG}/{repo}" if style else repo
+            d[path[-1]] = [x for x in d[path[-1]] if x not in (repo, f"{ORG}/{repo}")]
+            if op == "add":
+                d[path[-1]].append(item)
+        text = edit(old, op, repo)
+        if yaml.safe_load(text) != want:
+            sys.exit(f"{f}: unrelated change detected, aborting (nothing written)")
+        new[f] = text
+    for f, text in new.items():
+        shutil.copy2(f, f"{BACKUPS}/{f.replace('/', '-')}.{stamp}")
+        open(f, "w").write(text)
+
+main(*sys.argv[1:])
+```
+
+The script was exercised only on synthetic copies of the two file styles, not
+on the live files. Backups from the 2026-11-13 edits are
+`backups/*.20261113T040153Z` (sentinel exemption) and
+`backups/*.roster.20261113T125525Z` (roster); to roll back, remove the
+container, restore both files of the spoke from the same stamp, and `up` it.
+Rolling back the binary is described in the header of `compose.override.yaml`.
+
+### Operating from GitHub
+
+You rarely need the host. On a hive-managed issue or PR:
+
+- `/hive decision <instruction>` records a maintainer decision for the agents;
+  `/hive approve` lifts Hive's own `needs-human` hold on a PR; `/fixed` tells
+  Hive an issue is resolved.
+- On PRs that Hive did not author, a GitHub review (approve or request changes)
+  is honoured.
+- When Hive un-parks an issue it removes the `blocked` label itself. Decision
+  comments written by the maintainer's agent start with
+  `Decision (for @hanthor):`.
+
+(The command names are present in the running binary and the usage comes from
+the maintainer; their exact semantics were not exercised for this page.)
+
+### Checking health
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://school.tunaos.org/api/health   # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://reef.tunaos.org/api/health     # 200
+curl -s https://hub.tunaos.org/api/fleet-stats                                  # hub: /api/health is 404
+ssh james@bihar 'sudo podman ps --filter name=hives-'   # or karnataka after a failover
+```
+
+For authenticated status from the host, call the API inside the container with
+the container's own token, so it is never printed:
+
+```bash
+ssh james@bihar 'sudo podman exec hives-school-1 sh -c \
+  "curl -sS -H \"X-Hive-Internal: \$HIVE_DASHBOARD_TOKEN\" http://127.0.0.1:3002/api/status"' \
+  | jq '.agents[] | {name, paused, state}'
+```
+
+Agents that show `stopped` are normal between governor kicks; check authored
+PRs and issues (`gh search prs --author "hanthor-hive-agent[bot]"` and
+`"tuna-reef-hive[bot]"`) to see whether a hive is producing.
+
+### Known limits
+
+- **Memory.** On bihar and karnataka, each spoke can use 8 GB and the hub allows 4
+  concurrent shared-pool sessions (`compose.<host>.yaml`). On spindle the limits were
+  2560 MB per spoke and 2 sessions, and spokes were OOM-killed during
+  rustc/govulncheck builds.
+- **Pinned images.** The hive and hive-hub images are pinned by digest with the
+  amd64 fork binary `hive-2ef7dc7c0-amd64`. Do not change to `:v6-latest`.
+- **Hive's own CI** for `tuna-os/hive` is blocked by GitHub ("Actions has been
+  disabled"; a support ticket is pending), so fork builds are not CI-verified.
+- **Reply spam**: upstream
+  [hivecommons/hive#17512](https://github.com/hivecommons/hive/pull/17512)
+  (draft) fixes Hive repeating its un-park replies because it does not
+  recognise its own earlier reply when posting as an App login.
+- **Concurrent edits and drift**: see the layout notes above; verify after every
+  restart that the parsed seed and runtime agree on the roster.
+- The spokes call the `omp-auth-broker` on spindle (`OMP_AUTH_BROKER_URL`,
+  `http://100.113.75.88:8765`). Caddy routing and failover are described in
+  [Hives hosting and failover](../servers/hives.md). This page does not describe
+  the hub's own configuration. The
+  [hive_ops role](../roles/hive_ops.md) targets the retired cluster, not this
+  deployment.
 
 ## Archived cluster guide
 
