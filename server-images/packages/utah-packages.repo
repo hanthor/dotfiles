@@ -1,4 +1,4 @@
-# factory-pin: sha256:d257e97a0057e37da47995bb142c180e2352960ab13bd44594215616a395b717
+# factory-pin: sha256:15593106a1f3b8d6f604eb4239d5fbfeb4ec0558751f8d7e9099c9cea4d8c967
 # Authenticated by the Containerfile's OCI digest; mounted only during composition.
 [utah-packages]
 name=Utah package factory
@@ -7,4 +7,6 @@ enabled=0
 gpgcheck=0
 repo_gpgcheck=0
 priority=1
-excludepkgs=grub2*
+# The factory iscsi-initiator-utils (6.2.1.13 hum1) leaves installed nodes
+# without /etc/iscsi/initiatorname.iscsi; keep Fedora's build until fixed.
+excludepkgs=grub2* iscsi-initiator-utils*
