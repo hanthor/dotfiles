@@ -35,7 +35,7 @@ See [Home k3s and KubeStellar](home-k3s.md) for the shared design and the firewa
 | `lms` | Frappe Learning v16.1.0 (`frappe`, `db`, `redis`), local image from `frappe-lms-image/` | `https://karnataka.manatee-basking.ts.net:8443` |
 | `beale` | `beale-course` (course site) | `beale.karnataka.ts.net` |
 | `beeper-bridges` | `rustpush` (iMessage bridge) | none |
-| `arc-systems`, `tuna-ci`, `tuna-ci-storage` | GitHub Actions runner scale sets `tuna-ci-24.04` (1-6), `tuna-ci-26.04` (0-2), `tuna-iso-gpu` (0-1), with scratch storage | none |
+| `arc-systems`, `tuna-ci`, `tuna-ci-storage` | GitHub Actions runner scale sets `tuna-ci-24.04` (1-10; raised from 6 on 2026-11-20 with `kubectl patch`, so a Helm upgrade must carry `maxRunners: 10`), `tuna-ci-26.04` (0-2), `tuna-iso-gpu` (0-3), with scratch storage | none |
 | `lemonade` | Lemonade AMD LLM server, **scaled to 0** | `:13305` (tailscale serve) |
 | `open-cluster-management-agent*` | KubeStellar WEC agent for the hub on bihar | none |
 
