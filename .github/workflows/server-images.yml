@@ -146,16 +146,15 @@ jobs:
 
       - name: Install starter and accept a real bootc switch
         run: |
-          # The recorded acceptance runner had 85 GiB free on a 145 GiB root
-          # filesystem. Keep sequential media construction: the extra retained
-          # ISO is bounded below 2 GiB, and the starter disk/registry are removed
-          # before the existing two-node acceptance. No third VM disk overlaps.
+          # Keep media construction sequential to bound runner disk usage.
+          # Utah includes a desktop and its offline payload, so allow up to
+          # 8 GiB per ISO/archive here. Publication has a separate asset limit.
           df -h "$ARTIFACTS" | tee "$ARTIFACTS/starter-capacity.log"
           just server-installer starter \
             "ghcr.io/$REGISTRY_OWNER/home-k8s-starter:testing" \
             "$ARTIFACTS/starter-installer.iso" \
             2>&1 | tee "$ARTIFACTS/starter-build-installer.log"
-          test "$(stat --format=%s "$ARTIFACTS/starter-installer.iso")" -lt 2147483648
+          test "$(stat --format=%s "$ARTIFACTS/starter-installer.iso")" -lt 8589934592
           uv run server-images/test-vm.py --artifacts "$ARTIFACTS" \
             --accel kvm install starter \
             2>&1 | tee "$ARTIFACTS/starter-install-driver.log"
@@ -164,7 +163,7 @@ jobs:
           podman save --format oci-archive \
             --output "$ARTIFACTS/home-k8s-bihar.oci.tar" \
             localhost/home-k8s-bihar:testing
-          test "$(stat --format=%s "$ARTIFACTS/home-k8s-bihar.oci.tar")" -lt 2147483648
+          test "$(stat --format=%s "$ARTIFACTS/home-k8s-bihar.oci.tar")" -lt 8589934592
           podman pull "$REGISTRY_FIXTURE_IMAGE"
           registry="home-k8s-starter-switch-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           podman run --detach --name "$registry" --pull=never \
@@ -233,7 +232,7 @@ jobs:
             just server-installer "$node" \
               "ghcr.io/$REGISTRY_OWNER/home-k8s-$node:testing" "$iso" \
               2>&1 | tee "$ARTIFACTS/$node-build-installer.log"
-            test "$(stat --format=%s "$iso")" -lt 2147483648
+            test "$(stat --format=%s "$iso")" -lt 8589934592
             uv run server-images/test-vm.py --artifacts "$ARTIFACTS" \
               --accel kvm install "$node" \
               2>&1 | tee "$ARTIFACTS/$node-install-driver.log"
