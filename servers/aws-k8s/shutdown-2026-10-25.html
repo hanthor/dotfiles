@@ -1,0 +1,292 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Shutdown, 2026-10-25 - Infrastructure Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="James Reilly&#x27;s personal fleet (Ansible dotfiles) and the TunaOS infrastructure it administers">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../../highlight.css">
+        <link rel="stylesheet" href="../../tomorrow-night.css">
+        <link rel="stylesheet" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Infrastructure Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/servers/aws-k8s/shutdown-2026-10-25.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="aws-cluster-teardown-2026-10-25"><a class="header" href="#aws-cluster-teardown-2026-10-25">AWS cluster teardown, 2026-10-25</a></h1>
+<p>The AWS Talos cluster, its KubeVirt node and all their disks were deleted on
+2026-10-25 because the account's credits ran out. This page records what is
+gone, what was saved and where, and how to rebuild.</p>
+<h2 id="why"><a class="header" href="#why">Why</a></h2>
+<p>The account ran on <strong>one</strong> credit: <em>AWS Open Source Promotional Credits</em>,
+issued <strong>$1,435.00</strong>, valid 2026-08-01 to 2028-07-31. It is not monthly. It was
+consumed in under three months (Aug $108, Sep $550, Oct $932 applied). October
+was the first month with a net bill ($66.15 by the 25th, AWS forecast $307).
+At the footprint before the shutdown the cost was about $41/day gross.</p>
+<p>Earlier text in this repo calls the credits "permanent" or "$1400/mo". That was
+wrong. $1,400 is the migration budget's ceiling, not an allowance.</p>
+<h2 id="state-now"><a class="header" href="#state-now">State now</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Thing</th><th>State</th></tr></thead><tbody>
+<tr><td><code>aws-migration-worker-matrix</code>, <code>aws-migration-controlplane-hive</code>, <code>aws-migration-kubevirt</code></td><td><strong>terminated</strong></td></tr>
+<tr><td>Their EBS volumes (200, 400, 150 GB roots, 50 GB <code>migration-pgdata</code>)</td><td><strong>deleted</strong></td></tr>
+<tr><td>5 blank detached volumes created 2026-10-24 for an unstarted Hive-to-EBS migration</td><td><strong>deleted</strong></td></tr>
+<tr><td>EBS snapshots in eu-north-1 (35)</td><td><strong>deleted</strong></td></tr>
+<tr><td>punjab (t3.large, us-east-1), its 250 GB volume, one snapshot</td><td>kept, running</td></tr>
+<tr><td>Elastic IPs <code>13.62.161.5</code> (the <code>matrix.reilly.asia</code> target) and <code>13.63.243.56</code></td><td>kept, unassociated</td></tr>
+<tr><td>VPC, subnet, security groups, IAM, budgets, S3 bucket</td><td>kept</td></tr>
+</tbody></table>
+</div>
+<p>Matrix (<code>reilly.asia</code>), the Hives (<code>school.</code>, <code>reef.</code>, <code>hub.tunaos.org</code>,
+<code>hive.reilly.asia</code>), the CFP dashboard and Postgres are offline.</p>
+<p><code>aws/</code> (OpenTofu) was <strong>not</strong> changed. The instances were removed outside it,
+so <code>just aws-plan</code> will plan to create them again. That plan is the rebuild.</p>
+<h2 id="where-the-data-is"><a class="header" href="#where-the-data-is">Where the data is</a></h2>
+<p>Bucket <code>hanthor-fleet-backups-181185361136</code> (eu-north-1).</p>
+<h3 id="cluster-state-cluster-state-2026-10-25cluster-statetargzage"><a class="header" href="#cluster-state-cluster-state-2026-10-25cluster-statetargzage">Cluster state: <code>cluster-state-2026-10-25/cluster-state.tar.gz.age</code></a></h3>
+<p>Contains a Talos <strong>etcd snapshot</strong> (2,507 keys, includes every Kubernetes
+Secret: the MAS and Matrix secrets generated by ESS, tokens, etc.) and a YAML
+dump of 58 resource types. It is encrypted with <code>age</code> to five SSH keys: punjab,
+and the <code>james@kanpur</code>, <code>himachal</code>, <code>james@Kerala</code> and
+<code>james@Jamess-MacBook-Air.local</code> keys. Any one private key opens it:</p>
+<pre><code class="language-bash">aws s3 cp s3://hanthor-fleet-backups-181185361136/cluster-state-2026-10-25/cluster-state.tar.gz.age .
+age -d -i ~/.ssh/id_ed25519 cluster-state.tar.gz.age | tar xz   # etcd.snapshot, resources/*.yaml
+</code></pre>
+<p>Round trip checked: the decrypted archive hashes identically to the original.
+The private keys' own backup is not verified from here (Bitwarden was locked).</p>
+<h3 id="volumes-postgresshutdown-export-2026-10-25"><a class="header" href="#volumes-postgresshutdown-export-2026-10-25">Volumes: <code>postgres/shutdown-export-2026-10-25/</code></a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Object</th><th>Content</th></tr></thead><tbody>
+<tr><td><code>ess_ess-spindle-data.tar.gz</code></td><td>spindle store (the live homeserver)</td></tr>
+<tr><td><code>ess_synapse-media-preseed.tar.gz</code>, <code>ess_spindle-v0-1-0-rollback.tar.gz</code></td><td>media, rollback store</td></tr>
+<tr><td><code>hive-reef_hive-data.tar.gz</code>, <code>hive_hive-data.tar.gz</code>, <code>hive-hanthor_hive-data.tar.gz</code></td><td>the three Hives' data (about 43 GiB stored)</td></tr>
+<tr><td><code>hive_discord-reports-data</code>, <code>default_review-data</code>, <code>hive-hub_hive-hub-data</code>, <code>hive_hive-ops-state</code></td><td>small state</td></tr>
+</tbody></table>
+</div>
+<p><code>tar | gzip -1</code>, storage class <code>GLACIER_IR</code> (retrieval about $0.03/GB). Each
+archive's tar size, recomputed on the node, equals the uncompressed size in its
+gzip trailer. They were <strong>not</strong> restore-tested.</p>
+<h3 id="postgres-postgres2026-10-25"><a class="header" href="#postgres-postgres2026-10-25">Postgres: <code>postgres/2026-10-25/</code></a></h3>
+<p>Final dump, 4.1 GB: Synapse and MAS.</p>
+<h3 id="permanently-gone-not-exported"><a class="header" href="#permanently-gone-not-exported">Permanently gone (not exported)</a></h3>
+<p>Contributor homes (<code>claude-home</code> 46 GB, <code>pi-codex-home</code> 43 GB, <code>agy-home</code>
+15 GB), the <code>spindle-rehearsal</code> volumes, raw <code>pgdata</code> (the dump covers it),
+<code>hive-shared-auth</code> (provider logins, sign in again), and everything that lived
+on the KubeVirt node (monitoring data, VM disks, wootc). Workload replica
+counts and cronjob suspend flags were saved as annotations and are inside the
+etcd snapshot.</p>
+<h2 id="rebuilding-outline-untested"><a class="header" href="#rebuilding-outline-untested">Rebuilding (outline, untested)</a></h2>
+<ol>
+<li><code>just aws-apply</code> recreates the three instances from <code>aws/</code>. The Elastic IPs
+and private addresses are unchanged, so DNS and the Talos config still match.</li>
+<li>Restore etcd onto the new control plane so the Secrets and workload
+definitions come back, using the snapshot from the archive:
+<code>talosctl --talosconfig ~/.talos/config-aws-migration -e &lt;eip&gt; -n 10.20.1.10 bootstrap --recover-from=./etcd.snapshot</code>
+(the machine secrets come from the OpenTofu state, which is what the nodes
+were built with).</li>
+<li>Recreate each volume's directory under <code>/opt/local-path-provisioner/</code> on the
+node that holds it (the PV objects name the directories) and untar the
+matching archive into it. A read-write <code>hostPath</code> helper pod in <code>kube-system</code>
+does this; other namespaces reject <code>hostPath</code>.</li>
+<li>Restore Postgres from the dump (see <code>talos-k8s/backup/</code>), then scale the
+workloads back up from the saved annotations
+<code>tunaos.org/pre-shutdown-replicas</code> and <code>tunaos.org/pre-shutdown-suspend</code>.</li>
+</ol>
+<p>Cold start of the control plane from its stopped disk was exercised once during
+the teardown (the API server and etcd came back intact). Nothing else here has
+been run end to end.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../servers/aws-k8s/cluster.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../archive/vps/matrix/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../servers/aws-k8s/cluster.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../archive/vps/matrix/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

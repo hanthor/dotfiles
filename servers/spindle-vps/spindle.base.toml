@@ -1,0 +1,47 @@
+# Production runtime-base.toml from the ESS cluster (ConfigMap ess-spindle-bootstrap),
+# minus OTLP tracing (no collector on this host). deploy.sh appends the
+# [auth.delegated] block (issuer, introspection endpoint, homeserver_secret).
+[server]
+name = "reilly.asia"
+bind = "0.0.0.0:8008"
+public_base_url = "https://matrix.reilly.asia/"
+
+[storage]
+path = "/var/lib/spindle-data/store"
+
+[media]
+# Installed Synapse Config.parse_size("100M") = 104857600.
+max_upload_bytes = 104857600
+
+[federation]
+enabled = true
+insecure_http = false
+allow_internal = []
+
+[previews]
+enabled = true
+allow_private = []
+
+[push]
+enabled = true
+allow_internal = []
+
+[metrics]
+# Not published by compose; reachable only inside the compose network.
+bind = "0.0.0.0:9100"
+
+[auth]
+builtin_oidc = false
+
+[appservices]
+registrations = []
+
+[turn]
+uris = []
+
+[rtc]
+# MatrixRTC is standalone: the auth service mints LiveKit tokens; this URL is not the SFU.
+foci = [{ type = "livekit", livekit_service_url = "https://call.reilly.asia" }]
+
+[logging]
+filter = "info,spindle_server::push=debug"
