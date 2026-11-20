@@ -14,6 +14,8 @@ for mask in /etc/systemd/system/serial-getty@ttyS0.service \
 done
 systemctl enable getty@tty1.service serial-getty@ttyS0.service
 mkdir -p /var/roothome
+# utah:stable ships no /var/tmp in the image; dracut needs it as its tmpdir.
+install -d -m 1777 /var/tmp
 kernel=$(basename /usr/lib/modules/*)
 dracut --force --reproducible --no-hostonly --add dmsquash-live     --omit 'tpm2-tss pcsc'     --add-drivers 'squashfs overlay loop iso9660 sr_mod cdrom'     "/usr/lib/modules/$kernel/initramfs.img" "$kernel" 2>&1 | tee /tmp/dracut-installer.log
 if grep -q 'dracut\[E\]: FAILED' /tmp/dracut-installer.log; then
