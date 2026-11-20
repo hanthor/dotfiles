@@ -16,12 +16,10 @@ project:
     - hanthor/reilly.asia
     - hanthor/homebrew-tap
     - hanthor/shrimply
-    - hanthor/indiafoss-chat-android
     - hanthor/send-android
     - hanthor/fern-matrix
     - hanthor/letters
     - hanthor/matrix-server-migrator
-    - hanthor/indiafoss-android-repo
     - hanthor/bluefin-changelog
     - hanthor/vcfgen
   ai_author: ""
