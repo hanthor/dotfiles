@@ -36,6 +36,13 @@ setsebool -P container_use_devices on
 /usr/bin/k3s --version
 firewall-offline-cmd --check-config
 systemctl enable NetworkManager.service NetworkManager-wait-online.service sshd.service firewalld.service tailscaled.service iscsi-init.service iscsid.service
+# Utah masks this instance in both /etc and /usr. Installed server images need
+# an authenticated serial console for headless recovery, not live autologin.
+systemctl unmask serial-getty@ttyS0.service
+if [ "$(readlink /usr/lib/systemd/system/serial-getty@ttyS0.service || :)" = /dev/null ]; then
+    rm /usr/lib/systemd/system/serial-getty@ttyS0.service
+fi
+systemctl enable serial-getty@ttyS0.service
 # Reboots of the only control plane must be deliberate and preceded by backups.
 systemctl mask bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service
 
