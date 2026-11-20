@@ -26,10 +26,11 @@ school (`hanthor-hive-agent`, App ID 3942065) through the App's installation on
 the hanthor account (158987150), and the same key file. Its seed is
 [`hives/hanthor/hive.yaml`](https://github.com/hanthor/dotfiles/blob/master/hives/hanthor/hive.yaml):
 ACMM level 5, four agents (supervisor, scanner, quality, guide) on the `claude`
-backend, and 12 repositories: `dotfiles`, `reilly.asia`, `homebrew-tap`,
-`shrimply`, `indiafoss-chat-android`, and (since 2026-11-20) `send-android`,
-`fern-matrix`, `letters`, `matrix-server-migrator`, `indiafoss-android-repo`,
-`bluefin-changelog` and `vcfgen`. Only the account's own active projects are
+backend, and 10 repositories: `dotfiles`, `reilly.asia`, `homebrew-tap`,
+`shrimply`, and (since 2026-11-20) `send-android`, `fern-matrix`, `letters`,
+`matrix-server-migrator`, `bluefin-changelog` and `vcfgen`. The IndiaFOSS
+repositories (`indiafoss-chat-android`, `indiafoss-android-repo`) left the
+roster and were archived on 2026-11-20. Only the account's own active projects are
 listed: forks are left out (`shrimply` predates that rule). Every listed repo
 has the `hold` and `lgtm` labels, auto-merge and delete-branch-on-merge, and a
 Renovate config. Compared with the AWS seed it drops
