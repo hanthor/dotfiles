@@ -22,6 +22,12 @@ standby. The `hanthor` spoke (`hive.reilly.asia`) joined them on 2026-11-19. Spi
   reserve on every pooled account, including Claude Max. The clients'
   `routing.yml` sets the same 0. Restart the service after editing the file:
   `systemctl --user restart omp-auth-broker`.
+  The `omp-broker-update.timer` user timer (03:15 UTC, plus a random delay of up to 30
+  minutes) runs `~/.local/bin/omp-broker-update`. The script runs `omp update`,
+  rewrites the zero-reserve config if it has drifted, and restarts the broker only
+  when the version or config changed. It rolls back to `~/.local/bin/omp.prev` if
+  the broker does not answer on `:8765` within 30 seconds. To see the result:
+  `journalctl --user -u omp-broker-update`.
 
 See [Hives hosting and failover](../hives.md). The stopped copy in `/srv/hives` is
 kept for rollback only (`MOVED-TO-BIHAR.txt`). This removes the 2560 MB per-spoke
