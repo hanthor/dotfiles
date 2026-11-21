@@ -26,14 +26,25 @@ school (`hanthor-hive-agent`, App ID 3942065) through the App's installation on
 the hanthor account (158987150), and the same key file. Its seed is
 [`hives/hanthor/hive.yaml`](https://github.com/hanthor/dotfiles/blob/master/hives/hanthor/hive.yaml):
 ACMM level 5, four agents (supervisor, scanner, quality, guide) on the `claude`
-backend, and 10 repositories: `dotfiles`, `reilly.asia`, `homebrew-tap`,
-`shrimply`, and (since 2026-11-20) `send-android`, `fern-matrix`, `letters`,
-`matrix-server-migrator`, `bluefin-changelog` and `vcfgen`. The IndiaFOSS
-repositories (`indiafoss-chat-android`, `indiafoss-android-repo`) left the
-roster and were archived on 2026-11-20. Only the account's own active projects are
-listed: forks are left out (`shrimply` predates that rule). Every listed repo
-has the `hold` and `lgtm` labels, auto-merge and delete-branch-on-merge, and a
-Renovate config. Compared with the AWS seed it drops
+backend. Its repositories are every hanthor repo that is not archived and not
+a fork. Since 2026-11-21 [`hive-roster-sync`](https://github.com/hanthor/dotfiles/blob/master/hives/hive-roster-sync)
+keeps `project.repos` in step with GitHub: it runs hourly on the active host and
+reads the repo list through the App installation, so private repos count. It
+rewrites the seed and `/data/hive.yaml.runtime` and restarts the spoke only
+when the list changes. It also creates the `hold` and `lgtm` labels on a new
+repo. The App has no Administration permission, so auto-merge and
+delete-branch-on-merge on a new repo must be set by hand; the job logs a
+warning to the journal (`journalctl -u hive-roster-sync`) when it cannot set
+them. A private repo on a free plan cannot use auto-merge (`dwell-sermons`).
+Exceptions are in
+[`hives/hanthor/roster.conf`](https://github.com/hanthor/dotfiles/blob/master/hives/hanthor/roster.conf),
+installed at `/var/srv/hives-host/hanthor-roster.conf`: `keep shrimply` (a
+fork that predates the no-forks rule), and `exclude` for
+`hive-upstream-secfix-ci` (private, embargoed upstream security work) and
+`hive-lite-sandbox` (a test target). Run `sudo DRY_RUN=1 bash
+/var/srv/hives-host/hive-roster-sync` to see what it would change. The first
+run, on 2026-11-21, took the roster from 9 to 20 repos. `vcfgen` was deleted
+that day and the IndiaFOSS repositories were archived on 2026-11-20. Compared with the AWS seed it drops
 `indiafoss-companion` (archived), `hummingbird-github` (deleted) and
 `rust-wayland-desktop` (now `tuna-os/tuna-desktop`, which school covers). The
 AWS data volume was not kept, so the hive started with empty state.

@@ -1,0 +1,174 @@
+#!/bin/bash
+# hive-roster-sync: keep the hanthor hive's repo list equal to the hanthor
+# account's own repositories (run hourly by hive-roster-sync.timer).
+#
+# Rule (2026-11-21): every hanthor repo that is not archived and not a fork is
+# in the hive. Exceptions live in /var/srv/hives-host/hanthor-roster.conf:
+#   exclude <name>   never in the hive, even though it is eligible
+#   keep <name>      stays in the hive although it is a fork (shrimply)
+# A repo that is archived, deleted, or turns into a fork leaves the hive.
+#
+# The repo list comes from the hive's own GitHub App installation (so private
+# repos count, and a repo the App cannot reach is never added). A public repo
+# the installation does not cover is logged as a warning.
+#
+# On a change it:
+#   1. creates the hold/lgtm labels on the new repos and turns on auto-merge
+#      and delete-branch-on-merge (the second needs the App's Administration
+#      permission; without it the script warns and goes on);
+#   2. backs up the seed and runtime config to /var/srv/hives/backups/;
+#   3. removes the hanthor container, rewrites project.repos in both files,
+#      and starts it again.
+# It does nothing on the standby host (hanthor not running); hive-sync copies
+# the edited files there. DRY_RUN=1 prints the plan and changes nothing.
+set -euo pipefail
+
+HIVES=/var/srv/hives
+H=/var/srv/hives-host
+OWNER=hanthor
+SVC=hanthor
+CTR=hives-hanthor-1
+SEED=$HIVES/hanthor/config/hive.yaml
+RUNTIME=$HIVES/hanthor/data/hive.yaml.runtime
+KEY=$HIVES/hanthor/secrets/gh-app-key.pem
+CONF=${CONF:-$H/hanthor-roster.conf}
+DRY_RUN=${DRY_RUN:-0}
+API=https://api.github.com
+
+log() { logger -t hive-roster-sync -- "$*"; echo "hive-roster-sync: $*"; }
+warn() { logger -p user.warning -t hive-roster-sync -- "$*"; echo "<4>hive-roster-sync: $*"; }
+
+podman inspect -f '{{.State.Running}}' "$CTR" 2>/dev/null | grep -q true || {
+    echo "hive-roster-sync: $CTR not running (standby host?): nothing to do"; exit 0; }
+
+# --- GitHub App installation token (never printed) ---
+app_id=$(sed -nE 's/^  app_id: *([0-9]+).*/\1/p' "$SEED")
+inst_id=$(sed -nE 's/^  installation_id: *([0-9]+).*/\1/p' "$SEED")
+[ -n "$app_id" ] && [ -n "$inst_id" ] || { warn "no github.app_id/installation_id in $SEED"; exit 1; }
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+now=$(date +%s)
+jwt_head=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+jwt_body=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((now-60)) $((now+540)) "$app_id" | b64url)
+jwt_sig=$(printf '%s.%s' "$jwt_head" "$jwt_body" | openssl dgst -sha256 -sign "$KEY" -binary | b64url)
+TOKEN=$(curl -fsS -X POST -H "Authorization: Bearer $jwt_head.$jwt_body.$jwt_sig" \
+    -H 'Accept: application/vnd.github+json' "$API/app/installations/$inst_id/access_tokens" | jq -r .token)
+[ -n "$TOKEN" ] && [ "$TOKEN" != null ] || { warn "could not mint an installation token"; exit 1; }
+gh_api() { curl -fsS -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' "$@"; }
+
+# All pages of a list endpoint, one JSON object per line; $2 is the jq path to the array.
+sep() { case $1 in *\?*) echo '&';; *) echo '?';; esac; }
+paged() {
+    local url=$1 path=$2 page=1 out
+    while :; do
+        out=$(gh_api "$url$(sep "$url")per_page=100&page=$page" | jq -c "$path")
+        [ "$(jq length <<<"$out")" -gt 0 ] || break
+        jq -c '.[]' <<<"$out"
+        page=$((page+1))
+    done
+}
+
+reachable=$(paged "$API/installation/repositories" .repositories \
+    | jq -r --arg o "$OWNER" 'select(.owner.login==$o) | [.name, .archived, .fork] | @tsv')
+[ -n "$reachable" ] || { warn "installation lists no $OWNER repos; refusing to empty the roster"; exit 1; }
+
+declare -A EXCLUDE=() KEEP=()
+if [ -f "$CONF" ]; then
+    while read -r verb name _; do
+        case $verb in exclude) EXCLUDE[$name]=1 ;; keep) KEEP[$name]=1 ;; ''|\#*) ;; *) warn "$CONF: unknown line '$verb $name'" ;; esac
+    done < "$CONF"
+fi
+
+declare -A WANT=()
+while IFS=$'\t' read -r name archived fork; do
+    [ "$archived" = false ] || continue
+    [ -z "${EXCLUDE[$name]:-}" ] || continue
+    if [ "$fork" = false ] || [ -n "${KEEP[$name]:-}" ]; then WANT[$name]=1; fi
+done <<<"$reachable"
+
+# Public, eligible repos the installation cannot see.
+while IFS= read -r name; do
+    grep -q "^$name"$'\t' <<<"$reachable" || [ -n "${EXCLUDE[$name]:-}" ] \
+        || warn "$OWNER/$name is eligible but the App installation cannot reach it"
+done < <(paged "$API/users/$OWNER/repos?type=owner" . | jq -r 'select((.archived|not) and (.fork|not)) | .name')
+
+# project.repos of a config file, bare names, in file order.
+read_repos() {
+    python3 -I - "$1" <<'EOF'
+import re, sys
+lines = open(sys.argv[1]).read().split("\n"); i = lines.index("project:"); on = False
+for l in lines[i+1:]:
+    if l and not l.startswith(" "): break
+    if re.match(r"^\s+repos:\s*$", l): on = True; continue
+    if on:
+        m = re.match(r"^\s+-\s+(\S+)\s*$", l)
+        if not m: break
+        print(m.group(1).split("/")[-1])
+EOF
+}
+mapfile -t current < <(read_repos "$SEED")
+[ "${#current[@]}" -gt 0 ] || { warn "could not read project.repos from $SEED"; exit 1; }
+
+# Desired order: current entries that stay, then new ones alphabetically.
+desired=(); for r in "${current[@]}"; do [ -n "${WANT[$r]:-}" ] && desired+=("$r"); done
+mapfile -t added < <(for r in "${!WANT[@]}"; do printf '%s\n' "${current[@]}" | grep -qxF "$r" || echo "$r"; done | sort)
+mapfile -t removed < <(for r in "${current[@]}"; do [ -n "${WANT[$r]:-}" ] || echo "$r"; done)
+desired+=("${added[@]}")
+[ "${added[0]:-}" ] || added=(); [ "${removed[0]:-}" ] || removed=()
+
+runtime_now=$(read_repos "$RUNTIME")
+if [ ${#added[@]} -eq 0 ] && [ ${#removed[@]} -eq 0 ] \
+   && [ "$runtime_now" = "$(printf '%s\n' "${desired[@]}")" ]; then
+    echo "hive-roster-sync: roster up to date (${#desired[@]} repos)"; exit 0
+fi
+log "add: ${added[*]:-none}; remove: ${removed[*]:-none}; result: ${desired[*]}"
+[ "$DRY_RUN" = 1 ] && { echo "hive-roster-sync: DRY_RUN, no changes"; exit 0; }
+
+# 1. Repo setup for new members.
+for r in "${added[@]}"; do
+    for l in 'hold ededed Hive: agent PR waiting for review; do not merge' \
+             'lgtm 0e8a16 Hive: approved, the hive may merge'; do
+        read -r lname lcolor ldesc <<<"$l"
+        code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $TOKEN" \
+            -H 'Accept: application/vnd.github+json' "$API/repos/$OWNER/$r/labels" \
+            -d "$(jq -nc --arg n "$lname" --arg c "$lcolor" --arg d "$ldesc" '{name:$n,color:$c,description:$d}')")
+        case $code in 201|422) ;; *) warn "$OWNER/$r: creating label $lname returned HTTP $code" ;; esac
+    done
+    code=$(curl -sS -o /dev/null -w '%{http_code}' -X PATCH -H "Authorization: Bearer $TOKEN" \
+        -H 'Accept: application/vnd.github+json' "$API/repos/$OWNER/$r" \
+        -d '{"allow_auto_merge":true,"delete_branch_on_merge":true}')
+    [ "$code" = 200 ] || warn "$OWNER/$r: could not enable auto-merge/delete-branch (HTTP $code); set it by hand"
+done
+
+# 2-3. Back up, rewrite both files with the container stopped, start again.
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+for f in "$SEED" "$RUNTIME"; do
+    rel=${f#$HIVES/}; cp -p "$f" "$HIVES/backups/${rel//\//_}.$stamp"
+done
+bash $H/hives rm -f -s "$SVC" >/dev/null 2>&1 || true
+rc=0
+python3 -I - "$SEED" "$RUNTIME" "$OWNER" "${desired[@]}" <<'EOF' || rc=$?
+import re, sys
+seed, runtime, owner, repos = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
+def rewrite(path, prefix):
+    lines = open(path).read().split("\n")
+    i = lines.index("project:")
+    j = next(k for k in range(i + 1, len(lines)) if re.match(r"^\s+repos:\s*$", lines[k]))
+    k = j + 1
+    while k < len(lines) and re.match(r"^\s+-\s+\S+\s*$", lines[k]): k += 1
+    assert k > j + 1, f"{path}: empty repos block"
+    indent = re.match(r"^(\s+)-", lines[j + 1]).group(1)
+    new = lines[:j + 1] + [f"{indent}- {prefix}{r}" for r in repos] + lines[k:]
+    open(path, "w").write("\n".join(new))
+rewrite(seed, owner + "/")
+rewrite(runtime, "")
+EOF
+# Check what was written; on any mismatch put the backups back.
+want=$(printf '%s\n' "${desired[@]}")
+if [ "$rc" -ne 0 ] || [ "$(read_repos "$SEED")" != "$want" ] || [ "$(read_repos "$RUNTIME")" != "$want" ]; then
+    for f in "$SEED" "$RUNTIME"; do rel=${f#$HIVES/}; cp -p "$HIVES/backups/${rel//\//_}.$stamp" "$f"; done
+    warn "rewrite failed (rc=$rc); restored the backups from $stamp"
+    rc=1
+fi
+bash $H/hives up -d --no-deps "$SVC" >/dev/null 2>&1 || { warn "could not start $SVC"; exit 1; }
+[ "$rc" -eq 0 ] || exit 1
+log "roster now ${#desired[@]} repos; $SVC restarted"

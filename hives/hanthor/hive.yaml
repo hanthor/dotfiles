@@ -12,6 +12,7 @@ project:
   org: hanthor
   name: hanthor
   repos:
+    # Kept in step with GitHub by hive-roster-sync (hourly on the active host).
     - hanthor/dotfiles
     - hanthor/reilly.asia
     - hanthor/homebrew-tap
@@ -21,7 +22,17 @@ project:
     - hanthor/letters
     - hanthor/matrix-server-migrator
     - hanthor/bluefin-changelog
-    - hanthor/vcfgen
+    - hanthor/dwell-sermons
+    - hanthor/gnome-setup
+    - hanthor/hummingbird-documentation
+    - hanthor/hummingbird-rpms
+    - hanthor/imessage-beeper-mac-vm
+    - hanthor/inbox-resurrection
+    - hanthor/os-installer
+    - hanthor/touchscreen-toggle
+    - hanthor/tuna-installer-cosmic
+    - hanthor/tuna-installer-kde
+    - hanthor/tuna-installer-xfce
   ai_author: ""
   primary_repo: hanthor/dotfiles
 hub:
