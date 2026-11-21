@@ -8,7 +8,7 @@ This document outlines operational procedures, failure modes, disaster recovery,
 
 ## Overview
 
-The dotfiles fleet consists of 14+ machines across desktop, server, VPS, and test environments, managed by Ansible with centralized configuration in git and secrets in Bitwarden. Each machine applies changes daily via systemd timer and pulls from git automatically.
+The dotfiles fleet consists of 14+ machines across desktop, server, VPS, and test environments, managed by Ansible with centralized configuration in git and secrets in Bitwarden. Non-laptop machines apply changes from a daily systemd user timer (`dotfiles-update.timer`); laptops run `dotfiles-update.service` on login instead of a timer.
 
 **RTO/RPO targets** (provisional):
 - Desktop machines: RTO 4 hours (manual reimaging), RPO 1 day (daily sync)
@@ -18,20 +18,18 @@ The dotfiles fleet consists of 14+ machines across desktop, server, VPS, and tes
 
 ### Add a New Machine
 
-1. Create `host_vars/<name>.yml` with machine profile (desktop/server/vps)
-2. Add entry to `inventory.yml` with group assignment
-3. Generate SSH key: `just generate-host-key <name>`
-4. Bootstrap from fresh install: `just bootstrap <name>`
-5. Verify secrets resolved and sync completed: `just check <name>`
+1. Register the machine and bootstrap it. `just add-machine <name> [desktop|server|vps]` adds the inventory entry and `host_vars/<name>.yml`, pushes them, then runs `bootstrap.sh` on the host over SSH. Use it when the host is already reachable by SSH.
+2. For a fresh install that is not yet reachable, run `just onboard <name> [desktop|server|vps]` instead. It registers and pushes the machine, then prints the `bootstrap.sh` command to run on the new host.
+3. On the new machine, run `just apply` to apply the full configuration, then `just doctor` to verify it is healthy.
 
 **Expected time**: 20 minutes (automated bootstrap included)
 
 ### Rotate Bitwarden Credentials
 
-1. Generate new Bitwarden auth token on target machine
-2. Update `roles/bitwarden/defaults/main.yml` with new token
-3. Test unlock: `just check --vault-password-file ~/.bw_unlock`
-4. Apply to all: `just apply` (prompts for BW unlock once, distributes session)
+1. Rotate the credentials in Bitwarden itself (master password or API key, as appropriate). No repository file stores the token.
+2. On each machine, unlock with `bw unlock`; the `bitwarden` role resolves the session from `BW_SESSION`, then `/tmp/bw_session`, then an interactive unlock (see [Secrets with Bitwarden](bitwarden.md)).
+3. Dry-run to confirm secrets resolve: `just check` (a local `--check --diff` run, no host argument).
+4. Apply: `just apply` on a single machine, or `just apply-all` to apply to every online fleet machine.
 
 **Frequency**: Quarterly or after security incident  
 **Expected time**: 15 minutes
@@ -50,9 +48,9 @@ The dotfiles fleet consists of 14+ machines across desktop, server, VPS, and tes
 If a machine fails daily sync:
 
 1. SSH to machine: `ssh <name>`
-2. Check systemd timer status: `systemctl status dotfiles-apply.timer`
+2. Check the update unit: `systemctl --user status dotfiles-update.timer` (laptops have no timer; check `dotfiles-update.service`)
 3. Trigger manual apply: `just apply-nosecrets`
-4. Check for git merge conflicts: `cd ~/.dotfiles && git status`
+4. Check for git merge conflicts: `cd ~/.local/share/dotfiles && git status`
 5. If conflicts exist, resolve manually in `host_vars/<name>.yml` then `git pull`
 
 **Recovery time**: 5 minutes (usually just a git pull)
@@ -62,8 +60,8 @@ If a machine fails daily sync:
 | Failure | Detection | Recovery |
 |---------|-----------|----------|
 | **Machine offline** | Ansible host unreachable | SSH to machine, check network; if unrecoverable, re-bootstrap |
-| **Bitwarden down** | Secret resolution fails on apply | Retry on next scheduled timer (1 hour); manual secrets pull if urgent |
-| **Git repository unavailable** | Clone/pull fails | Machine continues with cached config; retry on next timer (DNS/network usually recovers in <10 min) |
+| **Bitwarden down** | Secret resolution fails on apply | Retry on next scheduled update (daily timer, or next login on laptops); run `just apply` after `bw unlock` if urgent |
+| **Git repository unavailable** | Clone/pull fails | Machine continues with cached config; retry on next scheduled update (DNS/network usually recovers in <10 min) |
 | **SSH key compromised** | Detected by audit | Regenerate key, update `authorized_keys` on all machines, audit git signing keys |
 | **Secrets leaked to git** | Pre-commit hook catches; never committed by design | N/A — design prevents this |
 | **Cluster node failure** (Talos) | Kubernetes node status | Automated failover; if persistent, reimage node via `talosctl` |
@@ -74,7 +72,7 @@ If a machine fails daily sync:
 
 1. Identify replacement hardware or cloud instance
 2. Create new `host_vars/<name>.yml` for the replacement
-3. Run `just bootstrap <replacement-name>` (same logical name, new hardware)
+3. Run `just add-machine <replacement-name>` if the host is reachable over SSH, or `just onboard <replacement-name>` and then the printed `bootstrap.sh` command on fresh hardware (same logical name, new hardware)
 4. Machine re-joins fleet with same Tailscale identity (rotated keys, same node ID)
 5. Services resume from last synced state (1-day RPO for desktops, 15-min for servers)
 
@@ -105,8 +103,8 @@ Current model is sustainable. All machines apply daily; no coordination needed. 
 
 Projected state: Cost/complexity still manageable.  
 **Action items**:
-- Distribute daily apply times to avoid thundering herd
-- Consider `just apply-batch <group>` for staged rollouts
+- Distribute daily apply times to avoid thundering herd (the timer already adds a 30 minute randomized delay)
+- Consider adding a batched apply recipe for staged rollouts (none exists today; `just apply-all` applies to every online host in parallel)
 - Monitor Bitwarden API rate limits (currently unused)
 
 ### Machines > 50
