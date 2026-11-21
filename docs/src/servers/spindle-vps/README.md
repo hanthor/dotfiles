@@ -17,6 +17,11 @@ standby. The `hanthor` spoke (`hive.reilly.asia`) joined them on 2026-11-19. Spi
 - **OMP auth broker:** the `omp-auth-broker` user service on `100.113.75.88:8765`. The hives
   connect to it over the tailnet. The `omp-auth-broker-docker-proxy` socket
   (`172.18.0.1:18765`) was used only by the hives when they ran on this host.
+  The broker's `~/.omp/agent/config.yml` holds only `retry.usageReservePct: 0` and
+  `retry.usageReservePolicy: auto`. Without that file the broker holds a 10% usage
+  reserve on every pooled account, including Claude Max. The clients'
+  `routing.yml` sets the same 0. Restart the service after editing the file:
+  `systemctl --user restart omp-auth-broker`.
 
 See [Hives hosting and failover](../hives.md). The stopped copy in `/srv/hives` is
 kept for rollback only (`MOVED-TO-BIHAR.txt`). This removes the 2560 MB per-spoke
