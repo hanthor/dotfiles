@@ -2,13 +2,13 @@
 
 **Current Status**: Mature Ansible-managed infrastructure across 13 machines  
 **Latest Release**: Continuous (auto-updates daily via systemd timer)  
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-11-20
 
 ---
 
 ## Overview
 
-This roadmap reflects the strategic direction of the dotfiles infrastructure across personal machines, Kubernetes clusters (Talos, KubeVirt, AWS), and test fleets. The goal is **zero-touch operations**: machines bootstrap from bare metal to production-ready state with a single command, all secrets managed through Bitwarden, and all state synchronized automatically without a central server.
+This roadmap reflects the strategic direction of the dotfiles infrastructure across personal machines, Kubernetes clusters (Talos, KubeVirt) and a Spindle VPS, and test fleets. The goal is **zero-touch operations**: machines bootstrap from bare metal to production-ready state with a single command, all secrets managed through Bitwarden, and all state synchronized automatically without a central server.
 
 ---
 
@@ -21,7 +21,7 @@ This roadmap reflects the strategic direction of the dotfiles infrastructure acr
 - **Package management**: Homebrew (CLI tools) + Flatpak (desktop apps) with automated sync
 - **Tailscale integration**: Auto-join mesh network with stored auth keys
 - **Git configuration**: SSH signing, `gh` CLI auth, per-machine identities
-- **Kubernetes clusters**: Talos (offline home cluster: bihar + karnataka), KubeVirt test fleet, AWS eu-north-1
+- **Kubernetes clusters**: Talos (offline home cluster: bihar + karnataka), KubeVirt test fleet. The AWS Talos cluster was terminated on 2026-10-25; its retained S3 backups and punjab stay in place until #342 authorizes changes
 - **Auto-updates**: Systemd timer pulls and applies changes daily to all machines
 - **Bitwarden integration**: Secrets fetched at runtime, no git-stored credentials
 - **GitHub Pages handbook**: Full documentation published at reilly.asia/infra/handbook
@@ -31,9 +31,42 @@ This roadmap reflects the strategic direction of the dotfiles infrastructure acr
 - **Offline cluster recovery**: Bihar + karnataka currently powered down (storage); startup playbook untested at scale
 - **ARM device support**: Kerala (postmarketOS) requires manual `apk` tooling; needs dedicated role
 - **CI/CD for roles**: No automated validation per role; handbook lists roles but no per-role testing
-- **Multi-region failover**: AWS cluster isolated; no cross-region replication strategy documented
 - **Secrets rotation**: Manual Bitwarden key rotation; no automated expiry or audit trail
 - **Machine discovery**: Hardcoded in `inventory.yml`; no dynamic mesh discovery for new nodes
+
+---
+
+## Strategic Goals (Nov 2026)
+
+Three goals now shape sequencing and take precedence over the older priorities below where they conflict. Each is a goal issue, not authorization for destructive changes.
+
+### Goal A: Reduce ongoing AWS cost to $0 (#342)
+
+- [ ] Inventory billing, resources and dependencies across regions
+- [ ] Validate replacements (backup storage, restore procedure) before touching anything
+- [ ] Apply only explicitly approved changes, then monitor billing until it reads $0
+
+Guardrail: retained S3 backups and punjab are not deleted or stopped without an explicit per-change decision. This goal retires the Mid-Term "Multi-Region Failover" item.
+
+### Goal B: Migrate fleet onboarding and configuration off Ansible (#343)
+
+- [ ] Inventory roles, inventory/vars, secrets, scheduling and bootstrap paths; map each to a replacement
+- [ ] Continue the staged mise/bash and chezmoi work (#331, #332, #334)
+- [ ] Verify clean-laptop onboarding and existing-host upgrades end to end
+- [ ] Remove Ansible entrypoints only after callers are migrated and verified
+
+Until this completes, Ansible stays the supported path; Priority 2 (per-role CI) should favour checks that survive the migration.
+
+### Goal C: Spindle VPS as the home for hosted services (#337, #338, #339, #340)
+
+- [ ] Restore MatrixRTC calls (#338) and move off MAS (#339)
+- [ ] Measure headroom, then decide whether the Hives move there (#340); the Always Free allowance may not fit both
+
+### Supporting work
+
+- Home server installer media built with Tacklebox (#318, #344, #351)
+- Phone-QR secret onboarding (#49), which depends on the transport and bootstrap choices in Goal B
+- Karnataka networking faults (#353, #354, #355), which gate the offline-cluster recovery below
 
 ---
 
@@ -76,12 +109,6 @@ This roadmap reflects the strategic direction of the dotfiles infrastructure acr
 
 ## Mid-Term (Q1-Q2 2027)
 
-### Multi-Region Failover
-
-- Replicate AWS cluster to second region (eu-west-1)
-- Document failover procedures and RTO/RPO targets
-- Publish multi-region runbook
-
 ### Dynamic Machine Discovery
 
 - Replace static `inventory.yml` with Tailscale-based discovery
@@ -103,7 +130,6 @@ This roadmap reflects the strategic direction of the dotfiles infrastructure acr
 | Offline cluster startup untested | High | 4-6h | Blocked on availability |
 | ARM role extraction incomplete | Medium | 2-3h | Needs postmarketOS device access |
 | CI validation missing per-role | Medium | 3-4h | Awaits GitHub Actions setup |
-| Multi-region documented but not tested | Low | 2-3d | Design phase |
 | Secrets rotation fully manual | Medium | 1-2d | Awaits Bitwarden API review |
 | Machine discovery hardcoded | Low | 1-2d | Design phase; low urgency |
 
@@ -150,7 +176,8 @@ This roadmap reflects the strategic direction of the dotfiles infrastructure acr
 
 ### Mid-term (Q1-Q2 2027)
 
-- **Multi-region**: Cross-region failover tested and documented
+- **AWS cost**: Ongoing AWS charges confirmed at $0 with restores verified
+- **Ansible exit**: Clean-laptop onboarding and host upgrades verified without Ansible
 - **Discovery**: New machines join inventory automatically without git edits
 - **Audit trail**: All secret access logged and queryable
 
@@ -166,7 +193,7 @@ This roadmap reflects the strategic direction of the dotfiles infrastructure acr
 
 - **Central management server**: This is single-user infrastructure; no multi-user auth model
 - **Desktop GUI management**: Ansible CLI is the intended interface
-- **Cloud provider abstraction**: AWS-specific for now; multi-cloud later if demand appears
+- **Cloud provider abstraction**: No multi-cloud layer; hosted services target the Spindle VPS
 - **Configuration templates for others**: Focus on personal machines first
 - **Paid tooling**: Stick with open-source (Ansible, Bitwarden, Tailscale, GitHub)
 
@@ -184,4 +211,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how changes land and the local checks
 ---
 
 *Maintained by: strategist agent (hold-gated, human review required)*  
-*Next review: 2026-12-15*
+*Next review: 2027-01-15*
