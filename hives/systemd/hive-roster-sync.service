@@ -1,0 +1,9 @@
+[Unit]
+Description=Keep the hanthor hive's repo list equal to hanthor's own unarchived, non-fork repos
+After=podman.socket network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /var/srv/hives-host/hive-roster-sync
+TimeoutStartSec=10min
