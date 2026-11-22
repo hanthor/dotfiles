@@ -9,6 +9,12 @@
   },
   "packageRules": [
     {
+      "description": "Postgres majors need a pg_upgrade/dump-restore of the live Synapse/MAS data volume; never propose them automatically.",
+      "matchPackageNames": ["docker.io/library/postgres"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "Auto-merge minor/patch/digest/pin updates (branch protection still requires green CI)",
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
       "automerge": true
