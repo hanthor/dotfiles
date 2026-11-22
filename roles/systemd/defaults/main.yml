@@ -1,0 +1,23 @@
+---
+# Nightly dotfiles-update run also upgrades packages (`-e upgrade=true`:
+# `brew update` + `brew upgrade` in the homebrew role, `flatpak update` in the
+# flatpak role). Only the daily timer on non-laptops; the laptop login run
+# never upgrades. Set false in host_vars to opt a host out.
+dotfiles_update_upgrade: true
+
+# notify-failure@.service posts to ntfy. The topic comes from the Bitwarden
+# item `ntfy-topic` (password field) and is written to
+# ~/.config/notify-failure.env (0600) only on an apply with an unlocked vault.
+# Without that file the notifier logs to the journal and exits 0.
+notify_failure_bw_item: ntfy-topic
+notify_failure_ntfy_server: https://ntfy.sh
+
+# disk-usage-check.timer: fail (and so notify) when any of these filesystems
+# is above the threshold. Read-only mounts (the composefs/erofs root on
+# bootc hosts) and repeats of the same filesystem are skipped.
+disk_check_enabled: true
+disk_check_threshold: 90
+disk_check_paths:
+  - /
+  - /var
+  - /home

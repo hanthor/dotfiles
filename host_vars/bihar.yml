@@ -1,5 +1,8 @@
 # Headless (multi-user.target) bootc box: no desktop audio stack needed.
 skip_pipewire_audio: true
+# The kube role would overwrite ~/.kube/config (contexts bihar, its1, wds1)
+# with the retired Talos kubeconfig from Bitwarden.
+skip_kube: true
 has_proxy: true
 tailscale_advertise_routes: "192.168.0.0/24"
 tailscale_accept_dns: false

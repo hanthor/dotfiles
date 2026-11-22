@@ -49,6 +49,7 @@ Every item a role or script reads (grep `bw get` / `bw list` under `roles/` and 
 | `forgejo` | Secure Note (`API Token:` line) | `shell_ai` role — `FORGEJO_TOKEN` |
 | `tavily-api-key` | Login (password) | `shell_ai` role — `TAVILY_API_KEY` |
 | `forgejo.manatee-basking.ts.net` | Login | `forgejo_registry` role — podman registry login |
+| `ntfy-topic` | Login (password) | `systemd` role — ntfy topic for `notify-failure@` alerts, written to `~/.config/notify-failure.env` |
 | `bw-api-key` | Login | `scripts/bw-resolve.sh` — `bw login --apikey` on a remote |
 | `James Bitwarden` | Login | `scripts/bw-resolve.sh` — non-interactive unlock on a remote |
 

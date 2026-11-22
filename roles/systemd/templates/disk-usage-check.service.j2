@@ -1,0 +1,7 @@
+[Unit]
+Description=Check disk usage (alert above {{ disk_check_threshold }}%)
+OnFailure=notify-failure@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/.local/bin/disk-usage-check.py {{ disk_check_threshold }} {{ disk_check_paths | join(' ') }}

@@ -38,7 +38,7 @@ Ansible-managed hosts, from `inventory.yml`:
 | Machine | Group | Type | Role |
 |---------|-------|------|------|
 | kanpur | desktop | Laptop | Portable workstation |
-| himachal | desktop | Laptop | Portable workstation; legacy `hive_ops` timers retired |
+| himachal | desktop | Laptop | Portable workstation |
 | dilli | desktop | Desktop | Secondary workstation |
 | kerala | desktop | Mobile | postmarketOS ARM device |
 | mumbai | desktop | VM | Debian VM on the phone, `machine_profile: cli-only` |
@@ -66,7 +66,7 @@ The `llm` group is dormant (commented out in `inventory.yml`).
 
 | Phase | Roles | Main tags |
 |-------|-------|-----------|
-| 1 — System + packages + dotfiles | sudo, sshd, apk_packages, homebrew, termux_packages, bitwarden, shell_fonts, shell_dotfiles, omp, hive_ops, git, neovim | `system`, `packages`, `dotfiles` |
+| 1 — System + packages + dotfiles | sudo, sshd, apk_packages, homebrew, termux_packages, bitwarden, shell_fonts, shell_dotfiles, omp, git, neovim | `system`, `packages`, `dotfiles` |
 | 2 — Secrets + auth | shell_atuin, shell_ai, ssh_keys, ssh_mesh, github, tailscale, kube, forgejo_registry | `secrets` |
 | 3 — Desktop apps | flatpak, bluefin_common, gnome, zen_browser (+ browser_fxa), pipewire_audio | `desktop` |
 | 4 — Services | syncthing, systemd, bst_dashboard, kirocrew, proxy, tailscale_cert, server_hardening | `services` |

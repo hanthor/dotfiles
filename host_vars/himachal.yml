@@ -7,7 +7,3 @@ dotfiles_auto_update: false
 phone_apply_enabled: false
 web_services: []
 mic_hardware_volume_pct: 75
-
-# The old Kubernetes Hive timers target the terminated AWS cluster, not the
-# OCI Compose deployment. Keep them disabled; the role removes known old timers.
-hive_ops_enabled: false

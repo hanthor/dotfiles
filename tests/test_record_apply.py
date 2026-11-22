@@ -91,3 +91,18 @@ def test_overwrites_previous_record(tmp_path):
     data = read_recorded(tmp_path)
     assert data["exit_code"] == 0
     assert data["label"] == "second"
+
+
+def test_records_pull_exit_code_when_given(tmp_path):
+    r = run(base_env(tmp_path), "1", "apply-nosecrets+pull-failed", "secrets", "128")
+    assert r.returncode == 0
+
+    data = read_recorded(tmp_path)
+    assert data["exit_code"] == 1
+    assert data["label"] == "apply-nosecrets+pull-failed"
+    assert data["pull_exit_code"] == 128
+
+
+def test_omits_pull_exit_code_by_default(tmp_path):
+    run(base_env(tmp_path), "0")
+    assert "pull_exit_code" not in read_recorded(tmp_path)
