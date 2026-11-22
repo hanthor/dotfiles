@@ -3,15 +3,17 @@
 # Branch protection requires code-owner review, so agent and bot PRs that
 # touch these paths wait for a human; everything carved out below can
 # auto-merge once CI is green. Direct pushes by the owner are unaffected.
+# The same rules are mirrored in .github/workflows/agent-automerge.yml
+# (needs-human label); keep the two in step.
 * @hanthor
 
 # ── Carve-outs: nothing here runs on fleet machines ─────────────────────
 /docs/
-*.md
 /tests/
 # Cluster manifests are applied by hand, never by the fleet timer.
 /talos-k8s/
-# pi agent skills are prompt text, not executed config.
+# pi agent skills: the prose is carved out; their code and SKILL.md are
+# owned again below.
 /roles/pi/files/skills/
 # Dependency bumps. package.json is additionally guarded by CI
 # (deps-guard): versions may change, the dependency set may not.
@@ -20,5 +22,25 @@
 /tools/secret-broker/go.sum
 /aws/.terraform.lock.hcl
 
-# ── Always owned, even inside carve-outs ────────────────────────────────
+# ── Always owned, even inside carve-outs (later rules win) ──────────────
 /.github/ @hanthor
+# Agent instructions: read by every agent session on every host.
+/*.md @hanthor
+**/SKILL.md @hanthor
+# Skill scripts are deployed 0755 to every host.
+/roles/pi/files/skills/**/*.sh @hanthor
+/roles/pi/files/skills/**/*.bash @hanthor
+/roles/pi/files/skills/**/*.py @hanthor
+/roles/pi/files/skills/**/*.js @hanthor
+/roles/pi/files/skills/**/*.mjs @hanthor
+/roles/pi/files/skills/**/*.ts @hanthor
+/roles/pi/files/skills/**/scripts/ @hanthor
+# Server kits kept under docs/ are run against production (spindle's front
+# door, Matrix); only their prose is carved out.
+/docs/src/servers/**/*.sh @hanthor
+/docs/src/servers/**/*.yaml @hanthor
+/docs/src/servers/**/*.yml @hanthor
+/docs/src/servers/**/*.toml @hanthor
+/docs/src/servers/**/*.json @hanthor
+/docs/src/servers/**/*.conf @hanthor
+/docs/src/servers/**/Caddyfile @hanthor

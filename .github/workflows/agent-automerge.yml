@@ -74,11 +74,15 @@ jobs:
           # Mirror of the CODEOWNERS carve-outs, only to label/comment —
           # branch protection is the real gate.
           files=$(gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path')
+          # Owned = not carved out, plus anything re-owned inside a carve-out
+          # (root *.md, SKILL.md, skill code, server kits under docs/, .github/).
           owned=$({
             printf '%s\n' "$files" \
-              | grep -vE '^(docs/|tests/|talos-k8s/|roles/pi/files/skills/)|\.md$' \
+              | grep -vE '^(docs/|tests/|talos-k8s/|roles/pi/files/skills/)' \
               | grep -vxE 'roles/pi/files/package\.json|tools/secret-broker/go\.(mod|sum)|aws/\.terraform\.lock\.hcl'
-            printf '%s\n' "$files" | grep '^\.github/'
+            printf '%s\n' "$files" | grep -E '^\.github/|^[^/]+\.md$|(^|/)SKILL\.md$'
+            printf '%s\n' "$files" | grep -E '^roles/pi/files/skills/.*(\.(sh|bash|py|js|mjs|ts)$|/scripts/)'
+            printf '%s\n' "$files" | grep -E '^docs/src/servers/.*(\.(sh|ya?ml|toml|json|conf)$|(^|/)Caddyfile$)'
           } | sort -u | sed '/^$/d')
           labelled=$(gh pr view "$PR" --repo "$REPO" --json labels --jq '[.labels[].name] | index("needs-human") != null')
           if [ -n "$owned" ]; then
