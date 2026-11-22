@@ -1,0 +1,12 @@
+[Unit]
+Description=Read-only check: installed hive files vs hanthor/dotfiles master (alerts on drift)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+# The same unit runs on bihar/karnataka (/var/srv/hives-host) and on spindle
+# (/usr/local/sbin). Started through bash: systemd cannot exec var_t scripts.
+ExecStart=/usr/bin/bash -c 'for f in /var/srv/hives-host/hive-drift-check /usr/local/sbin/hive-drift-check; do [ -f "$$f" ] && exec /usr/bin/bash "$$f"; done; echo "hive-drift-check is not installed" >&2; exit 1'
+# Exit 1 = drift found and alerted; do not mark the unit failed for that.
+SuccessExitStatus=1
+TimeoutStartSec=10min

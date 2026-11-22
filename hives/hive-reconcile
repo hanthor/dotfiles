@@ -2,14 +2,48 @@
 # hive-reconcile: make this host follow the lease on spindle (run each minute).
 #   lease == this host, hives not all running -> start them
 #   lease != this host, hives running         -> stop them
-#   lease unreadable for FENCE_MIN minutes    -> stop them (self-fence)
+#   lease unreadable for FENCE_MIN minutes    -> stop them (self-fence) and alert
+# While this host holds the lease it also alerts when hive-sync's
+# last-sync-to-<peer> stamp is older than SYNC_STALE_MIN (the standby is stale).
 # Touch /var/srv/hives-host/maintenance to skip starts (stops still happen).
 set -uo pipefail
-H=/var/srv/hives-host
+H=${HIVE_HOST_DIR:-/var/srv/hives-host}
+RUN=${HIVE_RUN_DIR:-/run}
 ME=$(hostname -s)
 FENCE_MIN=8   # spindle waits longer than this before a blind failover
-LAST_OK=/run/hive-reconcile.last-ok
+SYNC_STALE_MIN=60   # hive-sync runs every 15 min
+DEFAULT_SERVICES=5  # hub hub-front school reef hanthor, if compose cannot tell
+LAST_OK=$RUN/hive-reconcile.last-ok
+OWN_SINCE=$RUN/hive-reconcile.own-since   # when this host last took the lease
 log() { logger -t hive-reconcile -- "$*"; echo "$*"; }
+notify() {
+  if [ -f "$H/hive-notify" ]; then timeout 30 bash "$H/hive-notify" hive-reconcile "$ME: $*" >/dev/null 2>&1
+  else log "$*"; fi
+  true
+}
+expected_services() {
+  local n
+  n=$(timeout 60 bash "$H/hives" config --services 2>/dev/null | grep -c .)
+  if [ "${n:-0}" -gt 0 ] 2>/dev/null; then echo "$n"; else echo "$DEFAULT_SERVICES"; fi
+}
+check_sync_age() {
+  local peer stamp t age m=$RUN/hive-reconcile.sync-stale
+  [ "$ME" = bihar ] && peer=karnataka || peer=bihar
+  stamp=$H/last-sync-to-$peer
+  t=$(stat -c %Y "$stamp" 2>/dev/null || echo 0)
+  # Grace after taking the lease (or boot): the stamp may be from the last time.
+  [ "$(cat "$OWN_SINCE")" -gt "$t" ] && t=$(cat "$OWN_SINCE")
+  age=$(( ($(date +%s) - t) / 60 ))
+  if [ "$age" -ge "$SYNC_STALE_MIN" ]; then
+    if [ ! -e "$m" ]; then
+      notify "no hive-sync to $peer for ${age} min (last: $(cat "$stamp" 2>/dev/null || echo never)); the standby is stale"
+      touch "$m"
+    fi
+  elif [ -e "$m" ]; then
+    notify "hive-sync to $peer is current again"
+    rm -f "$m"
+  fi
+}
 
 running=$(podman ps -q --filter label=com.docker.compose.project=hives | wc -l)
 lease=$(ssh -i $H/keys/lease -o BatchMode=yes -o ConnectTimeout=15 \
@@ -17,25 +51,36 @@ lease=$(ssh -i $H/keys/lease -o BatchMode=yes -o ConnectTimeout=15 \
   ubuntu@100.113.75.88 2>/dev/null | tr -d '[:space:]')
 
 if [[ "$lease" =~ ^(bihar|karnataka|none)$ ]]; then
-  date +%s > $LAST_OK
+  date +%s > "$LAST_OK"
+  rm -f "$RUN/hive-reconcile.fenced"
   if [ "$lease" = "$ME" ]; then
-    if [ "$running" -lt 4 ] && [ ! -e $H/maintenance ]; then
-      log "lease is $ME and $running/4 hive containers run: starting"
+    [ -f "$OWN_SINCE" ] || date +%s > "$OWN_SINCE"
+    want=$(expected_services)
+    if [ "$running" -lt "$want" ] && [ ! -e $H/maintenance ]; then
+      log "lease is $ME and $running/$want hive containers run: starting"
       bash $H/hives up -d
     fi
-  elif [ "$running" -gt 0 ]; then
-    log "lease is '$lease', not $ME: stopping hives"
-    bash $H/hives stop
+    check_sync_age
+  else
+    rm -f "$OWN_SINCE" "$RUN/hive-reconcile.sync-stale"
+    if [ "$running" -gt 0 ]; then
+      log "lease is '$lease', not $ME: stopping hives"
+      bash $H/hives stop
+    fi
   fi
   exit 0
 fi
 
 # Lease unreadable (spindle or the path to it is down).
-[ -f $LAST_OK ] || date +%s > $LAST_OK   # first run after boot: start the clock
-mins=$(( ($(date +%s) - $(cat $LAST_OK)) / 60 ))
+[ -f "$LAST_OK" ] || date +%s > "$LAST_OK"   # first run after boot: start the clock
+mins=$(( ($(date +%s) - $(cat "$LAST_OK")) / 60 ))
 if [ "$running" -gt 0 ] && [ "$mins" -ge "$FENCE_MIN" ]; then
   log "lease unreadable for ${mins} min: self-fencing (stopping hives)"
   bash $H/hives stop
+  if [ ! -e "$RUN/hive-reconcile.fenced" ]; then
+    notify "lease on spindle unreadable for ${mins} min: self-fenced, hives stopped. They restart when spindle answers and the lease names this host"
+    touch "$RUN/hive-reconcile.fenced"
+  fi
 elif [ "$running" -gt 0 ]; then
   log "lease unreadable for ${mins} min (fence at $FENCE_MIN)"
 fi

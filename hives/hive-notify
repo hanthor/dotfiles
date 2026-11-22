@@ -1,0 +1,22 @@
+#!/bin/bash
+# hive-notify TITLE MESSAGE: log MESSAGE and send it to ntfy.sh/$NTFY_TOPIC.
+# The topic is read from the first of these files that sets NTFY_TOPIC=
+# (override the list with HIVE_NTFY_ENV):
+#   /etc/hive-failover.env   (preferred; mode 0600, never in git)
+#   /srv/hives/.env          (compatibility; on bootc /srv is /var/srv)
+# Without a topic the message is only logged. Never fails: callers must not
+# change behaviour because an alert could not be delivered.
+set -u
+title=${1:-hive}; shift || true
+msg=$*
+topic=${NTFY_TOPIC:-}
+if [ -z "$topic" ]; then
+  for f in ${HIVE_NTFY_ENV:-/etc/hive-failover.env /srv/hives/.env}; do
+    topic=$(sed -n 's/^NTFY_TOPIC=//p' "$f" 2>/dev/null | tail -n1 | tr -d "\"'[:space:]")
+    [ -n "$topic" ] && break
+  done
+fi
+logger -t "$title" -- "$msg" 2>/dev/null
+echo "$msg"
+[ -n "$topic" ] && curl -s -m10 -H "Title: $title" -d "$msg" "https://ntfy.sh/$topic" >/dev/null 2>&1
+exit 0

@@ -1,0 +1,83 @@
+#!/bin/bash
+# hive-drift-check: compare the hive files installed on this host with the
+# copies in hanthor/dotfiles and alert (hive-notify) when they differ.
+# READ-ONLY: it reads the installed files and writes only to a mktemp dir.
+# It never copies, fixes or restarts anything; redeploy by hand (see
+# docs/src/servers/hives.md, "Install or rebuild a host").
+#
+#   hive-drift-check [host|spindle]   default: spindle if hostname is spindle
+#
+# The repository copy comes from HIVE_DRIFT_REPO (a local checkout) when set,
+# otherwise from raw.githubusercontent.com at HIVE_DRIFT_REF (default master).
+# Only file names go into the alert, never contents.
+# Exit: 0 no drift, 1 drift, 2 could not fetch the repository copy.
+set -uo pipefail
+ME=$(hostname -s)
+ROLE=${1:-$([ "$ME" = spindle ] && echo spindle || echo host)}
+H=${HIVE_HOST_DIR:-/var/srv/hives-host}
+ROOT=${HIVE_DRIFT_ROOT:-}            # test seam: prefix for installed paths
+REF=${HIVE_DRIFT_REF:-master}
+RAW=https://raw.githubusercontent.com/hanthor/dotfiles/$REF
+SELF_DIR=$(dirname "$(readlink -f "$0")")
+
+# repo path (under hives/) -> installed path
+declare -A MAP
+if [ "$ROLE" = spindle ]; then
+  MAP=(
+    [hive-failover]=/usr/local/sbin/hive-failover
+    [hive-drift-check]=/usr/local/sbin/hive-drift-check
+    [hive-notify]=/usr/local/sbin/hive-notify
+    [systemd/hive-failover.service]=/etc/systemd/system/hive-failover.service
+    [systemd/hive-failover.timer]=/etc/systemd/system/hive-failover.timer
+    [systemd/hive-drift-check.service]=/etc/systemd/system/hive-drift-check.service
+    [systemd/hive-drift-check.timer]=/etc/systemd/system/hive-drift-check.timer
+  )
+else
+  for f in hives hive-reconcile hive-sync hive-cleanup hive-roster-sync hive-notify hive-drift-check; do
+    MAP[$f]=$H/$f
+  done
+  MAP[compose.$ME.yaml]=$H/compose.$ME.yaml
+  MAP[hanthor/roster.conf]=$H/hanthor-roster.conf
+  for u in hive-reconcile hive-sync hive-cleanup hive-roster-sync hive-drift-check; do
+    MAP[systemd/$u.service]=/etc/systemd/system/$u.service
+    MAP[systemd/$u.timer]=/etc/systemd/system/$u.timer
+  done
+fi
+
+notify() {
+  local n=$SELF_DIR/hive-notify
+  [ -f "$n" ] || n=$H/hive-notify
+  if [ -f "$n" ]; then timeout 30 bash "$n" hive-drift-check "$ME: $*" >/dev/null 2>&1
+  else logger -t hive-drift-check -- "$*" 2>/dev/null; fi
+  echo "$*"
+}
+
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+fetch() {  # repo path -> file in $tmp
+  local out=$tmp/${1//\//_}
+  if [ -n "${HIVE_DRIFT_REPO:-}" ]; then cp "$HIVE_DRIFT_REPO/hives/$1" "$out" 2>/dev/null
+  else curl -sfL -m30 -o "$out" "$RAW/hives/$1"; fi || return 1
+  echo "$out"
+}
+
+drift=() missing=() unfetched=()
+for f in "${!MAP[@]}"; do
+  inst=$ROOT${MAP[$f]}
+  want=$(fetch "$f") || { unfetched+=("$f"); continue; }
+  if [ ! -e "$inst" ]; then missing+=("${MAP[$f]}")
+  elif ! cmp -s "$want" "$inst"; then drift+=("${MAP[$f]}"); fi
+done
+
+if [ ${#unfetched[@]} -gt 0 ]; then
+  echo "could not fetch from the repository: ${unfetched[*]}" >&2
+  [ ${#unfetched[@]} -eq ${#MAP[@]} ] && { notify "drift check could not fetch the repository copy ($REF)"; exit 2; }
+fi
+if [ ${#drift[@]} -eq 0 ] && [ ${#missing[@]} -eq 0 ]; then
+  echo "no drift ($ROLE, ${#MAP[@]} files, ref $REF)"
+  exit 0
+fi
+msg="hive files differ from hanthor/dotfiles@$REF ($ROLE)."
+[ ${#drift[@]} -gt 0 ] && msg="$msg Changed: ${drift[*]}."
+[ ${#missing[@]} -gt 0 ] && msg="$msg Not installed: ${missing[*]}."
+notify "$msg Redeploy by hand; see docs/src/servers/hives.md"
+exit 1
