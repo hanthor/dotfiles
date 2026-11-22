@@ -67,6 +67,8 @@ Until this completes, Ansible stays the supported path; Priority 2 (per-role CI)
 - Home server installer media built with Tacklebox (#318, #344, #351)
 - Phone-QR secret onboarding (#49), which depends on the transport and bootstrap choices in Goal B
 - Karnataka networking faults (#353, #354, #355), which gate the offline-cluster recovery below
+- Delivery hygiene: restore the failing installer-acceptance check (#389), pin workflow actions by commit (#296), verify checksums of downloaded install scripts (#277) and centralise the Bitwarden fetcher (#279). These keep the Goal B migration verifiable
+- Handbook accuracy: align architecture and service wiring (#291), the remote Bitwarden/SSH contract (#293), OMP/pi dependencies (#298) and GNOME skill links (#302), plus the provisioning and lifecycle write-up (#274, #275)
 
 ---
 
@@ -161,7 +163,6 @@ Until this completes, Ansible stays the supported path; Priority 2 (per-role CI)
 ### High barrier
 
 - **ARM support**: Complete postmarketOS role extraction and testing
-- **Multi-region**: Design and test cross-region failover flows
 - **Dynamic discovery**: Implement Tailscale-based machine auto-registration
 
 ---
