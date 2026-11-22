@@ -33,7 +33,7 @@ just check              # Dry-run
 just lint               # yamllint + ansible-lint
 just doctor             # Health-check local machine; `doctor-fleet` does all hosts
 just inventory          # nmap LAN + Tailscale crosswalk → table of who's on
-just seed-kube          # Push this machine's kubeconfig + talosconfig to Bitwarden
+just seed-kube          # Overwrite BW notes kubeconfig/talosconfig with ~/.kube/config + ~/.talos/config (see below)
 just onboard NAME TYPE  # Register a new machine in inventory.yml
 just add-machine NAME   # Onboard + bootstrap an already-reachable machine via SSH
 ```
@@ -69,13 +69,13 @@ No Talos anywhere now. Each of bihar/karnataka has its own k3s v1.36.5 bound to 
 
 ## Automation (bots + Hive)
 
-Renovate and the Hive open PRs; the live Hives are school (`hanthor-hive-agent`) and reef (`tuna-reef-hive`) on bihar (karnataka standby) and cover only `tuna-os/*` repos, not this repo (see [`docs/src/cluster/hive.md`](docs/src/cluster/hive.md)). master is protected (CI + code-owner review, admin bypass). `.github/CODEOWNERS` is deny-by-default with carve-outs for paths that never run on the fleet (docs, tests, talos-k8s, pi skills, dep manifests) — only those auto-merge. See [`docs/src/automation.md`](docs/src/automation.md). Don't widen the carve-outs to anything the fleet timer executes.
+Renovate and the Hive open PRs; the live Hives run on bihar (karnataka standby): school (`hanthor-hive-agent`) and reef (`tuna-reef-hive`) cover `tuna-os/*`, and the hanthor spoke (`hive.reilly.asia`, also `hanthor-hive-agent`) covers `hanthor/*`, including this repo ([`hives/hanthor/hive.yaml`](hives/hanthor/hive.yaml); see [`docs/src/cluster/hive.md`](docs/src/cluster/hive.md)). master is protected (CI + code-owner review, admin bypass). `.github/CODEOWNERS` is deny-by-default with carve-outs for paths that never run on the fleet (docs, tests, talos-k8s, pi skills, dep manifests) — only those auto-merge. See [`docs/src/automation.md`](docs/src/automation.md). Don't widen the carve-outs to anything the fleet timer executes.
 
 ## Don'ts
 
 - **Don't commit `talosconfig`, `controlplane.yaml`, `worker.yaml`, or `~/.kube/config`.** `talos-k8s/.gitignore` covers the first three; the kubeconfig isn't in the repo path at all.
 - **Don't reintroduce NetBox.** LAN inventory comes from `just inventory`.
-- **Don't add files to `karnataka/`** — that directory was deleted in cleanup. Workstation-specific config goes in `host_vars/karnataka.yml`; cluster manifests go in `talos-k8s/`.
+- **Don't add files to `karnataka/`** — that directory was deleted in cleanup. Workstation-specific config goes in `host_vars/karnataka.yml`; k3s manifests and kits go in `home-k3s/<host>/`. `talos-k8s/` is archived — don't add to it.
 - **Don't rely on host sudo in automated/pi sessions** — `sudo -v` doesn't carry over across TTYs.
 - **This repo is public.** Secrets flow through Bitwarden only — never hardcode credentials.
 - **Don't commit tofu state, plans or `aws/terraform.tfvars`.** `aws/.gitignore` covers them.

@@ -36,8 +36,8 @@ memory budget from this host.
 | Piece | Source |
 |---|---|
 | Host | Oracle Cloud Always Free, `VM.Standard.A1.Flex`, Ubuntu 24.04 aarch64, `eu-frankfurt-1` AD-1; public IPv4 `92.5.82.232`, Tailscale `100.113.75.88` |
-| Spindle | `ghcr.io/tuna-os/spindle:v0.1.6` running on 2026-11-18 (v0.1.1 deployed 2026-11-07; arm64 release images). The upgrade from the `outbox-hotfix-arm64` build and its rehearsal are in [upgrade-to-main.md](upgrade-to-main.md) |
-| MatrixRTC | `livekit-server:v1.13.5` + `lk-jwt-service:0.6.0` as standalone containers |
+| Spindle | `ghcr.io/tuna-os/spindle:v0.1.7` in [`compose.yaml`](compose.yaml) (v0.1.6 was running on 2026-11-18; v0.1.1 deployed 2026-11-07; arm64 release images). The upgrade from the `outbox-hotfix-arm64` build and its rehearsal are in [upgrade-to-main.md](upgrade-to-main.md) |
+| MatrixRTC | `livekit-server:v1.13.11` + `lk-jwt-service:0.10.0` as standalone containers (versions from `compose.yaml`) |
 | Data | `ess_ess-spindle-data.tar.gz` (the store, taken 15:33 UTC) and `postgres/2026-10-25/mas.dump` (15:22 UTC), from `~/backups/tunaos-aws-2026-10-25` on himachal-1 |
 | Config | production runtime + delegated-auth block, MAS under/overrides and LiveKit template; deploy.sh renders credentials from cluster-state |
 
