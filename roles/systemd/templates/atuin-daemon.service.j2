@@ -1,5 +1,6 @@
 [Unit]
 Description=Atuin shell history sync daemon
+OnFailure=notify-failure@%n.service
 After=network.target
 
 [Service]

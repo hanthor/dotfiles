@@ -61,10 +61,21 @@ apply-nosecrets *args:
     #!/usr/bin/env bash
     set -uo pipefail
     cd {{ dotfiles_dir }}
-    git pull --ff-only || true
+    # A failed pull must not stop the apply (the current checkout is still
+    # applied), but it must not vanish either: it is recorded and the recipe
+    # exits non-zero, so `just doctor` and the dotfiles-update OnFailure
+    # notifier both see it.
+    pull_rc=0
+    git pull --ff-only || pull_rc=$?
     rc=0
     {{ _play }} site.yml --skip-tags secrets {{ args }} || rc=$?
-    scripts/record-apply.py "$rc" apply-nosecrets secrets
+    label=apply-nosecrets
+    if [ "$pull_rc" -ne 0 ]; then
+      echo "WARNING: git pull --ff-only failed (rc=$pull_rc); applied the current checkout" >&2
+      label=apply-nosecrets+pull-failed
+      [ "$rc" -eq 0 ] && rc=$pull_rc
+    fi
+    scripts/record-apply.py "$rc" "$label" secrets "$pull_rc"
     exit $rc
 
 # Apply to a remote machine with specific tags (e.g. just apply-remote-tags bihar kube,shell)

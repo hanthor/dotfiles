@@ -11,7 +11,7 @@ Pulls kube + Talos configs from BW for the home cluster (Bihar + Karnataka — p
 When `secrets_available` is true:
 
 1. Ensures `~/.kube/` and `~/.talos/` exist (mode 0700).
-2. `bw get notes kubeconfig` → writes to `~/.kube/config` (0600). Skipped if BW returns empty.
+2. `bw get notes kubeconfig` → writes to `~/.kube/config` (0600). Skipped if BW returns empty. If a `~/.kube/config` already exists, the role first copies it to `~/.kube/config.bak-<UTC timestamp>` (0600). It skips the backup when the file already equals the note, or equals what the role wrote last time (sha1 recorded in `~/.kube/.config.dotfiles-sha1`), so repeated applies don't pile up backups. Old backups are not pruned; delete them by hand. They contain cluster credentials.
 3. `bw get notes talosconfig` → writes to `~/.talos/config` (0600). Skipped if BW returns empty.
 4. Pins `tls-server-name` on every cluster in `~/.kube/config` to `kube_tls_server_name` (default: bihar's LAN address) — the home API-server cert lacks the tailnet address in its SANs.
 5. Emits a one-line warning if either home-cluster note is missing in BW.
@@ -50,4 +50,5 @@ talosctl --talosconfig ~/.talos/config get members
 ## Notes
 
 - These files contain cluster PKI material; the repo's `.gitignore` excludes the cluster source files, and these caches live in `~/` only — never commit.
+- `host_vars/bihar.yml` sets `skip_kube: true`. bihar's `~/.kube/config` holds its k3s and KubeStellar contexts (`bihar`, `its1`, `wds1`), and the `kubeconfig` note holds the retired Talos config.
 - The role is gated by `is_desktop | bool and not skip_kube`. Servers don't get a kubeconfig — the cluster nodes themselves are Talos and not in the inventory.

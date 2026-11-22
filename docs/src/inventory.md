@@ -13,7 +13,7 @@ desktop:
     mumbai:     # Debian VM on the phone (cli-only, skips desktop roles)
     kerala:     # postmarketOS ARM device
     kanpur:     # Laptop
-    himachal:   # Laptop (runs hive_ops)
+    himachal:   # Laptop
     dilli:      # Secondary desktop
 ```
 

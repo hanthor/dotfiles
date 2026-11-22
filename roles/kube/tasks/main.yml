@@ -33,6 +33,36 @@
       no_log: true
       failed_when: false
 
+    # ~/.kube/config may hold contexts that are not in the Bitwarden note
+    # (bihar's k3s/its1/wds1, punjab's karnataka). Back it up before the
+    # write unless it is exactly what this role last left there (recorded
+    # in ~/.kube/.config.dotfiles-sha1 below). Without that check every
+    # apply would back up again, because the tls-server-name pin always
+    # makes the file differ from the note.
+    - name: Stat existing kubeconfig
+      ansible.builtin.stat:
+        path: "{{ ansible_facts['env']['HOME'] }}/.kube/config"
+        checksum_algorithm: sha1
+      register: _kubeconfig_stat
+
+    - name: Read checksum of the kubeconfig this role last wrote
+      ansible.builtin.slurp:
+        src: "{{ ansible_facts['env']['HOME'] }}/.kube/.config.dotfiles-sha1"
+      register: _kubeconfig_marker
+      failed_when: false
+
+    - name: Back up existing kubeconfig before overwriting it
+      ansible.builtin.copy:
+        src: "{{ ansible_facts['env']['HOME'] }}/.kube/config"
+        dest: "{{ ansible_facts['env']['HOME'] }}/.kube/config.bak-{{ now(utc=true, fmt='%Y%m%dT%H%M%SZ') }}"
+        remote_src: true
+        mode: "0600"
+      when:
+        - _kubeconfig.rc == 0 and (_kubeconfig.stdout | length) > 0
+        - _kubeconfig_stat.stat.exists
+        - _kubeconfig_stat.stat.checksum != (_kubeconfig.stdout | hash('sha1'))
+        - _kubeconfig_stat.stat.checksum != ((_kubeconfig_marker.content | default('')) | b64decode | trim)
+
     - name: Write kubeconfig
       ansible.builtin.copy:
         content: "{{ _kubeconfig.stdout }}"
@@ -67,6 +97,20 @@
       loop: "{{ _clusters.stdout_lines[1:] | default([]) }}"   # skip the NAME header row
       changed_when: false
       when: _kubeconfig.rc == 0 and (_kubeconfig.stdout | length) > 0
+
+    - name: Stat kubeconfig as written
+      ansible.builtin.stat:
+        path: "{{ ansible_facts['env']['HOME'] }}/.kube/config"
+        checksum_algorithm: sha1
+      register: _kubeconfig_written
+      when: _kubeconfig.rc == 0 and (_kubeconfig.stdout | length) > 0
+
+    - name: Record checksum of the kubeconfig this role wrote
+      ansible.builtin.copy:
+        content: "{{ _kubeconfig_written.stat.checksum }}\n"
+        dest: "{{ ansible_facts['env']['HOME'] }}/.kube/.config.dotfiles-sha1"
+        mode: "0600"
+      when: _kubeconfig.rc == 0 and (_kubeconfig.stdout | length) > 0 and _kubeconfig_written.stat.exists
 
     - name: Warn if either config missing in Bitwarden
       ansible.builtin.debug:

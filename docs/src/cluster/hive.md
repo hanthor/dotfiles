@@ -328,9 +328,8 @@ PRs and issues (`gh search prs --author "hanthor-hive-agent[bot]"` and
 - The spokes call the `omp-auth-broker` on spindle (`OMP_AUTH_BROKER_URL`,
   `http://100.113.75.88:8765`). Caddy routing and failover are described in
   [Hives hosting and failover](../servers/hives.md). This page does not describe
-  the hub's own configuration. The
-  [hive_ops role](../roles/hive_ops.md) targets the retired cluster, not this
-  deployment.
+  the hub's own configuration. The former `hive_ops` role, which targeted the
+  retired cluster, has been removed.
 
 ## Archived cluster guide
 

@@ -63,6 +63,96 @@
     state: directory
     mode: "0755"
 
+# ── Failure notifier (ntfy) ─────────────────────────────────────────────
+# Every unit this role deploys has OnFailure=notify-failure@%n.service.
+- name: Ensure ~/.local/bin exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/bin"
+    state: directory
+    mode: "0755"
+
+- name: Deploy notify-failure and disk-usage-check scripts
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.local/bin/{{ item.dest }}"
+    mode: "0755"
+  loop:
+    - { src: notify-failure.sh, dest: notify-failure }
+    - { src: disk-usage-check.py, dest: disk-usage-check.py }
+
+- name: Deploy notify-failure@ template unit
+  ansible.builtin.template:
+    src: notify-failure@.service.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/notify-failure@.service"
+    mode: "0644"
+  notify: Reload systemd user daemon
+
+# Only with an unlocked vault (never on the nightly --skip-tags secrets run).
+# A missing or empty BW item leaves any existing env file untouched.
+- name: Write ntfy topic for notify-failure
+  when: secrets_available | default(false)
+  tags: [secrets]
+  environment:
+    BW_SESSION: "{{ bw_session }}"
+    PATH: "{{ ansible_env_path }}"
+  block:
+    - name: Fetch ntfy topic from Bitwarden
+      ansible.builtin.command: "bw get password {{ notify_failure_bw_item }}"
+      register: _ntfy_topic
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Write ~/.config/notify-failure.env
+      ansible.builtin.copy:
+        dest: "{{ ansible_facts['env']['HOME'] }}/.config/notify-failure.env"
+        mode: "0600"
+        content: |
+          NTFY_TOPIC={{ _ntfy_topic.stdout | trim }}
+          NTFY_SERVER={{ notify_failure_ntfy_server }}
+      when: _ntfy_topic.rc == 0 and (_ntfy_topic.stdout | trim | length) > 0
+      no_log: true
+
+- name: Deploy disk-usage-check units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/{{ item }}"
+    mode: "0644"
+  loop:
+    - disk-usage-check.service
+    - disk-usage-check.timer
+  when: disk_check_enabled | bool
+  notify: Reload systemd user daemon
+
+- name: Enable and start disk-usage-check timer
+  ansible.builtin.systemd:
+    name: disk-usage-check.timer
+    scope: user
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: disk_check_enabled | bool
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Stop and disable disk-usage-check timer when turned off
+  ansible.builtin.systemd:
+    name: disk-usage-check.timer
+    scope: user
+    enabled: false
+    state: stopped
+  when: not (disk_check_enabled | bool)
+  failed_when: false
+
+- name: Remove disabled disk-usage-check units
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/{{ item }}"
+    state: absent
+  loop:
+    - disk-usage-check.service
+    - disk-usage-check.timer
+  when: not (disk_check_enabled | bool)
+  notify: Reload systemd user daemon
+
 - name: Deploy dotfiles-update service
   ansible.builtin.template:
     src: dotfiles-update.service.j2

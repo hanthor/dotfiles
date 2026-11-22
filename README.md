@@ -55,7 +55,7 @@ From `inventory.yml`:
 | Name | Group | What |
 |------|-------|------|
 | kanpur | desktop | Laptop (Bluefin) |
-| himachal | desktop | Laptop — also drives the Hive (`hive_ops`) |
+| himachal | desktop | Laptop |
 | dilli | desktop | Secondary workstation (Bluefin) |
 | kerala | desktop | postmarketOS ARM device (musl, `apk`) |
 | mumbai | desktop | Debian VM on the phone (Android Virtualization Framework), `cli-only` |

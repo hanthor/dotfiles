@@ -1,5 +1,6 @@
 [Unit]
 Description=Lenovo Thermal and Journald Crash Mitigation Daemon
+OnFailure=notify-failure@%n.service
 After=default.target
 
 [Service]

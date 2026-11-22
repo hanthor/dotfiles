@@ -161,4 +161,3 @@ See [AWS account costs](../aws/README.md) for the current caution.
 ## See also
 
 - [Matrix cutover runbook](https://github.com/hanthor/dotfiles/blob/master/docs/matrix-cutover-runbook.md)
-- [`hive_ops` role](../../roles/hive_ops.md)

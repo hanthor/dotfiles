@@ -1,5 +1,6 @@
 [Unit]
 Description=Periodic push-apply to phone-hosted machines (termux, mumbai)
+OnFailure=notify-failure@%n.service
 After=network-online.target
 Wants=network-online.target
 

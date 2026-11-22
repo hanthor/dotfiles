@@ -2,8 +2,7 @@
 
 Pure decision/parsing helpers are exercised by sourcing hive-lib.sh (or, for
 hive-rotate.sh, which runs on source, by extracting single functions) in bash.
-The hive_open test drives the exec path against a stub kubectl on PATH, the
-same pattern as test_hive_peak.py.
+The hive_open test drives the exec path against a stub kubectl on PATH.
 """
 import json
 import subprocess

@@ -65,7 +65,6 @@ Every role in `site.yml` carries one or more tags. Tags fall into two kinds: **p
 | System + packages | `shell_fonts` | `dotfiles`, `shell`, `fonts` |
 | System + packages | `shell_dotfiles` | `dotfiles`, `shell`, `dotfiles` |
 | System + packages | `omp` | `dotfiles`, `omp` |
-| System + packages | `hive_ops` | `hive`, `hive_ops` |
 | System + packages | `git` | `dotfiles`, `git` |
 | System + packages | `neovim` | `dotfiles`, `neovim`, `editor` |
 | Secrets + auth | `shell_atuin` | `dotfiles`, `shell`, `atuin`, `secrets` |
