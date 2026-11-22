@@ -1,5 +1,6 @@
-# Off-node backups: nightly EBS snapshots of both nodes' root volumes (DLM),
-# plus an S3 bucket for Postgres dumps and this config's tofu state.
+# Off-node backups: nightly EBS snapshots of volumes tagged Backup=fleet-daily
+# (DLM; the former Talos nodes' root volumes in eu-north-1), plus an S3 bucket
+# for the former cluster's Postgres dumps and this config's tofu state.
 
 resource "aws_iam_role" "dlm" {
   name = "AWSDataLifecycleManagerDefaultRole"
@@ -89,13 +90,15 @@ resource "aws_s3_bucket_public_access_block" "fleet_backups" {
   restrict_public_buckets = true
 }
 
-# postgres/ dumps: IA at 30d, Glacier IR at 90d, gone at 1y. Everything else
-# (incl. tofu/ state) is kept; only stale multipart uploads are cleaned.
+# postgres/ dumps: IA at 30d, Glacier IR at 90d, then kept. Nothing in this
+# bucket expires — current or noncurrent versions — until an explicit cleanup
+# decision (CLAUDE.md: preserve the S3 backups). Only stale multipart uploads
+# are cleaned.
 resource "aws_s3_bucket_lifecycle_configuration" "fleet_backups" {
   bucket = aws_s3_bucket.fleet_backups.id
 
   rule {
-    id     = "tier-and-expire"
+    id     = "postgres-tier"
     status = "Enabled"
     filter {
       prefix = "postgres/"
@@ -107,12 +110,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "fleet_backups" {
     transition {
       days          = 90
       storage_class = "GLACIER_IR"
-    }
-    expiration {
-      days = 365
-    }
-    noncurrent_version_expiration {
-      noncurrent_days = 30
     }
   }
 

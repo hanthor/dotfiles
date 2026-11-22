@@ -1,0 +1,161 @@
+# Weekly read-only drift check for aws/ (OpenTofu).
+#
+# Runs `tofu plan -detailed-exitcode -lock=false` as a read-only IAM role
+# (aws/drift.tf) assumed via GitHub OIDC. Never applies anything.
+#
+# The state holds cluster PKI and the plan can contain sensitive values, so
+# plan/show output never reaches the log or an artifact: only the action and
+# resource address of each change are printed and put in the issue.
+#
+# Needs (skips cleanly while either is unset):
+#   vars.AWS_DRIFT_ROLE_ARN     `tofu -chdir=aws output -raw drift_role_arn`
+#   secrets.AWS_TOFU_TFVARS     contents of the Bitwarden note aws-tofu-tfvars
+name: tofu drift
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tofu-drift
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: vars.AWS_DRIFT_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # OIDC → AWS
+      issues: write # open/update the drift issue
+    defaults:
+      run:
+        working-directory: aws
+    env:
+      ISSUE_TITLE: "OpenTofu drift detected in aws/"
+    steps:
+      - name: check tfvars secret
+        id: pre
+        env:
+          TFVARS: ${{ secrets.AWS_TOFU_TFVARS }}
+        working-directory: .
+        run: |
+          if [ -z "$TFVARS" ]; then
+            echo "::notice::secrets.AWS_TOFU_TFVARS is unset; skipping drift check"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.pre.outputs.ready == 'true'
+        with:
+          persist-credentials: false
+
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        if: steps.pre.outputs.ready == 'true'
+        with:
+          tofu_version: 1.13.9
+          tofu_wrapper: false # the wrapper captures stdout; keep plan output out of reach
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        if: steps.pre.outputs.ready == 'true'
+        with:
+          role-to-assume: ${{ vars.AWS_DRIFT_ROLE_ARN }}
+          role-session-name: tofu-drift-${{ github.run_id }}
+          aws-region: eu-north-1
+          mask-aws-account-id: true
+
+      - name: tofu plan (summary only)
+        id: plan
+        if: steps.pre.outputs.ready == 'true'
+        env:
+          TFVARS: ${{ secrets.AWS_TOFU_TFVARS }}
+        run: |
+          set -uo pipefail
+          umask 077
+          printf '%s\n' "$TFVARS" > terraform.tfvars
+
+          if ! tofu init -input=false -no-color >/dev/null 2>init.err; then
+            echo "::error::tofu init failed"
+            grep -E '^(│ )?Error:' init.err | head -20 || true
+            exit 1
+          fi
+
+          tofu plan -detailed-exitcode -lock=false -input=false -no-color \
+            -out=tfplan >/dev/null 2>plan.err
+          rc=$?
+          echo "exitcode=$rc" >> "$GITHUB_OUTPUT"
+
+          if [ "$rc" -eq 1 ]; then
+            echo "::error::tofu plan failed"
+            # Error headlines only; details can quote attribute values.
+            grep -E '^(│ )?Error:' plan.err | head -20 || true
+            exit 1
+          fi
+
+          : > summary.txt
+          if [ "$rc" -eq 2 ]; then
+            {
+              echo "Planned changes:"
+              tofu show -json tfplan | jq -r '
+                .resource_changes[]?
+                | select(.change.actions != ["no-op"] and .change.actions != ["read"])
+                | "- `\(.change.actions | join("/"))` \(.address)"'
+              echo
+              echo "Changed outside OpenTofu (refresh drift):"
+              tofu show -json tfplan | jq -r '
+                .resource_drift[]?
+                | "- `\(.change.actions | join("/"))` \(.address)"'
+            } > summary.txt
+            cat summary.txt
+          else
+            echo "No drift."
+          fi
+
+      - name: clean up state-bearing files
+        if: always() && steps.pre.outputs.ready == 'true'
+        run: rm -f tfplan terraform.tfvars init.err plan.err; rm -rf .terraform
+
+      - name: open or update drift issue
+        if: steps.plan.outputs.exitcode == '2'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          {
+            echo "The weekly read-only \`tofu plan\` of \`aws/\` found differences ($RUN_URL)."
+            echo
+            echo "**Do not apply blindly** — credits are exhausted and the config may"
+            echo "propose recreating paid infrastructure. Review \`just aws-plan\` locally"
+            echo "(see docs/src/servers/aws/README.md)."
+            echo
+            head -c 60000 summary.txt
+          } > body.md
+          num=$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" \
+            --json number,title --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body-file body.md
+          else
+            gh issue create --title "$ISSUE_TITLE" --body-file body.md
+          fi
+
+      - name: close drift issue when clean
+        if: steps.plan.outputs.exitcode == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          num=$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" \
+            --json number,title --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")
+          if [ -n "$num" ]; then
+            gh issue close "$num" --comment "Weekly plan is clean again (run ${{ github.run_id }})."
+          fi

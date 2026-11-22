@@ -37,70 +37,10 @@ mock_provider "aws" {
 
 variables {
   alert_email = "alerts@example.com"
-  cluster_admin_ingress = [
-    { description = "home", cidrs = ["198.51.100.1/32"] },
-    { description = "travel", cidrs = ["203.0.113.7/32", "203.0.113.8/32"] },
-    { description = "office", cidrs = ["192.0.2.0/24"] },
-  ]
-  cluster_admin_pmtu_cidrs = []
   punjab_ssh_ingress = [
     { description = "admin", cidrs = ["198.51.100.1/32"] },
     { description = "backup", cidrs = ["203.0.113.9/32"] },
   ]
-}
-
-run "admin_ingress_without_pmtu" {
-  command = plan
-
-  assert {
-    condition     = length([for r in aws_security_group.admin_bootstrap.ingress : r if r.protocol == "icmp"]) == 0
-    error_message = "no icmp rule when cluster_admin_pmtu_cidrs is empty"
-  }
-
-  assert {
-    condition = alltrue([
-      for port in [6443, 50000] : length([
-        for r in aws_security_group.admin_bootstrap.ingress : r
-        if r.from_port == port && r.to_port == port && r.protocol == "tcp"
-        && r.description != "punjab EIP"
-      ]) == 3
-    ])
-    error_message = "each port must have one rule per cluster_admin_ingress entry"
-  }
-
-  assert {
-    condition = alltrue([
-      for e in var.cluster_admin_ingress : length([
-        for r in aws_security_group.admin_bootstrap.ingress : r
-        if r.description == e.description && toset(r.cidr_blocks) == toset(e.cidrs)
-      ]) == 2
-    ])
-    error_message = "rule descriptions/cidrs must mirror cluster_admin_ingress"
-  }
-
-  assert {
-    condition = alltrue([
-      for r in aws_security_group.admin_bootstrap.ingress : !contains(r.cidr_blocks, "0.0.0.0/0")
-    ])
-    error_message = "admin_bootstrap must never be open to the world"
-  }
-}
-
-run "admin_ingress_with_pmtu" {
-  command = plan
-
-  variables {
-    cluster_admin_pmtu_cidrs = ["198.51.100.0/24"]
-  }
-
-  assert {
-    condition = length([
-      for r in aws_security_group.admin_bootstrap.ingress : r
-      if r.protocol == "icmp" && r.from_port == 3 && r.to_port == 4
-      && toset(r.cidr_blocks) == toset(["198.51.100.0/24"])
-    ]) == 1
-    error_message = "icmp type 3 code 4 rule must carry cluster_admin_pmtu_cidrs"
-  }
 }
 
 run "punjab_ssh_mirrors_variable" {
@@ -211,11 +151,6 @@ run "punjab_hardening" {
   }
 
   assert {
-    condition     = length([for r in aws_security_group.admin_bootstrap.ingress : r if r.description == "punjab EIP"]) == 2
-    error_message = "punjab's EIP must be allowlisted on 6443 and 50000"
-  }
-
-  assert {
     condition     = aws_ebs_encryption_by_default.us_east_1.enabled && aws_ebs_encryption_by_default.eu_north_1.enabled
     error_message = "EBS encryption by default must stay on in both regions"
   }
@@ -228,5 +163,33 @@ run "postgres_backup_writer_is_write_only" {
   assert {
     condition     = !strcontains(aws_iam_user_policy.postgres_backup.policy, "Delete")
     error_message = "postgres-backup-writer must not be able to delete objects"
+  }
+}
+
+# Nothing in the backup bucket may expire until an explicit cleanup decision.
+run "backups_never_expire" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for r in aws_s3_bucket_lifecycle_configuration.fleet_backups.rule :
+      length(r.expiration) == 0 && length(r.noncurrent_version_expiration) == 0
+    ])
+    error_message = "fleet-backups lifecycle rules must not expire objects or noncurrent versions"
+  }
+}
+
+# The drift role is assumable only from master of this repo, and read-only.
+run "drift_role_is_scoped" {
+  command = plan
+
+  assert {
+    condition     = strcontains(aws_iam_role.tofu_drift.assume_role_policy, "\"repo:hanthor/dotfiles:ref:refs/heads/master\"") && !strcontains(aws_iam_role.tofu_drift.assume_role_policy, "*")
+    error_message = "drift role trust must be pinned to hanthor/dotfiles master with no wildcards"
+  }
+
+  assert {
+    condition     = aws_iam_role_policy_attachment.tofu_drift_readonly.policy_arn == "arn:aws:iam::aws:policy/ReadOnlyAccess"
+    error_message = "drift role must only carry ReadOnlyAccess"
   }
 }
