@@ -1,11 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
   "automerge": true,
   "automergeType": "pr",
   "platformAutomerge": true,
+  "vulnerabilityAlerts": {
+    "schedule": ["at any time"]
+  },
   "packageRules": [
     {
       "description": "Auto-merge minor/patch/digest/pin updates (branch protection still requires green CI)",
@@ -18,6 +19,24 @@
       "automerge": false
     },
     {
+      "description": "Owned paths (everything outside the CODEOWNERS carve-outs) need a human review, so open and rebase their PRs once a week instead of several times a day. Security updates are unscheduled (vulnerabilityAlerts).",
+      "matchFileNames": ["**"],
+      "schedule": ["before 6am on monday"],
+      "updateNotScheduled": false
+    },
+    {
+      "description": "CODEOWNERS carve-outs that hold dependencies auto-merge on green CI, so keep them unscheduled. Keep in sync with .github/CODEOWNERS.",
+      "matchFileNames": [
+        "docs/**",
+        "tests/**",
+        "talos-k8s/**",
+        "roles/pi/files/package.json",
+        "tools/secret-broker/go.mod"
+      ],
+      "schedule": ["at any time"],
+      "updateNotScheduled": true
+    },
+    {
       "description": "OpenTofu providers (aws/): lockfile bumps are validated + tofu-tested in CI; applying stays manual",
       "matchManagers": ["terraform"],
       "groupName": "opentofu providers"
@@ -28,17 +47,110 @@
       "automerge": false,
       "groupName": "cluster images and charts",
       "schedule": ["before 6am on monday"],
+      "updateNotScheduled": false,
       "labels": ["deploy-needed"]
     },
     {
-      "description": "Hive images: the hive-operator's HiveRelease `hive` (Enforce, track v6-latest) rolls the spokes and the hub, so the digests in the spoke manifests are not deployable state. ccleft's is bumped by hand (see its comment).",
+      "description": "Home k3s (bihar, karnataka): manifests are applied by hand and the k3s binary is installed by install-host.sh, so a merge does not deploy anything. Weekly to-do PRs, never auto-merge.",
+      "matchFileNames": ["home-k3s/**"],
+      "automerge": false,
+      "schedule": ["before 6am on monday"],
+      "updateNotScheduled": false,
+      "labels": ["deploy-needed"],
+      "groupName": "home-k3s images and binaries"
+    },
+    {
+      "description": "Locally built images (podman build + k3s ctr import) have no registry to look up.",
+      "matchPackageNames": ["localhost/**"],
+      "enabled": false
+    },
+    {
+      "description": "mdBook: Renovate bumps MDBOOK_VERSION only. Once the workflow verifies a checksum, the sha256 has to be updated by hand in the same PR.",
+      "matchDepNames": ["rust-lang/mdBook"],
+      "automerge": false,
+      "prBodyNotes": [
+        "Update the mdBook tarball sha256 in `.github/workflows/mdbook.yml` (if present) before merging: Renovate does not change it."
+      ]
+    },
+    {
+      "description": "Spindle kit (docs/src/servers/spindle-vps): production config deployed by hand with deploy.sh. It sits under the docs/ carve-out, so never auto-merge; label as a deploy to-do.",
+      "matchFileNames": ["docs/src/servers/spindle-vps/**"],
+      "automerge": false,
+      "schedule": ["before 6am on monday"],
+      "updateNotScheduled": false,
+      "labels": ["deploy-needed"]
+    },
+    {
+      "description": "Hive images: pinned by digest in hives/compose.<host>.yaml to match the hive binary mounted from the host, and the two must be upgraded together (docs/src/servers/hives.md). A newer image alone broke the hub on 2026-11-18, and the files are installed on bihar/karnataka by hand. Bump by hand.",
       "matchPackageNames": ["ghcr.io/hivecommons/hive", "ghcr.io/hivecommons/hive-hub"],
       "enabled": false
     }
   ],
   "kubernetes": {
-    "managerFilePatterns": ["/^talos-k8s/.+\\.ya?ml$/"]
+    "managerFilePatterns": ["/^talos-k8s/.+\\.ya?ml$/", "/^home-k3s/.+\\.ya?ml$/"]
   },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "k3s binary + sha256 in home-k3s/*/install-host.sh. The github-release-attachments datasource maps the sha256 to the new release via its sha256sum-amd64.txt.",
+      "managerFilePatterns": ["/^home-k3s/[^/]+/install-host\\.sh$/"],
+      "matchStrings": [
+        "https://github\\.com/k3s-io/k3s/releases/download/(?<currentValue>v[0-9.]+\\+k3s[0-9]+)/k3s'[^\\n]*\\n[^\\n]*?(?<currentDigest>[a-f0-9]{64})"
+      ],
+      "depNameTemplate": "k3s-io/k3s",
+      "datasourceTemplate": "github-release-attachments",
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k3s(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "mdBook release used by the docs workflow",
+      "managerFilePatterns": ["/^\\.github/workflows/mdbook\\.yml$/"],
+      "matchStrings": ["MDBOOK_VERSION=[\"']?(?<currentValue>[0-9.]+)[\"']?"],
+      "depNameTemplate": "rust-lang/mdBook",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "ccleft has no tags: go install is pinned to a commit on main",
+      "managerFilePatterns": ["/^roles/omp/tasks/main\\.yml$/"],
+      "matchStrings": ["go install github\\.com/tuna-os/ccleft/cmd/ccleft@(?<currentDigest>[a-f0-9]{40})"],
+      "depNameTemplate": "tuna-os/ccleft",
+      "packageNameTemplate": "https://github.com/tuna-os/ccleft",
+      "currentValueTemplate": "main",
+      "datasourceTemplate": "git-refs"
+    },
+    {
+      "customType": "regex",
+      "description": "JetBrains Mono Nerd Font release",
+      "managerFilePatterns": ["/^roles/shell_fonts/tasks/main\\.yml$/"],
+      "matchStrings": ["github\\.com/ryanoasis/nerd-fonts/releases/download/(?<currentValue>v[0-9.]+)/"],
+      "depNameTemplate": "ryanoasis/nerd-fonts",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Inter font release (version is in the tag and the asset name)",
+      "managerFilePatterns": ["/^roles/bluefin_common/tasks/main\\.yml$/"],
+      "matchStrings": ["github\\.com/rsms/inter/releases/download/v(?<currentValue>[0-9.]+)/Inter-[0-9.]+\\.zip"],
+      "depNameTemplate": "rsms/inter",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$",
+      "autoReplaceStringTemplate": "github.com/rsms/inter/releases/download/v{{{newValue}}}/Inter-{{{newValue}}}.zip"
+    },
+    {
+      "customType": "regex",
+      "description": "JetBrains Mono font release (version is in the tag and the asset name)",
+      "managerFilePatterns": ["/^roles/bluefin_common/tasks/main\\.yml$/"],
+      "matchStrings": [
+        "github\\.com/JetBrains/JetBrainsMono/releases/download/v(?<currentValue>[0-9.]+)/JetBrainsMono-[0-9.]+\\.zip"
+      ],
+      "depNameTemplate": "JetBrains/JetBrainsMono",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$",
+      "autoReplaceStringTemplate": "github.com/JetBrains/JetBrainsMono/releases/download/v{{{newValue}}}/JetBrainsMono-{{{newValue}}}.zip"
+    }
+  ],
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true,

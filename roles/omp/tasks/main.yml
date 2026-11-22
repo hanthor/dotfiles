@@ -107,8 +107,9 @@
     PATH: "{{ ansible_facts['env']['HOME'] }}/.bun/bin:{{ ansible_facts['env']['HOME'] }}/.local/bin:{{ ansible_env_path }}"
   when: omp_plugin_list.rc != 0 or 'omp-kiro-provider' not in (omp_plugin_list.stdout | default(''))
 
+# ccleft has no tags; pinned to a main commit, bumped by Renovate (git-refs).
 - name: Install ccleft (provider quota-remaining probe)
-  ansible.builtin.command: go install github.com/tuna-os/ccleft/cmd/ccleft@latest
+  ansible.builtin.command: go install github.com/tuna-os/ccleft/cmd/ccleft@aa448d52bbdf6d119885993dbd0406da0d25f23d
   environment:
     PATH: "{{ ansible_facts['env']['HOME'] }}/.local/bin:/home/linuxbrew/.linuxbrew/bin:{{ ansible_env_path }}"
   args:
