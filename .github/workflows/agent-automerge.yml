@@ -7,30 +7,69 @@ name: Agent auto-merge
 # pull_request_target runs THIS file from master, never the PR's copy, so an
 # agent can't rewrite its own gate. It must never check out or execute PR
 # code — it only calls the API.
+#
+# A `hold` label keeps any PR out of auto-merge: the `hold` job disables it
+# whenever the label is present (any author), and `queue` never enables it
+# while held. Removing `hold` from an agent PR re-queues it. `synchronize`
+# only recomputes needs-human; it never re-enables auto-merge, so a manual
+# disable sticks across pushes. No concurrency group: a queued run could
+# evict a pending hold run, so `queue` re-checks the label after enabling.
 
 on:
   pull_request_target:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
-  queue:
+  hold:
     if: >-
-      github.event.pull_request.user.login == 'hanthor-hive-agent[bot]' &&
-      !github.event.pull_request.draft
+      !contains(fromJSON('["labeled","unlabeled"]'), github.event.action) ||
+      (github.event.action == 'labeled' && github.event.label.name == 'hold')
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PR: ${{ github.event.pull_request.number }}
       REPO: ${{ github.repository }}
     steps:
-      - name: Enable auto-merge (squash)
-        run: gh pr merge "$PR" --repo "$REPO" --auto --squash
+      - name: Disable auto-merge while on hold
+        run: |
+          # Labels are read live, not from the event payload.
+          if gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name' | grep -qx hold; then
+            echo "hold label present; disabling auto-merge"
+            gh pr merge "$PR" --repo "$REPO" --disable-auto || true
+          fi
+
+  queue:
+    if: >-
+      github.event.pull_request.user.login == 'hanthor-hive-agent[bot]' &&
+      !github.event.pull_request.draft &&
+      (!contains(fromJSON('["labeled","unlabeled"]'), github.event.action) ||
+       (github.event.action == 'unlabeled' && github.event.label.name == 'hold'))
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Enable auto-merge (squash), unless on hold
+        if: github.event.action != 'synchronize'
+        run: |
+          held() { gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name' | grep -qx hold; }
+          if held; then
+            echo "hold label present; not enabling auto-merge"
+            exit 0
+          fi
+          gh pr merge "$PR" --repo "$REPO" --auto --squash
+          # A hold added while we were enabling still wins.
+          if held; then
+            gh pr merge "$PR" --repo "$REPO" --disable-auto || true
+          fi
 
       - name: Flag PRs that need a human
+        if: github.event.action != 'unlabeled'
         run: |
           # Mirror of the CODEOWNERS carve-outs, only to label/comment —
           # branch protection is the real gate.
@@ -41,11 +80,16 @@ jobs:
               | grep -vxE 'roles/pi/files/package\.json|tools/secret-broker/go\.(mod|sum)|aws/\.terraform\.lock\.hcl'
             printf '%s\n' "$files" | grep '^\.github/'
           } | sort -u | sed '/^$/d')
+          labelled=$(gh pr view "$PR" --repo "$REPO" --json labels --jq '[.labels[].name] | index("needs-human") != null')
           if [ -n "$owned" ]; then
+            # Comment only on the transition, so pushes don't spam the PR.
+            [ "$labelled" = true ] && exit 0
             gh pr edit "$PR" --repo "$REPO" --add-label needs-human
             {
               echo "Queued for auto-merge, but these paths run on fleet machines and need @hanthor's review first:"
               echo
               printf '%s\n' "$owned" | sed 's/^/- `/; s/$/`/'
             } | gh pr comment "$PR" --repo "$REPO" --body-file -
+          elif [ "$labelled" = true ]; then
+            gh pr edit "$PR" --repo "$REPO" --remove-label needs-human
           fi
