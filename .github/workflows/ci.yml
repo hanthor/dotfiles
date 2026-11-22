@@ -26,7 +26,7 @@ jobs:
 
       - name: Install tools
         run: |
-          pip install yamllint ansible-lint
+          pip install yamllint==1.38.0 ansible-lint==26.11.0
           sudo apt-get install -y shellcheck
 
       - name: yamllint
@@ -47,9 +47,16 @@ jobs:
       - name: ansible-lint
         run: ansible-lint --offline site.yml
 
+      # Select by shebang as well as *.sh, so extensionless scripts
+      # (hives/hive-*, hives/hives, scripts/kubevirt-node, ...) are checked.
+      # Excluded: *.j2 Jinja templates (not valid shell until rendered) and
+      # zsh scripts (shellcheck has no zsh support).
       - name: shellcheck
         run: |
-          find . -name "*.sh" -not -path "./.git/*" -type f -print0 | xargs -0 shellcheck -x -S error
+          {
+            git ls-files -z | xargs -0 grep -lIZE '^#!.*\b(ba|da|k)?sh\b' || true
+            git ls-files -z '*.sh'
+          } | sort -zu | grep -zv '\.j2$' | xargs -0 shellcheck -x -S error
 
   python:
     runs-on: ubuntu-latest
@@ -72,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
       - name: pytest
         run: uvx --with pyyaml pytest -q tests
@@ -135,7 +142,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install just
-        uses: extractions/setup-just@v4
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
       - name: Validate Justfile
         run: just --justfile Justfile --list
@@ -148,7 +155,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: opentofu/setup-opentofu@v2
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
 
       - name: fmt
         run: tofu fmt -check -recursive
