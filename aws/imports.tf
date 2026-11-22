@@ -1,6 +1,7 @@
 # One-time adoption of resources that were created by hand (2026-07 → 09).
 # Once imported these blocks are no-ops; they stay as a record of what was
-# adopted and so a fresh state can be rebuilt with `tofu apply`.
+# adopted. The terminated Talos cluster's imports were dropped when it was
+# forgotten (removed.tf).
 # (Import IDs can't use data sources, hence the literal account ID below.)
 
 # punjab
@@ -18,63 +19,6 @@ import {
   provider = aws.us_east_1
   to       = aws_key_pair.punjab
   id       = "punjab"
-}
-# cluster network
-import {
-  to = aws_vpc.migration
-  id = "vpc-0c8fdba0b442b9af1"
-}
-import {
-  to = aws_subnet.public_a
-  id = "subnet-0213792ff023a3737"
-}
-import {
-  to = aws_internet_gateway.migration
-  id = "igw-0e2ffcdc182f80672"
-}
-import {
-  to = aws_route_table.public
-  id = "rtb-02a8a143552755b18"
-}
-import {
-  to = aws_route_table_association.public_a
-  id = "subnet-0213792ff023a3737/rtb-02a8a143552755b18"
-}
-import {
-  to = aws_security_group.intracluster
-  id = "sg-0421d172cf0a202d8"
-}
-import {
-  to = aws_security_group.matrix_public
-  id = "sg-09803bdbcc7b9273a"
-}
-import {
-  to = aws_security_group.admin_bootstrap
-  id = "sg-052a6292d2dcf728e"
-}
-import {
-  to = aws_instance.controlplane
-  id = "i-00a3e4532cdbfc87e"
-}
-import {
-  to = aws_instance.worker
-  id = "i-0bdfafdebc799d49d"
-}
-import {
-  to = aws_eip.controlplane
-  id = "eipalloc-0d1d4a449bb5eb751"
-}
-import {
-  to = aws_eip.worker
-  id = "eipalloc-0c8535b0d86005345"
-}
-import {
-  to = aws_ebs_volume.pgdata
-  id = "vol-01ff00a316340f0ad"
-}
-import {
-  to = aws_volume_attachment.pgdata
-  id = "/dev/xvdb:vol-01ff00a316340f0ad:i-0bdfafdebc799d49d"
 }
 import {
   to = aws_dlm_lifecycle_policy.fleet_daily

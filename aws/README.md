@@ -1,12 +1,13 @@
 # aws/ — AWS account IaC (OpenTofu)
 
-Codifies everything in the AWS account except the `runs-on` CloudFormation
-stack: the eu-north-1 Talos cluster's infrastructure, punjab, backups, IAM
-and budgets.
+Codifies the TunaOS AWS account except the `runs-on` CloudFormation stack:
+punjab (retired EC2 instance, data preserved), backups, IAM, budgets and the
+read-only drift role. The terminated eu-north-1 Talos cluster is forgotten via
+`removed.tf`; anything of it still live is unmanaged.
 
 ```bash
-just aws-plan    # should always say "No changes"
-just aws-apply
+just aws-plan    # review every action; credits are exhausted
+just aws-apply   # never blindly
 ```
 
 Full handbook: [docs/src/servers/aws/README.md](../docs/src/servers/aws/README.md).
