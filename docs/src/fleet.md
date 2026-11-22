@@ -64,4 +64,4 @@ the Tailscale admin console. On 2026-11-18 these were:
 - since 2026-04: `uisp`, `chuppvm`
 - since 2026-07 and 2026-08: `vm`, `WIN-G9NAVN79GN0`
 
-[hanthor/dotfiles#333](https://github.com/hanthor/dotfiles/pull/333) (`scripts/tailnet.py`) automates this cleanup.
+Nothing on `master` automates this cleanup. [hanthor/dotfiles#333](https://github.com/hanthor/dotfiles/pull/333) proposed it and is closed; `scripts/tailnet.py` exists only on the `feat/native-laptop-units` branch ([#348](https://github.com/hanthor/dotfiles/pull/348), open).
