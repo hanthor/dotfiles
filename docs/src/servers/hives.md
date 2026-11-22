@@ -4,7 +4,7 @@
 > For the hives themselves (agents, configuration, health), see the
 > [Hive operations guide](../cluster/hive.md).
 
-Last updated: 2026-11-19 (hanthor added). The source for the scripts, compose layers and systemd
+Last updated: 2026-11-22 (alerts, drift check, all five ports checked). The source for the scripts, compose layers and systemd
 units is [`hives/`](https://github.com/hanthor/dotfiles/tree/master/hives) in this
 repository. Each host also has a copy of this runbook at
 `/var/srv/hives-host/RUNBOOK.md` (on spindle: `/var/lib/hive-failover/RUNBOOK.md`).
@@ -45,7 +45,10 @@ The OMP auth broker still runs on spindle at `http://100.113.75.88:8765`, reache
 | `/var/srv/hives-host/bin/hive-2ef7dc7c0-amd64` | `tuna-os/hive` at `2ef7dc7c0` (branch `deploy/upstream-v6-20261113`) built with `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath ./cmd/hive` |
 | `/var/srv/hives-host/hives` | Wrapper that runs docker-compose against rootful podman with the three compose files |
 | `/var/srv/hives-host/hive-reconcile` | Makes the host follow the lease (timer, every 1 min) |
-| `/var/srv/hives-host/hive-sync` | Pushes the data to the peer host (timer, every 15 min) |
+| `/var/srv/hives-host/hive-sync` | Pushes the data to the peer host (timer, every 15 min) and writes the stamp `last-sync-to-<peer>` |
+| `/var/srv/hives-host/hive-notify` | Shared alert helper: `hive-notify TITLE MESSAGE` logs the message and posts it to ntfy |
+| `/var/srv/hives-host/hive-drift-check` | Read-only nightly check of the installed hive files against this repository |
+| `/etc/hive-failover.env` | `NTFY_TOPIC=<topic>` for the alerts (mode 0600, not in git). Also on spindle |
 | `/var/srv/hives-host/keys/` | `lease` (read-only access to the lease on spindle) and `sync` (rsync to the peer host) |
 | `/var/srv/hives-host/maintenance` | If this file exists, reconcile does not start the hives |
 
@@ -107,9 +110,10 @@ The file `spindle:/var/lib/hive-failover/active` contains `bihar`, `karnataka` o
 
 | Component | Where | Schedule | What it does |
 |---|---|---|---|
-| `hive-failover check` | spindle, `hive-failover.timer` | every 1 min | Checks the active host on ports 3101-3103. After 5 min of failures it sets the lease to `none`, stops the old host if it can, and waits. When the old host has 0 containers, or after 10 min, it starts the standby, sets the lease, changes Caddy and sends a ntfy notification on `$NTFY_TOPIC`. |
-| `hive-reconcile` | both hosts, `hive-reconcile.timer` | every 1 min | If the lease names this host and fewer than 4 containers run, it starts them (unless `maintenance` exists). If the lease names a different host, it stops them. If it cannot read the lease for 8 min, it stops them (self-fence). |
+| `hive-failover check` | spindle, `hive-failover.timer` | every 1 min | Checks the active host on the **core ports** 3101-3103 (hub, school, reef). After 5 min of failures it sets the lease to `none`, stops the old host if it can, and waits. When the old host has 0 containers, or after 10 min, it starts the standby, sets the lease, changes Caddy and sends a ntfy notification. It also checks the **alert ports** 3100 (hub-front) and 3104 (hanthor). A failure on these ports only sends an alert, after 5 min, and never moves the hives. |
+| `hive-reconcile` | both hosts, `hive-reconcile.timer` | every 1 min | If the lease names this host and fewer containers run than `hives config --services` lists (5 if compose cannot tell), it starts them (unless `maintenance` exists). If the lease names a different host, it stops them. If it cannot read the lease for 8 min, it stops them (self-fence) and sends an alert. While it holds the lease, it sends an alert when `last-sync-to-<peer>` is older than 60 min. |
 | `hive-sync` | both hosts, `hive-sync.timer` | every 15 min | If the lease names this host, it uses rsync to push `/var/srv/hives` to the peer, without caches and toolchains. |
+| `hive-drift-check` | all three, `hive-drift-check.timer` | nightly 04:30 | Compares the installed scripts, compose layer and units with `hives/` on `master` (from raw.githubusercontent.com). It sends an alert with the names of the changed or missing files. It is read-only: it never changes, copies or restarts anything. |
 | `hive-cleanup` | both hosts, `hive-cleanup.timer` | every 1 h | On running spokes only: removes idle Claude session scratch and stale work dirs in `/tmp` inside the containers, removes dangling images and old backups, and warns when `/var` has less than 10 GB free. Ported from spindle, where the writable layers of the hive containers had reached 16.8 GB. |
 
 Logs:
@@ -117,7 +121,19 @@ Logs:
 ```bash
 journalctl -t hive-failover                # on spindle
 journalctl -u hive-reconcile -u hive-sync  # on the hosts
+journalctl -u hive-drift-check             # all three
 ```
+
+### Alerts
+All alerts go to `https://ntfy.sh/$NTFY_TOPIC`. Each script reads `NTFY_TOPIC=` from `/etc/hive-failover.env` first, then from `/srv/hives/.env` (the old location; on the bootc hosts `/srv` is `/var/srv`). Without a topic, the scripts only log the alerts. A failed alert never changes what a script does. The topic is a secret: keep it out of git.
+
+| Alert | From | When |
+|---|---|---|
+| Failover and move | `hive-failover` | The core ports were down for 5 min, a host became active, or a host did not become healthy |
+| Alert port down | `hive-failover` | Port 3100 or 3104 was down for 5 min on the active host. A second alert says when the port answers again. The hives stay where they are: fix the container (`hives logs hanthor`) |
+| Self-fence | `hive-reconcile` | The host could not read the lease for 8 min and stopped the hives. This is sent once per outage. If spindle is down, this alert is the only signal |
+| Stale standby | `hive-reconcile` | The active host has not synced to the peer for 60 min. There is a grace period of 60 min after the host takes the lease or boots. A second alert says when the sync is current again |
+| Drift | `hive-drift-check` | Installed files differ from `master`. Redeploy them by hand (see [Install or rebuild a host](#install-or-rebuild-a-host)) |
 
 The podman containers have restart policy `unless-stopped` and `podman-restart.service` is disabled. As a result, a host that boots does not start the hives itself. Only reconcile starts them, and only when the lease names that host.
 
@@ -145,6 +161,7 @@ Use one of these methods:
 
 ### Limits
 - The data on the standby can be up to 15 min old. Rsync copies files while they are in use, so a file that changes during the copy can arrive in an inconsistent state.
+- The containers are counted, not checked one by one. If you stop a single service by hand, reconcile starts it again within 1 min. To keep it stopped, create the `maintenance` file.
 - The self-fence after 8 min without spindle was tested by hand only. A real network partition has not been tested.
 - If spindle is down, there is no public access and no failover. The hosts stop the hives after 8 min, because they cannot read the lease.
 
@@ -174,12 +191,21 @@ The files in [`hives/`](https://github.com/hanthor/dotfiles/tree/master/hives) g
 
 | Repository file | Destination |
 |---|---|
-| `hives`, `hive-reconcile`, `hive-sync` | `/var/srv/hives-host/` on bihar and karnataka (mode 0755) |
+| `hives`, `hive-reconcile`, `hive-sync`, `hive-cleanup`, `hive-roster-sync`, `hive-notify`, `hive-drift-check` | `/var/srv/hives-host/` on bihar and karnataka (mode 0755) |
 | `compose.<host>.yaml` | `/var/srv/hives-host/` on that host |
-| `hive-cleanup` | `/var/srv/hives-host/` on bihar and karnataka (mode 0755) |
-| `systemd/hive-{reconcile,sync,cleanup}.*` | `/etc/systemd/system/` on bihar and karnataka |
-| `hive-failover` | `/usr/local/sbin/` on spindle |
-| `systemd/hive-failover.*` | `/etc/systemd/system/` on spindle |
+| `hanthor/roster.conf` | `/var/srv/hives-host/hanthor-roster.conf` on bihar and karnataka |
+| `systemd/hive-{reconcile,sync,cleanup,roster-sync,drift-check}.*` | `/etc/systemd/system/` on bihar and karnataka |
+| `hive-failover`, `hive-notify`, `hive-drift-check` | `/usr/local/sbin/` on spindle (mode 0755) |
+| `systemd/hive-{failover,drift-check}.*` | `/etc/systemd/system/` on spindle |
+
+The same `hive-drift-check.service` runs on all three machines. It starts the script from `/var/srv/hives-host/` or from `/usr/local/sbin/`, whichever exists.
+
+### Deploy a change from this repository
+There is no automated deploy. After a change in `hives/` is merged:
+1. Copy the changed files to their destinations (see the table) on each machine.
+2. If you changed a unit, run `systemctl daemon-reload`.
+3. Start each changed service one time, and make sure that `systemctl show <unit> -p Result` shows `success`.
+4. Run `hive-drift-check` on the machine. It must report `no drift`.
 
 On a new host, also do these steps:
 1. Install `docker-compose` with brew.
@@ -189,7 +215,8 @@ On a new host, also do these steps:
 5. Copy `bin/hive-2ef7dc7c0-amd64` from the other host. If neither host has it, build it from `tuna-os/hive` at `2ef7dc7c0`.
 6. Create the SSH keys in `/var/srv/hives-host/keys/`, and add the firewalld rule for ports 3100-3104 from spindle. Also install `/etc/sysctl.d/90-hives-inotify.conf` (`fs.inotify.max_user_instances = 1024`, `fs.inotify.max_user_watches = 1048576`): with five containers the per-agent permission watchers exhaust the default of 128 instances.
 7. Label the data and compose files (not the scripts): `chcon -R -t container_file_t /var/srv/hives /var/srv/hives-host/compose.*.yaml /var/srv/hives-host/bin`.
-8. Enable `hive-reconcile.timer`, `hive-sync.timer` and `hive-cleanup.timer`. Start each service one time and make sure that its `Result` is `success`.
+8. Create `/etc/hive-failover.env` with `NTFY_TOPIC=<topic>` (mode 0600, owner root). Use the same topic as spindle.
+9. Enable `hive-reconcile.timer`, `hive-sync.timer`, `hive-cleanup.timer` and `hive-drift-check.timer`. Start each service one time and make sure that its `Result` is `success`.
 
 ## Rollback to spindle (emergency only)
 On 2026-11-18 the cleanup removed the stale data copies, the arm64 binaries, and the hive containers and images on spindle. `/srv/hives` contains only the compose files, `.env`, `<svc>/config`, `<svc>/secrets` and `backups/`. karnataka is the fallback. Use spindle only if both hosts are lost:

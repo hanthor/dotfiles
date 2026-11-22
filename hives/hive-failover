@@ -11,18 +11,33 @@
 #   hive-failover status
 #   hive-failover move <host>    planned move / failback: stop, sync, start
 #   hive-failover hold on|off    pause / resume automatic failover
+#
+# Only the CORE_PORTS (hub, school, reef) decide a failover. ALERT_PORTS
+# (hub-front, hanthor) are probed too, but a failure there only sends an
+# alert: one flaky container must not move every hive to the standby.
+# NTFY_TOPIC comes from /etc/hive-failover.env (falls back to /srv/hives/.env).
 set -uo pipefail
 
-STATE=/var/lib/hive-failover
+STATE=${HIVE_FAILOVER_STATE:-/var/lib/hive-failover}
 LEASE=$STATE/active
 declare -A IP=([bihar]=100.103.44.48 [karnataka]=100.66.158.127)
 KEY=/root/.ssh/hive_failover
-CADDYFILE=/srv/spindle/Caddyfile
+CADDYFILE=${HIVE_FAILOVER_CADDYFILE:-/srv/spindle/Caddyfile}
 CADDY_CTR=spindle-caddy-1
 FAIL_MIN=5          # unhealthy minutes before the lease is revoked
 HOST_FENCE_MIN=8    # must match hive-reconcile on the hosts
 START_WAIT_MIN=10   # > HOST_FENCE_MIN: start standby blind only after this
-NTFY_TOPIC=$(sed -n 's/^NTFY_TOPIC=//p' /srv/hives/.env 2>/dev/null)
+CORE_PORTS="3101 3102 3103"   # hub school reef: failing these moves the hives
+ALERT_PORTS="3100 3104"       # hub-front hanthor: alert only, never a move
+ALERT_MIN=5         # failing minutes on an alert port before the alert
+ntfy_topic() {
+  local f t
+  for f in ${HIVE_NTFY_ENV:-/etc/hive-failover.env /srv/hives/.env}; do
+    t=$(sed -n 's/^NTFY_TOPIC=//p' "$f" 2>/dev/null | tail -n1 | tr -d "\"'[:space:]")
+    [ -n "$t" ] && { echo "$t"; return; }
+  done
+}
+NTFY_TOPIC=$(ntfy_topic)
 
 log()    { logger -t hive-failover -- "$*"; echo "$*"; }
 notify() { log "$*"; [ -n "$NTFY_TOPIC" ] && curl -s -m10 -H "Title: hive failover" -d "$*" "https://ntfy.sh/$NTFY_TOPIC" >/dev/null; true; }
@@ -34,9 +49,31 @@ rsh() {
     -o UserKnownHostsFile=$STATE/known_hosts -o StrictHostKeyChecking=accept-new \
     "james@${IP[$h]}" "$@"
 }
+probe()   { curl -sf -m15 -o /dev/null "http://${IP[$1]}:$2/"; }
 healthy() {
-  local ip=${IP[$1]} p
-  for p in 3101 3102 3103; do curl -sf -m15 -o /dev/null "http://$ip:$p/" || return 1; done
+  local p
+  for p in $CORE_PORTS; do probe "$1" "$p" || return 1; done
+}
+failing_alert_ports() {  # host -> space-separated failing ALERT_PORTS (empty when all answer)
+  local p bad=""
+  for p in $ALERT_PORTS; do probe "$1" "$p" || bad="$bad $p"; done
+  echo "${bad# }"
+}
+check_alert_ports() {  # host: alert-only; never touches lease, pending or down_since
+  local h=$1 bad n f=$STATE/degraded
+  bad=$(failing_alert_ports "$h")
+  if [ -z "$bad" ]; then
+    [ -f "$f.notified" ] && notify "hives on $h: port(s) $(cat "$f.notified") answer again"
+    rm -f "$f" "$f.notified"
+    return 0
+  fi
+  [ -f "$f" ] || now > "$f"
+  n=$(( ($(now) - $(cat "$f")) / 60 ))
+  log "hives on $h: port(s) $bad failing for ${n} min (alert only, no failover)"
+  if [ "$n" -ge "$ALERT_MIN" ] && [ "$(cat "$f.notified" 2>/dev/null)" != "$bad" ]; then
+    notify "hives on $h: port(s) $bad failing for ${n} min. Alert only: the hives stay on $h; check those containers"
+    echo "$bad" > "$f.notified"
+  fi
 }
 running_count() { rsh "$1" 'sudo podman ps -q --filter label=com.docker.compose.project=hives | wc -l'; }
 set_lease() { echo "$1" > "$LEASE.tmp" && chmod 644 "$LEASE.tmp" && mv "$LEASE.tmp" "$LEASE"; }
@@ -65,7 +102,7 @@ activate() {  # host -> start, wait, switch Caddy, take lease
   rsh "$h" 'sudo /var/srv/hives-host/hives up -d' >/dev/null 2>&1 || log "start on $h over ssh failed; hive-reconcile there starts it from the lease"
   if wait_healthy "$h" 5; then
     set_caddy "$h" && notify "hives now active on $h"
-    rm -f $STATE/down_since $STATE/pending
+    rm -f $STATE/down_since $STATE/pending $STATE/degraded $STATE/degraded.notified
     return 0
   fi
   notify "hives on $h did not become healthy within 5 min (lease is $h, Caddy unchanged)"
@@ -77,7 +114,7 @@ cmd_check() {
   local a t down n
   a=$(cat "$LEASE")
   if [ "$a" != none ]; then
-    if healthy "$a"; then rm -f $STATE/down_since; exit 0; fi
+    if healthy "$a"; then rm -f $STATE/down_since; check_alert_ports "$a"; exit 0; fi
     [ -f $STATE/down_since ] || now > $STATE/down_since
     n=$(( ($(now) - $(cat $STATE/down_since)) / 60 ))
     log "hives on $a unhealthy for ${n} min"
@@ -123,7 +160,8 @@ cmd_status() {
   local h
   echo "lease: $(cat "$LEASE")   hold: $([ -f $STATE/hold ] && echo on || echo off)   pending: $(cat $STATE/pending 2>/dev/null || echo -)"
   for h in bihar karnataka; do
-    printf '%-10s healthy=%s running=%s\n' "$h" "$(healthy $h && echo yes || echo no)" "$(running_count $h 2>/dev/null || echo ?)"
+    printf '%-10s healthy=%s alert-ports-failing=%s running=%s\n' "$h" "$(healthy $h && echo yes || echo no)" \
+      "$(failing_alert_ports $h | sed 's/^$/-/')" "$(running_count $h 2>/dev/null || echo ?)"
   done
   grep -oE 'reverse_proxy 100\.[0-9.]+:310[0-4]' "$CADDYFILE" | sort -u
 }
@@ -133,5 +171,5 @@ case "${1:-}" in
   move)   exec 9>$STATE/lock; flock 9; cmd_move "${2:-}" ;;
   status) cmd_status ;;
   hold)   case "${2:-}" in on) touch $STATE/hold ;; off) rm -f $STATE/hold ;; *) echo "hold on|off"; exit 2 ;; esac ;;
-  *)      sed -n '2,15p' "$0"; exit 2 ;;
+  *)      sed -n '2,20p' "$0"; exit 2 ;;
 esac

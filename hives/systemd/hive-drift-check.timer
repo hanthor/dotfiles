@@ -1,0 +1,8 @@
+[Unit]
+Description=Check the installed hive files for drift every night
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=15min
+Persistent=true
+[Install]
+WantedBy=timers.target
