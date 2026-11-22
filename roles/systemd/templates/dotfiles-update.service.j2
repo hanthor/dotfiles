@@ -18,9 +18,12 @@ ExecStartPre=/bin/sleep {{ dotfiles_update_delay_seconds | default(60) }}
 # Timer cannot unlock Bitwarden non-interactively, so we explicitly skip secrets.
 # SSH key sync happens on manual `dots-apply` instead.
 {% if not (is_laptop | bool) and dotfiles_update_upgrade | bool %}
-# Nightly package upgrade (dotfiles_update_upgrade): refresh brew metadata,
-# then the play's homebrew/flatpak upgrade tasks run via -e upgrade=true.
+# Nightly package upgrade (dotfiles_update_upgrade). Brew is upgraded here,
+# before the play, because ansible itself is a brew formula and must not be
+# replaced mid-run; -e upgrade=true then runs flatpak update (and a no-op
+# brew upgrade) inside the play.
 ExecStartPre=-{{ brew_prefix }}/bin/brew update --quiet
+ExecStartPre=-{{ brew_prefix }}/bin/brew upgrade
 ExecStart={{ brew_prefix }}/bin/just -f {{ ansible_facts['env']['HOME'] }}/.local/share/dotfiles/Justfile apply-nosecrets -e upgrade=true
 {% else %}
 ExecStart={{ brew_prefix }}/bin/just -f {{ ansible_facts['env']['HOME'] }}/.local/share/dotfiles/Justfile apply-nosecrets

@@ -22,9 +22,12 @@ is not hidden: the recipe records it in `~/.cache/dotfiles/last-apply.json`
 non-zero. `just doctor` then reports it and the unit's failure notifier fires.
 
 **Nightly package upgrade.** On the daily timer (non-laptops),
-`dotfiles_update_upgrade: true` (the default) adds `brew update` before the
-apply and `-e upgrade=true` to it. With that variable set, the homebrew role
-runs `brew upgrade` and the flatpak role runs `flatpak update --system`. The
+`dotfiles_update_upgrade: true` (the default) runs `brew update` and
+`brew upgrade` before the apply, and adds `-e upgrade=true` to the apply.
+Brew is upgraded first because Ansible is itself a brew formula and must not
+be replaced while the play is running. With `-e upgrade=true` set, the flatpak
+role runs `flatpak update --system`, and the homebrew role's own
+`brew upgrade` finds nothing left to do. The
 flatpak update needs passwordless sudo; without it the task fails and the
 apply ignores the failure. The laptop login run never upgrades. To opt a host
 out, set `dotfiles_update_upgrade: false` in its `host_vars`. `just update-all`
