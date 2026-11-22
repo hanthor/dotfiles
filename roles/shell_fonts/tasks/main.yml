@@ -15,7 +15,7 @@
   block:
     - name: Download JetBrains Mono Nerd Font
       ansible.builtin.get_url:
-        url: https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+        url: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/JetBrainsMono.zip
         dest: /tmp/JetBrainsMonoNerdFont.zip
         mode: "0644"
 

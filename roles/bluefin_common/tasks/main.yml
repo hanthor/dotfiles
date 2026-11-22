@@ -109,7 +109,7 @@
 
     - name: Download Inter font
       ansible.builtin.get_url:
-        url: https://github.com/rsms/inter/releases/latest/download/Inter-4.1.zip
+        url: https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip
         dest: /tmp/Inter.zip
         mode: "0644"
 
