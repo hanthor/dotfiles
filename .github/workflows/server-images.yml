@@ -72,12 +72,12 @@ jobs:
               raise SystemExit("::error::Publishing requires version to be a valid YYYYMMDD date.")
           PY
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Check out real Fisherman installer sources
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: tuna-os/fisherman
           ref: 014e704be5f7365c4a1ccdef37fcadf97ade792a
@@ -85,14 +85,14 @@ jobs:
           persist-credentials: false
 
       - name: Check out Utah live-media sources
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: projectbluefin/utah
           ref: f2736b6b774551cc8971af85cedaa65a272354ee
           path: .sources/utah
           persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version-file: .sources/fisherman/tui/go.mod
           cache: false
@@ -369,7 +369,7 @@ jobs:
 
       - name: Transfer accepted release artifacts
         if: github.event_name == 'workflow_dispatch' && inputs.publish
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: home-k8s-accepted-release
           path: ${{ runner.temp }}/home-k8s-release/*
@@ -379,7 +379,7 @@ jobs:
 
       - name: Upload installer and cluster diagnostics
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: home-server-images-diagnostics
           path: |
@@ -411,7 +411,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - name: Download only accepted release artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: home-k8s-accepted-release
           path: release
