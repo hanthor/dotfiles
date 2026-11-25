@@ -1,0 +1,334 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>fleet_facts &amp; osquery - Infrastructure Handbook</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="James Reilly&#x27;s personal fleet (Ansible dotfiles) and the TunaOS infrastructure it administers">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Infrastructure Handbook</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/hanthor/dotfiles/edit/master/src/roles/fleet_facts.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="fleet_facts"><a class="header" href="#fleet_facts">fleet_facts</a></h1>
+<p>Publishes each machine's <strong>public</strong> device facts for the live fleet view at
+<a href="https://reilly.asia/infra/#fleet">reilly.asia/infra</a>.</p>
+<ul>
+<li><strong>Runs on:</strong> every host (opt out with <code>fleet_facts_publish: false</code>), last in
+the play, including the no-secrets daily timer</li>
+<li><strong>Tags:</strong> <code>facts</code>, <code>fleet_facts</code></li>
+<li><strong>Needs:</strong> a logged-in <code>gh</code> CLI (skipped quietly otherwise)</li>
+</ul>
+<p>Each run writes <code>facts/&lt;host&gt;.json</code> to the <strong><code>fleet-facts</code></strong> branch of this
+repo through the GitHub contents API. There's no clone and no merge, and
+<code>master</code> isn't touched. The Worker behind reilly.asia/infra reads those files.</p>
+<div class="table-wrapper"><table><thead><tr><th>Field</th><th>Source</th></tr></thead><tbody>
+<tr><td><code>os.{name,version,codename,kernel}</code></td><td>Ansible distribution facts</td></tr>
+<tr><td><code>hardware.model</code></td><td>Android <code>getprop</code>, else device-tree model (Pi), else DMI product name (placeholders like "System Product Name" dropped)</td></tr>
+<tr><td><code>hardware.{vendor,form_factor,arch,cpu,cpu_threads,memory_gb}</code></td><td>Ansible hardware facts</td></tr>
+<tr><td><code>hardware.gpus</code></td><td><code>lspci -mm</code> display devices (unnamed virtual adapters dropped)</td></tr>
+<tr><td><code>virtualization</code>, <code>uptime_days</code>, <code>last_apply</code></td><td>Ansible facts, <code>~/.cache/dotfiles/last-apply.json</code></td></tr>
+</tbody></table>
+</div>
+<p><strong>Never published:</strong> IP/MAC addresses, serial numbers, usernames, anything
+from Bitwarden.</p>
+<h2 id="private-drift-monitoring-osquery"><a class="header" href="#private-drift-monitoring-osquery">Private drift monitoring (<code>osquery</code>)</a></h2>
+<p>The separate <code>osquery</code> role watches changes that must <strong>not</strong> go to the public
+<code>fleet-facts</code> branch. It installs checksum-pinned upstream osquery 5.23.1 under
+<code>/opt</code>, including on immutable desktops: no package layering, writable <code>/usr</code>,
+reboot, Fleet server, enrollment token, or new network listener.</p>
+<p><strong>Tags:</strong> <code>osquery</code>, <code>services</code>, <code>security</code>. Requires root, glibc Linux, systemd,
+and x86_64 or aarch64. Nura/Alpine musl (Kerala) and unrooted Android/Termux are
+unsupported; <code>osquery_supported: false</code> records that exclusion. Offline hosts
+install on their next successful normal apply. <code>skip_osquery: true</code> skips the
+role; it does not uninstall an already-running daemon. The retired VPS group is
+never modified, and Talos nodes are not Ansible-managed.</p>
+<h3 id="whats-watched"><a class="header" href="#whats-watched">What's watched</a></h3>
+<ul>
+<li>TCP listeners and bound UDP ports: address, port, protocol, executable path.
+PIDs are excluded so a process restart alone does not create drift. UDP client
+sockets and temporary development listeners can legitimately change.</li>
+<li>Enabled system startup triggers: service, timer, socket and path symlinks in
+<code>/etc/systemd/system/*.wants</code>, <code>*.requires</code> and their <code>/run</code> equivalents.
+This includes enabled-but-not-started units, without mistaking ordinary
+active/inactive transitions for startup changes. User units and vendor
+dependencies compiled into unit files are outside this query.</li>
+<li>Kernel, OS and osquery versions.</li>
+</ul>
+<p><code>osqueryd.service</code> samples every five minutes, writing differential JSON logs
+only under <code>/var/log/osquery</code> (10 MiB rotation, three retained archives).
+<code>fleet-osquery-report.timer</code> refreshes a private baseline comparison every
+15 minutes. Both have bounded CPU/memory use; audit/event capture and distributed
+queries are disabled. Sampling is not real-time intrusion detection or unit-file
+content integrity checking.</p>
+<h3 id="review-the-fleet"><a class="header" href="#review-the-fleet">Review the fleet</a></h3>
+<p>From an updated checkout:</p>
+<pre><code class="language-sh">just apply-tags osquery
+just osquery-fleet
+just osquery-fleet --host punjab --host dilli
+just osquery-fleet --json
+</code></pre>
+<p>The controller uses effective Ansible inventory, Tailscale online status and
+existing authenticated SSH plus noninteractive sudo. Host-key verification stays
+enabled. It shows <code>ok</code>, <code>drift</code>, <code>offline</code>, <code>unsupported</code>, <code>excluded</code>, <code>stale</code> or
+<code>error</code>; missing/bad reports and failed reads never become <code>ok</code>. Reports older
+than 30 minutes are stale. Stale/errors return nonzero; ordinary drift and offline
+coverage do not. Each result shows its collection time, not a claim of live state.
+<code>--inventory PATH</code> (or <code>DOTFILES_INVENTORY</code>) selects another inventory.</p>
+<h3 id="always-on-poller-punjab"><a class="header" href="#always-on-poller-punjab">Always-on poller: Punjab</a></h3>
+<p>Punjab has <code>osquery_poller_enabled: true</code>. Its system-level
+<code>fleet-osquery-poll.timer</code> runs every 15 minutes at :02/:17/:32/:47, after the
+hosts' report-refresh window, and two minutes after boot. It runs as <code>ubuntu</code>,
+using that account's existing SSH keys, known hosts and noninteractive sudo.
+It does not depend on an interactive SSH agent or copy credentials into Kubernetes.</p>
+<p>The role installs a root-managed collector and a minimal inventory under
+<code>/opt/fleet-osquery</code> and <code>/etc/fleet-osquery/inventory.yml</code>. Only connection and
+exclusion metadata is copied—not the full effective inventory or Bitwarden facts.
+Apply the <code>osquery</code> role on Punjab after changing fleet membership or connection
+details to refresh this inventory snapshot.</p>
+<p>Each poll atomically replaces <strong>one</strong> aggregate:
+<code>/home/ubuntu/.local/state/fleet-osquery/latest.json</code> (0600, inside a 0700 directory,
+owned by <code>ubuntu</code>). No unbounded history is kept. Journald gets coverage counts,
+not raw addresses or executable paths. Polling never accepts host baselines.</p>
+<pre><code class="language-sh">ssh ubuntu@punjab 'cat ~/.local/state/fleet-osquery/latest.json'
+ssh ubuntu@punjab 'systemctl status fleet-osquery-poll.timer --no-pager'
+ssh ubuntu@punjab 'sudo -n systemctl start fleet-osquery-poll.service'
+</code></pre>
+<p>Offline machines remain explicitly offline. Failed reads/stale reports are saved
+as degraded coverage and fail the service; an unusable or empty inventory saves
+a timestamped error instead of retaining a supposedly healthy snapshot. If the
+process itself cannot run or write, check the service journal and the snapshot's
+collection time—an old file is not current health.</p>
+<p><code>osquery_poller_enabled</code> defaults to false on other hosts. Setting it false on a
+previous poller and applying the role stops its timer and in-flight service;
+the last private snapshot remains for inspection. The manual fleet CLI still works
+from other machines and supports <code>--output PATH</code> for explicit private snapshots.</p>
+<h3 id="baseline-and-local-investigation"><a class="header" href="#baseline-and-local-investigation">Baseline and local investigation</a></h3>
+<p>First apply records the machine's <strong>existing</strong> state, not an audited known-safe
+state. Later applies never accept new drift automatically. Changes remain pending
+against that baseline until reviewed and explicitly accepted:</p>
+<pre><code class="language-sh">sudo systemctl start fleet-osquery-report.service
+sudo /opt/fleet-osquery/fleet-osquery report
+sudo journalctl -u fleet-osquery-report.service
+# Only after reviewing the changes:
+sudo /opt/fleet-osquery/fleet-osquery baseline --accept
+sudo systemctl start fleet-osquery-report.service
+</code></pre>
+<p>Baseline/report/lock files are root-owned mode 0600 in
+<code>/var/lib/fleet-osquery</code> (0700). Failed collection does not replace the last
+successful report or baseline; inspect the failed service and its journal, and
+treat an aging cached sample accordingly. Manual CLI runs do not save fetched
+reports unless <code>--output</code> is supplied; Punjab's scheduled aggregate is described
+above. <strong>Keep all report output private:</strong> addresses and executable paths are
+sensitive; do not attach raw JSON to public issues or publish it through <code>fleet_facts</code>.
+No command lines, process environments, credentials or serial numbers are queried.</p>
+<p>Check mode reports platform support only; actual installation and baseline
+collection require a normal apply. CI exercises the actual role and
+<code>sudo python3 tests/osquery_smoke.py</code> on x86_64 and aarch64 Ubuntu runners.
+That smoke creates a temporary loopback listener and an enabled, never-started
+unit, checks pending/accepted/removed drift, and compares a synthetic prior kernel
+against the real current kernel. It uses isolated state and removes its fixtures;
+the fleet baseline is untouched.
+The native CI jobs also enable the persistent poller and run
+<code>tests/osquery_poller_smoke.py</code>: a real temporary listener must appear in the
+aggregate, disappear after removal, and leave the host baseline unchanged.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../roles/server_hardening.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../roles/retired_services.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../roles/server_hardening.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../roles/retired_services.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
